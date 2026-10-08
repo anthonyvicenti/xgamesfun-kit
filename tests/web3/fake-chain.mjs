@@ -3,7 +3,7 @@
 // the flows rely on: the loot program's create_game / upsert_item / upsert_box, Metaplex Core's collection, and a
 // Meteora DBC pool with its mint and metadata.
 import { createHash } from 'node:crypto';
-import { addressBytes, encodeBase58 } from '../../web3/gf-web3/chain/base58.js';
+import { addressBytes, decodeBase58, encodeBase58 } from '../../web3/gf-web3/chain/base58.js';
 import { encodeBorsh, decodeBorsh } from '../../web3/gf-web3/chain/borsh.js';
 import { concat, fromBase64, toBase64, uintLE, utf8 } from '../../web3/gf-web3/chain/bytes.js';
 import { LOOT_IDL, LOOT_PROGRAM } from '../../web3/gf-web3/chain/loot.js';
@@ -119,6 +119,16 @@ export function fakeChain({ irysFree = true } = {}) {
         return ok({ context: { slot }, value: params[0].map((a) => rawAccount(accounts.get(a))) });
       case 'getAccountInfo':
         return ok({ context: { slot }, value: rawAccount(accounts.get(params[0])) });
+      case 'getProgramAccounts': {
+        const [program, { filters = [] } = {}] = params;
+        const match = (data) =>
+          filters.every((f) => {
+            if (f.dataSize !== undefined) return data.length === f.dataSize;
+            const want = decodeBase58(f.memcmp.bytes);
+            return want.every((b, i) => data[f.memcmp.offset + i] === b);
+          });
+        return ok([...accounts.entries()].filter(([, a]) => a.owner === program && match(a.data)).map(([pubkey, a]) => ({ pubkey, account: rawAccount(a) })));
+      }
       case 'getBalance':
         return ok({ context: { slot }, value: 5_000_000_000 });
       case 'getTokenAccountBalance': {

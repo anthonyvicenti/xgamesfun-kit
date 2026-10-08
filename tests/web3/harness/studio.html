@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>web3 tabs harness</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d0f14; color: #e8ecf3; font: 14px system-ui, sans-serif; }
+  nav { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #2a3140; }
+  nav button { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid #2a3140; background: #161a22; color: inherit; cursor: pointer; }
+  nav button.on { border-color: #8b7cff; color: #8b7cff; }
+  main { padding: 16px; }
+</style>
+</head>
+<body>
+<nav id="tabs"></nav>
+<main id="panel"></main>
+<script type="module">
+// Mounts the web3 tabs the way core's studio page will (docs/ARCHITECTURE.md, "Studio tabs"), with no ctx.api and
+// no ctx.wallet so the tabs use their own fallbacks (same-origin fetch, their own Wallet Standard discovery).
+const tabs = (await Promise.all(['/studio/tabs/token.js', '/studio/tabs/shop.js'].map((p) => import(p)))).map((m) => m.default).sort((a, b) => a.order - b.order);
+const nav = document.getElementById('tabs');
+const panel = document.getElementById('panel');
+const ctx = { game: { dir: 'harness' }, toast: (m) => console.log('toast:', m) };
+let unmount = null;
+function open(tab) {
+  unmount?.();
+  for (const b of nav.children) b.classList.toggle('on', b.dataset.tab === tab.id);
+  unmount = tab.mount(panel, ctx);
+  history.replaceState(null, '', `?tab=${tab.id}`);
+}
+for (const tab of tabs) {
+  const b = Object.assign(document.createElement('button'), { textContent: tab.label, onclick: () => open(tab) });
+  b.dataset.tab = tab.id;
+  nav.append(b);
+}
+open(tabs.find((t) => t.id === new URLSearchParams(location.search).get('tab')) ?? tabs[0]);
+</script>
+</body>
+</html>

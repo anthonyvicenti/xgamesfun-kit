@@ -15,6 +15,7 @@ transactions, the loot program, Metaplex Core, the Meteora DBC launch instructio
 | --- | --- | --- | --- |
 | games.fun loot program IDL (program `FWVap91D…f53D`) | `web3/gf-web3/chain/loot-idl.js` | games.fun's own | Copied from games.fun `launchpad/loot/client/idl.json` at commit `111d4f926be7ab62dce6e5f7344e23ac6afe2adc`, with doc comments removed |
 | Meteora Dynamic Bonding Curve IDL facts (instruction discriminators, account orders, `PoolConfig`/`VirtualPool` field offsets, program version 0.2.1) | `web3/gf-web3/chain/dbc.js` | MIT, per the `license` field of `@meteora-ag/dynamic-bonding-curve-sdk` 1.5.12. The npm package ships no LICENSE file. | Read from the IDL inside that SDK. The kit does not copy the SDK's code. The kit's builders are checked against the SDK's output through golden fixtures. |
+| Wallet Standard protocol | `web3/gf-web3/wallet.js`, `studio/tabs/web3/wallet.js` | Specification (wallet-standard, Apache-2.0) | Implemented from the protocol's events (`wallet-standard:register-wallet`, `wallet-standard:app-ready`). No library is used. |
 | ANS-104 data items | `web3/node/irys.mjs` | Specification (ArweaveTeam/arweave-standards) | Implemented from the specification. The output is checked against `@irys/bundles` 0.0.5 (Apache-2.0) through golden fixtures. That package is not a dependency. |
 
 ### Test-only (not installed with the kit)
@@ -24,3 +25,9 @@ which is never part of the kit. That install holds `@solana/web3.js` 1.99.0 (MIT
 (Apache-2.0), `@meteora-ag/dynamic-bonding-curve-sdk` 1.5.12 (MIT), `@irys/bundles` 0.0.5 (Apache-2.0),
 `bn.js` 5.2.5 (MIT) and games.fun's own loot client. The fixture file holds the outputs and public devnet account
 bytes. It holds no code.
+
+### Dev dependencies
+
+| Package | Version | Licence | Why |
+| --- | --- | --- | --- |
+| `playwright` | 1.63.0 (published 2026-09-04) | Apache-2.0 | The studio tabs' browser test (`tests/web3-studio.test.mjs`) and the web3 devnet proof drive Chrome with an injected Wallet Standard wallet. `playwright-core` 1.63.0 comes with it (Apache-2.0). |

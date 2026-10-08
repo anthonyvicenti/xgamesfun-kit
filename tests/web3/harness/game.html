@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gf-web3 harness game</title>
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; background: #10131a; color: #e8ecf3; font: 14px system-ui, sans-serif; padding: 16px; }
+  button { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid #2a3140; background: #161a22; color: inherit; cursor: pointer; margin: 2px; }
+  pre { white-space: pre-wrap; background: #0d0f14; padding: 10px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<h1>Harness game</h1>
+<p id="who">Guest</p>
+<div id="shop"></div>
+<pre id="log"></pre>
+<script type="module">
+// A stand-in game page: it loads gf-web3 the way a gf-three game would (from the kit's copy) and reads ./gamesfun.json
+// from the game folder. The devnet proof drives `window.gf` directly.
+import gf from '/web3/gf-web3/index.js';
+window.gf = gf;
+const log = (x) => (document.getElementById('log').textContent += `${typeof x === 'string' ? x : JSON.stringify(x)}\n`);
+gf.on('status', (s) => s && log(s));
+gf.on('wallet', (a) => (document.getElementById('who').textContent = a ? `Signed in: ${a}` : 'Guest'));
+await gf.ready();
+log(`gf-web3 ${gf.VERSION}, mock: ${gf.mock}`);
+const shop = document.getElementById('shop');
+for (const item of await gf.shop.list()) {
+  if (!item.forSale) continue;
+  shop.append(Object.assign(document.createElement('button'), { textContent: `Buy ${item.name} (${item.priceText})`, onclick: () => gf.shop.buy(item.id).then(log, (e) => log(e.message)) }));
+}
+for (const box of await gf.boxes()) {
+  shop.append(Object.assign(document.createElement('button'), { textContent: `Open ${box.name} (${box.priceText})`, onclick: () => gf.openBox(box.id).then(log, (e) => log(e.message)) }));
+}
+window.__gfReady = true;
+</script>
+</body>
+</html>
