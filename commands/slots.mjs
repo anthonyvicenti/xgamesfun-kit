@@ -2,7 +2,8 @@ import path from 'node:path';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { runTool } from '../lib/run-tool.mjs';
-import { listSlots, setFile, setValue, findSlot, getPointer } from '../lib/slots.mjs';
+import { addKitIgnores } from '../lib/manifest-ignores.mjs';
+import { listSlots, setFile, setValue, findSlot, getPointer, slotsUpToDate } from '../lib/slots.mjs';
 
 const usage = `Usage:
   gamesfun slots [list] [dir] [--all] [--group <g>] [--json]   the main tier (about 40 slots); --all for every slot
@@ -44,9 +45,17 @@ export default {
       console.log(`\n${rows.length} of ${r.total} slots${values.all ? '' : ' (main tier; --all for every slot)'} in ${shown(dir)}/assets.json`);
       return;
     }
-    if (verb === 'write' || verb === 'check') {
+    if (verb === 'write') {
       const dir = await resolveGame(values.game ?? positionals[0]);
-      return (await runTool('slots', [dir, verb === 'write' ? '--write' : '--check'], { stdio: 'inherit' })).code;
+      const r = await runTool('slots', [dir, '--write'], { stdio: 'inherit' });
+      if (r.code === 0) await addKitIgnores(dir);
+      return r.code;
+    }
+    if (verb === 'check') {
+      const dir = await resolveGame(values.game ?? positionals[0]);
+      const r = await slotsUpToDate(dir);
+      console.log(r.same ? 'slots: assets.json is up to date' : 'slots: assets.json differs from what the declarations give (run: npx gamesfun slots write)');
+      return r.same ? 0 : 1;
     }
     const id = positionals[0];
     if (!id) throw new UsageError(usage);

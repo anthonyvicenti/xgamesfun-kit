@@ -1,4 +1,6 @@
+import path from 'node:path';
 import { guard, parse } from '../lib/cli.mjs';
+import { addKitIgnores } from '../lib/manifest-ignores.mjs';
 import { resolveGame } from '../lib/games.mjs';
 import { runTool } from '../lib/run-tool.mjs';
 
@@ -19,6 +21,8 @@ export default {
     if (values.out) flags.push('--out', values.out);
     if (values.world) flags.push('--world');
     if (values.json) flags.push('--json');
-    return (await runTool('upgrade', [dir, ...flags])).code;
+    const r = await runTool('upgrade', [dir, ...flags]);
+    if (r.code === 0) await addKitIgnores(values.out ? path.resolve(values.out) : dir).catch(() => {});
+    return r.code;
   }),
 };

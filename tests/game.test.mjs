@@ -6,7 +6,9 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { createGame } from '../lib/create.mjs';
 import { listExamples } from '../lib/examples.mjs';
-import { EXAMPLES, KIT_ROOT, toPosix } from '../lib/paths.mjs';
+import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import { BIN, EXAMPLES, KIT_ROOT, toPosix } from '../lib/paths.mjs';
 import { coerceValue, listSlots, setFile, setValue } from '../lib/slots.mjs';
 import { tempDir, tempGame } from './helpers.mjs';
 
@@ -30,6 +32,24 @@ test('create --from: a full game with the example\'s rules and the game\'s own a
   assert.doesNotMatch(agents, /\{\{[A-Z_]+\}\}/, 'no unfilled placeholders');
   assert.equal((await readFile(path.join(g.dir, 'CLAUDE.md'), 'utf8')).trim(), '@AGENTS.md');
   assert.equal(JSON.parse(await readFile(path.join(g.dir, 'multiplayer.json'), 'utf8')).mode, 'live');
+});
+
+test('a created game passes the kit\'s asset-manifest validator (verify check 1), agent guide files included', async () => {
+  const { validateGame } = await import(pathToFileURL(path.join(KIT_ROOT, 'kits', 'research', 'asset-manifest', 'validate.mjs')).href);
+  const v = await validateGame(g.dir);
+  assert.deepEqual(v.errors, []);
+  assert.equal(v.ok, true);
+  const ignored = JSON.parse(await readFile(path.join(g.dir, 'assets.json'), 'utf8')).ignore.map(e => e.path);
+  for (const p of ['AGENTS.md', 'CLAUDE.md', '.claude/**', 'scratch/**']) assert.ok(ignored.includes(p), p);
+});
+
+test('slots write keeps the agent ignores, and slots check agrees', async () => {
+  const run = args => spawnSync(process.execPath, [BIN, 'slots', ...args], { encoding: 'utf8' });
+  assert.equal(run(['check', g.dir]).status, 0, 'fresh game is up to date');
+  assert.equal(run(['write', g.dir]).status, 0);
+  assert.equal(run(['check', g.dir]).status, 0, 'still up to date after write');
+  const { validateGame } = await import(pathToFileURL(path.join(KIT_ROOT, 'kits', 'research', 'asset-manifest', 'validate.mjs')).href);
+  assert.equal((await validateGame(g.dir)).ok, true);
 });
 
 test('create again keeps the game\'s own rules.js and config; create refuses a folder that is not a game', async () => {
