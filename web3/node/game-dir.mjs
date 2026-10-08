@@ -29,19 +29,26 @@ export async function resolveGame(given, { kitRoot = KIT_ROOT, cwd = process.cwd
 }
 
 /**
- * Where the studio is for a tab, when `gamesfun dev` is running: GAMESFUN_DEV_URL, else the URL or port the dev
- * server records in .gamesfun/dev.json. Null when it is not known (the dev server is not running).
+ * The studio's address when `gamesfun dev` is running for this game: GAMESFUN_DEV_URL, else the running dev servers
+ * core records in .gamesfun/dev.json (lib/state.mjs). Null when none is running for it.
  */
-export async function studioUrl(tab, { kitRoot = KIT_ROOT, env = process.env } = {}) {
-  let base = env.GAMESFUN_DEV_URL ?? null;
-  if (!base) {
-    try {
-      const dev = JSON.parse(await readFile(path.join(kitRoot, '.gamesfun', 'dev.json'), 'utf8'));
-      base = dev.url ?? (dev.port ? `http://127.0.0.1:${dev.port}/` : null);
-    } catch {}
+export async function studioUrl({ gameDir = null, kitRoot = KIT_ROOT, env = process.env } = {}) {
+  if (env.GAMESFUN_DEV_URL) return new URL('studio/', env.GAMESFUN_DEV_URL).toString();
+  try {
+    const { servers = [] } = JSON.parse(await readFile(path.join(kitRoot, '.gamesfun', 'dev.json'), 'utf8'));
+    const running = servers.filter((s) => s?.url && alive(s.pid));
+    const mine = running.find((s) => gameDir && s.gameDir && path.resolve(s.gameDir) === path.resolve(gameDir));
+    return mine ? new URL('studio/', mine.url).toString() : null;
+  } catch {
+    return null;
   }
-  if (!base) return null;
-  const url = new URL(base);
-  url.searchParams.set('tab', tab);
-  return url.toString();
+}
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e.code === 'EPERM';
+  }
 }

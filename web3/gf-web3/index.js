@@ -32,7 +32,9 @@ import { rpcClient } from './rpc.js';
 import { fromUnits, odds, secretLike } from './rules.js';
 import * as walletKit from './wallet.js';
 
-export const VERSION = '1.0.0';
+import { VERSION } from './version.js';
+
+export { VERSION };
 const ROLL_POLL_MS = 1000;
 const ROLL_POLLS = 90;
 

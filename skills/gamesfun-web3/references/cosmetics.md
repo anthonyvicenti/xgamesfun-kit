@@ -18,23 +18,25 @@ slots that owning the item changes:
 
 ## Wear what the player owns
 
+In `rules.js` (game code never goes in `main.js`, `index.html` or `gf/`):
+
 ```js
 import gfWeb3 from './gf/web3/index.js';
 
-connectButton.onclick = async () => {
-  try {
-    await gfWeb3.connect();       // the wallet picker, only now
-    await gfWeb3.wearOwned();     // owned items' looks → window.__GF_LOADOUT
-  } catch (error) {
-    showMessage(error.message);   // no wallet installed, or the player cancelled
-  }
+export default {
+  setup(ctx) {
+    const wear = () => gfWeb3.wearOwned().catch(() => {});
+    gfWeb3.ready().then(() => gfWeb3.address && wear());
+    gfWeb3.on('wallet', (address) => address && wear());   // after the player connects (see buy-button.md)
+    gfWeb3.on('items', wear);                               // after a buy or a box opens
+  },
 };
-gfWeb3.on('items', () => gfWeb3.wearOwned());   // after a buy or a box opens
 ```
 
-`wearOwned()` sets `window.__GF_LOADOUT`. gf-three's `kit/net/looks.js` applies it to this player,
-and every other copy in the match draws it too (the `lk`/`lo` loadout messages). You write no
-multiplayer code for this.
+`wearOwned()` sets `window.__GF_LOADOUT`. gf-three's `kit/net/looks.js` applies it to this player, and every
+other copy in the match draws it too (the `lk`/`lo` loadout messages). You write no multiplayer code for this.
+`ctx.looks.apply(loadout)` is the same thing from inside the rules, so
+`ctx.looks.apply((await gfWeb3.wear(ids)).loadout)` works too.
 
 - **One item per slot.** With no choice made, the rarest owned item wins each slot. To let the
   player choose, call `gfWeb3.wear([itemId, …])`. Their order wins, and the choice is remembered per

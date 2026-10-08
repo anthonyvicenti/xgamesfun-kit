@@ -23,7 +23,11 @@ export function createWeb3Api(ctx) {
   const engine = ctx.engine ?? createFlowEngine(ctx.now ? { now: ctx.now } : {});
   const kitRoot = ctx.kitRoot ?? process.cwd();
   let chain = null;
-  const chainCtx = async () => (chain ??= await chainContext(kitRoot, { env: ctx.env ?? process.env, fetchImpl: ctx.fetchImpl }));
+  const chainCtx = async () => {
+    // The dev server takes the network from the game's gamesfun.json (or GAMESFUN_NETWORK): devnet only here.
+    if (ctx.network && ctx.network !== 'devnet') throw new HttpError(409, `The games.fun kit runs on devnet only; this game names ${ctx.network}.`);
+    return (chain ??= await chainContext(kitRoot, { env: ctx.env ?? process.env, fetchImpl: ctx.fetchImpl }));
+  };
   const gameDir = () => {
     if (!ctx.gameDir) throw new HttpError(409, 'Open a game first (gamesfun dev games/<name>).');
     return path.resolve(ctx.gameDir);

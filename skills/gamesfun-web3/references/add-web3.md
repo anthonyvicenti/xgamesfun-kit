@@ -1,18 +1,29 @@
 # Add web3 to a game
 
-## 1. The kit is in the game
+## 1. The kit is in the game. Use it from `rules.js`
 
-A game made with `npx gamesfun create` carries the in-game kit at `gf/web3/` (a copy of the kit's
-`web3/gf-web3/`). A game made before that needs the folder copied in. Don't edit that copy. It's
-the kit's, and it's updated as a whole.
+`npx gamesfun create` (and `upgrade`) copies the in-game kit into every game at `gf/web3/`, and writes a
+`gamesfun.json` stub there. Like everything under `gf/`, that copy belongs to the kit, so never edit it.
+`index.html` and `main.js` belong to the kit too (verify check 2). **Your web3 code goes in `rules.js`**, the game's
+own file:
 
 ```js
-// main.js (or wherever the game boots)
+// rules.js
 import gfWeb3 from './gf/web3/index.js';
-await gfWeb3.ready(); // reads ./gamesfun.json; never throws; an empty setup when there is none
+
+export default {
+  setup(ctx) {
+    // A player who connected a wallet wears what they own; guests wear the game's defaults.
+    gfWeb3.ready().then(() => gfWeb3.address && gfWeb3.wearOwned()).catch(() => {});
+    gfWeb3.on('items', () => gfWeb3.wearOwned().catch(() => {}));
+    // …the game's own setup
+  },
+};
 ```
 
-A game with no `gamesfun.json` still loads. The shop is just empty.
+`ready()` never throws. A game with an empty `gamesfun.json` still loads, and its shop is just empty. Under
+`gamesfun verify` the kit runs its mock, so verify stays deterministic. The Soak Squad example with these lines
+passes `verify --quick` (16/16; check 9 is skipped by `--quick`).
 
 ## 2. Draft the setup (no signature needed)
 

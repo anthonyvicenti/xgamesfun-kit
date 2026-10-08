@@ -19,15 +19,16 @@ In the mock:
 - What the mock buys or opens is owned until the page reloads.
 
 Use it to check that the buttons appear, the looks apply, errors show, and the game still runs for a
-guest who never connects.
+guest who never connects. Run `npx gamesfun verify games/<name> --quick` after wiring web3: the kit runs the mock
+there, and verify's loadout leg (check 5) still has to pass.
 
 ## A real wallet on devnet
 
 The human does this part. You can't approve a wallet prompt, and you must never ask for a key.
 
-1. Run the game (`npx gamesfun dev games/<name>`) and open it in the human's own Chrome, where their
-   wallet extension is. A normal Chrome window is not automated, so the mock is off. In an automated
-   browser, add `?gamesfun_mock=0`.
+1. Run `npx gamesfun dev games/<name>`. It opens the studio in the human's own Chrome profile, where their
+   wallet extension is. The game is at `/game/`. A normal Chrome window is not automated, so the mock is off.
+   In an automated browser, add `?gamesfun_mock=0`.
 2. Ask them to switch the wallet (Phantom, Solflare, Backpack…) to **devnet** and get devnet SOL
    (https://faucet.solana.com).
 3. Have them connect, buy an item and open a box, approving each in the wallet. Then check the result

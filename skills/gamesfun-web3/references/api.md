@@ -1,7 +1,7 @@
 # gf-web3 API (`gf/web3/index.js`, version 1.0.0)
 
 ```js
-import gfWeb3 from './gf/web3/index.js';
+import gfWeb3 from './gf/web3/index.js';   // from rules.js; create and upgrade keep gf/web3/ current
 ```
 
 | Call | Returns | Notes |

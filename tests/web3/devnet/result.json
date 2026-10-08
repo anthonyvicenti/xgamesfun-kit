@@ -1,0 +1,49 @@
+{
+  "network": "devnet",
+  "startedAt": "2026-10-08T01:17:57.800Z",
+  "steps": [
+    {
+      "name": "fund the creator from the public devnet faucet",
+      "at": "2026-10-08T01:18:32.424Z",
+      "creator": "7Mj8GZjgesKWEG43o9ibp1mi6GHkB7nV5ubCV9xd4389",
+      "blocked": "You've either reached your airdrop limit today or the airdrop faucet has run dry. Please visit https://faucet.solana.com for alternate sources of test SOL | You've either reached your airdrop limit today or the airdrop faucet has run dry. Please visit https://faucet.solana.com for alternate sources of test SOL",
+      "balance": "0",
+      "airdrops": [
+        {
+          "lamports": 2000000000,
+          "ok": false,
+          "message": "You've either reached your airdrop limit today or the airdrop faucet has run dry. Please visit https://faucet.solana.com for alternate sources of test SOL"
+        },
+        {
+          "lamports": 1000000000,
+          "ok": false,
+          "message": "You've either reached your airdrop limit today or the airdrop faucet has run dry. Please visit https://faucet.solana.com for alternate sources of test SOL"
+        }
+      ]
+    },
+    {
+      "name": "Irys uploads from the Token tab (signed by the wallet with signMessage, free under 100 KB)",
+      "at": "2026-10-08T01:18:50.533Z",
+      "uploads": [
+        "29vqCDoYp2EQUmUR84L1iXYJ6KxE1eX99oLfXAco9Trx",
+        "cvj7yRcGrefbaoSWMKrYALX2csrYkoQKrrMNmGe16MQ"
+      ],
+      "prompts": [
+        "message",
+        "message"
+      ]
+    },
+    {
+      "name": "token launch transaction",
+      "at": "2026-10-08T01:18:52.391Z",
+      "ok": false,
+      "error": "The network refused this in a dry run: AccountNotFound"
+    }
+  ],
+  "blocked": {
+    "faucet": "You've either reached your airdrop limit today or the airdrop faucet has run dry. Please visit https://faucet.solana.com for alternate sources of test SOL | You've either reached your airdrop limit today or the airdrop faucet has run dry. Please visit https://faucet.solana.com for alternate sources of test SOL"
+  },
+  "creator": "7Mj8GZjgesKWEG43o9ibp1mi6GHkB7nV5ubCV9xd4389",
+  "player": "7QTdqYvgqvZJcfbbL6EZqkpiiGrxQSXw7xNMx6FierQ9",
+  "finishedAt": "2026-10-08T01:18:52.449Z"
+}

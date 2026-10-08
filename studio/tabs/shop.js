@@ -4,7 +4,7 @@
 // from rarity, and one "Put it on sale" that is one wallet approval for every transaction (plus a signature for
 // each new upload).
 import { fromUnits, pictureUrl } from './web3/client.js';
-import { approvalPanel, choosePicture, fill, h, modal, note, requestBanner, styles, tabContext, walletChip } from './web3/ui.js';
+import { approvalPanel, choosePicture, fill, h, keepFresh, modal, note, requestBanner, styles, tabContext, walletChip } from './web3/ui.js';
 
 const STATE_LABEL = { draft: 'Not on sale yet', published: 'On sale', changed: 'Changes not live' };
 const SWATCHES = ['#ff4d6d', '#ff9f1c', '#ffd23f', '#7bd389', '#2ec4b6', '#3a86ff', '#8338ec', '#f15bb5', '#ffffff', '#1b1b1f'];
@@ -67,8 +67,8 @@ export default {
     }
 
     function header() {
-      return h('div', { class: 'bar' },
-        h('div', {}, h('h2', {}, 'Shop'), h('span', { class: 'badge dev' }, 'Devnet · test tokens only')),
+      return h('div', { class: 'w3-bar' },
+        h('div', {}, h('h2', {}, 'Shop'), h('span', { class: 'w3-badge dev' }, 'Devnet · test tokens only')),
         walletChip(t, (error) => (error ? (message = { kind: 'error', text: error }) : null, render())));
     }
 
@@ -79,7 +79,7 @@ export default {
       if (state.config.token?.program === 'spl-token') options.unshift({ label: `$${state.config.token.symbol}`, value: 'token', mint: state.config.token.mint });
       const chosen = s?.currency?.mint ?? options[0].mint;
       const other = s?.currency && !options.some((o) => o.mint === s.currency.mint);
-      return h('div', { class: 'row', 'data-testid': 'shop-pay' },
+      return h('div', { class: 'w3-row', 'data-testid': 'shop-pay' },
         h('span', { class: 'dim' }, 'Players pay with'),
         h('div', { class: 'seg', role: 'radiogroup' },
           options.map((o) => h('button', { role: 'radio', class: !other && chosen === o.mint ? 'on' : '', 'aria-checked': String(!other && chosen === o.mint), onclick: () => run(`Your shop is priced in ${o.label}.`, () => t.api('/shop/currency', { currency: o.value })) }, o.label)),
@@ -111,7 +111,7 @@ export default {
           } }, 'Look it up'),
           info ? h('p', { class: 'note', 'data-testid': 'mint-card' }, h('strong', {}, info.name ?? 'Unnamed token'), ` ${info.symbol ? `$${info.symbol}` : ''} · ${info.decimals} decimals`) : null,
           error ? h('p', { class: 'note error' }, error) : null,
-          h('div', { class: 'row' },
+          h('div', { class: 'w3-row' },
             h('button', { class: 'primary', disabled: !info || !info.lootReady, onclick: () => (m.close(), run(`Your shop is priced in ${info.symbol ?? 'that token'}.`, () => t.api('/shop/currency', { currency: info.mint }))) }, `Price in ${info?.symbol ? `$${info.symbol}` : 'this token'}`),
             h('button', { onclick: m.close }, 'Cancel')));
       draw();
@@ -148,7 +148,7 @@ export default {
           state.looks.length ? null : h('p', { class: 'dim' }, 'This game declares no player looks yet, so items are collectibles only.'),
           ...state.looks.map((slot) => {
             const on = slot.id in values || slot.id in files;
-            const toggle = h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: on, disabled: locked, style: 'width:auto', 'data-testid': `look-${slot.id}`, onchange: (e) => {
+            const toggle = h('label', { class: 'w3-row' }, h('input', { type: 'checkbox', checked: on, disabled: locked, style: 'width:auto', 'data-testid': `look-${slot.id}`, onchange: (e) => {
               if (e.target.checked) {
                 if (slot.type === 'color') values[slot.id] = SWATCHES[0];
                 else if (slot.type === 'enum') values[slot.id] = slot.options?.[0]?.value;
@@ -206,7 +206,7 @@ export default {
         fill(m.el, 
           h('h3', {}, item ? 'Edit item' : 'Add an item'),
           locked ? h('p', { class: 'note' }, 'Players already own this item, so its picture, name and look can’t change. The price and supply still can.') : null,
-          h('div', { class: 'row' }, slot,
+          h('div', { class: 'w3-row' }, slot,
             h('div', { class: 'grow', style: 'display:grid;gap:8px' },
               h('label', { class: 'field' }, 'Name', h('input', { value: draft.name, maxLength: 32, disabled: locked, 'data-testid': 'item-name', oninput: (e) => (draft.name = e.target.value) })),
               h('label', { class: 'field' }, `Price in ${unit()} (empty: loot boxes only)`, h('input', { value: draft.price, inputMode: 'decimal', placeholder: 'Loot boxes only', 'data-testid': 'item-price', oninput: (e) => (draft.price = e.target.value.replace(/[^0-9.]/g, '')) })))),
@@ -215,9 +215,9 @@ export default {
           lookEditor(draft, locked),
           h('details', {}, h('summary', {}, 'Supply and trading (optional)'),
             h('label', { class: 'field' }, 'How many can exist (empty: no limit)', h('input', { value: draft.maxSupply, inputMode: 'numeric', oninput: (e) => (draft.maxSupply = e.target.value.replace(/\D/g, '')) })),
-            h('label', { class: 'row' }, h('input', { type: 'checkbox', style: 'width:auto', checked: draft.soulbound, disabled: locked, onchange: (e) => (draft.soulbound = e.target.checked) }), 'Can’t be traded (stays with the player who got it)')),
+            h('label', { class: 'w3-row' }, h('input', { type: 'checkbox', style: 'width:auto', checked: draft.soulbound, disabled: locked, onchange: (e) => (draft.soulbound = e.target.checked) }), 'Can’t be traded (stays with the player who got it)')),
           error ? h('p', { class: 'note error' }, error) : null,
-          h('div', { class: 'row' },
+          h('div', { class: 'w3-row' },
             h('button', { class: 'primary', 'data-testid': 'item-save', onclick: save }, item ? 'Save' : 'Add item'),
             h('button', { onclick: m.close }, 'Cancel'),
             item && !item.listed ? h('button', { onclick: () => (m.close(), run('Item deleted.', () => t.api('/item/remove', { id: item.id }))) }, 'Delete') : null),
@@ -258,14 +258,14 @@ export default {
         fill(m.el, 
           h('h3', {}, box ? 'Edit loot box' : 'Make a loot box'),
           h('p', { class: 'dim' }, 'Players pay once and get one of these at random (MagicBlock VRF). Rarer items come up less often.'),
-          h('div', { class: 'row' },
+          h('div', { class: 'w3-row' },
             h('label', { class: 'field grow' }, 'Name', h('input', { value: draft.name, maxLength: 40, 'data-testid': 'box-name', oninput: (e) => (draft.name = e.target.value) })),
             h('label', { class: 'field grow' }, `Price in ${unit()}`, h('input', { value: draft.price, inputMode: 'decimal', placeholder: '1', 'data-testid': 'box-price', oninput: (e) => (draft.price = e.target.value.replace(/[^0-9.]/g, '')) }))),
-          h('label', { class: 'row' }, h('input', { type: 'checkbox', style: 'width:auto', checked: draft.custom, onchange: (e) => ((draft.custom = e.target.checked), draw()) }), 'Set the odds myself'),
+          h('label', { class: 'w3-row' }, h('input', { type: 'checkbox', style: 'width:auto', checked: draft.custom, onchange: (e) => ((draft.custom = e.target.checked), draw()) }), 'Set the odds myself'),
           h('ul', { style: 'list-style:none;padding:0;margin:0;display:grid;gap:6px' }, items.map((i) => {
             const on = draft.picked.includes(i.id);
-            return h('li', { class: 'row' },
-              h('label', { class: 'row grow' }, h('input', { type: 'checkbox', style: 'width:auto', checked: on, disabled: !on && draft.picked.length >= 8, onchange: () => {
+            return h('li', { class: 'w3-row' },
+              h('label', { class: 'w3-row grow' }, h('input', { type: 'checkbox', style: 'width:auto', checked: on, disabled: !on && draft.picked.length >= 8, onchange: () => {
                 draft.picked = on ? draft.picked.filter((x) => x !== i.id) : [...draft.picked, i.id];
                 draw();
               } }), `${i.name} (${i.rarity})`),
@@ -273,7 +273,7 @@ export default {
               on ? h('b', {}, total ? percent(weightOf(i.id) / total) : '–') : null);
           })),
           error ? h('p', { class: 'note error' }, error) : null,
-          h('div', { class: 'row' },
+          h('div', { class: 'w3-row' },
             h('button', { class: 'primary', 'data-testid': 'box-save', onclick: save }, box ? 'Save' : 'Add loot box'),
             h('button', { onclick: m.close }, 'Cancel'),
             box && !box.listed ? h('button', { onclick: () => (m.close(), run('Loot box deleted.', () => t.api('/box/remove', { id: box.id }))) }, 'Delete') : null),
@@ -298,7 +298,7 @@ export default {
       const items = s?.items ?? [];
       const waiting = items.filter((i) => itemState(i).state !== 'published' && (i.picture || i.image)).length + (s?.boxes ?? []).filter((b) => boxState(b).state !== 'published').length;
       const noPicture = items.filter((i) => !i.picture && !i.image).length;
-      return h('div', { class: 'card bar', 'data-testid': 'shop-publish' },
+      return h('div', { class: 'card w3-bar', 'data-testid': 'shop-publish' },
         h('div', {},
           h('strong', {}, waiting ? `${waiting} change${waiting === 1 ? '' : 's'} ready to go live` : live() ? 'Everything is on sale' : 'Add an item to open your shop'),
           h('p', { class: 'dim' }, live() ? `Priced in ${unit()}. One wallet approval puts changes live.` : 'One wallet approval opens the shop. Your wallet controls the collection, not games.fun.',
@@ -342,6 +342,10 @@ export default {
     }
 
     refresh();
-    return () => el.replaceChildren();
+    const stop = keepFresh(ctx, el, t, { busy: () => Boolean(flow), refresh, render });
+    return () => {
+      stop();
+      el.replaceChildren();
+    };
   },
 };

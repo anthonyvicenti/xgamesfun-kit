@@ -3,7 +3,7 @@
 // or use a token the creator already has (paste its address). A shop needs neither. Launching runs in the creator's
 // own wallet: two upload signatures and one transaction, each shown here before the wallet asks.
 import { explorer, fromUnits, pictureUrl, short } from './web3/client.js';
-import { approvalPanel, choosePicture, fill, h, note, requestBanner, styles, tabContext, walletChip } from './web3/ui.js';
+import { approvalPanel, choosePicture, fill, h, keepFresh, note, requestBanner, styles, tabContext, walletChip } from './web3/ui.js';
 
 /** "Bean Brawl" → BEAN; one short word → its letters; else initials. */
 function tickerOf(title) {
@@ -68,15 +68,15 @@ export default {
     }
 
     function header() {
-      return h('div', { class: 'bar' },
-        h('div', {}, h('h2', {}, 'Token'), h('span', { class: 'badge dev' }, 'Devnet · test tokens only')),
+      return h('div', { class: 'w3-bar' },
+        h('div', {}, h('h2', {}, 'Token'), h('span', { class: 'w3-badge dev' }, 'Devnet · test tokens only')),
         walletChip(t, (error) => (error ? (message = { kind: 'error', text: error }) : null, render())));
     }
 
     function tokenCard(token) {
       const live = state.chain?.token;
       return h('div', { class: 'card', 'data-testid': 'token-card' },
-        h('div', { class: 'row' },
+        h('div', { class: 'w3-row' },
           token.image ? h('img', { class: 'pic slot', src: token.image, alt: '', referrerpolicy: 'no-referrer' }) : null,
           h('div', { class: 'grow' },
             h('h3', {}, `${token.name} · $${token.symbol}`),
@@ -110,7 +110,7 @@ export default {
         h('button', { class: 'link', onclick: () => ((mode = 'choose'), render()) }, '← Back'),
         h('h3', {}, 'Launch a token'),
         h('p', { class: 'dim' }, 'Pick a picture, a name and a ticker. That’s all a launch needs.'),
-        h('div', { class: 'row' }, pictureSlot,
+        h('div', { class: 'w3-row' }, pictureSlot,
           h('div', { class: 'grow', style: 'display:grid;gap:8px' },
             h('label', { class: 'field' }, 'Name', input('name', { attrs: { maxLength: 32, 'data-testid': 'token-name' } })),
             h('label', { class: 'field' }, 'Ticker', input('symbol', { attrs: { maxLength: 10, 'data-testid': 'token-symbol' }, clean: (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, '') })))),
@@ -182,6 +182,10 @@ export default {
     }
 
     refresh();
-    return () => el.replaceChildren();
+    const stop = keepFresh(ctx, el, t, { busy: () => Boolean(flow), refresh, render });
+    return () => {
+      stop();
+      el.replaceChildren();
+    };
   },
 };

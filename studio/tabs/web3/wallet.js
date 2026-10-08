@@ -1,6 +1,6 @@
 // The studio's wallet, as the Token and Shop tabs use it. The studio page owns the Wallet Standard connection and
-// hands it over as ctx.wallet; this adapts the shapes it may take, and falls back to finding a wallet itself when
-// the page has none (a bare harness). The wallet signs in this browser; nothing here ever sees a private key.
+// hands it over as ctx.wallet (studio/wallet.js); this adapts it (and other shapes a host may pass), and falls back to
+// finding a wallet itself when the page has none. The wallet signs in this browser; nothing here ever sees a private key.
 //   { name, address(), connect(), signTransactions(base64[]) → base64[], signMessage(text) → base64 signature }
 
 const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -79,6 +79,39 @@ export function studioWallet(ctxWallet, chain = 'solana:devnet', pick = async (l
       async signMessage(text) {
         const sig = await ctxWallet.signMessage(new TextEncoder().encode(text));
         return typeof sig === 'string' ? sig : bytesToB64(sig.signature ?? sig);
+      },
+    };
+  }
+  // The studio page's own wallet (studio/wallet.js): list(), connect(name?), account, address, feature(name), onChange(fn).
+  if (ctxWallet && typeof ctxWallet.feature === 'function' && typeof ctxWallet.list === 'function') {
+    const need = (name) => {
+      const f = ctxWallet.feature(name);
+      if (!f) throw new Error(`${ctxWallet.wallet?.name ?? 'This wallet'} can’t ${name === 'solana:signMessage' ? 'sign messages' : 'sign transactions'}; pick another wallet.`);
+      return f;
+    };
+    return {
+      get name() {
+        return ctxWallet.wallet?.name ?? 'Wallet';
+      },
+      address: () => ctxWallet.address ?? null,
+      onChange: (fn) => ctxWallet.onChange(fn),
+      async connect() {
+        if (ctxWallet.address) return ctxWallet.address;
+        const list = ctxWallet.list().map((w) => w.wallet).filter(usable);
+        if (!list.length) throw new Error('No Solana wallet found in this browser. Install Phantom (or any Wallet Standard wallet), switch it to devnet and reload.');
+        const wallet = await pick(list);
+        if (!wallet) throw new Error('No wallet chosen.');
+        const account = await ctxWallet.connect(wallet.name);
+        if (!account) throw new Error('The wallet did not share an account.');
+        return account.address;
+      },
+      async signTransactions(list) {
+        const outputs = await need('solana:signTransaction').signTransaction(...list.map((b64) => ({ account: ctxWallet.account, transaction: b64ToBytes(b64), chain })));
+        return outputs.map((o) => bytesToB64(o.signedTransaction));
+      },
+      async signMessage(text) {
+        const [out] = await need('solana:signMessage').signMessage({ account: ctxWallet.account, message: new TextEncoder().encode(text) });
+        return bytesToB64(out.signature);
       },
     };
   }

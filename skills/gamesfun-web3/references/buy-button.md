@@ -1,10 +1,12 @@
 # Buy and open-box buttons
 
-Draw the shop the way the game draws its other UI. The kit gives you data and actions.
+The kit gives you data and actions. gf-three's `ctx.ui` has meters, banners and toasts, but no buttons, so draw
+the shop as a small DOM overlay from `rules.js` `setup(ctx)` (style it like the game's HUD), and give feedback
+with `ctx.ui.toast`. A **Connect** button calls `gfWeb3.connect()`.
 
 ```js
 import gfWeb3 from './gf/web3/index.js';
-await gfWeb3.ready();
+await gfWeb3.ready();   // in setup(ctx): gfWeb3.ready().then(drawShop)
 
 for (const item of await gfWeb3.shop.list()) {           // listed items, priced in the shop's currency
   if (!item.forSale) continue;                           // "Loot boxes only" items

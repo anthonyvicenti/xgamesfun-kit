@@ -6,6 +6,7 @@ import { lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from
 import path from 'node:path';
 import { CONFIG_FILE, emptyConfig, parseConfig, serializeConfig } from '../gf-web3/config.js';
 import { RuleError } from '../gf-web3/rules.js';
+import { addKitIgnores } from '../../lib/manifest-ignores.mjs';
 
 /** The biggest picture uploaded for a token, a collection or an item. */
 export const MAX_PICTURE_BYTES = 5 * 1024 * 1024;
@@ -101,6 +102,8 @@ export async function writeConfig(gameDir, config) {
     await rm(temp, { force: true });
     throw error;
   }
+  // gamesfun.json is not a game asset: a gf-three game's manifest must say so, or verify check 1 fails.
+  await addKitIgnores(gameDir).catch(() => {});
   return parseConfig(text);
 }
 

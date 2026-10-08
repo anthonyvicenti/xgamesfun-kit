@@ -28,8 +28,9 @@ export async function web3Action(action, sub, values, { kitRoot = KIT_ROOT, cwd 
   const approve = async (kind, input, summary) => {
     const request = await queueRequest(kitRoot, { kind, gameDir, input, from, summary });
     const tab = kind === 'launch' ? 'token' : 'shop';
-    const url = await studioUrl(tab, { kitRoot, env });
-    const where = url ?? `the studio's ${tab === 'token' ? 'Token' : 'Shop'} tab (start it with: npx gamesfun dev ${rel})`;
+    const url = await studioUrl({ gameDir, kitRoot, env });
+    const label = tab === 'token' ? 'Token' : 'Shop';
+    const where = url ? `${url} (the ${label} tab)` : `the studio's ${label} tab (start it with: npx gamesfun dev ${rel})`;
     return {
       approve: { requestId: request.id, url, tab, step: `Open ${where} and press "Review and approve". Your wallet shows every step before anything is signed.` },
       text: `${summary}\nWaiting for your approval: open ${where} and press "Review and approve". Nothing is signed until you approve it in your wallet.`,
