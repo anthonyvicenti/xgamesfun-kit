@@ -1,0 +1,25 @@
+{
+  "id": "quaternius-punk-woman",
+  "label": "Punk",
+  "file": "bodies/quaternius-punk-woman.glb",
+  "from": "library",
+  "kind": "cc0",
+  "tags": [
+    "human",
+    "woman",
+    "punk",
+    "rocker",
+    "street",
+    "music",
+    "rebel",
+    "player"
+  ],
+  "describe": "a punk with a mohawk, crop top and ripped black trousers; the top and the mohawk take the player colour",
+  "license": {
+    "spdx": "CC0-1.0",
+    "author": "Quaternius",
+    "url": "https://poly.pizza/m/djXoqejw6w",
+    "source": "https://poly.pizza/m/djXoqejw6w \"Punk\" (Ultimate Modular Women Pack), https://static.poly.pizza/1d368679-1d9a-4d5c-9095-877144b02d00.glb (sha256 77cbb683…8c52, retrieved 2026-10-07)",
+    "note": "made by research/gf-three/tools/cc0-bodies.mjs: posed at its bind pose (42 joints reset); normalised onto gf-humanoid-1 by tools/optimize.mjs --normalize --tint Pink --tint-mix 0.8; its own clips dropped"
+  }
+}

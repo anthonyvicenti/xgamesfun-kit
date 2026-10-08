@@ -1,0 +1,17 @@
+# Text files are LF in every checkout, on every platform.
+* text=auto eol=lf
+# kits/ is a byte-exact snapshot: tests/kits.test.mjs and gf-three's verify (check 2) compare sha256 hashes, so git
+# must never convert anything in it (a Windows checkout with core.autocrlf would otherwise break every hash).
+kits/** -text
+# Binary assets, wherever they are.
+*.glb binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ktx2 binary
+*.hdr binary
+*.wasm binary
+*.ogg binary
+*.mp3 binary
+*.wav binary

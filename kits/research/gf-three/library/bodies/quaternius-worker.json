@@ -1,0 +1,25 @@
+{
+  "id": "quaternius-worker",
+  "label": "Construction worker",
+  "file": "bodies/quaternius-worker.glb",
+  "from": "library",
+  "kind": "cc0",
+  "tags": [
+    "human",
+    "man",
+    "worker",
+    "construction",
+    "builder",
+    "hard-hat",
+    "job",
+    "player"
+  ],
+  "describe": "a moustached builder in a hard hat, hi-vis vest and work boots; the vest takes the player colour",
+  "license": {
+    "spdx": "CC0-1.0",
+    "author": "Quaternius",
+    "url": "https://poly.pizza/m/Yg2bQZO6Hj",
+    "source": "https://poly.pizza/m/Yg2bQZO6Hj \"Worker\" (Ultimate Modular Men Pack), https://static.poly.pizza/3a5f3056-ffe6-42eb-bd52-122afcbd22b2.glb (sha256 9c28614f…d38d, retrieved 2026-10-07)",
+    "note": "made by research/gf-three/tools/cc0-bodies.mjs: posed at its bind pose (45 joints reset); normalised onto gf-humanoid-1 by tools/optimize.mjs --normalize --tint Worker_Vest --tint-mix 0.7; its own clips dropped"
+  }
+}

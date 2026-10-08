@@ -1,0 +1,44 @@
+# Tests, then a real game: create from the example and quick-verify it in Chrome, on all three platforms.
+# Actions are disabled for this repository on purpose (the owner's billing decision); this runs once they are enabled.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Tests
+        run: npm test
+      - name: Skills mirrors in sync
+        run: node scripts/sync-skills.mjs --check
+      - name: Create a game from the example
+        run: npx gamesfun create games/ci --from soak-squad
+      - name: Quick verify (real Chrome, real input; software rendering on these runners)
+        run: npx gamesfun verify games/ci --quick
+      - name: Keep the verify evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-${{ matrix.os }}
+          path: games/ci/evidence/
+          if-no-files-found: ignore

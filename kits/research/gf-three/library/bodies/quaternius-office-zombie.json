@@ -1,0 +1,26 @@
+{
+  "id": "quaternius-office-zombie",
+  "label": "Office zombie",
+  "file": "bodies/quaternius-office-zombie.glb",
+  "from": "library",
+  "kind": "cc0",
+  "tags": [
+    "zombie",
+    "undead",
+    "office",
+    "worker",
+    "call-centre",
+    "short-sleeves",
+    "horror",
+    "enemy",
+    "human"
+  ],
+  "describe": "a zombie office worker: grey-green skin, pale eyes, a light-blue short-sleeve work shirt and dark trousers",
+  "license": {
+    "spdx": "CC0-1.0",
+    "author": "Quaternius",
+    "url": "https://poly.pizza/m/kZ3DmIoGip",
+    "source": "https://poly.pizza/m/kZ3DmIoGip \"Casual Character\" (Ultimate Modular Men Pack), https://static.poly.pizza/90a9e2d4-053f-42f1-99a2-8f5e1180ea7f.glb (sha256 fea7e712…46b4, retrieved 2026-10-07)",
+    "note": "made by research/gf-three/tools/cc0-bodies.mjs: posed at its bind pose (45 joints reset); recoloured Skin #8fae7a, Skin_Darker #6d8a5c, LightBrown #7ea6d8, LightBlue #3d4656, Eye #d9e8a0; normalised onto gf-humanoid-1 by tools/optimize.mjs --normalize; its own clips dropped"
+  }
+}

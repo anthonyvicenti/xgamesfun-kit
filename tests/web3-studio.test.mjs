@@ -11,15 +11,17 @@ import { fakeChain } from './web3/fake-chain.mjs';
 import { startHarness } from './web3/harness/server.mjs';
 import { injectWallet } from './web3/inject-wallet.mjs';
 import { makeGame } from './web3/helpers.mjs';
+import { findChrome } from '../lib/chrome.mjs';
 
 const F = JSON.parse(await readFile(new URL('./web3/fixtures/chain.json', import.meta.url), 'utf8'));
 let chromium = null;
 try {
-  ({ chromium } = await import('playwright'));
+  ({ chromium } = await import('playwright-core'));
 } catch {}
 
 async function launch() {
-  for (const options of [{ channel: 'chrome' }, {}]) {
+  const found = findChrome();
+  for (const options of [found ? { executablePath: found.path } : null, {}].filter(Boolean)) {
     try {
       return await chromium.launch({ headless: true, ...options });
     } catch {}
@@ -27,7 +29,7 @@ async function launch() {
   return null;
 }
 
-describe('studio tabs in Chrome (fake chain)', { skip: !chromium && 'playwright is not installed' }, () => {
+describe('studio tabs in Chrome (fake chain)', { skip: !chromium && 'playwright-core is not installed' }, () => {
   let browser;
   let harness;
   let game;

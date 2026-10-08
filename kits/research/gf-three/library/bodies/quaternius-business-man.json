@@ -1,0 +1,26 @@
+{
+  "id": "quaternius-business-man",
+  "label": "Office worker",
+  "file": "bodies/quaternius-business-man.glb",
+  "from": "library",
+  "kind": "cc0",
+  "tags": [
+    "human",
+    "man",
+    "office",
+    "business",
+    "suit",
+    "boss",
+    "worker",
+    "modern",
+    "player"
+  ],
+  "describe": "a man in a dark business suit, white shirt and tie; the tie takes the player colour",
+  "license": {
+    "spdx": "CC0-1.0",
+    "author": "Quaternius",
+    "url": "https://poly.pizza/m/JFrLIKqvCH",
+    "source": "https://poly.pizza/m/JFrLIKqvCH \"Business Man\" (Ultimate Modular Men Pack), https://static.poly.pizza/e599abbe-7d73-488c-9d7e-3ead281e705c.glb (sha256 82b81257…546e, retrieved 2026-10-07)",
+    "note": "made by research/gf-three/tools/cc0-bodies.mjs: posed at its bind pose (45 joints reset); normalised onto gf-humanoid-1 by tools/optimize.mjs --normalize --tint Tie --tint-mix 1; its own clips dropped"
+  }
+}

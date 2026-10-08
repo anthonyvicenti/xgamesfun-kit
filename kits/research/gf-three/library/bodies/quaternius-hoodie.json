@@ -1,0 +1,26 @@
+{
+  "id": "quaternius-hoodie",
+  "label": "Hoodie kid",
+  "file": "bodies/quaternius-hoodie.glb",
+  "from": "library",
+  "kind": "cc0",
+  "tags": [
+    "human",
+    "man",
+    "teen",
+    "casual",
+    "streetwear",
+    "hoodie",
+    "skater",
+    "modern",
+    "player"
+  ],
+  "describe": "a young man in a hoodie, shorts and trainers; the hoodie takes the player colour",
+  "license": {
+    "spdx": "CC0-1.0",
+    "author": "Quaternius",
+    "url": "https://poly.pizza/m/gKLBoRsyKe",
+    "source": "https://poly.pizza/m/gKLBoRsyKe \"Hoodie Character\" (Ultimate Modular Men Pack), https://static.poly.pizza/bcd66ec5-5e81-4901-a222-47abc875fe2a.glb (sha256 0de1bcd7…e61e, retrieved 2026-10-07)",
+    "note": "made by research/gf-three/tools/cc0-bodies.mjs: posed at its bind pose (45 joints reset); normalised onto gf-humanoid-1 by tools/optimize.mjs --normalize --tint Purple --tint-mix 0.8; its own clips dropped"
+  }
+}

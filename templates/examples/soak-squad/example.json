@@ -1,0 +1,10 @@
+{
+  "title": "Soak Squad",
+  "summary": "A backyard water fight: buckets fill your tank, your spray claims the lawn, soaking friends steals points.",
+  "verified": {
+    "result": "PASS 16/16 (check 9 skipped: no contact-sheet tool in this kit)",
+    "kits": "e9ffd2423380a71397084985d88dd924c8574ab5",
+    "date": "2026-10-07",
+    "how": "fresh clone, npm ci, npx gamesfun create games/demo --from soak-squad, npx gamesfun verify games/demo (Linux, Chrome, 106 s; the two-player gate 24/24)"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "quaternius-casual-man",
+  "label": "Casual man",
+  "file": "bodies/quaternius-casual-man.glb",
+  "from": "library",
+  "kind": "cc0",
+  "tags": [
+    "human",
+    "man",
+    "casual",
+    "everyday",
+    "modern",
+    "civilian",
+    "town",
+    "player"
+  ],
+  "describe": "a man in a T-shirt, jeans and trainers; the shirt takes the player colour",
+  "license": {
+    "spdx": "CC0-1.0",
+    "author": "Quaternius",
+    "url": "https://poly.pizza/m/kZ3DmIoGip",
+    "source": "https://poly.pizza/m/kZ3DmIoGip \"Casual Character\" (Ultimate Modular Men Pack), https://static.poly.pizza/90a9e2d4-053f-42f1-99a2-8f5e1180ea7f.glb (sha256 fea7e712…46b4, retrieved 2026-10-07)",
+    "note": "made by research/gf-three/tools/cc0-bodies.mjs: posed at its bind pose (45 joints reset); normalised onto gf-humanoid-1 by tools/optimize.mjs --normalize --tint LightBrown --tint-mix 0.6; its own clips dropped"
+  }
+}

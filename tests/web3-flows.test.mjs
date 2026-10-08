@@ -153,7 +153,10 @@ describe('putting a shop on sale, end to end (offline)', () => {
     assert.equal(item.price, 50_000_000n);
     assert.equal(item.uri, config.shop.items[0].uri);
     // The item details uploaded are real Metaplex JSON with the look under properties.gameLook.
-    const meta = JSON.parse(new TextDecoder().decode(chain.uploads.find((u) => u.id === config.shop.items[0].uri.split('/').pop()).bytes.slice(-2000)).replace(/^[^{]*/, ''));
+    // A data item (ANS-104, no target): 2 + 64 + 32 + 1 + 1 + 32 + 8 bytes, then the tags' length (u64), the tags, the data.
+    const dataItem = chain.uploads.find((u) => u.id === config.shop.items[0].uri.split('/').pop()).bytes;
+    const tagsLength = Number(new DataView(dataItem.buffer, dataItem.byteOffset).getBigUint64(140, true));
+    const meta = JSON.parse(new TextDecoder().decode(dataItem.subarray(148 + tagsLength)));
     assert.deepEqual(meta.properties.gameLook, { values: { 'character.tint.player': '#ffcc00' }, files: {} });
 
     const after = await request(server.port, { path: '/api/web3/state' });

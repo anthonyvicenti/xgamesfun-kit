@@ -9,7 +9,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium } from 'playwright-core';
 import { networkConfig, explorerUrl } from '../../../web3/gf-web3/network.js';
 import { rpcClient } from '../../../web3/gf-web3/rpc.js';
 import { compileMessage, wireTransaction } from '../../../web3/gf-web3/chain/tx.js';
@@ -20,6 +20,7 @@ import { keypairFromSecret } from '../../../web3/node/ed25519.mjs';
 import { startHarness } from '../harness/server.mjs';
 import { injectWallet } from '../inject-wallet.mjs';
 import { png } from '../helpers.mjs';
+import { findChrome } from '../../../lib/chrome.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const kitRoot = path.resolve(here, '..', '..', '..');
@@ -102,7 +103,8 @@ async function main() {
   if (funding.blocked) result.blocked = { faucet: funding.blocked };
 
   const harness = await startHarness({ gameDir, kitRoot: path.join(keyDir, 'kit-state') });
-  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const chrome = findChrome();
+  const browser = await chromium.launch({ headless: true, ...(chrome ? { executablePath: chrome.path } : {}) });
   const signed = [];
   try {
     const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });

@@ -1,0 +1,296 @@
+{
+  "about": "Where every library prop came from. curate.mjs --fetch re-downloads these into research/gf-three/.cache (gitignored) and checks the zip hashes.",
+  "retrieved": "2026-10-06",
+  "kenney": {
+    "furniture-kit": {
+      "title": "Furniture Kit (2.0)",
+      "page": "https://kenney.nl/assets/furniture-kit",
+      "download": "https://kenney.nl/media/pages/assets/furniture-kit/440e0608a4-1677580847/kenney_furniture-kit.zip",
+      "zipSha256": "e67652d0932cee41683f74711c03d3e192a2af9979ef8e6b237711f5482d46b0",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "city-kit-suburban": {
+      "title": "City Kit Suburban (2.0)",
+      "page": "https://kenney.nl/assets/city-kit-suburban",
+      "download": "https://kenney.nl/media/pages/assets/city-kit-suburban/2c871b7af2-1745479373/kenney_city-kit-suburban_20.zip",
+      "zipSha256": "5869c35cf30b1c87bdb2d197b6d325eebadd2ef08ea27f04797e8e08d77a9a39",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "city-kit-commercial": {
+      "title": "City Kit Commercial (2.1)",
+      "page": "https://kenney.nl/assets/city-kit-commercial",
+      "download": "https://kenney.nl/media/pages/assets/city-kit-commercial/a742d900eb-1753115042/kenney_city-kit-commercial_2.1.zip",
+      "zipSha256": "f8b09b081c2bb88bcc126e2dec1cb40fd0dad7e7e591b6c26aaefe96fb35276b",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "nature-kit": {
+      "title": "Nature Kit (2.1)",
+      "page": "https://kenney.nl/assets/nature-kit",
+      "download": "https://kenney.nl/media/pages/assets/nature-kit/37ac38a37b-1677698939/kenney_nature-kit.zip",
+      "zipSha256": "fa7974a0d342bfe63c38664ba9f8ec1a4aab8ea25f099bdc56870e33588c4d9d",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "platformer-kit": {
+      "title": "Platformer Kit (4.1)",
+      "page": "https://kenney.nl/assets/platformer-kit",
+      "download": "https://kenney.nl/media/pages/assets/platformer-kit/1585cf62b4-1775122253/kenney_platformer-kit.zip",
+      "zipSha256": "899605d237367688c6b42e41fff2206c0fb8d626163158294556353f7baa7c1b",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "mini-arena": {
+      "title": "Mini Arena (1.1)",
+      "page": "https://kenney.nl/assets/mini-arena",
+      "download": "https://kenney.nl/media/pages/assets/mini-arena/88f977a0cb-1709220730/kenney_mini-arena.zip",
+      "zipSha256": "514760c2bc2457027451534a0b06a23f98beece166fb11ed2321226276b83c2c",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "city-kit-roads": {
+      "title": "City Kit Roads (2.1)",
+      "page": "https://kenney.nl/assets/city-kit-roads",
+      "download": "https://kenney.nl/media/pages/assets/city-kit-roads/74288c9459-1787042796/kenney_city-kit-roads.zip",
+      "zipSha256": "22058af3d68173a7cf9bda9f0e243a8cef6bd68168c302ebc76327063849674e",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "food-kit": {
+      "title": "Food Kit (2.0)",
+      "page": "https://kenney.nl/assets/food-kit",
+      "download": "https://kenney.nl/media/pages/assets/food-kit/83086fa91c-1719418518/kenney_food-kit.zip",
+      "zipSha256": "cdad90853682499b94c9fda2f87678b24bfd8f3264e0ed323f6b6a27fd7c6f6f",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "holiday-kit": {
+      "title": "Holiday Kit (2.0)",
+      "page": "https://kenney.nl/assets/holiday-kit",
+      "download": "https://kenney.nl/media/pages/assets/holiday-kit/3976a6496a-1733923970/kenney_holiday-kit.zip",
+      "zipSha256": "fde4d514d7297388d98058e8933ff614e071886f7ce57f9aea4b00d7698dd769",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "minigolf-kit": {
+      "title": "Minigolf Kit (3.1)",
+      "page": "https://kenney.nl/assets/minigolf-kit",
+      "download": "https://kenney.nl/media/pages/assets/minigolf-kit/3ae60d8b01-1741163874/kenney_minigolf-kit.zip",
+      "zipSha256": "74b7bf5cf82bf8a5225319ade1284600c64f9482ae66f0ccf1f22d2212d5a952",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "toy-car-kit": {
+      "title": "Toy Car Kit (1.2)",
+      "page": "https://kenney.nl/assets/toy-car-kit",
+      "download": "https://kenney.nl/media/pages/assets/toy-car-kit/42e19cc426-1736346027/kenney_toy-car-kit.zip",
+      "zipSha256": "26c11bbb77102b8dd00cdaf7b2c7ab692416d750dd064de886d809acec346782",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "prototype-kit": {
+      "title": "Prototype Kit (1.0)",
+      "page": "https://kenney.nl/assets/prototype-kit",
+      "download": "https://kenney.nl/media/pages/assets/prototype-kit/4d3b7073ed-1724832076/kenney_prototype-kit.zip",
+      "zipSha256": "213b522fb12bcc9b9ac66c4f7581f7c74623293272212e40a70c39936ad3da95",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "mini-market": {
+      "title": "Mini Market (1.0)",
+      "page": "https://kenney.nl/assets/mini-market",
+      "download": "https://kenney.nl/media/pages/assets/mini-market/463f38da51-1729865423/kenney_mini-market.zip",
+      "zipSha256": "6f2e69090e359204ace43e4c98dc3fb8639b75e423109672b5c890d194c45203",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "fantasy-town-kit": {
+      "title": "Fantasy Town Kit (2.0)",
+      "page": "https://kenney.nl/assets/fantasy-town-kit",
+      "download": "https://kenney.nl/media/pages/assets/fantasy-town-kit/efe948d309-1754222374/kenney_fantasy-town-kit_2.0.zip",
+      "zipSha256": "1a7530c09f4d2fa2cdee259876f089334f8b1f27fa86a0c4f54ef86cdd8676ef",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "car-kit": {
+      "title": "Car Kit (3.1)",
+      "page": "https://kenney.nl/assets/car-kit",
+      "download": "https://kenney.nl/media/pages/assets/car-kit/1a312ec241-1775131960/kenney_car-kit.zip",
+      "zipSha256": "fac7dacac5c7874348cf19729af3ef205f3d366493edaf0a827d93f4fdf3d0c4",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "survival-kit": {
+      "title": "Survival Kit (2.0)",
+      "page": "https://kenney.nl/assets/survival-kit",
+      "download": "https://kenney.nl/media/pages/assets/survival-kit/4065a8185b-1712149243/kenney_survival-kit.zip",
+      "zipSha256": "c3586341b5932c87eb43d75d915434f47daed168b17ed36a03e8ca9977c7443e",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "mini-skate": {
+      "title": "Mini Skate (1.2)",
+      "page": "https://kenney.nl/assets/mini-skate",
+      "download": "https://kenney.nl/media/pages/assets/mini-skate/00b0c2b304-1709221152/kenney_mini-skate.zip",
+      "zipSha256": "82582f6de507e93090c16bb4802a7c361015fe246eddd571e6e96f816b12e8c6",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "mini-arcade": {
+      "title": "Mini Arcade (1.2)",
+      "page": "https://kenney.nl/assets/mini-arcade",
+      "download": "https://kenney.nl/media/pages/assets/mini-arcade/ece1e8f320-1721638600/kenney_mini-arcade.zip",
+      "zipSha256": "2acfe5cb44d392e834f77cf5488528c7cd45427cdf5fb941ce99856276158c19",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "mini-forest": {
+      "title": "Mini Forest (1.0)",
+      "page": "https://kenney.nl/assets/mini-forest",
+      "download": "https://kenney.nl/media/pages/assets/mini-forest/44a89aed7f-1784024079/kenney_mini-forest_1.0.zip",
+      "zipSha256": "8691614018075a66458e35915b8c358c2e6178648aedadafcdf313b924aa6581",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "building-kit": {
+      "title": "Building Kit (1.0)",
+      "page": "https://kenney.nl/assets/building-kit",
+      "download": "https://kenney.nl/media/pages/assets/building-kit/0de7aaa492-1743244741/kenney_building-kit.zip",
+      "zipSha256": "2740ef5772fb5fb3d7aab881db22d129f6b68afe711b1a79e6d5e9e19cf3eec6",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "modular-buildings": {
+      "title": "Modular Buildings (2.1)",
+      "page": "https://kenney.nl/assets/modular-buildings",
+      "download": "https://kenney.nl/media/pages/assets/modular-buildings/3253b4219a-1707397411/kenney_modular-buildings.zip",
+      "zipSha256": "47e1614686b4c0fe55190e88b22ff2b8b10935edf61f37f478a9b6a99477edc6",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "marble-kit": {
+      "title": "Marble Kit (2.0)",
+      "page": "https://kenney.nl/assets/marble-kit",
+      "download": "https://kenney.nl/media/pages/assets/marble-kit/56fd69e5ed-1716385090/kenney_marble-kit.zip",
+      "zipSha256": "4a289fe77fa4e71b943fb9a0df828a7987e62f665083ea9237d0bd9acd0b6dcb",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    }
+  },
+  "polypizza": {
+    "07KqBahqHXK": {
+      "title": "Sandbox",
+      "author": "sirkitree",
+      "licence": "CC-BY 3.0",
+      "spdx": "CC-BY-3.0",
+      "page": "https://poly.pizza/m/07KqBahqHXK",
+      "download": "https://static.poly.pizza/a6ee69b1-32ff-4e97-b2ed-a86146f2b71c.glb",
+      "preview": "https://static.poly.pizza/a6ee69b1-32ff-4e97-b2ed-a86146f2b71c.jpg"
+    },
+    "2li3sdSkmCI": {
+      "title": "Red/White Beach Umbrella",
+      "author": "S. Paul Michael",
+      "licence": "CC-BY 3.0",
+      "spdx": "CC-BY-3.0",
+      "page": "https://poly.pizza/m/2li3sdSkmCI",
+      "download": "https://static.poly.pizza/6c5af3c4-aa1a-4cd2-b181-be06f6567ccb.glb",
+      "preview": "https://static.poly.pizza/6c5af3c4-aa1a-4cd2-b181-be06f6567ccb.jpg"
+    },
+    "44cGXp6_8WD": {
+      "title": "Cloud",
+      "author": "Poly by Google",
+      "licence": "CC-BY 3.0",
+      "spdx": "CC-BY-3.0",
+      "page": "https://poly.pizza/m/44cGXp6_8WD",
+      "download": "https://static.poly.pizza/1c700295-38f5-44f1-9681-a13ef3e5aa7b.glb",
+      "preview": "https://static.poly.pizza/1c700295-38f5-44f1-9681-a13ef3e5aa7b.jpg"
+    },
+    "8CXbPO6p0n2": {
+      "title": "Cloud",
+      "author": "jeremy",
+      "licence": "CC-BY 3.0",
+      "spdx": "CC-BY-3.0",
+      "page": "https://poly.pizza/m/8CXbPO6p0n2",
+      "download": "https://static.poly.pizza/b713e1c3-f06b-49b3-b88f-d5f84eb4d968.glb",
+      "preview": "https://static.poly.pizza/b713e1c3-f06b-49b3-b88f-d5f84eb4d968.jpg"
+    },
+    "c53QXQ1ofIN": {
+      "title": "Barbecue Grill",
+      "author": "Jason Toff",
+      "licence": "CC-BY 3.0",
+      "spdx": "CC-BY-3.0",
+      "page": "https://poly.pizza/m/c53QXQ1ofIN",
+      "download": "https://static.poly.pizza/399e45ee-79cb-44b3-ab52-d29df72b960b.glb",
+      "preview": "https://static.poly.pizza/399e45ee-79cb-44b3-ab52-d29df72b960b.jpg"
+    },
+    "dDe3njWPbg0": {
+      "title": "Slide",
+      "author": "Poly by Google",
+      "licence": "CC-BY 3.0",
+      "spdx": "CC-BY-3.0",
+      "page": "https://poly.pizza/m/dDe3njWPbg0",
+      "download": "https://static.poly.pizza/3a8b471c-4e8d-4270-822f-7243a45604a3.glb",
+      "preview": "https://static.poly.pizza/3a8b471c-4e8d-4270-822f-7243a45604a3.jpg"
+    },
+    "e-IJdcqZH4p": {
+      "title": "Swing set",
+      "author": "Poly by Google",
+      "licence": "CC-BY 3.0",
+      "spdx": "CC-BY-3.0",
+      "page": "https://poly.pizza/m/e-IJdcqZH4p",
+      "download": "https://static.poly.pizza/d1bfc135-fa19-40ea-aae2-818a1c01edbe.glb",
+      "preview": "https://static.poly.pizza/d1bfc135-fa19-40ea-aae2-818a1c01edbe.jpg"
+    },
+    "GQieALI2C4": {
+      "title": "Picnic Table",
+      "author": "J-Toastie",
+      "licence": "CC-BY 3.0",
+      "spdx": "CC-BY-3.0",
+      "page": "https://poly.pizza/m/GQieALI2C4",
+      "download": "https://static.poly.pizza/83c41a82-88f3-4bc5-a77e-769ba6337626.glb",
+      "preview": "https://static.poly.pizza/83c41a82-88f3-4bc5-a77e-769ba6337626.jpg"
+    },
+    "zWi9p5FSxD": {
+      "title": "Water Cooler",
+      "author": "J-Toastie",
+      "licence": "CC-BY 3.0",
+      "spdx": "CC-BY-3.0",
+      "page": "https://poly.pizza/m/zWi9p5FSxD",
+      "download": "https://static.poly.pizza/a410e1d9-246d-4613-89a3-90001853c6a2.glb",
+      "preview": "https://static.poly.pizza/a410e1d9-246d-4613-89a3-90001853c6a2.jpg"
+    },
+    "qXBsZPAaYQ": {
+      "title": "Reel W/ Hose",
+      "author": "J-Toastie",
+      "licence": "CC-BY 3.0",
+      "spdx": "CC-BY-3.0",
+      "page": "https://poly.pizza/m/qXBsZPAaYQ",
+      "download": "https://static.poly.pizza/bfe7fd55-27df-4681-bf9d-ff103ca4911a.glb",
+      "preview": "https://static.poly.pizza/bfe7fd55-27df-4681-bf9d-ff103ca4911a.jpg"
+    }
+  }
+}

@@ -1,0 +1,4490 @@
+{
+ "schema": "gf-three-props/1",
+ "props": [
+  {
+   "id": "tree-round",
+   "file": "props/tree-round.glb",
+   "describe": "a tall tree with a round leafy crown",
+   "tags": [
+    "nature",
+    "tree",
+    "backyard",
+    "plaza",
+    "arena"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.35,
+    "height": 3,
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.926,
+    5.2,
+    1.926
+   ],
+   "tris": 126,
+   "bytes": 20188,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "tree-pine",
+   "file": "props/tree-pine.glb",
+   "describe": "a tall stylised pine tree",
+   "tags": [
+    "nature",
+    "tree"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.35,
+    "height": 3,
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.893,
+    5.5,
+    1.893
+   ],
+   "tris": 200,
+   "bytes": 21184,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "tree-small",
+   "file": "props/tree-small.glb",
+   "describe": "a small garden tree",
+   "tags": [
+    "nature",
+    "tree",
+    "backyard"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.25,
+    "height": 2,
+    "offset": [
+     0,
+     1,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.039,
+    2.8,
+    1.2
+   ],
+   "tris": 42,
+   "bytes": 20292,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "tree-large",
+   "file": "props/tree-large.glb",
+   "describe": "a large garden tree",
+   "tags": [
+    "nature",
+    "tree",
+    "backyard"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.35,
+    "height": 3,
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.262,
+    4.6,
+    1.457
+   ],
+   "tris": 42,
+   "bytes": 20300,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "tree-puffy",
+   "file": "props/tree-puffy.glb",
+   "describe": "a chunky cartoon tree with a puffy crown",
+   "tags": [
+    "nature",
+    "tree",
+    "arena",
+    "cute"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.3,
+    "height": 2.5,
+    "offset": [
+     0,
+     1.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.143,
+    3.8,
+    2.182
+   ],
+   "tris": 408,
+   "bytes": 24868,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "tree-pine-cute",
+   "file": "props/tree-pine-cute.glb",
+   "describe": "a chunky cartoon pine tree",
+   "tags": [
+    "nature",
+    "tree",
+    "arena",
+    "cute"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.3,
+    "height": 2.5,
+    "offset": [
+     0,
+     1.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.995,
+    4.2,
+    1.995
+   ],
+   "tris": 204,
+   "bytes": 21332,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "tree-oak",
+   "file": "props/tree-oak.glb",
+   "describe": "a low-poly oak tree",
+   "tags": [
+    "nature",
+    "tree"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.35,
+    "height": 3,
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.507,
+    4.8,
+    2.895
+   ],
+   "tris": 196,
+   "bytes": 5808,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "bush",
+   "file": "props/bush.glb",
+   "describe": "a round leafy bush",
+   "tags": [
+    "nature",
+    "bush"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.505,
+     0.9,
+     1.505
+    ],
+    "offset": [
+     0,
+     0.45,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.505,
+    0.9,
+    1.505
+   ],
+   "tris": 104,
+   "bytes": 3992,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "bush-large",
+   "file": "props/bush-large.glb",
+   "describe": "a large leafy bush",
+   "tags": [
+    "nature",
+    "bush"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2.003,
+     1.3,
+     1.796
+    ],
+    "offset": [
+     0,
+     0.65,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.003,
+    1.3,
+    1.796
+   ],
+   "tris": 60,
+   "bytes": 3176,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "hedge",
+   "file": "props/hedge.glb",
+   "describe": "a trimmed hedge block",
+   "tags": [
+    "nature",
+    "hedge",
+    "wall"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     1.2,
+     0.9
+    ],
+    "offset": [
+     0,
+     0.6,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    1.2,
+    0.9
+   ],
+   "tris": 72,
+   "bytes": 19624,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "hedge-corner",
+   "file": "props/hedge-corner.glb",
+   "describe": "a trimmed hedge corner",
+   "tags": [
+    "nature",
+    "hedge",
+    "wall"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     1.2,
+     3
+    ],
+    "offset": [
+     0,
+     0.6,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    1.2,
+    3
+   ],
+   "tris": 104,
+   "bytes": 19984,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "hedge-tall",
+   "file": "props/hedge-tall.glb",
+   "describe": "a tall trimmed hedge in a stone planter",
+   "tags": [
+    "nature",
+    "hedge",
+    "wall",
+    "plaza"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.2,
+     1.8,
+     3
+    ],
+    "offset": [
+     0,
+     0.9,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.2,
+    1.8,
+    3
+   ],
+   "tris": 90,
+   "bytes": 19728,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "flowers",
+   "file": "props/flowers.glb",
+   "describe": "a cluster of small flowers",
+   "tags": [
+    "nature",
+    "flowers",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    1.983,
+    0.35,
+    2.006
+   ],
+   "tris": 264,
+   "bytes": 23412,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "flowers-tall",
+   "file": "props/flowers-tall.glb",
+   "describe": "a cluster of tall flowers",
+   "tags": [
+    "nature",
+    "flowers",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.71,
+    0.6,
+    0.804
+   ],
+   "tris": 398,
+   "bytes": 25700,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "flower-red",
+   "file": "props/flower-red.glb",
+   "describe": "red garden flowers",
+   "tags": [
+    "nature",
+    "flowers",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.245,
+    0.45,
+    0.279
+   ],
+   "tris": 76,
+   "bytes": 4092,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "flower-yellow",
+   "file": "props/flower-yellow.glb",
+   "describe": "yellow garden flowers",
+   "tags": [
+    "nature",
+    "flowers",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.372,
+    0.45,
+    0.423
+   ],
+   "tris": 76,
+   "bytes": 4116,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "grass-tuft",
+   "file": "props/grass-tuft.glb",
+   "describe": "a tuft of grass",
+   "tags": [
+    "nature",
+    "grass",
+    "scatter"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.578,
+    0.35,
+    0.606
+   ],
+   "tris": 72,
+   "bytes": 20096,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "grass-large",
+   "file": "props/grass-large.glb",
+   "describe": "a large tuft of grass",
+   "tags": [
+    "nature",
+    "grass",
+    "scatter"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.644,
+    0.4,
+    0.642
+   ],
+   "tris": 224,
+   "bytes": 5868,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "rock-small",
+   "file": "props/rock-small.glb",
+   "describe": "a small rounded rock",
+   "tags": [
+    "nature",
+    "rock"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.489,
+     0.5,
+     0.65
+    ],
+    "offset": [
+     0,
+     0.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.489,
+    0.5,
+    0.65
+   ],
+   "tris": 128,
+   "bytes": 20468,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "rock-large",
+   "file": "props/rock-large.glb",
+   "describe": "a large rock pile",
+   "tags": [
+    "nature",
+    "rock",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2.298,
+     1.6,
+     2.131
+    ],
+    "offset": [
+     0,
+     0.8,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.298,
+    1.6,
+    2.131
+   ],
+   "tris": 200,
+   "bytes": 21560,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "stones",
+   "file": "props/stones.glb",
+   "describe": "a few flat stones",
+   "tags": [
+    "nature",
+    "rock",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    3.551,
+    0.25,
+    3.948
+   ],
+   "tris": 120,
+   "bytes": 20864,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "mushrooms",
+   "file": "props/mushrooms.glb",
+   "describe": "a cluster of cartoon mushrooms",
+   "tags": [
+    "nature",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.722,
+    0.4,
+    0.708
+   ],
+   "tris": 126,
+   "bytes": 20732,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "cloud-puffy",
+   "file": "props/cloud-puffy.glb",
+   "describe": "a puffy low-poly cloud",
+   "tags": [
+    "sky",
+    "cloud",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    13.261,
+    5,
+    4.796
+   ],
+   "tris": 816,
+   "bytes": 18380,
+   "licence": "CC-BY-3.0",
+   "shadow": false
+  },
+  {
+   "id": "cloud-small",
+   "file": "props/cloud-small.glb",
+   "describe": "a small low-poly cloud",
+   "tags": [
+    "sky",
+    "cloud",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    8.299,
+    3,
+    2.634
+   ],
+   "tris": 602,
+   "bytes": 3868,
+   "licence": "CC-BY-3.0",
+   "shadow": false
+  },
+  {
+   "id": "house",
+   "file": "props/house.glb",
+   "describe": "a suburban house with a green roof",
+   "tags": [
+    "backyard",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     9.335,
+     7.5,
+     7.461
+    ],
+    "offset": [
+     0,
+     3.75,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    9.335,
+    7.5,
+    7.461
+   ],
+   "tris": 1196,
+   "bytes": 33428,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "house-b",
+   "file": "props/house-b.glb",
+   "describe": "a two-storey suburban house",
+   "tags": [
+    "backyard",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     9.889,
+     8,
+     7.64
+    ],
+    "offset": [
+     0,
+     4,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    9.889,
+    8,
+    7.64
+   ],
+   "tris": 1212,
+   "bytes": 34216,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "fence",
+   "file": "props/fence.glb",
+   "describe": "a wooden garden fence panel",
+   "tags": [
+    "backyard",
+    "fence",
+    "wall"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.9,
+     1.08,
+     0.3
+    ],
+    "offset": [
+     0,
+     0.54,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.9,
+    1.08,
+    0.3
+   ],
+   "tris": 88,
+   "bytes": 20916,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "path-stones",
+   "file": "props/path-stones.glb",
+   "describe": "stepping stones for a garden path",
+   "tags": [
+    "backyard",
+    "path",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.56,
+    0.04,
+    1.6
+   ],
+   "tris": 48,
+   "bytes": 20396,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "planter",
+   "file": "props/planter.glb",
+   "describe": "a planter box with a shrub",
+   "tags": [
+    "backyard",
+    "plaza",
+    "planter"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.6,
+     0.708,
+     1.2
+    ],
+    "offset": [
+     0,
+     0.354,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.6,
+    0.708,
+    1.2
+   ],
+   "tris": 204,
+   "bytes": 21792,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "slide",
+   "file": "props/slide.glb",
+   "describe": "a red playground slide with a ladder",
+   "tags": [
+    "backyard",
+    "playground",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.562,
+     2.4,
+     3.404
+    ],
+    "offset": [
+     0,
+     1.2,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.562,
+    2.4,
+    3.404
+   ],
+   "tris": 695,
+   "bytes": 193348,
+   "licence": "CC-BY-3.0"
+  },
+  {
+   "id": "swing-set",
+   "file": "props/swing-set.glb",
+   "describe": "a wooden swing set with two swings",
+   "tags": [
+    "backyard",
+    "playground"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.88,
+     2.5,
+     3.308
+    ],
+    "offset": [
+     0,
+     1.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.88,
+    2.5,
+    3.308
+   ],
+   "tris": 588,
+   "bytes": 6652,
+   "licence": "CC-BY-3.0"
+  },
+  {
+   "id": "sandbox",
+   "file": "props/sandbox.glb",
+   "describe": "a red sandbox with a sandcastle",
+   "tags": [
+    "backyard",
+    "playground"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2.6,
+     1.02,
+     2.6
+    ],
+    "offset": [
+     0,
+     0.51,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.6,
+    1.02,
+    2.6
+   ],
+   "tris": 284,
+   "bytes": 11008,
+   "licence": "CC-BY-3.0"
+  },
+  {
+   "id": "picnic-table",
+   "file": "props/picnic-table.glb",
+   "describe": "a wooden picnic table with a checked cloth",
+   "tags": [
+    "backyard",
+    "table",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.668,
+     0.9,
+     1.346
+    ],
+    "offset": [
+     0,
+     0.45,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.668,
+    0.9,
+    1.346
+   ],
+   "tris": 832,
+   "bytes": 18472,
+   "licence": "CC-BY-3.0",
+   "hosts": [
+    "parasol"
+   ]
+  },
+  {
+   "id": "grill",
+   "file": "props/grill.glb",
+   "describe": "a kettle barbecue grill",
+   "tags": [
+    "backyard"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.35,
+    "height": 1,
+    "offset": [
+     0,
+     0.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.669,
+    1.15,
+    0.754
+   ],
+   "tris": 4117,
+   "bytes": 73404,
+   "licence": "CC-BY-3.0"
+  },
+  {
+   "id": "parasol",
+   "file": "props/parasol.glb",
+   "describe": "a red and white beach umbrella",
+   "tags": [
+    "backyard",
+    "plaza"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.08,
+    "height": 2.4,
+    "offset": [
+     0,
+     1.2,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.107,
+    2.5,
+    1.882
+   ],
+   "tris": 214,
+   "bytes": 11000,
+   "licence": "CC-BY-3.0"
+  },
+  {
+   "id": "hose-reel",
+   "file": "props/hose-reel.glb",
+   "describe": "a garden hose on a reel",
+   "tags": [
+    "backyard",
+    "hose"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.814,
+     0.8,
+     1.115
+    ],
+    "offset": [
+     0,
+     0.4,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.814,
+    0.8,
+    1.115
+   ],
+   "tris": 2036,
+   "bytes": 36772,
+   "licence": "CC-BY-3.0"
+  },
+  {
+   "id": "bench",
+   "file": "props/bench.glb",
+   "describe": "a wooden park bench",
+   "tags": [
+    "backyard",
+    "plaza",
+    "bench",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.412,
+     0.92,
+     0.796
+    ],
+    "offset": [
+     0,
+     0.46,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.412,
+    0.92,
+    0.796
+   ],
+   "tris": 160,
+   "bytes": 22580,
+   "licence": "CC0-1.0",
+   "real": [
+    0.75,
+    1
+   ]
+  },
+  {
+   "id": "ball-red",
+   "file": "props/ball-red.glb",
+   "describe": "a soft red rubber ball",
+   "tags": [
+    "item",
+    "ball"
+   ],
+   "collider": {
+    "shape": "sphere",
+    "radius": 0.16,
+    "offset": [
+     0,
+     0.16,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.321,
+    0.32,
+    0.321
+   ],
+   "tris": 572,
+   "bytes": 19516,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "ball-blue",
+   "file": "props/ball-blue.glb",
+   "describe": "a soft blue rubber ball",
+   "tags": [
+    "item",
+    "ball"
+   ],
+   "collider": {
+    "shape": "sphere",
+    "radius": 0.16,
+    "offset": [
+     0,
+     0.16,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.321,
+    0.32,
+    0.321
+   ],
+   "tris": 572,
+   "bytes": 19520,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "ball-green",
+   "file": "props/ball-green.glb",
+   "describe": "a soft green rubber ball",
+   "tags": [
+    "item",
+    "ball"
+   ],
+   "collider": {
+    "shape": "sphere",
+    "radius": 0.16,
+    "offset": [
+     0,
+     0.16,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.321,
+    0.32,
+    0.321
+   ],
+   "tris": 572,
+   "bytes": 19524,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "crate",
+   "file": "props/crate.glb",
+   "describe": "a wooden crate",
+   "tags": [
+    "crate",
+    "cover",
+    "arena",
+    "backyard"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.9,
+     0.9,
+     0.9
+    ],
+    "offset": [
+     0,
+     0.45,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.9,
+    0.9,
+    0.9
+   ],
+   "tris": 156,
+   "bytes": 21444,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "barrel",
+   "file": "props/barrel.glb",
+   "describe": "a cartoon wooden barrel",
+   "tags": [
+    "barrel",
+    "cover",
+    "arena"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.35,
+    "height": 1,
+    "offset": [
+     0,
+     0.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.087,
+    1,
+    1.087
+   ],
+   "tris": 148,
+   "bytes": 20964,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "bucket",
+   "file": "props/bucket.glb",
+   "describe": "a metal bucket",
+   "tags": [
+    "item",
+    "backyard"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.3,
+     0.4,
+     0.3
+    ],
+    "offset": [
+     0,
+     0.2,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.3,
+    0.4,
+    0.3
+   ],
+   "tris": 68,
+   "bytes": 14404,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "cone",
+   "file": "props/cone.glb",
+   "describe": "an orange traffic cone",
+   "tags": [
+    "marker",
+    "plaza",
+    "arena"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.2,
+    "height": 0.6,
+    "offset": [
+     0,
+     0.3,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.48,
+    0.6,
+    0.48
+   ],
+   "tris": 172,
+   "bytes": 21916,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "office-wall",
+   "file": "props/office-wall.glb",
+   "describe": "a plain office wall panel",
+   "tags": [
+    "office",
+    "wall"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2,
+     2.579,
+     0.1
+    ],
+    "offset": [
+     0,
+     1.29,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2,
+    2.579,
+    0.1
+   ],
+   "tris": 12,
+   "bytes": 4040,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "office-wall-window",
+   "file": "props/office-wall-window.glb",
+   "describe": "an office wall panel with a window",
+   "tags": [
+    "office",
+    "wall"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2,
+     2.579,
+     0.178
+    ],
+    "offset": [
+     0,
+     1.29,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2,
+    2.579,
+    0.178
+   ],
+   "tris": 108,
+   "bytes": 6272,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "office-wall-doorway",
+   "file": "props/office-wall-doorway.glb",
+   "describe": "an office wall panel with a doorway (a real opening: 0.86 m wide)",
+   "tags": [
+    "office",
+    "wall",
+    "door"
+   ],
+   "collider": {
+    "shape": "compound",
+    "parts": [
+     {
+      "shape": "box",
+      "size": [
+       0.57,
+       2.579,
+       0.178
+      ],
+      "offset": [
+       -0.715,
+       1.29,
+       0
+      ]
+     },
+     {
+      "shape": "box",
+      "size": [
+       0.57,
+       2.579,
+       0.178
+      ],
+      "offset": [
+       0.715,
+       1.29,
+       0
+      ]
+     },
+     {
+      "shape": "box",
+      "size": [
+       2,
+       0.59,
+       0.178
+      ],
+      "offset": [
+       0,
+       2.285,
+       0
+      ]
+     }
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2,
+    2.579,
+    0.178
+   ],
+   "tris": 60,
+   "bytes": 4556,
+   "licence": "CC0-1.0",
+   "door": {
+    "width": 0.86,
+    "height": 1.99
+   }
+  },
+  {
+   "id": "office-wall-half",
+   "file": "props/office-wall-half.glb",
+   "describe": "a low office partition",
+   "tags": [
+    "office",
+    "wall"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1,
+     2.579,
+     0.1
+    ],
+    "offset": [
+     0,
+     1.29,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1,
+    2.579,
+    0.1
+   ],
+   "tris": 12,
+   "bytes": 4048,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "office-wall-corner",
+   "file": "props/office-wall-corner.glb",
+   "describe": "an office wall corner post",
+   "tags": [
+    "office",
+    "wall"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.1,
+     2.579,
+     1.1
+    ],
+    "offset": [
+     0,
+     1.29,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.1,
+    2.579,
+    1.1
+   ],
+   "tris": 28,
+   "bytes": 4232,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "office-wall-doorway-wide",
+   "file": "props/office-wall-doorway-wide.glb",
+   "describe": "an office wall panel with a wide open doorway (1.7 m)",
+   "tags": [
+    "office",
+    "wall",
+    "door"
+   ],
+   "collider": {
+    "shape": "compound",
+    "parts": [
+     {
+      "shape": "box",
+      "size": [
+       0.142,
+       2.579,
+       0.178
+      ],
+      "offset": [
+       -0.929,
+       1.29,
+       0
+      ]
+     },
+     {
+      "shape": "box",
+      "size": [
+       0.142,
+       2.579,
+       0.178
+      ],
+      "offset": [
+       0.929,
+       1.29,
+       0
+      ]
+     },
+     {
+      "shape": "box",
+      "size": [
+       2,
+       0.59,
+       0.178
+      ],
+      "offset": [
+       0,
+       2.285,
+       0
+      ]
+     }
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2,
+    2.579,
+    0.178
+   ],
+   "tris": 60,
+   "bytes": 4572,
+   "licence": "CC0-1.0",
+   "door": {
+    "width": 1.71,
+    "height": 1.99
+   }
+  },
+  {
+   "id": "ceiling-lamp",
+   "file": "props/ceiling-lamp.glb",
+   "describe": "a square ceiling lamp that hangs from the ceiling",
+   "tags": [
+    "office",
+    "lamp",
+    "light",
+    "ceiling"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.36,
+    0.69,
+    0.36
+   ],
+   "tris": 60,
+   "bytes": 3632,
+   "licence": "CC0-1.0",
+   "shadow": false,
+   "light": {
+    "at": [
+     0,
+     0.08,
+     0
+    ],
+    "radius": 1.2
+   },
+   "real": [
+    0.2,
+    0.9
+   ]
+  },
+  {
+   "id": "desk",
+   "file": "props/desk.glb",
+   "describe": "a wooden office desk",
+   "tags": [
+    "office",
+    "desk",
+    "station",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.469,
+     0.769,
+     0.785
+    ],
+    "offset": [
+     0,
+     0.385,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.469,
+    0.769,
+    0.785
+   ],
+   "tris": 198,
+   "bytes": 5376,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "desk-corner",
+   "file": "props/desk-corner.glb",
+   "describe": "an L-shaped office desk",
+   "tags": [
+    "office",
+    "desk",
+    "station",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.949,
+     0.769,
+     1.949
+    ],
+    "offset": [
+     0,
+     0.385,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.949,
+    0.769,
+    1.949
+   ],
+   "tris": 250,
+   "bytes": 5908,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "chair-office",
+   "file": "props/chair-office.glb",
+   "describe": "a swivel office chair",
+   "tags": [
+    "office",
+    "chair"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.67,
+     1.215,
+     0.629
+    ],
+    "offset": [
+     0,
+     0.608,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.67,
+    1.215,
+    0.629
+   ],
+   "tris": 588,
+   "bytes": 8856,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "monitor",
+   "file": "props/monitor.glb",
+   "describe": "a computer monitor",
+   "tags": [
+    "office",
+    "screen",
+    "station"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.785,
+    0.589,
+    0.208
+   ],
+   "tris": 72,
+   "bytes": 3892,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "keyboard",
+   "file": "props/keyboard.glb",
+   "describe": "a computer keyboard",
+   "tags": [
+    "office",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.564,
+    0.055,
+    0.236
+   ],
+   "tris": 32,
+   "bytes": 3284,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "computer-mouse",
+   "file": "props/computer-mouse.glb",
+   "describe": "a computer mouse",
+   "tags": [
+    "office",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.099,
+    0.047,
+    0.17
+   ],
+   "tris": 71,
+   "bytes": 2616,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "laptop",
+   "file": "props/laptop.glb",
+   "describe": "an open laptop",
+   "tags": [
+    "office",
+    "screen",
+    "station",
+    "item"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.528,
+    0.324,
+    0.48
+   ],
+   "tris": 68,
+   "bytes": 4712,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "desk-lamp",
+   "file": "props/desk-lamp.glb",
+   "describe": "a square desk lamp",
+   "tags": [
+    "office",
+    "lamp",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.24,
+    0.58,
+    0.24
+   ],
+   "tris": 60,
+   "bytes": 3644,
+   "licence": "CC0-1.0",
+   "light": {
+    "at": [
+     0,
+     0.48,
+     0
+    ],
+    "radius": 0.5
+   }
+  },
+  {
+   "id": "plant-potted",
+   "file": "props/plant-potted.glb",
+   "describe": "a potted office plant",
+   "tags": [
+    "office",
+    "plant"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.25,
+    "height": 1,
+    "offset": [
+     0,
+     0.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.424,
+    1.308,
+    0.483
+   ],
+   "tris": 60,
+   "bytes": 5248,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "plant-small",
+   "file": "props/plant-small.glb",
+   "describe": "a small desk plant",
+   "tags": [
+    "office",
+    "plant",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.189,
+    0.28,
+    0.189
+   ],
+   "tris": 102,
+   "bytes": 4356,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "bookcase",
+   "file": "props/bookcase.glb",
+   "describe": "a wide closed bookcase",
+   "tags": [
+    "office",
+    "shelf"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.6,
+     1.58,
+     0.5
+    ],
+    "offset": [
+     0,
+     0.79,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.6,
+    1.58,
+    0.5
+   ],
+   "tris": 372,
+   "bytes": 5632,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "bookcase-open",
+   "file": "props/bookcase-open.glb",
+   "describe": "an open bookshelf",
+   "tags": [
+    "office",
+    "shelf"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.8,
+     1.76,
+     0.5
+    ],
+    "offset": [
+     0,
+     0.88,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.8,
+    1.76,
+    0.5
+   ],
+   "tris": 320,
+   "bytes": 4468,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "trashcan",
+   "file": "props/trashcan.glb",
+   "describe": "an office bin",
+   "tags": [
+    "office",
+    "decor"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.415,
+     0.856,
+     0.468
+    ],
+    "offset": [
+     0,
+     0.428,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.415,
+    0.856,
+    0.468
+   ],
+   "tris": 68,
+   "bytes": 4012,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "box-closed",
+   "file": "props/box-closed.glb",
+   "describe": "a closed cardboard box",
+   "tags": [
+    "office",
+    "box",
+    "item"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.425,
+     0.562,
+     0.425
+    ],
+    "offset": [
+     0,
+     0.281,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.425,
+    0.562,
+    0.425
+   ],
+   "tris": 60,
+   "bytes": 3560,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "box-open",
+   "file": "props/box-open.glb",
+   "describe": "an open cardboard box",
+   "tags": [
+    "office",
+    "box",
+    "item"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.744,
+     0.562,
+     0.425
+    ],
+    "offset": [
+     0,
+     0.281,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.744,
+    0.562,
+    0.425
+   ],
+   "tris": 60,
+   "bytes": 3580,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "coffee-machine",
+   "file": "props/coffee-machine.glb",
+   "describe": "a coffee machine",
+   "tags": [
+    "office",
+    "kitchen",
+    "station"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.379,
+    0.355,
+    0.48
+   ],
+   "tris": 166,
+   "bytes": 6392,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "water-cooler",
+   "file": "props/water-cooler.glb",
+   "describe": "an office water cooler",
+   "tags": [
+    "office",
+    "drink",
+    "station"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.311,
+     1.35,
+     0.364
+    ],
+    "offset": [
+     0,
+     0.675,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.311,
+    1.35,
+    0.364
+   ],
+   "tris": 1566,
+   "bytes": 17928,
+   "licence": "CC-BY-3.0"
+  },
+  {
+   "id": "sofa",
+   "file": "props/sofa.glb",
+   "describe": "a lounge sofa",
+   "tags": [
+    "office",
+    "sofa"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.96,
+     0.92,
+     0.82
+    ],
+    "offset": [
+     0,
+     0.46,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.96,
+    0.92,
+    0.82
+   ],
+   "tris": 128,
+   "bytes": 4532,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "coffee-table",
+   "file": "props/coffee-table.glb",
+   "describe": "a low coffee table",
+   "tags": [
+    "office",
+    "table"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.322,
+     0.46,
+     0.8
+    ],
+    "offset": [
+     0,
+     0.23,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.322,
+    0.46,
+    0.8
+   ],
+   "tris": 124,
+   "bytes": 3004,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "rug",
+   "file": "props/rug.glb",
+   "describe": "a rectangular rug",
+   "tags": [
+    "office",
+    "rug",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    3.768,
+    0.024,
+    2.208
+   ],
+   "tris": 28,
+   "bytes": 3172,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "tv",
+   "file": "props/tv.glb",
+   "describe": "a flat-screen television",
+   "tags": [
+    "office",
+    "screen"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.37,
+     0.91,
+     0.257
+    ],
+    "offset": [
+     0,
+     0.455,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.37,
+    0.91,
+    0.257
+   ],
+   "tris": 72,
+   "bytes": 3724,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "fridge",
+   "file": "props/fridge.glb",
+   "describe": "a kitchen fridge",
+   "tags": [
+    "office",
+    "kitchen"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.86,
+     1.84,
+     0.584
+    ],
+    "offset": [
+     0,
+     0.92,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.86,
+    1.84,
+    0.584
+   ],
+   "tris": 250,
+   "bytes": 8048,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "kitchen-counter",
+   "file": "props/kitchen-counter.glb",
+   "describe": "a kitchen counter cabinet",
+   "tags": [
+    "office",
+    "kitchen"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.86,
+     0.9,
+     0.9
+    ],
+    "offset": [
+     0,
+     0.45,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.86,
+    0.9,
+    0.9
+   ],
+   "tris": 114,
+   "bytes": 5496,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "vending-machine",
+   "file": "props/vending-machine.glb",
+   "describe": "a red drinks vending machine",
+   "tags": [
+    "office",
+    "plaza",
+    "drink",
+    "station"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.333,
+     2,
+     1.267
+    ],
+    "offset": [
+     0,
+     1,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.333,
+    2,
+    1.267
+   ],
+   "tris": 176,
+   "bytes": 17696,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "arcade-machine",
+   "file": "props/arcade-machine.glb",
+   "describe": "a retro arcade cabinet",
+   "tags": [
+    "office",
+    "station",
+    "fun"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.993,
+     1.8,
+     1.334
+    ],
+    "offset": [
+     0,
+     0.9,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.993,
+    1.8,
+    1.334
+   ],
+   "tris": 392,
+   "bytes": 19576,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "floor-lamp",
+   "file": "props/floor-lamp.glb",
+   "describe": "a round floor lamp",
+   "tags": [
+    "office",
+    "lamp",
+    "light"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.2,
+    "height": 1.6,
+    "offset": [
+     0,
+     0.8,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.304,
+    1.72,
+    0.351
+   ],
+   "tris": 76,
+   "bytes": 3876,
+   "licence": "CC0-1.0",
+   "light": {
+    "at": [
+     0,
+     1.55,
+     0
+    ],
+    "radius": 0.9
+   }
+  },
+  {
+   "id": "coat-rack",
+   "file": "props/coat-rack.glb",
+   "describe": "a standing coat rack",
+   "tags": [
+    "office",
+    "decor"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.15,
+    "height": 1.8,
+    "offset": [
+     0,
+     0.9,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.546,
+    1.54,
+    0.546
+   ],
+   "tris": 190,
+   "bytes": 4188,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "table",
+   "file": "props/table.glb",
+   "describe": "a meeting table",
+   "tags": [
+    "office",
+    "table",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.683,
+     0.653,
+     0.895
+    ],
+    "offset": [
+     0,
+     0.327,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.683,
+    0.653,
+    0.895
+   ],
+   "tris": 120,
+   "bytes": 3024,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "chair",
+   "file": "props/chair.glb",
+   "describe": "a wooden chair",
+   "tags": [
+    "office",
+    "plaza",
+    "chair"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.4,
+     0.94,
+     0.4
+    ],
+    "offset": [
+     0,
+     0.47,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.4,
+    0.94,
+    0.4
+   ],
+   "tris": 170,
+   "bytes": 3528,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "table-round",
+   "file": "props/table-round.glb",
+   "describe": "a small round table",
+   "tags": [
+    "plaza",
+    "office",
+    "table"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.5,
+    "height": 0.8,
+    "offset": [
+     0,
+     0.4,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.386,
+    0.733,
+    1.6
+   ],
+   "tris": 80,
+   "bytes": 2828,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "fountain",
+   "file": "props/fountain.glb",
+   "describe": "a round stone fountain with water",
+   "tags": [
+    "plaza",
+    "water",
+    "centrepiece"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 2.3,
+    "height": 0.7,
+    "offset": [
+     0,
+     0.35,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    4.8,
+    0.672,
+    4.8
+   ],
+   "tris": 1002,
+   "bytes": 28260,
+   "licence": "CC0-1.0",
+   "materials": {
+    "Water": "water"
+   }
+  },
+  {
+   "id": "paving",
+   "file": "props/paving.glb",
+   "describe": "a 2 m stone paving tile",
+   "tags": [
+    "plaza",
+    "floor",
+    "tile"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    2,
+    0.05,
+    2
+   ],
+   "tris": 12,
+   "bytes": 18692,
+   "licence": "CC0-1.0",
+   "shadow": "receive"
+  },
+  {
+   "id": "lantern",
+   "file": "props/lantern.glb",
+   "describe": "an old-fashioned street lantern",
+   "tags": [
+    "plaza",
+    "lamp",
+    "light"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.12,
+    "height": 3,
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.433,
+    3.112,
+    0.449
+   ],
+   "tris": 158,
+   "bytes": 20488,
+   "licence": "CC0-1.0",
+   "light": {
+    "at": [
+     0,
+     2.75,
+     0
+    ],
+    "radius": 1
+   }
+  },
+  {
+   "id": "street-light",
+   "file": "props/street-light.glb",
+   "describe": "a curved modern street light",
+   "tags": [
+    "plaza",
+    "lamp",
+    "light"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.12,
+    "height": 4.5,
+    "offset": [
+     0,
+     2.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.333,
+    4.5,
+    1.5
+   ],
+   "tris": 92,
+   "bytes": 19360,
+   "licence": "CC0-1.0",
+   "light": {
+    "at": [
+     0,
+     4.25,
+     0.62
+    ],
+    "radius": 1
+   }
+  },
+  {
+   "id": "stall-red",
+   "file": "props/stall-red.glb",
+   "describe": "a market stall with a red awning",
+   "tags": [
+    "plaza",
+    "stall",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2,
+     2.474,
+     2
+    ],
+    "offset": [
+     0,
+     1.237,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2,
+    2.474,
+    2
+   ],
+   "tris": 270,
+   "bytes": 22180,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "stall-green",
+   "file": "props/stall-green.glb",
+   "describe": "a market stall with a green awning",
+   "tags": [
+    "plaza",
+    "stall",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2,
+     2.474,
+     2
+    ],
+    "offset": [
+     0,
+     1.237,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2,
+    2.474,
+    2
+   ],
+   "tris": 322,
+   "bytes": 22516,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "banner-red",
+   "file": "props/banner-red.glb",
+   "describe": "a red hanging banner",
+   "tags": [
+    "plaza",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.1,
+    1.679,
+    1
+   ],
+   "tris": 98,
+   "bytes": 20008,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "cart",
+   "file": "props/cart.glb",
+   "describe": "a wooden hand cart",
+   "tags": [
+    "plaza",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.786,
+     1.071,
+     2.68
+    ],
+    "offset": [
+     0,
+     0.535,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.786,
+    1.071,
+    2.68
+   ],
+   "tris": 608,
+   "bytes": 26140,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "parasol-cafe",
+   "file": "props/parasol-cafe.glb",
+   "describe": "a cafe table under a green parasol",
+   "tags": [
+    "plaza",
+    "cafe"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.5,
+    "height": 0.8,
+    "offset": [
+     0,
+     0.4,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.848,
+    2.4,
+    2.133
+   ],
+   "tris": 96,
+   "bytes": 19732,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "townhouse",
+   "file": "props/townhouse.glb",
+   "describe": "a warm brick townhouse",
+   "tags": [
+    "plaza",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     4.957,
+     9,
+     9.994
+    ],
+    "offset": [
+     0,
+     4.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    4.957,
+    9,
+    9.994
+   ],
+   "tris": 374,
+   "bytes": 18952,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "townhouse-b",
+   "file": "props/townhouse-b.glb",
+   "describe": "a townhouse with gables",
+   "tags": [
+    "plaza",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     9.085,
+     9,
+     9.994
+    ],
+    "offset": [
+     0,
+     4.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    9.085,
+    9,
+    9.994
+   ],
+   "tris": 322,
+   "bytes": 18752,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "tower",
+   "file": "props/tower.glb",
+   "describe": "a narrow brick apartment tower",
+   "tags": [
+    "plaza",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     6.16,
+     14,
+     7
+    ],
+    "offset": [
+     0,
+     7,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    6.16,
+    14,
+    7
+   ],
+   "tris": 398,
+   "bytes": 19156,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "tower-b",
+   "file": "props/tower-b.glb",
+   "describe": "a wide brick apartment block",
+   "tags": [
+    "plaza",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     7.576,
+     13,
+     8.609
+    ],
+    "offset": [
+     0,
+     6.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    7.576,
+    13,
+    8.609
+   ],
+   "tris": 326,
+   "bytes": 17872,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "shop",
+   "file": "props/shop.glb",
+   "describe": "a low white shop building with an awning",
+   "tags": [
+    "plaza",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     14.692,
+     8,
+     9.029
+    ],
+    "offset": [
+     0,
+     4,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    14.692,
+    8,
+    9.029
+   ],
+   "tris": 1509,
+   "bytes": 37060,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "city-block",
+   "file": "props/city-block.glb",
+   "describe": "a three-storey city office block",
+   "tags": [
+    "city",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     6.804,
+     9.956,
+     7.238
+    ],
+    "offset": [
+     0,
+     4.978,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    6.804,
+    9.956,
+    7.238
+   ],
+   "tris": 1252,
+   "bytes": 33212,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "city-block-b",
+   "file": "props/city-block-b.glb",
+   "describe": "a four-storey city building with shops below",
+   "tags": [
+    "city",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     7.469,
+     13.036,
+     7.099
+    ],
+    "offset": [
+     0,
+     6.518,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    7.469,
+    13.036,
+    7.099
+   ],
+   "tris": 2006,
+   "bytes": 42096,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "city-block-c",
+   "file": "props/city-block-c.glb",
+   "describe": "a five-storey city apartment block",
+   "tags": [
+    "city",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     10.549,
+     17.479,
+     10.795
+    ],
+    "offset": [
+     0,
+     8.739,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    10.549,
+    17.479,
+    10.795
+   ],
+   "tris": 3512,
+   "bytes": 58032,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "city-block-wide",
+   "file": "props/city-block-wide.glb",
+   "describe": "a wide city office building",
+   "tags": [
+    "city",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     17.864,
+     19.096,
+     14.014
+    ],
+    "offset": [
+     0,
+     9.548,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    17.864,
+    19.096,
+    14.014
+   ],
+   "tris": 4350,
+   "bytes": 65296,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "skyscraper",
+   "file": "props/skyscraper.glb",
+   "describe": "a glass office tower",
+   "tags": [
+    "city",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     10.472,
+     22.176,
+     10.472
+    ],
+    "offset": [
+     0,
+     11.088,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    10.472,
+    22.176,
+    10.472
+   ],
+   "tris": 1292,
+   "bytes": 35060,
+   "licence": "CC0-1.0",
+   "real": [
+    15,
+    60
+   ]
+  },
+  {
+   "id": "skyscraper-b",
+   "file": "props/skyscraper-b.glb",
+   "describe": "a tall glass skyscraper",
+   "tags": [
+    "city",
+    "building",
+    "backdrop"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     9.065,
+     28.56,
+     8.694
+    ],
+    "offset": [
+     0,
+     14.28,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    9.065,
+    28.56,
+    8.694
+   ],
+   "tris": 1156,
+   "bytes": 32332,
+   "licence": "CC0-1.0",
+   "real": [
+    20,
+    80
+   ]
+  },
+  {
+   "id": "road",
+   "file": "props/road.glb",
+   "describe": "an 8 m straight two-lane road tile",
+   "tags": [
+    "city",
+    "street",
+    "floor",
+    "path"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    8,
+    0.16,
+    8
+   ],
+   "tris": 44,
+   "bytes": 18628,
+   "licence": "CC0-1.0",
+   "shadow": "receive"
+  },
+  {
+   "id": "road-crossing",
+   "file": "props/road-crossing.glb",
+   "describe": "an 8 m road crossroads tile",
+   "tags": [
+    "city",
+    "street",
+    "floor",
+    "path"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    8,
+    0.16,
+    8
+   ],
+   "tris": 116,
+   "bytes": 19380,
+   "licence": "CC0-1.0",
+   "shadow": "receive"
+  },
+  {
+   "id": "sidewalk",
+   "file": "props/sidewalk.glb",
+   "describe": "a 4 m concrete sidewalk slab",
+   "tags": [
+    "city",
+    "street",
+    "floor",
+    "tile"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    4,
+    0.08,
+    4
+   ],
+   "tris": 12,
+   "bytes": 18240,
+   "licence": "CC0-1.0",
+   "shadow": "receive"
+  },
+  {
+   "id": "store-shelf",
+   "file": "props/store-shelf.glb",
+   "describe": "a supermarket shelf of boxed goods, stocked on both sides",
+   "tags": [
+    "store",
+    "shelf",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.68,
+     1.785,
+     1.47
+    ],
+    "offset": [
+     0,
+     0.892,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.68,
+    1.785,
+    1.47
+   ],
+   "tris": 436,
+   "bytes": 23604,
+   "licence": "CC0-1.0",
+   "real": [
+    1.4,
+    2.2
+   ]
+  },
+  {
+   "id": "store-shelf-b",
+   "file": "props/store-shelf-b.glb",
+   "describe": "a supermarket shelf of bagged goods, stocked on both sides",
+   "tags": [
+    "store",
+    "shelf",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.68,
+     1.813,
+     1.47
+    ],
+    "offset": [
+     0,
+     0.906,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.68,
+    1.813,
+    1.47
+   ],
+   "tris": 892,
+   "bytes": 29584,
+   "licence": "CC0-1.0",
+   "real": [
+    1.4,
+    2.2
+   ]
+  },
+  {
+   "id": "shelf-end",
+   "file": "props/shelf-end.glb",
+   "describe": "a supermarket end-cap display",
+   "tags": [
+    "store",
+    "shelf"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.68,
+     2.205,
+     0.84
+    ],
+    "offset": [
+     0,
+     1.103,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.68,
+    2.205,
+    0.84
+   ],
+   "tris": 362,
+   "bytes": 21084,
+   "licence": "CC0-1.0",
+   "real": [
+    1.4,
+    2.4
+   ]
+  },
+  {
+   "id": "freezer-tall",
+   "file": "props/freezer-tall.glb",
+   "describe": "a pair of tall glass-door freezers",
+   "tags": [
+    "store",
+    "freezer",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2.1,
+     1.89,
+     1.05
+    ],
+    "offset": [
+     0,
+     0.945,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.1,
+    1.89,
+    1.05
+   ],
+   "tris": 156,
+   "bytes": 17268,
+   "licence": "CC0-1.0",
+   "real": [
+    1.6,
+    2.2
+   ]
+  },
+  {
+   "id": "freezer-chest",
+   "file": "props/freezer-chest.glb",
+   "describe": "a low open chest freezer",
+   "tags": [
+    "store",
+    "freezer",
+    "table"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.68,
+     0.735,
+     1.26
+    ],
+    "offset": [
+     0,
+     0.367,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.68,
+    0.735,
+    1.26
+   ],
+   "tris": 180,
+   "bytes": 17188,
+   "licence": "CC0-1.0",
+   "real": [
+    0.6,
+    1
+   ]
+  },
+  {
+   "id": "checkout",
+   "file": "props/checkout.glb",
+   "describe": "a supermarket checkout counter with a till",
+   "tags": [
+    "store",
+    "counter",
+    "station"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.785,
+     1.249,
+     1.785
+    ],
+    "offset": [
+     0,
+     0.625,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.785,
+    1.249,
+    1.785
+   ],
+   "tris": 203,
+   "bytes": 18224,
+   "licence": "CC0-1.0",
+   "real": [
+    0.9,
+    1.4
+   ]
+  },
+  {
+   "id": "shopping-cart",
+   "file": "props/shopping-cart.glb",
+   "describe": "a shopping trolley",
+   "tags": [
+    "store",
+    "cart"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.63,
+     0.82,
+     1.006
+    ],
+    "offset": [
+     0,
+     0.41,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.63,
+    0.82,
+    1.006
+   ],
+   "tris": 384,
+   "bytes": 20180,
+   "licence": "CC0-1.0",
+   "real": [
+    0.8,
+    1.2
+   ]
+  },
+  {
+   "id": "fruit-stand",
+   "file": "props/fruit-stand.glb",
+   "describe": "a fruit and vegetable display stand",
+   "tags": [
+    "store",
+    "display",
+    "table"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.26,
+     1.084,
+     1.26
+    ],
+    "offset": [
+     0,
+     0.542,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.26,
+    1.084,
+    1.26
+   ],
+   "tris": 650,
+   "bytes": 23064,
+   "licence": "CC0-1.0",
+   "real": [
+    0.8,
+    1.3
+   ]
+  },
+  {
+   "id": "bread-stand",
+   "file": "props/bread-stand.glb",
+   "describe": "a bread display stand",
+   "tags": [
+    "store",
+    "display",
+    "table"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.47,
+     1.05,
+     1.26
+    ],
+    "offset": [
+     0,
+     0.525,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.47,
+    1.05,
+    1.26
+   ],
+   "tris": 362,
+   "bytes": 19480,
+   "licence": "CC0-1.0",
+   "real": [
+    0.8,
+    1.3
+   ]
+  },
+  {
+   "id": "bottle-return",
+   "file": "props/bottle-return.glb",
+   "describe": "a bottle return machine",
+   "tags": [
+    "store",
+    "machine",
+    "station"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.945,
+     2.294,
+     1.01
+    ],
+    "offset": [
+     0,
+     1.147,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.945,
+    2.294,
+    1.01
+   ],
+   "tris": 324,
+   "bytes": 19004,
+   "licence": "CC0-1.0",
+   "real": [
+    1.7,
+    2.4
+   ]
+  },
+  {
+   "id": "block-large",
+   "file": "props/block-large.glb",
+   "describe": "a large grass-topped block",
+   "tags": [
+    "arena",
+    "block",
+    "platform"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     4.164,
+     2,
+     4.164
+    ],
+    "offset": [
+     0,
+     1,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    4.164,
+    2,
+    4.164
+   ],
+   "tris": 92,
+   "bytes": 20076,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "block-tall",
+   "file": "props/block-tall.glb",
+   "describe": "a tall grass-topped block",
+   "tags": [
+    "arena",
+    "block",
+    "platform"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     4.164,
+     4,
+     4.164
+    ],
+    "offset": [
+     0,
+     2,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    4.164,
+    4,
+    4.164
+   ],
+   "tris": 92,
+   "bytes": 20092,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "block-slope",
+   "file": "props/block-slope.glb",
+   "describe": "a grass ramp block",
+   "tags": [
+    "arena",
+    "block",
+    "ramp"
+   ],
+   "collider": {
+    "shape": "ramp",
+    "size": [
+     4.164,
+     1.518,
+     4.022
+    ],
+    "offset": [
+     0,
+     0.759,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    4.164,
+    1.518,
+    4.022
+   ],
+   "tris": 102,
+   "bytes": 20232,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "block-low",
+   "file": "props/block-low.glb",
+   "describe": "a low grass-topped slab",
+   "tags": [
+    "arena",
+    "block",
+    "platform"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     4.164,
+     1,
+     4.164
+    ],
+    "offset": [
+     0,
+     0.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    4.164,
+    1,
+    4.164
+   ],
+   "tris": 92,
+   "bytes": 20080,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "block-hex",
+   "file": "props/block-hex.glb",
+   "describe": "a low hexagon stepping stone",
+   "tags": [
+    "arena",
+    "block",
+    "platform"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 1,
+    "height": 1,
+    "offset": [
+     0,
+     0.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.2,
+    1,
+    2.54
+   ],
+   "tris": 44,
+   "bytes": 19672,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "platform",
+   "file": "props/platform.glb",
+   "describe": "a wooden plank platform",
+   "tags": [
+    "arena",
+    "platform"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2,
+     0.39,
+     2
+    ],
+    "offset": [
+     0,
+     0.195,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2,
+    0.39,
+    2
+   ],
+   "tris": 84,
+   "bytes": 20424,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "arena-wall",
+   "file": "props/arena-wall.glb",
+   "describe": "a chunky lilac stone arena wall",
+   "tags": [
+    "arena",
+    "wall"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2.5,
+     2.5,
+     1.5
+    ],
+    "offset": [
+     0,
+     1.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.5,
+    2.5,
+    1.5
+   ],
+   "tris": 174,
+   "bytes": 17324,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "arena-wall-corner",
+   "file": "props/arena-wall-corner.glb",
+   "describe": "an arena wall corner",
+   "tags": [
+    "arena",
+    "wall"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2,
+     2.5,
+     2
+    ],
+    "offset": [
+     0,
+     1.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2,
+    2.5,
+    2
+   ],
+   "tris": 226,
+   "bytes": 18256,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "arena-gate",
+   "file": "props/arena-gate.glb",
+   "describe": "an arena wall with a portcullis gate",
+   "tags": [
+    "arena",
+    "wall",
+    "gate"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2.5,
+     2.5,
+     1.5
+    ],
+    "offset": [
+     0,
+     1.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.5,
+    2.5,
+    1.5
+   ],
+   "tris": 322,
+   "bytes": 19824,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "arena-column",
+   "file": "props/arena-column.glb",
+   "describe": "a sandstone column",
+   "tags": [
+    "arena",
+    "column",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.508,
+     2.5,
+     1.5
+    ],
+    "offset": [
+     0,
+     1.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.508,
+    2.5,
+    1.5
+   ],
+   "tris": 168,
+   "bytes": 17516,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "arena-banner",
+   "file": "props/arena-banner.glb",
+   "describe": "a red arena banner on a pole",
+   "tags": [
+    "arena",
+    "decor"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    1.5,
+    2.563,
+    0.563
+   ],
+   "tris": 228,
+   "bytes": 18456,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "arena-statue",
+   "file": "props/arena-statue.glb",
+   "describe": "a knight statue on a plinth",
+   "tags": [
+    "arena",
+    "decor",
+    "centrepiece"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.75,
+     3.341,
+     1.75
+    ],
+    "offset": [
+     0,
+     1.671,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.75,
+    3.341,
+    1.75
+   ],
+   "tris": 549,
+   "bytes": 23096,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "trophy",
+   "file": "props/trophy.glb",
+   "describe": "a golden trophy cup",
+   "tags": [
+    "arena",
+    "item",
+    "goal"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.954,
+     0.8,
+     0.757
+    ],
+    "offset": [
+     0,
+     0.4,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.954,
+    0.8,
+    0.757
+   ],
+   "tris": 244,
+   "bytes": 18192,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "spring",
+   "file": "props/spring.glb",
+   "describe": "a bouncy spring pad",
+   "tags": [
+    "arena",
+    "jump",
+    "pad"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.5,
+     0.936,
+     1.5
+    ],
+    "offset": [
+     0,
+     0.468,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.5,
+    0.936,
+    1.5
+   ],
+   "tris": 356,
+   "bytes": 22092,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "flag",
+   "file": "props/flag.glb",
+   "describe": "a red checkpoint flag",
+   "tags": [
+    "arena",
+    "goal",
+    "checkpoint"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.08,
+    "height": 1.8,
+    "offset": [
+     0,
+     0.9,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.847,
+    1.8,
+    0.224
+   ],
+   "tris": 110,
+   "bytes": 20396,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "spike-block",
+   "file": "props/spike-block.glb",
+   "describe": "a block covered in spikes",
+   "tags": [
+    "arena",
+    "hazard"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.8,
+     1.8,
+     1.8
+    ],
+    "offset": [
+     0,
+     0.9,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.8,
+    1.8,
+    1.8
+   ],
+   "tris": 116,
+   "bytes": 21164,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "saw",
+   "file": "props/saw.glb",
+   "describe": "a spinning saw blade on a base",
+   "tags": [
+    "arena",
+    "hazard"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.587,
+     1.587,
+     0.607
+    ],
+    "offset": [
+     0,
+     0.793,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.587,
+    1.587,
+    0.607
+   ],
+   "tris": 128,
+   "bytes": 20832,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "target",
+   "file": "props/target.glb",
+   "describe": "an archery target on a stand",
+   "tags": [
+    "arena",
+    "target"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.326,
+     1.4,
+     1.136
+    ],
+    "offset": [
+     0,
+     0.7,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.326,
+    1.4,
+    1.136
+   ],
+   "tris": 188,
+   "bytes": 19752,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "half-pipe",
+   "file": "props/half-pipe.glb",
+   "describe": "a skate half-pipe ramp",
+   "tags": [
+    "arena",
+    "plaza",
+    "ramp"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2.75,
+     2.2,
+     2.75
+    ],
+    "offset": [
+     0,
+     1.1,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.75,
+    2.2,
+    2.75
+   ],
+   "tris": 44,
+   "bytes": 14208,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "skate-box",
+   "file": "props/skate-box.glb",
+   "describe": "a skate box obstacle",
+   "tags": [
+    "arena",
+    "plaza",
+    "cover"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3.5,
+     0.7,
+     3.5
+    ],
+    "offset": [
+     0,
+     0.35,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3.5,
+    0.7,
+    3.5
+   ],
+   "tris": 28,
+   "bytes": 14288,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "coin",
+   "file": "props/coin.glb",
+   "describe": "a spinning gold coin",
+   "tags": [
+    "item",
+    "pickup",
+    "score"
+   ],
+   "collider": {
+    "shape": "sphere",
+    "radius": 0.3,
+    "offset": [
+     0,
+     0.3,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.6,
+    0.6,
+    0.262
+   ],
+   "tris": 124,
+   "bytes": 20732,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "star",
+   "file": "props/star.glb",
+   "describe": "a yellow star",
+   "tags": [
+    "item",
+    "pickup",
+    "power"
+   ],
+   "collider": {
+    "shape": "sphere",
+    "radius": 0.35,
+    "offset": [
+     0,
+     0.35,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.704,
+    0.7,
+    0.46
+   ],
+   "tris": 30,
+   "bytes": 19444,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "heart",
+   "file": "props/heart.glb",
+   "describe": "a red heart",
+   "tags": [
+    "item",
+    "pickup",
+    "health"
+   ],
+   "collider": {
+    "shape": "sphere",
+    "radius": 0.3,
+    "offset": [
+     0,
+     0.3,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.644,
+    0.6,
+    0.186
+   ],
+   "tris": 44,
+   "bytes": 19488,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "bomb",
+   "file": "props/bomb.glb",
+   "describe": "a cartoon bomb",
+   "tags": [
+    "item",
+    "hazard",
+    "throw"
+   ],
+   "collider": {
+    "shape": "sphere",
+    "radius": 0.3,
+    "offset": [
+     0,
+     0.3,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.546,
+    0.6,
+    0.546
+   ],
+   "tris": 148,
+   "bytes": 20484,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "jewel",
+   "file": "props/jewel.glb",
+   "describe": "a cut jewel",
+   "tags": [
+    "item",
+    "pickup",
+    "score"
+   ],
+   "collider": {
+    "shape": "sphere",
+    "radius": 0.25,
+    "offset": [
+     0,
+     0.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.449,
+    0.5,
+    0.389
+   ],
+   "tris": 12,
+   "bytes": 19340,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "key",
+   "file": "props/key.glb",
+   "describe": "a golden key",
+   "tags": [
+    "item",
+    "pickup"
+   ],
+   "collider": {
+    "shape": "sphere",
+    "radius": 0.25,
+    "offset": [
+     0,
+     0.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.879,
+    0.5,
+    0.156
+   ],
+   "tris": 148,
+   "bytes": 20848,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "present",
+   "file": "props/present.glb",
+   "describe": "a wrapped present",
+   "tags": [
+    "item",
+    "pickup",
+    "box"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.394,
+     0.5,
+     0.394
+    ],
+    "offset": [
+     0,
+     0.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.394,
+    0.5,
+    0.394
+   ],
+   "tris": 238,
+   "bytes": 22944,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "soda-can",
+   "file": "props/soda-can.glb",
+   "describe": "a soda can",
+   "tags": [
+    "item",
+    "pickup",
+    "drink"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.1,
+    "height": 0.3,
+    "offset": [
+     0,
+     0.15,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.192,
+    0.3,
+    0.192
+   ],
+   "tris": 164,
+   "bytes": 19576,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "soda-bottle",
+   "file": "props/soda-bottle.glb",
+   "describe": "a soda bottle",
+   "tags": [
+    "item",
+    "pickup",
+    "drink"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.1,
+    "height": 0.45,
+    "offset": [
+     0,
+     0.225,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.14,
+    0.45,
+    0.121
+   ],
+   "tris": 100,
+   "bytes": 18896,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "cup-coffee",
+   "file": "props/cup-coffee.glb",
+   "describe": "a takeaway coffee cup",
+   "tags": [
+    "item",
+    "pickup",
+    "drink"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.08,
+    "height": 0.22,
+    "offset": [
+     0,
+     0.11,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.34,
+    0.22,
+    0.45
+   ],
+   "tris": 108,
+   "bytes": 18928,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "watermelon",
+   "file": "props/watermelon.glb",
+   "describe": "a whole watermelon",
+   "tags": [
+    "item",
+    "pickup",
+    "food",
+    "throw"
+   ],
+   "collider": {
+    "shape": "sphere",
+    "radius": 0.25,
+    "offset": [
+     0,
+     0.25,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.383,
+    0.4,
+    0.383
+   ],
+   "tris": 1376,
+   "bytes": 32684,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "burger",
+   "file": "props/burger.glb",
+   "describe": "a burger",
+   "tags": [
+    "item",
+    "pickup",
+    "food"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.15,
+    "height": 0.22,
+    "offset": [
+     0,
+     0.11,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.307,
+    0.22,
+    0.307
+   ],
+   "tris": 294,
+   "bytes": 20912,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "donut",
+   "file": "props/donut.glb",
+   "describe": "a donut with sprinkles",
+   "tags": [
+    "item",
+    "pickup",
+    "food"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.15,
+    "height": 0.15,
+    "offset": [
+     0,
+     0.075,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.387,
+    0.15,
+    0.447
+   ],
+   "tris": 180,
+   "bytes": 20380,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "ice-cream",
+   "file": "props/ice-cream.glb",
+   "describe": "an ice cream cone",
+   "tags": [
+    "item",
+    "pickup",
+    "food"
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "radius": 0.1,
+    "height": 0.35,
+    "offset": [
+     0,
+     0.175,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.178,
+    0.35,
+    0.205
+   ],
+   "tris": 80,
+   "bytes": 18352,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "pizza",
+   "file": "props/pizza.glb",
+   "describe": "a whole pizza",
+   "tags": [
+    "item",
+    "pickup",
+    "food"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.5,
+     0.026,
+     0.5
+    ],
+    "offset": [
+     0,
+     0.013,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.5,
+    0.026,
+    0.5
+   ],
+   "tris": 1208,
+   "bytes": 31684,
+   "licence": "CC0-1.0"
+  }
+ ],
+ "about": "gf-three prop library (track L). Every prop: metres, Y up, base at y=0, centred on x/z. collider shapes are in metres in the prop's own frame (offset = centre). Generated by lookdev/tools/curate.mjs from sources.json; edit sources.json, not this file."
+}

@@ -1,0 +1,25 @@
+{
+  "id": "quaternius-zombie",
+  "label": "Zombie",
+  "file": "bodies/quaternius-zombie.glb",
+  "from": "library",
+  "kind": "cc0",
+  "tags": [
+    "zombie",
+    "undead",
+    "monster",
+    "horror",
+    "halloween",
+    "chunky",
+    "toon",
+    "enemy"
+  ],
+  "describe": "a chunky cartoon zombie: green skin, big bald head, lolling tongue, a belt, torn trousers and one red trainer",
+  "license": {
+    "spdx": "CC0-1.0",
+    "author": "Quaternius",
+    "url": "https://poly.pizza/m/VlXjG0N8Eg",
+    "source": "https://poly.pizza/m/VlXjG0N8Eg \"Zombie\" (Post-Apocalypse Pack), https://static.poly.pizza/c4002f69-6979-42e8-ad6e-2f4e14fc3a9d.glb (sha256 3afd2837…b09d, retrieved 2026-10-07)",
+    "note": "made by research/gf-three/tools/cc0-bodies.mjs: posed at its bind pose (25 joints reset); wrist joints added (L, R; the rig had none); normalised onto gf-humanoid-1 by tools/optimize.mjs --normalize; its own clips dropped"
+  }
+}
