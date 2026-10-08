@@ -48,8 +48,8 @@ function defaultCurrency(config) {
 // ---------------------------------------------------------------- token
 
 /** Use a token the game did not launch here: read it from the chain and record it. No signature. */
-export async function linkToken({ gameDir, rpc }, { mint }) {
-  const info = await mintInfo(rpc, mint);
+export async function linkToken({ gameDir, rpc, network }, { mint }) {
+  const info = await mintInfo(rpc, mint, { network });
   if (info.native) fail('SOL is not a token you can link. Pick it as the shop’s currency instead.');
   return updateConfig(gameDir, (config) => {
     if (config.token?.source === 'launched') fail(`This game launched $${config.token.symbol}; it can’t use another token.`);
@@ -86,7 +86,7 @@ export async function setCurrency({ gameDir, rpc, network }, { currency }) {
   if (quick) next = { mint: quick.mint, symbol: quick.symbol, decimals: quick.decimals, native: quick.mint === NATIVE_MINT };
   else if (choice.toLowerCase() === 'token') next = null;
   else if (isAddress(choice)) {
-    const info = await mintInfo(rpc, choice);
+    const info = await mintInfo(rpc, choice, { network });
     if (!info.lootReady) fail('Shops take classic SPL tokens and SOL; that mint belongs to Token-2022.');
     next = { mint: info.mint, symbol: clip(info.symbol || info.mint.slice(0, 4), 40), decimals: info.decimals, native: info.native };
   } else fail('Currency is SOL, MAIN, USDC, token (the game’s own) or a mint address.');

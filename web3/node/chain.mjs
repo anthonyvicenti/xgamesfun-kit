@@ -10,8 +10,13 @@ import { cleanLook, isEmptyLook } from '../gf-web3/looks.js';
 import { explorerUrl } from '../gf-web3/network.js';
 import { rarityIndex, RuleError } from '../gf-web3/rules.js';
 
-/** What a mint is on this network, or a plain refusal. SOL is answered without a read. */
-export async function mintInfo(rpc, address) {
+const KNOWN_NAMES = { main: 'games.fun MAIN (devnet)', usdc: 'USD Coin (devnet)', sol: 'Solana' };
+
+/**
+ * What a mint is on this network, or a plain refusal. SOL is answered without a read. A mint the network config
+ * knows (MAIN-dev, USDC-dev) gets its known name when it carries no metadata.
+ */
+export async function mintInfo(rpc, address, { network = null } = {}) {
   const mint = String(address ?? '').trim();
   if (!isAddress(mint)) throw new RuleError('That is not a Solana address. Paste the token’s mint address.');
   if (mint === NATIVE_MINT)
@@ -20,6 +25,8 @@ export async function mintInfo(rpc, address) {
   if (!account) throw new RuleError('There is no token at that address on devnet.');
   const info = parseMint(mint, account.owner, account.data, metadata?.data ?? null);
   if (!info) throw new RuleError('That address is not a token mint (it may be a wallet, a pool or a token account).');
+  const known = network?.currencies?.find((c) => c.mint === mint);
+  if (known && !info.symbol) Object.assign(info, { symbol: known.symbol, name: KNOWN_NAMES[known.kind] ?? known.symbol });
   return info;
 }
 

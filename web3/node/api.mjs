@@ -113,7 +113,7 @@ export function createWeb3Api(ctx) {
         sendBytes(res, picture.contentType, picture.bytes);
       }, ctx.log),
     },
-    { method: 'post', path: '/mint', handler: handle(async (req) => mintInfo((await chainCtx()).rpc, (await readJson(req)).mint), ctx.log) },
+    { method: 'post', path: '/mint', handler: handle(async (req) => mintInfo((await chainCtx()).rpc, (await readJson(req)).mint, { network: (await chainCtx()).network }), ctx.log) },
     { method: 'post', path: '/token/link', handler: handle(async (req) => ({ config: await linkToken(await env(), await readJson(req)) }), ctx.log) },
     { method: 'post', path: '/token/unlink', handler: handle(async (req) => (await readJson(req), { config: await unlinkToken(await env()) }), ctx.log) },
     { method: 'post', path: '/shop/currency', handler: handle(async (req) => ({ config: await setCurrency(await env(), await readJson(req)) }), ctx.log) },
