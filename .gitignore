@@ -1,0 +1,12 @@
+node_modules/
+# Games you make live here and stay out of the kit's history (each game can be its own repo).
+/games/*
+!/games/README.md
+# Local state: dev-server ports, signer sessions, throwaway devnet keys, caches.
+.gamesfun/
+*.keypair.json
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
