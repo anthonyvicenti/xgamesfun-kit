@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://games.fun/schemas/game-spec/0.json",
+  "title": "games.fun game spec v0 (Studio v2)",
+  "description": "What the pitch conversation produces and `gf-three create` consumes. Plain, creator-readable values; the kit turns them into config/*.json and assets.json. research/studio-v2/PLAN.md §2.4, research/gf-three/CONTRACT.md.",
+  "type": "object",
+  "required": ["specVersion", "title", "hook", "players", "round", "camera", "world", "mechanics", "rules", "characters", "look"],
+  "additionalProperties": false,
+  "properties": {
+    "specVersion": { "const": 0 },
+    "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "hook": { "type": "string", "maxLength": 200, "description": "One line: why this is funny with friends." },
+    "prompt": { "type": "string", "maxLength": 6000, "description": "The creator's original words, verbatim (untrusted)." },
+    "references": { "type": "array", "items": { "type": "object", "required": ["kind"], "properties": {
+      "kind": { "enum": ["image", "game", "url"] }, "revisionId": { "type": "string" }, "name": { "type": "string" }, "url": { "type": "string" }, "use": { "enum": ["character", "style", "inspiration"] }, "note": { "type": "string" } } } },
+    "players": { "type": "object", "required": ["min", "max"], "additionalProperties": false, "properties": {
+      "min": { "type": "integer", "minimum": 1, "maximum": 8 }, "max": { "type": "integer", "minimum": 1, "maximum": 8 },
+      "bots": { "type": "boolean", "default": true, "description": "Fill empty seats with bots." },
+      "teams": { "type": "integer", "minimum": 0, "maximum": 4, "default": 0, "description": "0 = free for all." },
+      "mode": { "enum": ["versus", "coop", "teams"] } } },
+    "round": { "type": "object", "required": ["seconds"], "additionalProperties": false, "properties": {
+      "seconds": { "type": "integer", "minimum": 30, "maximum": 900 },
+      "winBy": { "type": "string", "maxLength": 200, "description": "Plain words: how a round is won." },
+      "loseBy": { "type": "string", "maxLength": 200 },
+      "replay": { "type": "boolean", "default": true } } },
+    "camera": { "enum": ["third", "first", "top"] },
+    "controls": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 80 }, "description": "Action → plain description, e.g. {\"primary\": \"throw the ball\"}. Keys: primary, secondary, interact, jump." },
+    "world": { "type": "object", "required": ["template"], "additionalProperties": false, "properties": {
+      "template": { "enum": ["backyard", "office", "plaza", "arena", "store"] },
+      "size": { "enum": ["small", "medium", "large"], "default": "small" },
+      "props": { "type": "array", "maxItems": 40, "items": { "type": "object", "required": ["name", "describe"], "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$" }, "describe": { "type": "string", "maxLength": 200 },
+        "count": { "type": "integer", "minimum": 1, "maximum": 60 }, "from": { "enum": ["library", "generate", "reference"], "default": "library", "description": "generate: made from describe; reference: made from the references[] image named by reference. The worker makes at most 2 per build (tools/meshy-prop.mjs), the thing to defend or win first." }, "reference": { "type": "string", "description": "For reference: the references[] revisionId of the image." }, "role": { "type": "string", "maxLength": 80 } } } },
+      "notes": { "type": "string", "maxLength": 600 } } },
+    "mechanics": { "type": "array", "minItems": 1, "maxItems": 6, "items": { "type": "object", "required": ["id"], "properties": {
+      "id": { "enum": ["projectile", "paint", "pickup", "health", "carry", "waves", "station", "race", "tag", "teams"] },
+      "as": { "type": "string", "maxLength": 80, "description": "What it is in this game, in plain words, e.g. 'dodgeball throw'." },
+      "params": { "type": "object", "description": "Validated against the mechanic's own params schema (kit/mechanics/<id>/index.js)." } } } },
+    "rules": { "type": "object", "required": ["summary"], "additionalProperties": false, "properties": {
+      "summary": { "type": "string", "maxLength": 1200, "description": "The game's own rules in plain words; the game agent turns this into rules.js." },
+      "scoring": { "type": "string", "maxLength": 400 },
+      "params": { "type": "object", "description": "Named tuning numbers the creator may change; each becomes a rules.* slot." } } },
+    "characters": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "type": "object", "required": ["role", "body"], "properties": {
+      "role": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,23}$", "description": "'player' for the players' own characters; others for NPCs or enemies." },
+      "describe": { "type": "string", "maxLength": 200 },
+      "body": { "type": "object", "required": ["from"], "properties": {
+        "from": { "enum": ["library", "bean", "generate", "reference"] },
+        "library": { "type": "string", "description": "A body id from research/gf-three/library/bodies.json. For generate and reference: the stand-in until the generated body lands, kept if generation fails." },
+        "prompt": { "type": "string", "maxLength": 300, "description": "For generate: what the body looks like." },
+        "reference": { "type": "string", "description": "For reference: the references[] revisionId of the image." } } },
+      "hat": { "type": "string", "maxLength": 80 } } } },
+    "look": { "type": "object", "required": ["preset"], "additionalProperties": false, "properties": {
+      "preset": { "enum": ["jelly-pastel", "toon-lowpoly", "soft-stylised"] },
+      "palette": { "type": "array", "maxItems": 8, "items": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } },
+      "time": { "enum": ["day", "golden", "night"], "default": "day" } } },
+    "sounds": { "type": "array", "maxItems": 24, "items": { "type": "object", "required": ["id", "describe"], "properties": {
+      "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,39}$" }, "describe": { "type": "string", "maxLength": 120 }, "preset": { "type": "string" } } } },
+    "content": { "type": "object", "additionalProperties": false, "properties": {
+      "rating": { "enum": ["E", "T", "PG-13"], "default": "T" },
+      "notes": { "type": "string", "maxLength": 400, "description": "How the pitch kept it within policy (PLAN §7)." } } },
+    "notInV1": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 120 } },
+    "accept": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 160 }, "description": "Checks the creator will judge; verify adds its own." }
+  }
+}

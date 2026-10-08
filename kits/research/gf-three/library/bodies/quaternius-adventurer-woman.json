@@ -1,0 +1,25 @@
+{
+  "id": "quaternius-adventurer-woman",
+  "label": "Adventurer",
+  "file": "bodies/quaternius-adventurer-woman.glb",
+  "from": "library",
+  "kind": "cc0",
+  "tags": [
+    "human",
+    "woman",
+    "adventurer",
+    "explorer",
+    "jungle",
+    "treasure",
+    "outdoors",
+    "player"
+  ],
+  "describe": "an explorer in a khaki shirt, shorts, belts and boots; the shirt takes the player colour",
+  "license": {
+    "spdx": "CC0-1.0",
+    "author": "Quaternius",
+    "url": "https://poly.pizza/m/ZwF0K7WBmu",
+    "source": "https://poly.pizza/m/ZwF0K7WBmu \"Adventurer\" (Ultimate Modular Women Pack), https://static.poly.pizza/69689495-028d-4b81-8678-792338a5693e.glb (sha256 38e4e642…cf31, retrieved 2026-10-07)",
+    "note": "made by research/gf-three/tools/cc0-bodies.mjs: posed at its bind pose (42 joints reset); normalised onto gf-humanoid-1 by tools/optimize.mjs --normalize --tint LightGreen --tint-mix 0.5; its own clips dropped"
+  }
+}

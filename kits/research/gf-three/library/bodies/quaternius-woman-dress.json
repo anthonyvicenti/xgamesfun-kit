@@ -1,0 +1,26 @@
+{
+  "id": "quaternius-woman-dress",
+  "label": "Woman in a dress",
+  "file": "bodies/quaternius-woman-dress.glb",
+  "from": "library",
+  "kind": "cc0",
+  "tags": [
+    "human",
+    "woman",
+    "dress",
+    "party",
+    "formal",
+    "wedding",
+    "modern",
+    "civilian",
+    "player"
+  ],
+  "describe": "a red-haired woman in a sleeveless dress with a gold belt; the dress takes the player colour",
+  "license": {
+    "spdx": "CC0-1.0",
+    "author": "Quaternius",
+    "url": "https://poly.pizza/m/nIItLV9nxS",
+    "source": "https://poly.pizza/m/nIItLV9nxS \"Animated Woman\" (Ultimate Modular Women Pack), https://static.poly.pizza/46d6db5a-3c9f-4238-8cdf-8eb7194498dc.glb (sha256 a6522fe5…2d17, retrieved 2026-10-07)",
+    "note": "made by research/gf-three/tools/cc0-bodies.mjs: posed at its bind pose (42 joints reset); normalised onto gf-humanoid-1 by tools/optimize.mjs --normalize --tint LimeGreen --tint-mix 0.6; its own clips dropped"
+  }
+}

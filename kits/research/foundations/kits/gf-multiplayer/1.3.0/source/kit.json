@@ -1,0 +1,20 @@
+{
+  "kit": "gf-multiplayer",
+  "version": "1.3.0",
+  "license": "MIT",
+  "note": "Kit-owned files, byte-identical in every game. Never edit a copy: research/multiplayer/party/adopt.mjs rewrites them.",
+  "files": {
+    "bot.js": "882495b3814773423d12d02e7fc3ac4fef463ec838d63cf816182f5c94c5b043",
+    "index.html": "f9fa4a8448065585b4f04d2711d1151b693fc1f66ff1a66a6a6132329b785cf9",
+    "net.js": "842492cddd0c694dc2efbaf4b9c9977a34bc143f3329c451e9552b94745b5442",
+    "p2p.json": "aaf21845c839307a7c61c7a64d86c35f0341b28f42c9d334a612bdb38c0bbad3",
+    "p2p/host-engine.js": "dd3e1d9f9139b29f441e1ce2b8144d3976d0358657d4e8e72769b9a8948ae692",
+    "p2p/host-worker.js": "a1d4da7491e04de87e7586fa95c7e52b71149f43eadcf3fb03ab05f4e4754426",
+    "p2p/rng.js": "d266c67c5ddfef979e13161d3ec114f1639da53348eea70e9e071cc176110d0c",
+    "p2p/sandbox-core.js": "2e132175716390f428012772ece7d52bfc27abdcf77edd147baf36ad7b67f1fc",
+    "party.css": "7956267daae1acc5ceda1f5ba920e8bf2b32803361a79e0cfeff68940196ddfc",
+    "party.js": "000b8e92d986b0c63c4755b67ce00ac1f1fbeed30d6b8a363714428fe49289eb",
+    "room.js": "0b542e7e7f9d071cbfde755cc1cc518755dd19b9e9627ac2e26eced899ce79bf",
+    "vendor/gf.js": "01558f32aa24f98c62459fa87c9b917b100450281bd7c43e558ee8c5261c4084"
+  }
+}

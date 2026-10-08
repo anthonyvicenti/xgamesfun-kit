@@ -10,3 +10,5 @@ node_modules/
 !.env.example
 .DS_Store
 *.log
+# Playwright's own browsers, if someone points the cache here
+ms-playwright/

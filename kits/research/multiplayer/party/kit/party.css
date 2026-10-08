@@ -1,0 +1,73 @@
+/* games.fun multiplayer kit: party shell. Kit-owned (never edit a copy). The game's frame and the standings rail sit
+   side by side, so the kit never draws over the game's own HUD. Colours come from multiplayer.json "theme". */
+:root {
+  --mp-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mp-bg: #0d0f15; --mp-panel: #1b1e27; --mp-fg: #eef0f6; --mp-muted: #b8bfd2; --mp-faint: #8a90a2;
+  --mp-line: #333a4d; --mp-row: #232735; --mp-button: #262a37; --mp-accent: #4f7cff; --mp-accent-fg: #fff;
+  --mp-code: #ffd166; --mp-ok: #3ddc84; --mp-radius: 12px; --mp-rail: 248px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--mp-bg); color: var(--mp-fg); font: 15px/1.4 var(--mp-font); overflow: hidden; }
+#party { display: grid; grid-template-columns: minmax(0, 1fr) var(--mp-rail); height: 100dvh; }
+#party[data-phase="boot"], #party[data-phase="home"] { grid-template-columns: minmax(0, 1fr); }
+
+#stage { position: relative; min-width: 0; min-height: 0; background: #000; }
+#game { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+#game[hidden] { display: none; }
+
+/* The host-join kit's room pill sits fixed in the top-right corner: the rail keeps that corner free for it. */
+#rail { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 48px 12px 12px; background: var(--mp-panel); border-left: 1px solid var(--mp-line); overflow: auto; }
+#rail[hidden] { display: none; }
+#rail header h1 { margin: 0; font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#rail header p { margin: 2px 0 0; color: var(--mp-faint); font-size: 12px; }
+#racers { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+#racers li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 4px 6px; align-items: center; padding: 7px 8px; border-radius: 9px; background: var(--mp-row); }
+#racers li.me { outline: 1px solid var(--mp-accent); }
+#racers .place { color: var(--mp-faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+#racers .dot { width: 10px; height: 10px; border-radius: 50%; justify-self: center; }
+#racers .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+#racers .val { font-variant-numeric: tabular-nums; color: var(--mp-muted); font-size: 13px; }
+#racers li.done .val { color: var(--mp-ok); font-weight: 700; }
+#racers li.away .name { color: var(--mp-faint); }
+#racers .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .09); overflow: hidden; }
+#racers .bar i { display: block; height: 100%; background: var(--mp-accent); transition: width .25s linear; }
+#racers li.done .bar i { background: var(--mp-ok); }
+#racers li.out .val { color: var(--mp-faint); }
+#status { margin: 0; color: var(--mp-muted); font-size: 13px; min-height: 1.4em; }
+#controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+
+button { cursor: pointer; font: inherit; font-weight: 600; color: var(--mp-fg); background: var(--mp-button); border: 1px solid var(--mp-line); border-radius: 9px; padding: 9px 14px; }
+button.primary { background: var(--mp-accent); border-color: var(--mp-accent); color: var(--mp-accent-fg); }
+button:disabled { opacity: .45; cursor: default; }
+button[hidden] { display: none; }
+:focus-visible { outline: 2px solid var(--mp-accent); outline-offset: 2px; }
+
+.card { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(8, 10, 16, .82); backdrop-filter: blur(3px); overflow: auto; }
+.card[hidden] { display: none; }
+.card .panel { width: min(440px, 100%); background: var(--mp-panel); border: 1px solid var(--mp-line); border-radius: var(--mp-radius); padding: 20px; }
+.card h2 { margin: 0 0 6px; font-size: 20px; }
+.card p { margin: 6px 0; color: var(--mp-muted); }
+.card .muted { color: var(--mp-faint); font-size: 13px; }
+.card .code { font: 800 34px/1.1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .18em; color: var(--mp-code); margin: 8px 0; }
+.card .link { display: flex; gap: 6px; margin: 8px 0; }
+.card .link input { flex: 1 1 auto; min-width: 0; font: 12px var(--mp-font); color: var(--mp-fg); background: var(--mp-bg); border: 1px solid var(--mp-line); border-radius: 9px; padding: 8px 10px; }
+.card .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.card .count { font: 800 88px/1 var(--mp-font); text-align: center; color: var(--mp-code); margin: 8px 0; font-variant-numeric: tabular-nums; }
+.card table { width: 100%; border-collapse: collapse; margin: 10px 0 2px; font-variant-numeric: tabular-nums; }
+.card td { padding: 7px 6px; border-top: 1px solid var(--mp-line); }
+.card tr.me td { color: var(--mp-code); font-weight: 700; }
+.card td.r { text-align: right; }
+.card .err { color: #ffb3bf; }
+
+/* Narrow screens: the standings become a strip above the game. */
+@media (max-width: 760px) {
+  #party { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  #rail { order: -1; flex-direction: row; align-items: center; gap: 8px; padding: 6px 150px 6px 8px; border-left: 0; border-bottom: 1px solid var(--mp-line); overflow-x: auto; overflow-y: hidden; }
+  #rail header, #status { display: none; }
+  #racers { display: flex; gap: 6px; }
+  #racers li { grid-template-columns: auto auto auto; white-space: nowrap; padding: 5px 8px; flex: 0 0 auto; }
+  #racers .name { max-width: 11ch; }
+  #racers .bar { display: none; }
+  #controls { margin: 0; flex-wrap: nowrap; }
+  #controls button { padding: 5px 10px; font-size: 13px; white-space: nowrap; }
+}

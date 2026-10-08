@@ -1,0 +1,319 @@
+// Host-join signaling over HTTP: the protocol, its limits and an in-memory store. One module for both servers, so
+// they can't drift: the play origin's routes (lib/signal-http.mjs: POST /signal/v1, GET /signal/v1/ice, Postgres
+// store) and the local Node signaling server (research/multiplayer/p2p/signal-server.mjs: the same HTTP endpoints
+// with memoryStore(), beside its WebSocket at /signal). The client is the multiplayer kit's vendor/gf.js
+// (research/foundations/kits/gf-multiplayer/1.3.0+), which picks this transport on any non-loopback page.
+// Pure module: no Node or DOM imports (Web Crypto and timers only), like lib/play-policy.mjs.
+//
+// Signaling only introduces a joiner to a host: a 6-character room code, then offer / answer / ICE candidates. Game
+// traffic never passes through here (it flows host <-> joiner over a WebRTC data channel). Same semantics as the
+// WebSocket server, as request/response:
+//
+//   POST /signal/v1  {op:'host'}                         -> {t:'hosted', code, peer, token}
+//                    {op:'join', code}                   -> {t:'joined', peer, token}         host's queue <- {t:'peer', peer}
+//                    {op:'signal', peer, token, to?, data} -> {ok:true}                       data = {sdp:{type,sdp}} | {ice}
+//                                                        the other side's queue <- {t:'signal', from, data}
+//                                                        (a joiner can only reach its host; the host must name a joiner)
+//                    {op:'poll', peer, token, after}     -> {msgs:[...], last}   long-poll: answers at once when something
+//                                                        is queued, else waits up to pollWaitMs; `after` acknowledges
+//                                                        (deletes) every message up to that sequence number
+//                    {op:'leave', peer, token}           -> {ok:true}   joiner: host <- {t:'peer-left', peer};
+//                                                        host: every joiner <- {t:'host-left'}, the code is closed
+//   errors           {t:'error', code, reason} with a 4xx/5xx status. Codes: no-room, rate, busy, bad, full.
+//   GET /signal/v1/ice -> {v:1, signal:'http', iceServers}  (public STUN, plus TURN when TURN_URLS is set)
+//
+// `token` is a secret per peer: only its SHA-256 is stored. Addresses are kept only as a keyed hash, for the per-network
+// limits. Rooms whose host stops asking for 2 h are deleted, messages after 60 s, joiners 60 s after joining (a joiner
+// that has its data channel leaves at once). A request whose Origin is not this host is refused.
+
+export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ2345678';   // 31 letters: no I, O, 0, 1 (runtime/src/index.js)
+export const SIGNAL_LIMITS = Object.freeze({
+  frameBytes: 16 * 1024,        // a request (or WebSocket frame); an SDP offer is ~1-6 KB, nothing legitimate is bigger
+  sdpChars: 12 * 1024,
+  ratePerSec: 20, burst: 80,    // per peer (WebSocket: per socket); trickle ICE sends a burst of candidates
+  joinsPerSocket: 5,            // WebSocket only: join attempts before the socket is refused
+  joinsPerIpPerMin: 30,         // join attempts per network per minute (code guessing)
+  socketsPerIp: 20,             // WebSocket: open sockets per address; HTTP: live sessions per network
+  maxRooms: 2000,
+  pendingPerRoom: 16,           // joiners mid-handshake per room
+  joinerIdleMs: 60_000,         // a joiner must finish its handshake within this
+  heartbeatMs: 30_000,          // WebSocket only
+  // HTTP only (/signal/v1)
+  hostsPerIpPerMin: 10,         // rooms opened per network per minute
+  roomIdleMs: 2 * 60 * 60_000,  // a room whose host has not asked for anything in 2 h is deleted
+  hostSilentMs: 45_000,         // ...and refuses joiners after 45 s (a host polls at least every pollWaitMs)
+  messageTtlMs: 60_000,         // an undelivered message is dropped after a minute
+  queuePerPeer: 256,            // undelivered messages per peer
+  pollWaitMs: 8_000,            // a long-poll answers within this
+  pollEveryMs: 350,             // how often a waiting poll looks for new messages
+  pollBatch: 64,                // messages per answer
+  sweepEveryMs: 30_000,         // expiry runs at most this often (per server instance)
+});
+
+export const PUBLIC_STUN = Object.freeze([Object.freeze({ urls: 'stun:stun.l.google.com:19302' })]);
+
+const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+const randomBytes = n => crypto.getRandomValues(new Uint8Array(n));
+const base64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const te = new TextEncoder();
+const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+export const sha256Hex = async text => hex(await crypto.subtle.digest('SHA-256', te.encode(text)));
+async function hmacHex(secret, text) {
+  const key = await crypto.subtle.importKey('raw', te.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return hex(await crypto.subtle.sign('HMAC', key, te.encode(text)));
+}
+
+/** A room code: 6 characters from CODE_ALPHABET, by rejection sampling (no modulo bias). `bytes(n)` gives n random bytes. */
+export function makeCode(bytes = randomBytes) {
+  let out = '';
+  while (out.length < 6) {
+    for (const b of bytes(12)) if (b < 248 && out.length < 6) out += CODE_ALPHABET[b % 31];
+  }
+  return out;
+}
+export const cleanCode = v => (typeof v === 'string' ? v.slice(0, 16).toUpperCase().replace(/[^A-Z0-9]/g, '') : '');
+
+/** Signal data is exactly {sdp:{type:'offer'|'answer', sdp}} or {ice: candidate|null}; anything else is refused. */
+export function validSignal(d) {
+  if (!isObj(d)) return false;
+  const keys = Object.keys(d);
+  if (keys.length !== 1) return false;
+  if (keys[0] === 'sdp') {
+    const s = d.sdp;
+    return isObj(s) && (s.type === 'offer' || s.type === 'answer') && typeof s.sdp === 'string' && s.sdp.length <= SIGNAL_LIMITS.sdpChars
+      && Object.keys(s).every(k => k === 'type' || k === 'sdp');
+  }
+  if (keys[0] === 'ice') {
+    const c = d.ice;
+    if (c === null) return true;
+    return isObj(c) && (c.candidate === undefined || typeof c.candidate === 'string') && JSON.stringify(c).length <= 1024;
+  }
+  return false;
+}
+
+/**
+ * The ICE servers a page should use: public STUN, plus a TURN relay when TURN_URLS is set (comma-separated turn: or
+ * turns: URLs, with TURN_USERNAME and TURN_CREDENTIAL). These credentials are readable by every player: use
+ * short-lived ones (a TURN service's API, or coturn's REST secret) before relying on a paid relay.
+ */
+export function iceServersFromEnv(env = {}) {
+  const out = PUBLIC_STUN.map(s => ({ ...s }));
+  const urls = String(env.TURN_URLS ?? '').split(',').map(s => s.trim()).filter(u => /^turns?:/i.test(u) && u.length <= 300).slice(0, 8);
+  if (urls.length) {
+    const turn = { urls };
+    if (env.TURN_USERNAME) turn.username = String(env.TURN_USERNAME);
+    if (env.TURN_CREDENTIAL) turn.credential = String(env.TURN_CREDENTIAL);
+    out.push(turn);
+  }
+  return out;
+}
+
+/** Whether `origin` (an Origin header) is the page origin for `host` (a host[:port], no scheme). */
+export function sameOrigin(origin, host) {
+  if (!origin || !host || origin === 'null') return false;
+  try { return new URL(origin).host.toLowerCase() === String(host).trim().toLowerCase(); } catch { return false; }
+}
+
+const STATUS = { bad: 400, 'no-room': 404, full: 409, rate: 429, busy: 503 };
+const fail = (code, reason, status = STATUS[code] ?? 400) => ({ status, body: { t: 'error', code, reason } });
+const ok = body => ({ status: 200, body });
+const wait = (ms, signal) => new Promise(res => {
+  if (signal?.aborted) return res();
+  const t = setTimeout(done, ms);
+  function done() { clearTimeout(t); signal?.removeEventListener?.('abort', done); res(); }
+  signal?.addEventListener?.('abort', done, { once: true });
+});
+
+/**
+ * The HTTP signaling protocol over a store (memoryStore() here, pgStore() in lib/signal-http.mjs).
+ *   secret       keys the address hash (Studio: PLAY_SECRET; the Node server: random per process)
+ *   now, sleep   injectable for tests
+ * → { request({origin, host, ip, body, signal}) → {status, body}, ice({origin, host, env}) → {status, body}, stats() }
+ * `host` is this server's own host (Studio: PLAY_HOST; Node: the Host header); `body` is the raw request text.
+ */
+export function createSignaling({ store, secret = '', now = () => Date.now(), sleep = wait, limits = SIGNAL_LIMITS, checkOrigin = true } = {}) {
+  if (!store) throw new Error('createSignaling needs a store');
+  const L = limits;
+  const stats = { requests: 0, rooms: 0, joins: 0, relayed: 0, polls: 0, rejected: 0 };
+  let lastSweep = 0;
+  const no = (...a) => { stats.rejected++; return fail(...a); };
+  const ipKey = ip => (secret ? hmacHex(secret, `signal-ip|${ip ?? ''}`) : sha256Hex(`signal-ip|${ip ?? ''}`)).then(h => h.slice(0, 24));
+  const minute = t => Math.floor(t / 60_000);
+  const newSession = async () => { const token = base64url(randomBytes(18)); return { peer: base64url(randomBytes(6)), token, tokenHash: await sha256Hex(token) }; };
+
+  async function sweep(t) {
+    if (t - lastSweep < L.sweepEveryMs) return;
+    lastSweep = t;
+    try {
+      await store.sweep({ messagesBefore: t - L.messageTtlMs, joinersBefore: t - L.joinerIdleMs, closedBefore: t - L.messageTtlMs,
+        idleBefore: t - L.roomIdleMs, hitsBefore: minute(t) - 1 });
+    } catch { /* expiry is best effort; the next request tries again */ lastSweep = 0; }
+  }
+
+  async function openRoom(ip, t) {
+    if ((await store.hit(`host|${ip}`, minute(t))) > L.hostsPerIpPerMin) return no('rate', 'too many rooms opened from this network, try again in a minute');
+    if ((await store.ipPeers(ip, t - L.joinerIdleMs)) >= L.socketsPerIp) return no('rate', 'too many signaling sessions from this network');
+    if ((await store.openRooms(t - L.roomIdleMs)) >= L.maxRooms) return no('busy', 'signaling is full, try again soon');
+    for (let i = 0; i < 8; i++) {
+      const code = makeCode(), s = await newSession();
+      const made = await store.createRoom({ code, host: s.peer, created: t },
+        { id: s.peer, room: code, role: 'host', token: s.tokenHash, ip, created: t, seen: t, tokens: L.burst, last: t });
+      if (made) { stats.rooms++; return ok({ t: 'hosted', code, peer: s.peer, token: s.token }); }
+    }
+    return no('busy', 'could not find a free room code, try again');
+  }
+
+  async function joinRoom(m, ip, t) {
+    if ((await store.hit(`join|${ip}`, minute(t))) > L.joinsPerIpPerMin) return no('rate', 'too many join attempts');
+    const code = cleanCode(m.code);
+    const room = code.length === 6 ? await store.room(code) : null;
+    if (!room || room.closed != null || room.seen < t - L.hostSilentMs) return no('no-room', 'no game with that code (the host may have left)');
+    if ((await store.ipPeers(ip, t - L.joinerIdleMs)) >= L.socketsPerIp) return no('rate', 'too many signaling sessions from this network');
+    if ((await store.joiners(code, t - L.joinerIdleMs)).length >= L.pendingPerRoom) return no('busy', 'too many players joining at once, try again');
+    for (let i = 0; i < 4; i++) {
+      const s = await newSession();
+      if (!(await store.addPeer({ id: s.peer, room: code, role: 'joiner', token: s.tokenHash, ip, created: t, seen: t, tokens: L.burst, last: t }))) continue;
+      await store.push(room.host, JSON.stringify({ t: 'peer', peer: s.peer }), t, L.queuePerPeer);
+      stats.joins++;
+      return ok({ t: 'joined', peer: s.peer, token: s.token });
+    }
+    return no('no-room', 'no game with that code (the host may have left)');
+  }
+
+  // A peer id and its token. A session that ended, expired or never was is 'no-room', like a WebSocket that is not in a room.
+  async function session(m) {
+    if (typeof m.peer !== 'string' || m.peer.length > 32 || typeof m.token !== 'string' || m.token.length > 64) return null;
+    const me = await store.peer(m.peer);
+    if (!me || me.token !== (await sha256Hex(m.token))) return null;
+    return me;
+  }
+
+  async function deliver(to, msg, t) {
+    const seq = await store.push(to, JSON.stringify(msg), t, L.queuePerPeer);
+    if (seq == null) return no('full', 'the other player is not reading its signaling messages');
+    stats.relayed++;
+    return ok({ ok: true });
+  }
+
+  async function poll(me, m, t, signal) {
+    stats.polls++;
+    const after = Number.isSafeInteger(m.after) && m.after > 0 ? m.after : 0;
+    if (after) await store.ack(me.id, after);
+    const until = t + L.pollWaitMs;
+    for (;;) {
+      const rows = await store.read(me.id, after, now() - L.messageTtlMs, L.pollBatch);
+      if (rows.length) {
+        const msgs = [];
+        for (const r of rows) { try { msgs.push(JSON.parse(r.body)); } catch { /* never written by anything else */ } }
+        return ok({ msgs, last: rows[rows.length - 1].seq });
+      }
+      if (signal?.aborted || now() + L.pollEveryMs >= until) return ok({ msgs: [], last: after });
+      await sleep(L.pollEveryMs, signal);
+    }
+  }
+
+  async function leave(me, t) {
+    if (me.role === 'host') {
+      for (const id of await store.joiners(me.room, t - L.joinerIdleMs)) await store.push(id, JSON.stringify({ t: 'host-left' }), t, L.queuePerPeer);
+      await store.closeRoom(me.room, t);
+    } else {
+      await store.dropPeer(me.id);
+      if (me.roomClosed == null) await store.push(me.roomHost, JSON.stringify({ t: 'peer-left', peer: me.id }), t, L.queuePerPeer);
+    }
+    return ok({ ok: true });
+  }
+
+  async function request({ origin = null, host = '', ip = '', body = '', signal = null } = {}) {
+    stats.requests++;
+    if (checkOrigin && !sameOrigin(origin, host)) return no('bad', 'signaling answers only pages on its own origin', 403);
+    if (typeof body !== 'string' || !body) return no('bad', 'no request body');
+    if (body.length > L.frameBytes) return no('bad', 'request too large', 413);
+    let m; try { m = JSON.parse(body); } catch { return no('bad', 'not JSON'); }
+    if (!isObj(m)) return no('bad', 'not an object');
+    const t = now();
+    await sweep(t);
+    if (m.op === 'host') return openRoom(await ipKey(ip), t);
+    if (m.op === 'join') return joinRoom(m, await ipKey(ip), t);
+    if (m.op !== 'signal' && m.op !== 'poll' && m.op !== 'leave') return no('bad', 'unknown op (signaling carries no game traffic)');
+    const me = await session(m);
+    if (!me) return no('no-room', 'not in a room (the session ended or expired)');
+    // Token bucket per peer, as per WebSocket: ratePerSec, burst. Every request counts, polls included.
+    const tokens = Math.min(L.burst, me.tokens + ((t - me.last) / 1000) * L.ratePerSec);
+    await store.touch(me.id, { tokens: Math.max(0, tokens - 1), last: t, seen: t }, me.role === 'host' ? me.room : null, t);
+    if (tokens < 1) return no('rate', 'too many messages');
+    if (m.op === 'poll') return poll(me, m, t, signal);
+    if (m.op === 'leave') return leave(me, t);
+    if (!validSignal(m.data)) return no('bad', 'signal data must be {sdp:{type,sdp}} or {ice}');
+    if (me.roomClosed != null) return no('no-room', 'the host left');
+    if (me.role === 'host') {
+      const target = typeof m.to === 'string' && m.to.length <= 32 ? await store.peer(m.to) : null;
+      if (!target || target.room !== me.room || target.role !== 'joiner') return no('bad', 'no such peer');
+      return deliver(target.id, { t: 'signal', from: 'host', data: m.data }, t);
+    }
+    return deliver(me.roomHost, { t: 'signal', from: me.id, data: m.data }, t);   // a joiner's `to` is ignored
+  }
+
+  /** GET /signal/v1/ice. A same-origin GET carries no Origin header; one from elsewhere is refused. */
+  function ice({ origin = null, host = '', env = {} } = {}) {
+    if (checkOrigin && origin && !sameOrigin(origin, host)) return fail('bad', 'signaling answers only pages on its own origin', 403);
+    return ok({ v: 1, signal: 'http', iceServers: iceServersFromEnv(env) });
+  }
+
+  return { request, ice, stats: () => ({ ...stats }), store, limits: L };
+}
+
+/**
+ * The store for one Node process (the local signaling server and the tests). Same contract as pgStore():
+ *   createRoom(room, hostPeer) → bool       room(code) → {code, host, created, seen, closed} | null
+ *   peer(id) → {id, room, role, token, ip, created, seen, tokens, last, roomHost, roomClosed, roomSeen} | null
+ *   addPeer(peer) → bool (false when the room is gone or closed)   touch(id, {tokens, last, seen}, hostRoom|null, t)
+ *   ipPeers(ip, since) → n live sessions      joiners(code, since) → [peer ids]     openRooms(since) → n
+ *   push(id, body, t, max) → seq | null       ack(id, after)       read(id, after, since, max) → [{seq, body}]
+ *   dropPeer(id)    closeRoom(code, t)    hit(key, window) → count    sweep({...before})
+ */
+export function memoryStore() {
+  const rooms = new Map(), peers = new Map(), queues = new Map(), hits = new Map();
+  let seq = 0;
+  const view = p => { const r = rooms.get(p.room); return { ...p, roomHost: r?.host ?? null, roomClosed: r ? r.closed : null, roomSeen: r?.seen ?? 0 }; };
+  const drop = id => { peers.delete(id); queues.delete(id); };
+  return {
+    kind: 'memory',
+    async openRooms(since) { let n = 0; for (const r of rooms.values()) if (r.closed == null && r.seen >= since) n++; return n; },
+    async createRoom(room, host) {
+      if (rooms.has(room.code) || peers.has(host.id)) return false;
+      rooms.set(room.code, { code: room.code, host: room.host, created: room.created, seen: room.created, closed: null });
+      peers.set(host.id, { ...host });
+      return true;
+    },
+    async room(code) { const r = rooms.get(code); return r ? { ...r } : null; },
+    async peer(id) { const p = peers.get(id); return p && rooms.has(p.room) ? view(p) : null; },
+    async addPeer(p) { const r = rooms.get(p.room); if (!r || r.closed != null || peers.has(p.id)) return false; peers.set(p.id, { ...p }); return true; },
+    async touch(id, fields, hostRoom, t) { const p = peers.get(id); if (p) Object.assign(p, fields); const r = hostRoom && rooms.get(hostRoom); if (r) r.seen = t; },
+    async ipPeers(ip, since) { let n = 0; for (const p of peers.values()) if (p.ip === ip && p.seen >= since) n++; return n; },
+    async joiners(code, since) { return [...peers.values()].filter(p => p.room === code && p.role === 'joiner' && p.created >= since).map(p => p.id); },
+    async push(id, body, created, max) {
+      if (!peers.has(id)) return null;
+      const q = queues.get(id) ?? [];
+      if (q.length >= max) return null;
+      q.push({ seq: ++seq, body, created }); queues.set(id, q);
+      return seq;
+    },
+    async ack(id, after) { const q = queues.get(id); if (!q) return; const keep = q.filter(m => m.seq > after); if (keep.length) queues.set(id, keep); else queues.delete(id); },
+    async read(id, after, since, max) { return (queues.get(id) ?? []).filter(m => m.seq > after && m.created >= since).slice(0, max).map(m => ({ seq: m.seq, body: m.body })); },
+    async dropPeer(id) { drop(id); },
+    async closeRoom(code, t) { const r = rooms.get(code); if (!r) return; if (r.closed == null) r.closed = t; drop(r.host); },
+    async hit(key, win) { const k = `${key}|${win}`, n = (hits.get(k) ?? 0) + 1; hits.set(k, n); return n; },
+    async sweep({ messagesBefore, joinersBefore, closedBefore, idleBefore, hitsBefore }) {
+      for (const [id, q] of queues) { const keep = q.filter(m => m.created >= messagesBefore); if (keep.length) queues.set(id, keep); else queues.delete(id); }
+      for (const p of [...peers.values()]) if (p.role === 'joiner' && p.created < joinersBefore) drop(p.id);
+      for (const r of [...rooms.values()]) {
+        if ((r.closed != null && r.closed < closedBefore) || r.seen < idleBefore) {
+          rooms.delete(r.code);
+          for (const p of [...peers.values()]) if (p.room === r.code) drop(p.id);
+        }
+      }
+      for (const k of [...hits.keys()]) if (Number(k.slice(k.lastIndexOf('|') + 1)) < hitsBefore) hits.delete(k);
+    },
+    size: () => ({ rooms: rooms.size, peers: peers.size, messages: [...queues.values()].reduce((n, q) => n + q.length, 0), hits: hits.size }),
+  };
+}
