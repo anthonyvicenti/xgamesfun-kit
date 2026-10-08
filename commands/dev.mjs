@@ -1,0 +1,43 @@
+import { guard, parse, UsageError } from '../lib/cli.mjs';
+import { resolveGame, shown } from '../lib/games.mjs';
+import { openUrl } from '../lib/open.mjs';
+import { forgetDevServer, recordDevServer } from '../lib/state.mjs';
+import { startDevServer } from '../server/index.mjs';
+
+const usage = `Usage: gamesfun dev [dir] [--port <n>] [--no-open]
+
+Serve one game on this machine (127.0.0.1 only) and open the studio: the game, its slots, verify, and any tabs in
+studio/tabs/. Files reload as you (or your agent) save them. Two tabs on /game/gf/mp/ play together through the local
+signaling server. Stop with Ctrl+C.
+  --port <n>   that port exactly (default: the first free of 5180–5189, else any free port)
+  --no-open    don't open a browser`;
+
+export default {
+  name: 'dev',
+  summary: 'serve a game with the studio, live reload and local multiplayer',
+  usage,
+  run: args => guard(async () => {
+    const { values, positionals } = parse(args, { port: { type: 'string' }, 'no-open': { type: 'boolean' } }, usage);
+    if (values.port && !/^\d{1,5}$/.test(values.port)) throw new UsageError(`--port takes a number\n\n${usage}`);
+    const gameDir = await resolveGame(positionals[0]);
+    const srv = await startDevServer({ gameDir, port: values.port ? Number(values.port) : null, log: (...a) => console.log(...a) });
+    const entry = { pid: process.pid, url: srv.url, port: srv.port, game: shown(gameDir), gameDir, started: new Date().toISOString() };
+    await recordDevServer(entry);
+    const failed = srv.router.areas().filter(a => !a.ok);
+    console.log(`gamesfun dev: ${shown(gameDir)}`);
+    console.log(`  studio   ${srv.url}studio/`);
+    console.log(`  play     ${srv.url}game/                 (alone, with bots)`);
+    console.log(`  friends  ${srv.url}game/gf/mp/           (Host here, open the invite link in another tab)`);
+    console.log(`  api      ${srv.router.areas().filter(a => a.ok).map(a => `/api/${a.area}`).join(', ')}`);
+    for (const f of failed) console.log(`  routes   ${f.file} did not load: ${f.error}`);
+    console.log('Live reload is on. Ctrl+C stops the server.');
+    if (!values['no-open']) openUrl(`${srv.url}studio/`);
+    await new Promise(resolve => {
+      const stop = async () => { await srv.close(); await forgetDevServer(process.pid).catch(() => {}); resolve(); };
+      process.once('SIGINT', stop);
+      process.once('SIGTERM', stop);
+      process.once('SIGHUP', stop);
+    });
+    return 0;
+  }),
+};
