@@ -34,6 +34,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { measure as fairMeasure, FAIR_LIMITS } from './fair-check.mjs';
+import { EMULATED_LOCK } from './lock.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const r2 = v => Math.round(v * 100) / 100;
@@ -61,13 +62,10 @@ const median = list => { const s = [...list].sort((a, b) => a - b); return s.len
 export const FORGE_FAIR_SECONDS = 20;
 
 /** Headless Chrome grants no pointer lock: emulate it so real relative mouse motion reaches the look (the reference
- *  captures did the same: research/rust-engine/feel-targets.md "Input path"). */
-export const POINTER_LOCK = () => {
-  let locked = null;
-  Element.prototype.requestPointerLock = function () { locked = this; document.dispatchEvent(new Event('pointerlockchange')); return Promise.resolve(); };
-  Object.defineProperty(Document.prototype, 'pointerLockElement', { get() { return locked; }, configurable: true });
-  Document.prototype.exitPointerLock = function () { locked = null; document.dispatchEvent(new Event('pointerlockchange')); };
-};
+ *  captures did the same: research/rust-engine/feel-targets.md "Input path"). One copy since gf-forge wave 4: it is
+ *  tools/lib/lock.mjs's EMULATED_LOCK (the same three overrides, and the page says so in window.__gfEmulatedLock);
+ *  the forge checks and tools/play.mjs keep importing it under this name. */
+export const POINTER_LOCK = EMULATED_LOCK;
 
 const FEEL = () => window.__game?.forge?.feel?.() ?? null;
 const CAM = () => { const c = window.__game?.camera?.(); return c ? { yaw: c.yaw, pitch: c.pitch, eye: c.eye } : null; };

@@ -3,7 +3,7 @@
 // the agent's eyes ("The worker" in Studio; a tool in a person's session passes its own name).
 //
 // The words assume the worker's layout unless the host says otherwise (every default below is the worker's exact words):
-//   paths.GAME      the game folder as the agent sees it         (default `${JOB}/game`)
+//   paths.GAME      the game folder as the agent sees it         (default `${JOB}/game`; the game.json it names is `game/config/game.json` until a host gives GAME)
 //   paths.OUT       the folder the agent's outputs and verdicts are in (default `${JOB}/out`)
 //   paths.DELIVERY  the delivery file, as the agent names it      (default `out/delivery.json`)
 //   paths.QUESTIONS the questions file                            (default `${JOB}/out/questions.json`)
@@ -14,7 +14,7 @@ import {isAbsolute} from 'node:path';
 import {MAX_REPAIRS,RESCUE_ROUNDS} from './verdict.mjs';
 
 const lay=paths=>({game:paths.GAME??`${paths.JOB}/game`,out:paths.OUT??`${paths.JOB}/out`,delivery:paths.DELIVERY??'out/delivery.json',
-  questions:paths.QUESTIONS??`${paths.JOB}/out/questions.json`,spec:paths.SPEC??`${paths.JOB}/spec.json`});
+  gameJson:paths.GAME?`${paths.GAME}/config/game.json`:'game/config/game.json',questions:paths.QUESTIONS??`${paths.JOB}/out/questions.json`,spec:paths.SPEC??`${paths.JOB}/spec.json`});
 const tool=(tools,name)=>tools?.[name]?`the tool ${tools[name]}`:null;
 /** The full verify, as the agent runs it: "node …/verify.mjs game", or the host's tool. */
 const fullVerify=(paths,tools)=>tool(tools,'verify')??`node ${paths.KIT_TOOLS}/verify.mjs game`;
@@ -44,7 +44,7 @@ export function verifyRepair(verdict,n,round,{paths,who='The worker',maxRepairs=
 
 export function rescueRepair(verdict,n,round,{paths,who='the worker',maxRepairs=MAX_REPAIRS,rescueRounds=RESCUE_ROUNDS,tools=null}){
   const L=lay(paths);
-  return `The game still doesn't play after ${maxRepairs} repair rounds, so ${who} keeps going: rescue round ${round} of at most ${rescueRounds}. The full verify (${L.out}/verify-${n}/verdict.json) fails:\n${failedLines(verdict)}\nWhat counts now is a game a player can play: it boots and the player moves (check 3), a round reaches results and replays (check 6), and every control on the HUD works (check 13). Fix those first. If a part of the plan keeps breaking them, make it simpler (fewer enemies, a plainer rule, a control taken out of game/config/game.json → controls) and say so in the delivery. Fix the game in ${L.game} (rules.js, config/*.json and slots only), ${runQuick(tools)} until it passes, then rewrite ${L.delivery} LAST.`;
+  return `The game still doesn't play after ${maxRepairs} repair rounds, so ${who} keeps going: rescue round ${round} of at most ${rescueRounds}. The full verify (${L.out}/verify-${n}/verdict.json) fails:\n${failedLines(verdict)}\nWhat counts now is a game a player can play: it boots and the player moves (check 3), a round reaches results and replays (check 6), and every control on the HUD works (check 13). Fix those first. If a part of the plan keeps breaking them, make it simpler (fewer enemies, a plainer rule, a control taken out of ${L.gameJson} → controls) and say so in the delivery. Fix the game in ${L.game} (rules.js, config/*.json and slots only), ${runQuick(tools)} until it passes, then rewrite ${L.delivery} LAST.`;
 }
 
 export function questionsMessage(failed,{paths,tools=null}){
@@ -64,7 +64,7 @@ export function playRepair(pt,round,{paths,maxRepairs=MAX_REPAIRS,tools=null}){
     `Promises a new player could not see happen on their own screen:\n${promised.join('\n')||'- none'}`,
     ...(feel.length?[`What it found (blockers must be fixed; majors are worth fixing when quick):\n${feel.join('\n')}`]:[]),
     ...(enemies?[`If a player can't see their hits on enemies, never answer by making enemies die in one hit (projectile damage at or above waves hp): the kit already shows every hit that does not kill (a health bar, a flash, a flinch), and verify check 16 fails one-hit kills unless the spec asks for them. Fix the aim, the range or how rules.js fires instead.`]:[]),
-    `Fix the game in ${L.game} (rules.js, config/*.json and slots only) so a new player sees each of these happen on their own screen. If a control can't be made to work, take it out of game/config/game.json → controls so the HUD stops promising it, and say so in the delivery. You can play it the same way: ${tools?.play?`the tool ${tools.play} with steps like [{"do":"hold","key":"Mouse","seconds":2,"shot":"firing"}] (the tool says which steps it takes)`:`node ${paths.KIT_TOOLS}/play.mjs game --steps '[{"do":"hold","key":"Mouse","seconds":2,"shot":"firing"}]' --out scratch/play-1 (the step list is in ${paths.KIT_TOOLS}/lib/play-script.mjs)`}. Then ${runQuick(tools)} until it passes and rewrite ${L.delivery} last. The full verify runs again, then the play-tester re-tests what failed. This is repair round ${round} of at most ${maxRepairs}.`].join('\n\n');
+    `Fix the game in ${L.game} (rules.js, config/*.json and slots only) so a new player sees each of these happen on their own screen. If a control can't be made to work, take it out of ${L.gameJson} → controls so the HUD stops promising it, and say so in the delivery. You can play it the same way: ${tools?.play?`the tool ${tools.play} with steps like [{"do":"hold","key":"Mouse","seconds":2,"shot":"firing"}] (the tool says which steps it takes)`:`node ${paths.KIT_TOOLS}/play.mjs game --steps '[{"do":"hold","key":"Mouse","seconds":2,"shot":"firing"}]' --out scratch/play-1 (the step list is in ${paths.KIT_TOOLS}/lib/play-script.mjs)`}. Then ${runQuick(tools)} until it passes and rewrite ${L.delivery} last. The full verify runs again, then the play-tester re-tests what failed. This is repair round ${round} of at most ${maxRepairs}.`].join('\n\n');
 }
 
 export const ownVerifyReminder=(own,paths,{tools=null,who='The worker'}={})=>{

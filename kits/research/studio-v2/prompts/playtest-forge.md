@@ -47,6 +47,7 @@ Each run starts a fresh game and prints one line per step: the phase, the round 
 | `{"do":"start","bots":0,"seed":1,"round":90}` | Opens the game, presses Play, takes the mouse. `round`: a shorter round for this run. Always first. `"bots":0` is you alone against the waves |
 | `{"do":"look","dx":300,"dy":60}` | Turns your view (about 650 px is a quarter turn; `dy` > 0 looks down). You start facing into the arena |
 | `{"do":"hold","key":"Mouse","seconds":1.5,"shot":"firing"}` | Holds a key or button (`"keys":[...]` for several), with a screenshot just before letting go. `"look":{"dx":200}` turns while holding |
+| `{"do":"fight","seconds":8,"shot":"fighting","dir":"back"}` | **Your eyes and hand in a fight**: for that many seconds (up to 20) it turns to the nearest enemy in front of you and fires at its body the way a new player does (a moment to react, a little off, about three shots a second), and looks around when none is in view. `dir` walks meanwhile (`back`, `left`, …). The log line says how many shots, at how many enemies, and how many fell |
 | `{"do":"press","key":"KeyR","shot":"reloading"}` | Taps a key, then a screenshot a quarter second later |
 | `{"do":"move","dir":"forward","seconds":1.5}` | Walks (`forward`, `back`, `left`, `right`, `forward-left`, …) |
 | `{"do":"shot","name":"first-look"}`, `{"do":"snap"}` | A screenshot; the full state (every player's score, the HUD text, results) |
@@ -54,7 +55,7 @@ Each run starts a fresh game and prints one line per step: the phase, the round 
 
 Keys: `Mouse`, `MouseRight`, `Space`, `ShiftLeft`, `KeyE`, `KeyR`, `KeyV`, `Digit1`… A run of 60 s takes about a minute. The step list in full is at the top of `{{KIT_TOOLS}}/lib/play-script.mjs`.
 
-**Aiming without seeing.** You cannot watch the screen while a script runs, so aim in two runs: first a run that only looks around and takes screenshots (`look dx 200`, `shot`, four or five times), then a run that turns to where the screenshot showed an enemy and fires. Enemies walk toward you, so by the time they are close a shot straight ahead at chest height (`look dy 0`) usually lands; fire in short bursts with a screenshot on each.
+**Aiming without seeing.** You cannot watch the screen while a script runs, so a script cannot aim: `look` turns blind, and a shot fired straight ahead passes most enemies by (an enemy's head is about level with your eyes and it leans as it runs). **To fight, use `fight`.** It is how you kill anything, clear a wave and reach what comes after it; chain it (`fight 15 s`, a `shot`, `fight 15 s` walking `back`, …) and read each line for how many fell and what your health did. Use `hold Mouse` only for what the weapon itself does (one round, a held burst, emptying it). A fight you lose while using `fight` is a real finding; a fight you lose firing straight ahead is not.
 
 **A phone.** The same game on a touch screen, in both ways a phone is held:
 
@@ -79,10 +80,10 @@ Judge the pictures: a friend promise passes only when your picture shows the oth
 1. **First look.** Start, a screenshot, a snap, wait 2 s, a screenshot. The `start` step's first screenshot is the home menu: does it show the title, Play, Play with friends, How to play, Settings and Connect wallet? In the round: can I tell what I am holding, how many rounds it has, **how much health I have**, which wave it is and what I am meant to do? Is the picture bright enough to see the floor, the walls and an enemy 10 m away?
 2. **The weapon in hand.** Fire once with a screenshot in the same step (`hold Mouse 0.1 s` with `shot`): is there a flash at the barrel, does the weapon kick, did the round counter drop by one? Hold fire for 2 s: does it keep firing (an automatic), or fire once (say which)? Empty it: does it reload by itself, and can I tell it is reloading? Press R half-full: same question.
 3. **Every weapon.** `Digit1` to `Digit4`, each twice (two can share a key), a screenshot after each: does a different weapon come up in my hand, is its name on the HUD, does firing it look and behave differently from the last one? A key that brings up nothing, or the same thing as another key, is a finding.
-4. **A hit and a kill.** Let the first wave come close and fire into it. On the screenshot of a hit: did the enemy flash, did a number appear over it, did it flinch? How many hits did one take? On the kill: did it break apart or fall, and did my score move? One hit killing everything is a finding (nobody sees a hit land); so is a hit that shows nothing.
+4. **A hit and a kill.** `fight` for 6 to 8 s with a screenshot, as the first wave arrives. On the screenshot of a hit: did the enemy flash, did a number appear over it, did it flinch? How many hits did one take? On the kill: did it break apart or fall, and did my score move? One hit killing everything is a finding (nobody sees a hit land); so is a hit that shows nothing.
 5. **The evade and the quick melee.** With an enemy close: `ShiftLeft` while moving sideways with a screenshot (did I move a few metres at once, and could I do it again immediately?), then `KeyV` facing an enemy (did something swing on my screen, and did the enemy react?).
 6. **Being hit, and dying.** Stand still in the wave with a snap every 2 s. When I am hit: does the screen show it at once, and does my health on the HUD go down by a visible step? Was I ever unable to move or look for more than a moment (walk and look right after a hit to find out)? Keep standing until I am down: does the game say I died and what killed me, and does the round end on a results card with my score?
-7. **The wave change and the reward.** Play well enough to clear a wave (fire on every screenshot's enemy; evade when the edge goes red). Does the game say the wave is cleared and the next is coming? If it offers a choice between waves (cards, an upgrade), can I read what each does, pick one, and see afterwards that I have it? Can I pass? Does the fight wait for me?
+7. **The wave change and the reward.** Clear a wave: `fight` in steps of 10 to 20 s, walking `back` or sideways when the edge goes red, with a screenshot and a look at the log line after each (how many fell, the wave on the HUD), until the wave changes; keep going as far as the run's 300 s allow (the next wave, the cards, a boss). Does the game say the wave is cleared and the next is coming? If it offers a choice between waves (cards, an upgrade), can I read what each does, pick one, and see afterwards that I have it? Can I pass? Does the fight wait for me?
 8. **Replay.** From the results: `again`, a screenshot. A new round, full health, the weapon I should have, the wave at one.
 9. **A phone** (above), sideways and upright: are the stick, fire and every action there as buttons, big enough, clear of the middle where I aim? Walk, look and fire with fingers; reload, evade and switch weapon by their buttons. Is the HUD readable and does anything sit on top of anything else?
 10. **A friend** (above), when you can: on each player's picture, is the other one there as a character, in their own colour, holding a weapon, where they should be?
@@ -99,7 +100,7 @@ Judge the pictures: a friend promise passes only when your picture shows the oth
 
 ## Write the report
 
-Write `{{DIR}}/out/playtest.json` **last** (draft it in `scratch/` first):
+{{REPORT_HOW}}
 
 For example (another game, not this one):
 

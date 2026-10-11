@@ -21,7 +21,9 @@
 //   7  audio gate v4                   8  swap proof (the forge way: a model slot and the texture slot, on screen)
 //   13 controls work: forge's own (tools/lib/forge-controls-check.mjs: each listed control on a quiet staged page must
 //      make the game's state answer and the screen show it)     14 looks honoured · 18 sounds play (static)
-//   15 the loop is alive (the goal's share of the first look, from the core's slot-ID pass)
+//   15 the loop is alive (the goal's share of the first look, from the core's slot-ID pass), and forge's own leg
+//      (tools/lib/forge-first-wave-check.mjs): the first wave can be fought (a player who stands and fights with a new
+//      player's hand is not felled by it, and something falls)
 //   20 the menu, and forge's own leg (tools/lib/forge-keys-check.mjs: How to play's keys do what the table says) · 21 the HUD, and forge's own leg (tools/lib/forge-hud-check.mjs: a player with hit points sees its
 //      health, and it follows the core's) · 22 the wallet · 23 looks like the references · 24 plays inside a post · 25 friends
 //   31 screens
@@ -34,12 +36,14 @@
 //   16 hits read and 10 fair play's feel half: track F's (tools/lib/forge-feel-check.mjs: a game with weapons, the staged
 //      target ?gf-demo=feel.hit, every weapon a player can hold brought into the hand; control goes with the evade, a knock-down, death, and keys that do nothing)
 //   Seen to fail on a forge game, each for its reason (research/gf-three/regressions/forge-*; README there, "Forge
-//   examples"): 4, 5, 6, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21. Not yet seen to fail on forge: 1, 3, 7, 8, 9, 14, 15,
+//   examples"): 4, 5, 6, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 34. Not yet seen to fail on forge: 1, 3, 7, 8, 9, 14,
 //   22, 23, 24, 25, 31, 32, 33 (2 fails an edited copy in tests/s-forge.test.mjs, with no browser).
 //   11 set dressing and 17 the world is complete: track A's forge world lint (gf/forge/arena.js lintWorld)
 //   12 something happens: a round with forge bots (?bots=3, forge-ai's bot players) in which something scores (track A)
-//   not yet for forge: 34 watch then play (no Go live in a forge game yet), and the mechanic modules
-//   (NOT_YET_FORGE.mechanics is why none of them runs)
+//   34 watch then play (gf-forge wave 4, track V; a release's check, tools/lib/verdict.mjs RELEASE_ONLY): the shared
+//      check (tools/lib/friends-watch-check.mjs) on the forge boot's viewer: a guest goes live from the game's own
+//      menu, a viewer's copy looks through their eyes and turns with them, joins the room, and one plays alone
+//   not yet for forge: the mechanic modules (NOT_YET_FORGE.mechanics is why none of them runs)
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -57,6 +61,7 @@ import { checkEmbed } from './lib/embed-check.mjs';
 import { checkScreens } from './lib/screens-check.mjs';
 import { checkLoadouts } from './lib/loadout-check.mjs';
 import { checkFriends } from './lib/friends-check.mjs';
+import { checkFriendsWatch } from './lib/friends-watch-check.mjs';
 import { checkForgeSight } from './lib/forge-sight-check.mjs';
 import { RECORDER, recordingOf, firstLook, judgeAlive } from './lib/alive-check.mjs';
 import { passesForge, requiredFor, runsHere, NOT_YET_FORGE } from './lib/verdict.mjs';
@@ -65,6 +70,7 @@ import { checkForgeHealth } from './lib/forge-hud-check.mjs';
 import { forgeWorldProblems, listedCover } from './lib/forge-world-check.mjs';
 import { checkForgeKeys } from './lib/forge-keys-check.mjs';
 import { checkForgeRoundEnds } from './lib/forge-round-check.mjs';
+import { checkForgeFirstWave } from './lib/forge-first-wave-check.mjs';
 import { checkForgeBackends } from './lib/forge-webgl-check.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -73,7 +79,7 @@ const snap = p => p.evaluate(() => window.__game?.snapshot?.() ?? null);
 
 // ---- the stages: each check once, in the order it runs (see "HOW THIS FILE IS BUILT") ----
 const STATIC = [check1, check2, check14, check18, check11, check17, check19];
-const SOLO = [soloRound, lostRound, check4, check8, check13, check16, check10, check20, check21, check12, check22, check24, check31, check33];
+const SOLO = [soloRound, lostRound, firstWave, check4, check8, check13, check16, check10, check20, check21, check12, check22, check24, check31, check33];
 const AFTER = [check15, check9, check23];
 /** The gate's random-input checks that need a first-person view to turn: in the friends page's frame the pointer-locked
  *  mouse cannot turn one (chrome-headless-shell reports its moves as 0), so forge's sight leg stands in for them. */
@@ -101,7 +107,7 @@ export async function verifyForge(dir, { rec, outDir, add, log, t0, lap, quick =
 
   // 5, 25 and 6's two-player half: their own servers and browsers, beside the solo session
   const live = env.mpm.manifest?.mode === 'live';
-  const duo = live && [5, 6, 25].some(want) ? runDuo(env) : null;
+  const duo = live && [5, 6, 25, 34].some(want) ? runDuo(env) : null;
 
   // the solo session: WebGPU Chrome, the game's own server
   const needsBrowser = [3, 4, 6, 7, 8, 10, 12, 13, 15, 16, 20, 21, 22, 23, 24, 31, 33].some(want);
@@ -136,8 +142,8 @@ export async function verifyForge(dir, { rec, outDir, add, log, t0, lap, quick =
   for (const c of AFTER) await c(env);
 
   // the two-player results
-  if (duo) { const d = await duo; check5(env, d); check6(env, d); check25(env, d); }
-  else if (!live) for (const [n, name] of [[5, 'two-player live gate'], [25, 'playing with friends']]) if (want(n)) add(n, name, false, `multiplayer.json mode is ${env.mpm.manifest?.mode ?? 'missing'}, not live`);
+  if (duo) { const d = await duo; check5(env, d); check6(env, d); check25(env, d); check34(env, d); }
+  else if (!live) for (const [n, name] of [[5, 'two-player live gate'], [25, 'playing with friends'], [34, 'watch then play']]) if (want(n)) add(n, name, false, `multiplayer.json mode is ${env.mpm.manifest?.mode ?? 'missing'}, not live`);
   if (want(6) && !checks.some(c => c.n === 6)) check6(env, null);
 
   checks.sort((a, b) => (typeof a.n === 'number' ? a.n : 99) - (typeof b.n === 'number' ? b.n : 99));
@@ -267,6 +273,16 @@ async function lostRound(env) {
   try { const r = await checkForgeRoundEnds({ newPage, url: srv.url, game, log, shot }); rec.lostRound = r.record; rec.notes.push(...r.warnings); env.lost = { ok: r.ok, detail: r.detail }; }
   catch (e) { env.lost = { ok: false, detail: `a lost round could not be played: ${e.message}` }; }
   env.lapNow('a lost round');
+}
+
+/** 15's forge leg (wave 4, tools/lib/forge-first-wave-check.mjs): the first wave can be fought: alone on the game's own
+ *  values, a player who stands and fights with a new player's hand is not felled by it, and something falls. */
+async function firstWave(env) {
+  const { want, rec, newPage, srv, game, log, shot } = env;
+  if (!want(15)) return;
+  try { const r = await checkForgeFirstWave({ newPage, url: srv.url, game, log, shot }); rec.firstWave = r.record; rec.notes.push(...r.warnings); env.firstWave = { ok: r.ok, detail: r.detail }; }
+  catch (e) { env.firstWave = { ok: false, detail: `the first wave could not be played: ${e.message}` }; }
+  env.lapNow('the first wave');
 }
 
 /** 4: coverage in play (the solo round's) and in every preview subject. */
@@ -508,12 +524,12 @@ async function check32(env) {
 // after the solo session
 
 /** 15: the loop is alive: the recording and the goal's share of the first look (the core's slot-ID pass). */
-async function check15({ want, add, rec, game, world, recordings, look }) {
+async function check15({ want, add, rec, game, world, recordings, look, firstWave: fw }) {
   if (!want(15)) return;
   const al = judgeAlive({ game, world, pages: recordings, firstLook: look, aim: null });
   rec.alive = { goal: al.goal, firstLook: look, pages: recordings.map(r => ({ label: r.label, samples: r.samples.length })), items: al.items };
   const mech = (game.mechanics ?? []).length;
-  add(15, 'the loop is alive', al.ok, `${al.detail}${mech ? `; mechanics: not yet for forge (${NOT_YET_FORGE.mechanics})` : ''}`);
+  add(15, 'the loop is alive', al.ok && fw?.ok !== false, `${fw && !fw.ok ? `${fw.detail}. ` : ''}${al.detail}${fw?.ok ? `; ${fw.detail}` : ''}${mech ? `; mechanics: not yet for forge (${NOT_YET_FORGE.mechanics})` : ''}`);
 }
 /**
  * 9 (track R, research/gf-forge/lookdev/forge-checks.mjs): the forge capture's contact sheet and perf (its own browser
@@ -559,7 +575,8 @@ async function runDuo(env) {
     out.sight = await checkForgeSight({ dir, outDir, shots: rec.shots, log: line => log(`  ${line}`) }).catch(e => ({ ok: false, detail: `forge sight: ${e.message}`, record: null, warnings: [] }));
   }
   if (want(25)) out.fr = await checkFriends({ dir, outDir, shots: rec.shots, log: line => log(`  ${line}`) }).catch(e => ({ ok: false, detail: `friends: ${e.message}`, record: null, warnings: [] }));
-  lap('two players (gate, loadouts, sight, friends)', t);
+  if (want(34)) out.wa = await checkFriendsWatch({ dir, outDir, shots: rec.shots, log: line => log(`  ${line}`) }).catch(e => ({ ok: false, detail: `watch: ${e.message}`, record: null, warnings: [] }));
+  lap('two players (gate, loadouts, sight, friends, watch)', t);
   return out;
 }
 
@@ -595,6 +612,14 @@ function check25({ want, add, rec }, { fr }) {
   if (!want(25) || !fr) return;
   rec.friends = fr.record; if (fr.warnings?.length) rec.notes.push(...fr.warnings);
   add(25, 'playing with friends', fr.ok, fr.detail);
+}
+
+/** 34 (wave 4, track V): watch then play, the shared check (tools/lib/friends-watch-check.mjs) on the forge boot's
+ *  viewer: a guest goes live from the game's own menu, a viewer's copy looks through their eyes, joins, plays alone. */
+function check34({ want, add, rec }, { wa }) {
+  if (!want(34) || !wa) return;
+  rec.watch = wa.record; if (wa.warnings?.length) rec.notes.push(...wa.warnings);
+  add(34, 'watch then play', wa.ok, wa.detail);
 }
 
 /** Share of pixels that differ between two PNG screenshots (compared in a page, at 160x90). */

@@ -50,7 +50,8 @@ export const LOOK_SIZES = [[1920, 1080], [390, 844]];
  *   changed   the share of pixels that differ by more than `step`
  *   luma      how far the two pictures' mean brightness may be apart (of 255)
  * Two pictures of ONE build taken a moment apart still differ (the fires, a round under way): `floor` is that
- * difference measured in the same run at each size, and a limit is never under `overFloor` times it.
+ * difference measured in the same run at each size (twice, the larger kept), and a limit is never under `overFloor`
+ * times it.
  * Set from Bone Vigil on 2026-10-10 (research/gf-forge/evidence/wave3-W-2026-10-10/README.md has the runs): the two
  * builds are 0.3 to 1.0 apart, one build from itself 0.5 to 0.9, and with the WebGL2 build made to draw its 8-bit scene
  * (no bloom: `--break 8bit`) the four shots with a fire in view are 2.0 to 2.3 apart and the check fails. It is a
@@ -120,6 +121,12 @@ async function compareKept(page, keyA, keyB, step = PICTURE.step) {
     return { mean: r(sum / n), p99: r(sorted[Math.floor(n * 0.99)]), changed: Math.round(changed / n * 10000) / 10000, luma: [r(la / n), r(lb / n)], lumaDelta: r(Math.abs(la - lb) / n),
       where: `${names[0][Math.floor(worst / 4)]}, ${names[1][worst % 4]}`, worst: r(cells[worst] / counts[worst]), frames: [A.n, B.n] };
   }, [keyA, keyB, step]);
+}
+
+/** Of two measures of one build against itself, the larger in each number (the scene's own noise is at least that). */
+export function largerFloor(a, b) {
+  const big = a.mean >= b.mean ? a : b;
+  return { ...big, mean: Math.max(a.mean, b.mean), changed: Math.max(a.changed, b.changed), lumaDelta: Math.max(a.lumaDelta ?? 0, b.lumaDelta ?? 0) };
 }
 
 /** Is a pair inside PICTURE, given the same-build floor? → {ok, limits, over: [what …]} */
@@ -288,8 +295,11 @@ export async function checkForgeBackends({ dir = null, url, launchChrome, browse
           leg.floors = {};
           for (const size of quick ? LOOK_SIZES.slice(0, 1) : LOOK_SIZES) {
             // the floor at this size: one build against itself a moment later, on the busiest shot
-            const [f1, f2] = [await take(LOOK_SHOTS[0][1], size, 'webgpu', true), await take(LOOK_SHOTS[0][1], size, 'webgpu', true)];
-            const floor = await comparePictures(blank, f1.pngs, f2.pngs);
+            // (twice, and the larger kept: one sample of a scene's own noise can come out low. The Forge Room's hero shot,
+            // a round under way, read 0.67, 2.49 and 2.22 against itself in three runs on 2026-10-11, and the run with
+            // 0.67 failed the two builds for being 2.36 apart)
+            const [f1, f2, f3] = [await take(LOOK_SHOTS[0][1], size, 'webgpu', true), await take(LOOK_SHOTS[0][1], size, 'webgpu', true), await take(LOOK_SHOTS[0][1], size, 'webgpu', true)];
+            const floor = largerFloor(await comparePictures(blank, f1.pngs, f2.pngs), await comparePictures(blank, f1.pngs, f3.pngs));
             leg.floors[size.join('x')] = floor; leg.floor ??= floor;
             log(`backends C floor (WebGPU against itself, hero ${size.join('×')}): mean ${floor.mean}, ${(floor.changed * 100).toFixed(1)}% changed, luma ${floor.luma.join(' / ')}`);
             for (const [shot, q] of LOOK_SHOTS) {

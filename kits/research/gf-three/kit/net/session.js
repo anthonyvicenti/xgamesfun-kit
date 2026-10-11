@@ -65,7 +65,9 @@ export function worldNet(net) {
 // returns the engine's own part of the world message ({f: the core's snapshot}) when one is due, else null; the world
 // then goes out only with it, so every snapshot the core takes is sent (its events are taken with it). Three.js
 // engines pass none and send the world every frame as before.
-export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, botCount, onPhase = () => {}, createPlayers, engineWorld = null }) {
+// `engineWatch` (the forge engine, watch then play: CONTRACT §9b): {key(), take(data)}: the engine's own part of the
+// stream's key frame (what a viewer tuning in cannot learn from the messages to come), beside looks, mech and rules.
+export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, botCount, onPhase = () => {}, createPlayers, engineWorld = null, engineWatch = null }) {
   const cfg = ctx.config;
   const R = cfg.round ?? {};
   const worldMode = R.mode === 'world';
@@ -136,11 +138,13 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
       try { const v = m.watchKey(); if (v != null) mech[m.id] = v; } catch (e) { console.error(e); }
     }
     let r = null; try { r = rules.watchKey?.(ctx) ?? null; } catch (e) { console.error(e); }
-    return { looks: looks.watchKey(), mech, rules: r };
+    let eng = null; if (engineWatch) { try { eng = engineWatch.key?.() ?? null; } catch (e) { console.error(e); } }
+    return { looks: looks.watchKey(), mech, rules: r, ...(eng != null ? { engine: eng } : {}) };
   };
   function watchTake(b) {
     if (!b || typeof b !== 'object') return;
     looks.watchTake(b.looks);
+    if (engineWatch) { try { engineWatch.take?.(b.engine ?? null); } catch (e) { console.error(e); } }
     for (const m of ctx.mechanicsList ?? []) { try { m.watchStart?.(b.mech?.[m.id] ?? null); } catch (e) { console.error(e); } }
     try { rules.watchStart?.(ctx, b.rules ?? null); } catch (e) { console.error(e); }
   }

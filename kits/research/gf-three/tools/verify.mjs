@@ -1070,9 +1070,10 @@ if (isMain(import.meta)) {
   const only = nums === null ? null : nums.length === 1 ? nums[0] : nums;
   // a world (CONTRACT §9) runs any of its checks alone or together: --check 26 or --check 13,26,30
   const worldGame = JSON.parse(await readFile(join(resolve(dir), 'config/game.json'), 'utf8').catch(() => '{}')).round?.mode === 'world';
-  // a forge game (CONTRACT §8 forge) runs any of its checks alone or together, its own 32 and 33 among them
+  // a forge game (CONTRACT §8 forge) runs any of its checks alone or together, its own 32 and 33 among them (and
+  // since gf-forge wave 4, 34: watch then play)
   const forgeGame = await engineOfGame(resolve(dir)) === 'forge';
-  if (forgeGame && nums && !nums.every(n => n >= 1 && n <= 33)) { console.error('--check takes check numbers 1 to 33 (one, or several: 3,32,33)'); process.exit(2); }
+  if (forgeGame && nums && !nums.every(n => n >= 1 && n <= 34)) { console.error('--check takes check numbers 1 to 34 (one, or several: 3,32,34)'); process.exit(2); }
   if (worldGame && nums && !nums.every(n => n >= 1 && n <= 34)) { console.error('--check takes check numbers 1 to 31 and 34 (one, or several: 13,26,30)'); process.exit(2); }
   const roundChecks = [...requiredFor('round', { release: true }), 9];
   if (!worldGame && !forgeGame && nums && !nums.every(n => roundChecks.includes(n))) { console.error(`--check takes the checks of a round game (1 to 25, 31, 34 and 35), one or several: 13 or 1,2 or 13,16. Not one: ${nums.filter(n => !roundChecks.includes(n)).join(', ')}`); process.exit(2); }

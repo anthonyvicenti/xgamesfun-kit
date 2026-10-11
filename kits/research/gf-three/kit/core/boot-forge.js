@@ -35,6 +35,16 @@
 // (eagerAssets below); nothing of a fight is fetched before the menu. Once the menu has been drawn the steps of
 // gf/forge/first.js run: `first` (the first wave's bodies, the starting weapon, a kill's pieces; the director waits for
 // it) and then `later` (later waves, the boss, the weapons cards give).
+// Watch then play (wave 4, track V; CONTRACT §9b; research/watch/PLAN.md). A player in a room goes live from the
+// game's own menu (#gf-live: the same button and calls as boot.js) or from the friends page. A page opened as the
+// stream's viewer (net.watching: the friends page loads it with gf_mode=watch) is a copy with no player of its own:
+// the core's role is `viewer`, every player in the stream is a replica from the host's snapshots, nothing is sent,
+// input and the menu are off. The camera is the streamer's eyes (first person, as boot.js does for a first-person
+// game, and as the stream is watched on the other engines: what the streamer sees): the core looks through the
+// streamer's replica (gf/forge/players.js `follow`), with their weapon in the hand as the host says it moves, their
+// crosshair, their hits' numbers and their red edge. A player's own things stay off a viewer's screen (the card,
+// the menu, prompts, rounds, touch buttons): WATCH_KEEPS below is what stays. Until the streamer is in the core's
+// world the camera circles the arena.
 import * as gf from '../../gf-assets.js';
 import { createAudio } from '../../../audio/audio.js';
 import audioPresets from '../../../audio/presets.json' with { type: 'json' };
@@ -68,6 +78,12 @@ import { createGovernor, lookFor, QUALITY, loadChoice, saveChoice, settingsRow }
 
 export const VERSION = KIT.version;
 export const ENGINE = 'forge';
+/** What of the HUD a stream's viewer keeps (direct children of #gf-ui): what everyone in the round sees (names, the
+ *  wave with its clock, goal and boss, banners, everyone's health, who is down and who is choosing a card) and what
+ *  the streamer's own screen shows of the fight (their crosshair, their hits' numbers, their combo, the red edge and
+ *  the low-health stages). Never a player's own card, menu, prompts, rounds or touch buttons. */
+export const WATCH_KEEPS = ['.gf-plates', '.gf-bars', '.gf-fsbtn', '.gf-top', '.gf-scores', '.gf-banner', '.gf-goal', '.gf-bossbar',
+  '.gf-feel-edge', '.gf-feel-low', '.gf-feel-nums', '.gf-feel-cross', '.gf-feel-combo', '.gf-fh-friends', '#gf-forge-reward', '.gf-forge-down'];
 
 export async function boot({ rules = {} } = {}) {
   startLoading({ theme: 'grim' });   // track U: the kit's loading view (ui/loading.js), up until window.__game exists
@@ -76,6 +92,9 @@ export async function boot({ rules = {} } = {}) {
   const params = new URLSearchParams(location.search);
   const subject = params.get('gf-show');
   const backdrop = params.get('gf-backdrop') === '1' && !net.active;
+  // a stream's viewer (CONTRACT §9b): the friends page's watch mode loads this page for a round being streamed; it is a
+  // viewer from its first frame to its last (Join opens the room's own link: another page)
+  const viewer = net.active && !!net.watching;
   const ctx = { kit: { name: 'gf-three', engine: ENGINE, version: VERSION, forge: FORGE_VERSION }, onFrame: [], time: { now: 0, dt: 0, round: 0, left: 0 }, gf: eagerAssets(gf) };
   let ui = null;
   try {
@@ -237,8 +256,16 @@ export async function boot({ rules = {} } = {}) {
     // no bots (the session's rule)
     const botParam = params.get('bots'), maxPlayers = Math.max(1, game.players?.max ?? 4);
     const botCount = backdrop ? 0 : botParam !== null ? Math.max(0, Math.min(7, Number(botParam) || 0)) : game.players?.bots === false ? 0 : maxPlayers - 1;
+    // (a viewer: the players are told whom the stream follows; the HUD's wave rides the stream's key frames, so a
+    // viewer who tunes in mid-wave knows which it is)
+    const watchState = { session: null };
+    ctx.watching = () => !!watchState.session?.watching;
+    ctx.watched = () => players.api?.watched?.() ?? null;
     const session = createSession(ctx, { rules, spawnCharacter: null, characterFor: () => ({}), rng, botCount, onPhase: ph => onPhase(ph),
-      createPlayers: c => (players.api = createForgePlayers(c, { host: forge, live: net.active, epoch })), engineWorld: net.active ? engineWorld : null });
+      createPlayers: c => (players.api = createForgePlayers(c, { host: forge, live: net.active, epoch, watching: viewer, follow: () => watchState.session?.watch?.follow?.id ?? null })),
+      engineWorld: net.active && !viewer ? engineWorld : null,
+      engineWatch: { key: () => ctx.forgeHud?.watchKey?.() ?? null, take: d => ctx.forgeHud?.watchStart?.(d) } });
+    watchState.session = session;
     // QA only (the live gate: multiplayer.json check.query, which create writes for a forge game): with ?gf-gate=1 the
     // rules end no round, so the gate's later steps find it running; the clock and the host's End round still end it
     const gateRound = params.get('gf-gate') === '1';
@@ -291,17 +318,28 @@ export async function boot({ rules = {} } = {}) {
       onResume: () => { menu.close(); canvas.focus(); },
       onLeave: () => { menu.close(); session.toLobby(); },
       onQuality: () => { if (!session.live) location.reload(); },
-      room: session.live ? { info: () => net.room, leave: () => { menu.close(); net.leave(); }, end: worldMode ? null : () => { menu.close(); session.end('ended'); canvas.focus(); } } : null,
+      room: session.live ? { info: () => net.room, leave: () => { menu.close(); net.leave(); }, end: worldMode ? null : () => { menu.close(); session.end('ended'); canvas.focus(); },
+        // watch then play (gf-multiplayer 1.6.0; wave 4): Go live, and the stream's state while it is on, as boot.js
+        // (net.live is undefined on a gf/mp older than 1.6.0: the menu then offers no Go live)
+        live: () => net.live ?? null, goLive: () => { menu.close(); canvas.focus(); net.live?.start?.(); }, showLive: () => { menu.close(); canvas.focus(); net.live?.share?.(); } } : null,
     });
     ctx.menu = menu;
+    if (session.live) net.live?.onChange?.(() => menu.redraw?.());
     if (params.get('gf-ui') === '0' || backdrop) ui.root.style.display = 'none';
     if (backdrop) { input.enabled = false; canvas.tabIndex = -1; }
+    // a viewer keeps what WATCH_KEEPS lists and nothing else of the HUD; its canvas takes no clicks (no pointer lock
+    // with nothing to look round with)
+    const watchStyle = document.createElement('style');
+    watchStyle.textContent = `#gf-ui.gf-watching > ${WATCH_KEEPS.map(s => `:not(${s})`).join('')}{display:none !important}`;
+    document.head.append(watchStyle);
+    const watchUi = on => { if (ui.root.classList.contains('gf-watching') !== on) { ui.root.classList.toggle('gf-watching', on); canvas.style.pointerEvents = on ? 'none' : ''; } };
+    if (viewer) watchUi(true);
     if (session.live && worldMode) { session.arm(); session.ready(); }
     else if (session.live) { ui.waiting(); session.arm(); session.ready(); }
     else if (params.get('gf-autoplay') === '1') session.beginCountdown();
     else menu.home();
     addEventListener('keydown', e => {
-      if (backdrop) return;
+      if (backdrop || session.watching) return;
       const a = document.activeElement, onControl = a && (a.tagName === 'BUTTON' || a.tagName === 'INPUT');
       if ((e.code === 'Enter' || e.code === 'Space') && !onControl && session.round.phase === 'lobby' && menu.view === 'home') { e.preventDefault(); menu.close(); ctx.audio.play('ui-click', { optional: true }); session.beginCountdown(); }
       if (e.code === 'Escape' && !e.defaultPrevented && !menu.view && ['playing', 'countdown'].includes(session.round.phase)) { e.preventDefault(); openPause(); }
@@ -325,12 +363,23 @@ export async function boot({ rules = {} } = {}) {
       rules: (() => { try { return rules.observe?.(ctx) ?? null; } catch { return null; } })(),
       modules: { standins: { look: false, world: false, character: !forge.drawsBodies() }, mechanics: list.map(m => ({ id: m.id, standin: true })) },
       net: session.gateBlock(ui.covered),
+      // watch then play (CONTRACT §9b): a viewer's copy, whom it follows and whether the camera has them (the core
+      // holds the streamer and looks through their eyes)
+      watch: session.watching ? { follow: session.watch?.follow ?? null, live: !!session.watch?.live, target: players.api.watched()?.id ?? null, camera: 'first' } : null,
       world: null,
       forge: { ...forgeState(), net: forge.net.stats(), bodies: players.api.bodies() },
     });
-    const cameraOf = () => ({ mode: 'first', yaw: me.yaw ?? null, pitch: me.pitch ?? null, cursorMode: !!input.cursorMode, cursor: input.cursorMode || null, aimFree: !!input.aimFree,
-      eye: (({ x, y, z }) => [x, y, z].map(v => Math.round(v * 1000) / 1000))(forge.drawnCamera()), sensitivity: cam.sensitivity ?? 0.0024, lookScale: input.lookScale ?? 1, invertY: !!input.invertY,
-      crosshair: !!ui.crosshairOn, lockRefused: !!input.lockRefused, locked: !!input.locked, fullscreen: hud.fullscreen?.() ?? null });
+    const r3 = v => Math.round(v * 1000) / 1000;
+    // (`dir`: where the view looks, check 34: a viewer sees as the streamer does. A viewer's yaw and pitch are the
+    // watched player's, as drawn)
+    const cameraOf = () => {
+      const c = forge.drawnCamera(), cp = Math.cos(c.pitch), seen = session.watching ? players.api.watched() : null;
+      return { mode: 'first', yaw: (seen ?? me).yaw ?? null, pitch: (seen ?? me).pitch ?? null, cursorMode: !!input.cursorMode, cursor: input.cursorMode || null, aimFree: !!input.aimFree,
+        eye: [c.x, c.y, c.z].map(r3), dir: [-Math.sin(c.yaw) * cp, Math.sin(c.pitch), -Math.cos(c.yaw) * cp].map(r3), sensitivity: cam.sensitivity ?? 0.0024, lookScale: input.lookScale ?? 1, invertY: !!input.invertY,
+        crosshair: !!ui.crosshairOn, lockRefused: !!input.lockRefused, locked: !!input.locked, fullscreen: hud.fullscreen?.() ?? null };
+    };
+    /** Where a world point is on this screen, in CSS pixels (check 34: a viewer's nameplates sit over the characters). */
+    const screenOf = (x, y, z) => { const v = project(forge.drawnCamera(), { x, y, z }, innerWidth / innerHeight); return v ? { x: r2((v.x * 0.5 + 0.5) * innerWidth), y: r2((-v.y * 0.5 + 0.5) * innerHeight), front: true } : { x: -1, y: -1, front: false }; };
     window.__game = Object.freeze({
       kit: 'gf-three', engine: ENGINE, version: VERSION, seed, quality: quality.name,
       get phase() { return session.round.phase; },
@@ -349,6 +398,7 @@ export async function boot({ rules = {} } = {}) {
       looks: () => JSON.parse(JSON.stringify({ me: me.id, local: ctx.looks?.observe?.() ?? null, slots: assets.playerLooks(),
         players: ctx.players.list().map(p => { const r = assets.loadout(p.id); return { id: p.id, name: p.name, bot: p.isBot, local: p.local, seat: p.seat, color: p.color, key: r?.key ?? '', advertised: r?.advertised ?? '', values: r?.loadout.values ?? {}, files: r?.loadout.files ?? {}, dropped: [...(r?.dropped ?? [])], drawn: players.api.drawnLook(p), shots: null }; }) })),
       camera: () => JSON.parse(JSON.stringify(cameraOf())),
+      project: (x, y, z) => screenOf(x, y, z),
       sight: ids => sightReport(ids),
       screen: () => ({ dpr: globalThis.devicePixelRatio || 1, css: [innerWidth, innerHeight], buffer: [canvas.width, canvas.height], ratio: res.ratio, target: res.target, budget: res.budget, quality: quality.name, slow: gov.observe().last, guard: gov.on, governor: gov.observe() }),
       // the observation interface v2 (CONTRACT §8 forge): what the core holds, under names tracks R, F and A fill
@@ -406,6 +456,20 @@ export async function boot({ rules = {} } = {}) {
     // ---- the frame ----
     const forgeButtons = buttonMapper();
     let last = null, recovering = false, drawn = 0;
+    // A viewer's camera. The core's own once it holds the streamer (their eyes: forge-core net.rs `net.watch`); until
+    // then, and whenever they are gone (between a room's rounds, a streamer who left), a slow circle of the arena.
+    const watchCam = { on: null, a: 0, seen: null };
+    const watchCamera = dt => {
+      const seen = players.api.watched();
+      if (seen !== watchCam.seen) { watchCam.seen = seen; if (seen?.color) ctx.render?.fp?.sleeve?.(seen.color); }
+      if (!!seen !== watchCam.on) { watchCam.on = !!seen; forge.eyes(!!seen); }
+      if (seen) return;
+      const b = ctx.world?.bounds, cx = b ? (b.min.x + b.max.x) / 2 : 0, cz = b ? (b.min.z + b.max.z) / 2 : 0;
+      const R = b ? Math.max(6, Math.min(b.max.x - b.min.x, b.max.z - b.min.z) * 0.3) : 8, h = 5.5;
+      watchCam.a += dt * 0.12;
+      const x = cx + Math.sin(watchCam.a) * R, z = cz + Math.cos(watchCam.a) * R, dx = cx - x, dz = cz - z, dy = 1.2 - h;
+      forge.pose(x, h, z, Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz)));
+    };
     session.loop(t => {
       const raw = last === null ? 0 : Math.max(0, (t - last) / 1000);
       const dt = Math.min(0.1, raw); last = t;
@@ -432,7 +496,9 @@ export async function boot({ rules = {} } = {}) {
       }
       ctx.time.now += dt; ctx.time.dt = dt;
       const phase = session.round.phase;
-      input.enabled = phase === 'playing' && !ui.covered && !backdrop;
+      const watching = session.watching;
+      input.enabled = phase === 'playing' && !ui.covered && !backdrop && !watching;
+      watchUi(watching);
       input.update();
       if (phase === 'countdown') ui.countdown(Math.max(1, Math.ceil(session.round.countdown)));
       session.tick(dt);
@@ -448,14 +514,16 @@ export async function boot({ rules = {} } = {}) {
       const n = players.api.nid(me.id), k = cam.sensitivity ?? 0.0024;
       const { held, pressed } = forgeButtons(input), tb = ctx.feel?.touch?.() ?? { held: 0, pressed: 0 };   // track U: the touch buttons' bits (gf/forge/hud.js)
       const gyro = ctx.forgeHud?.gyro?.() ?? { dx: 0, dy: 0 };   // wave 3: gyro aim (gf/forge/hud.js), radians, when the player turned it on
-      forge.cmd.input(n, { mx: input.move.x, mz: input.move.y, dx: input.look.dx * k + gyro.dx, dy: input.look.dy * k + gyro.dy, held: held | tb.held, pressed: pressed | tb.pressed, enabled: !!me.controller?.enabled && input.enabled });
+      // (a viewer has no player: no input goes to the core, and nothing to the host)
+      if (!watching) forge.cmd.input(n, { mx: input.move.x, mz: input.move.y, dx: input.look.dx * k + gyro.dx, dy: input.look.dy * k + gyro.dy, held: held | tb.held, pressed: pressed | tb.pressed, enabled: !!me.controller?.enabled && input.enabled });
       forge.tick(dt);
       players.api.fromCore();
+      if (watching) watchCamera(dt);
       // a joiner: this frame's steps of its own player's input, to the host about 20 times a second
-      if (net.active && !ctx.host && t - lastInputs >= 50) { lastInputs = t; const b = forge.net.takeInputs(); if (b) net.send('fi', b, 'host'); }
+      if (net.active && !ctx.host && !watching && t - lastInputs >= 50) { lastInputs = t; const b = forge.net.takeInputs(); if (b) net.send('fi', b, 'host'); }
       // the core's events: sounds by name (declared in assets.json from the tables), rule events to rules.event, the
-      // rest to whoever listens (ctx.forge.on)
-      forge.route(ctx, rules, { local: n });
+      // rest to whoever listens (ctx.forge.on). A viewer hears as the streamer does: their own sounds at full level
+      forge.route(ctx, rules, { local: watching ? players.api.nid(players.api.watched()?.id) ?? 0 : n });
       try { ctx.feel?.update(dt); } catch (e) { console.error(e); }
       try { ctx.cards?.update(dt); } catch (e) { console.error(e); }
       try { ctx.fair.update(dt); } catch (e) { console.error(e); }

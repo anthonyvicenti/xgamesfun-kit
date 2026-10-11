@@ -22,6 +22,7 @@ import { existsSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseScript, judgeExpect } from './lib/play-script.mjs';
+import { fightFor } from './lib/forge-fight.mjs';
 import { launchChrome, GPU_TROUBLE } from '../../foundations/qa/browser.mjs';
 import { launchForGame, engineOfGame } from './lib/paths.mjs';
 import { POINTER_LOCK } from './lib/forge-feel-check.mjs';
@@ -239,6 +240,14 @@ export async function play(target, script, { out, log = console.log, size = '128
       return { apart: a.apart };
     };
 
+    /** "fight": the script's eyes and hand in a first-person fight for N seconds (lib/forge-fight.mjs). */
+    const fight = async st => {
+      const did = await fightFor({ frame: () => me.G(), down: k => me.down(k), up: k => me.up(k) }, { seconds: st.seconds, keys: st.keys ?? [], seed: rec.steps.length + 1 });
+      if (did.cannot) throw new Error('"fight" is for a first-person fight (a forge game with enemies): this game reports no enemies, or has no first-person look to turn');
+      const shot = st.shot ? await shoot(rec.steps.length + 1, st.shot) : null;
+      return { did: { shots: did.shots, lookedAround: did.lookedAround, firedAt: did.firedAt, fell: did.fell }, shot };
+    };
+
     const snaps = new Map();       // the observation at each snap (and at the start), for an expect's "since"
     for (const [i, st] of parsed.steps.entries()) {
       const n = i + 1, ts = Date.now(), entry = { n, ...st };
@@ -275,6 +284,7 @@ export async function play(target, script, { out, log = console.log, size = '128
             if (st.shot) { await sleep(250); shot = await shoot(n, st.shot, A); }
             break;
           case 'look': await A.turn(st.dx, st.dy, 250); break;
+          case 'fight': { const f = await fight(st); entry.fought = f.did; shot = f.shot; break; }
           case 'wait': case 'step': await sleep(st.seconds * 1000); break;     // the play-tester plays in real time: a step is a wait here
           case 'expect': {
             const now = await me.G().evaluate(() => { try { return JSON.parse(JSON.stringify(window.__game?.snapshot?.() ?? null)); } catch { return null; } }).catch(() => null);
@@ -311,7 +321,7 @@ export async function play(target, script, { out, log = console.log, size = '128
       entry.took = r1((Date.now() - ts) / 1000);
       rec.steps.push(entry);
       const whose = st.who === 'friend' ? 'the friend: ' : '';
-      const what = whose + (st.do === 'hold' || st.do === 'move' ? `${st.do} ${st.keys.join('+')} ${st.seconds}s` : st.do === 'press' ? `press ${st.key}${st.times > 1 ? ` x${st.times}` : ''}` : st.do === 'look' ? `look ${st.dx},${st.dy}` : st.do === 'wait' ? `wait ${st.seconds}s` : st.do === 'until' ? `until ${st.phase}` : st.do === 'shot' || st.do === 'snap' ? `${st.do} ${st.name}` : st.do === 'tap' ? `tap ${st.x},${st.y} ${st.seconds}s` : st.do === 'drag' ? `drag ${st.from.join(',')}→${st.to.join(',')}${st.with ? ` with ${st.with.from.join(',')}→${st.with.to.join(',')}` : ''} ${st.seconds}s` : st.do === 'face' ? `face each other${entry.faced ? ` (${entry.faced.apart} m apart)` : ''}` : st.do);
+      const what = whose + (st.do === 'hold' || st.do === 'move' ? `${st.do} ${st.keys.join('+')} ${st.seconds}s` : st.do === 'press' ? `press ${st.key}${st.times > 1 ? ` x${st.times}` : ''}` : st.do === 'look' ? `look ${st.dx},${st.dy}` : st.do === 'wait' ? `wait ${st.seconds}s` : st.do === 'until' ? `until ${st.phase}` : st.do === 'shot' || st.do === 'snap' ? `${st.do} ${st.name}` : st.do === 'tap' ? `tap ${st.x},${st.y} ${st.seconds}s` : st.do === 'drag' ? `drag ${st.from.join(',')}→${st.to.join(',')}${st.with ? ` with ${st.with.from.join(',')}→${st.with.to.join(',')}` : ''} ${st.seconds}s` : st.do === 'face' ? `face each other${entry.faced ? ` (${entry.faced.apart} m apart)` : ''}` : st.do === 'fight' ? `fight ${st.seconds}s${st.keys ? ` moving ${st.keys.join('+')}` : ''}${entry.fought ? ` (${entry.fought.shots} shots at ${entry.fought.firedAt} of them, ${entry.fought.fell} fell${entry.fought.lookedAround ? `, looked around ${entry.fought.lookedAround} times` : ''})` : ''}` : st.do);
       log(`#${n} ${what} → ${entry.error ? `FAILED: ${entry.error} | ` : ''}${stateLine(state)}${shot ? ` | shot ${shot}` : ''}`);
       if (st.do === 'snap') log(`   snap ${st.name}: ${JSON.stringify({ players: state.players?.map(p => `${p.you ? 'YOU' : p.name} ${p.score}${p.bot ? ' (bot)' : ''} ${p.anim ?? ''}${p.control === false ? ' not-in-control' : ''}`), hud: state.hud ? { help: state.hud.help, scores: state.hud.scores, crosshair: state.hud.crosshair } : null, results: state.results })}`);
       if (entry.error || (state.phase === null && st.do !== 'start')) { if (!entry.error) { entry.error = 'the game is gone from the page'; rec.ok = false; } break; }

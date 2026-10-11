@@ -16,12 +16,13 @@ export const fill=(text,values)=>text.replace(/\{\{([A-Z_0-9]+)\}\}/g,(m,k)=>k i
 
 /**
  * The words in the play-tester's brief that assume a shell, as placeholders a host fills (P.PLAY_HOW, P.PLAY_STEPS_AT,
- * P.RUN_NODE). Without them they are the worker's exact words: the play.mjs command, where its step list is, and the
- * Node line. A host whose agent plays through a tool names the tool in PLAY_HOW and PLAY_STEPS_AT, and sets RUN_NODE to ''.
+ * P.RUN_NODE, P.REPORT_HOW). Without them they are the worker's exact words: the play.mjs command, where its step list is, and the
+ * Node line, and how the report is handed in (a file in the play-tester's folder). A host whose agent plays through a tool names the tool in PLAY_HOW and PLAY_STEPS_AT, and sets RUN_NODE to ''.
  */
 export const playWords=(P,game)=>({
   PLAY_HOW:P.PLAY_HOW??`\`\`\`\nnode ${P.KIT_TOOLS}/play.mjs ${game} --script ${P.DIR}/scratch/<name>.json --out ${P.DIR}/runs/<name>\n\`\`\``,
   PLAY_STEPS_AT:P.PLAY_STEPS_AT??`The step list in full is at the top of \`${P.KIT_TOOLS}/lib/play-script.mjs\`.`,
+  REPORT_HOW:P.REPORT_HOW??`Write \`${P.DIR}/out/playtest.json\` **last** (draft it in \`scratch/\` first):`,
   RUN_NODE:P.RUN_NODE??'Run node through Node 24.19.0 (`source ~/.nvm/nvm.sh && nvm use 24.19.0`). ',
 });
 

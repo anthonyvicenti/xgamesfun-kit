@@ -12,6 +12,14 @@
 //   {"do":"press", "key":"KeyE", "times":1}           tap a key (or a mouse button)
 //   {"do":"move", "dir":"forward", "seconds":1.5}     walk: forward | back | left | right, or "keys":"WD"; "sprint":true
 //   {"do":"look", "dx":300, "dy":-40}                 turn the camera by mouse pixels (about 600 px is a quarter turn)
+//   {"do":"fight", "seconds":8, "shot":"fighting", "dir":"back"}
+//                                                     a first-person fight (forge): for N seconds, turn to the nearest
+//                                                     enemy in view and fire at its body, as a new player's hand does
+//                                                     (a quarter second to react to a new one, about a degree off, a
+//                                                     shot three times a second); with none in view, look around for
+//                                                     one. "dir" walks that way meanwhile (back, left, right, …).
+//                                                     A script cannot see the screen, so this is its eyes and hand; it
+//                                                     knows nothing a player's screen does not show
 //   {"do":"wait", "seconds":3}
 //   {"do":"shot", "name":"first-look"}               a screenshot of my own view
 //   {"do":"snap", "name":"after-drink"}              the observation, trimmed: phase, time, players, the HUD text
@@ -51,7 +59,7 @@
 // Keys: Mouse (left button), MouseRight, Space, ShiftLeft, KeyA–KeyZ, Digit0–9, Enter, Escape, Tab, Arrow*; shorthands
 // "E" → KeyE, "click" → Mouse, "right click" → MouseRight, "Shift" → ShiftLeft.
 export const LIMITS = { steps: 200, holdSeconds: 20, waitSeconds: 120, untilSeconds: 300, totalSeconds: 300, look: 3000, bots: 7 };
-export const DOS = ['start', 'hold', 'press', 'move', 'look', 'wait', 'shot', 'snap', 'until', 'again', 'click', 'tap', 'drag', 'face', 'step', 'expect'];
+export const DOS = ['start', 'hold', 'press', 'move', 'look', 'fight', 'wait', 'shot', 'snap', 'until', 'again', 'click', 'tap', 'drag', 'face', 'step', 'expect'];
 /** The steps a friend can be told to do ("who": "friend"). */
 export const FRIEND_DOS = ['hold', 'press', 'move', 'look', 'shot', 'snap'];
 /** What an expect step can ask of a value; the last four compare it with an earlier snap of the same path. */
@@ -175,6 +183,12 @@ export function parseScript(input) {
         break;
       }
       case 'look': { const l = look(s); if (l) Object.assign(st, l); break; }
+      case 'fight': {
+        if (s.dir !== undefined) { const keys = DIRS[String(s.dir).toLowerCase()] ?? null; if (!keys) bad(`"dir" must be one of ${Object.keys(DIRS).join(', ')}`); else st.keys = keys; }
+        seconds(0.5, LIMITS.holdSeconds, 5);
+        shotName();
+        break;
+      }
       case 'wait': seconds(0, LIMITS.waitSeconds, undefined); break;
       case 'step': seconds(0, LIMITS.waitSeconds, undefined); break;
       case 'expect': {

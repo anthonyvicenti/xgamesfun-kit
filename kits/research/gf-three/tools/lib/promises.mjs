@@ -102,13 +102,23 @@ export function forgePromises(tables = {}) {
   const names = W.map(w => w.name || w.id).filter(Boolean);
   out.push({ id: 'forge.slots', text: 'Everything the game draws is a piece Studio can show and swap: every model, picture and number is a slot, and nothing I see is built into the engine.', source: 'forge: slot coverage', proofs: ['verify:4'] });
   out.push({ id: 'forge.browser', text: 'In a browser without WebGPU the game says so and gives me a link to open somewhere it plays, never a blank page; and if the graphics device is lost in a round the game draws again by itself.', source: 'forge: no WebGPU, a lost device', proofs: ['verify:32', 'verify:33'] });
+  // (gf-forge wave 4: a release's check, tools/lib/verdict.mjs RELEASE_ONLY, so a build's own verify leaves it untested)
+  out.push({ id: 'forge.watch', text: 'In a round with friends I can go live from the menu: anyone with my link watches the fight through my eyes as I play it, and can then join us, start a room of their own or play alone.', source: 'forge: watch then play', proofs: ['verify:34'] });
   out.push({ id: 'forge.evade', text: 'Shift is a quick evade: a short dash the way I am moving, and I cannot do it again at once.', source: 'forge: the player table (evade)', proofs: ['play'] });
   if (W.length) {
     if (E.length) out.push({ id: 'kit.hits', text: 'When I shoot or strike an enemy I see each hit land: it flashes white, a number pops from it, and it takes a few hits to go down.', source: 'forge: hits read', proofs: ['verify:16', 'play'] });
     out.push({ id: 'forge.weapon', text: `My weapon is in my hand on screen${names.length ? ` (${names[0]} first)` : ''}; firing shows at once (a flash, a kick, the round gone from the counter).`, source: 'forge: the weapons table', proofs: ['play'] });   // seen, not heard: a play-tester's script has no ears (sound is checks 7 and 18)
     if (W.some(w => Number(w.magazine ?? 0) > 0)) out.push({ id: 'forge.reload', text: 'The HUD shows my rounds; R reloads, and an empty weapon reloads by itself.', source: 'forge: the weapons table (magazine, reload)', proofs: ['play'] });
     out.push({ id: 'forge.melee', text: 'V is a quick melee: a close swing that hits what is right in front of me, whatever weapon I hold.', source: 'forge: the quick melee', proofs: ['play'] });
-    if (W.length > 1) out.push({ id: 'forge.weapons', text: `Keys 1 to 4 and the wheel pick a weapon (${names.join(', ')}); each comes up in my hand and fires its own way.`, source: 'forge: the weapons table (slots)', proofs: ['play'] });
+    // only what is in hand at the start is promised as a key: a weapon a card gives is said as that (the frozen forge
+    // case, 2026-10-11: "Keys 1 to 4 … pick a weapon" with three of the four given by card; the play-tester failed
+    // it and the repair put every weapon in hand to make the sentence true)
+    const label = w => w.name || w.id, key = w => Number(w.slot) || W.indexOf(w) + 1;
+    const first = W.filter(w => w.start !== false), carded = W.filter(w => w.start === false && (forge.cards ?? []).some(c => c?.kind === 'weapon' && c.weapon === w.id));
+    const list = ws => ws.map(w => `${label(w)} on ${key(w)}`).join(', ');
+    const more = carded.length ? ` A reward card can give me ${carded.length > 1 ? 'another' : 'one more'} (${list(carded)}); from then on its key picks it too.` : '';
+    if (first.length > 1) out.push({ id: 'forge.weapons', text: `The number keys and the wheel pick a weapon (${list(first)}); each comes up in my hand and fires its own way.${more}`, source: 'forge: the weapons table (slots, start) and the weapon cards', proofs: ['play'] });
+    else if (carded.length) out.push({ id: 'forge.weapons', text: `I start with one weapon${first.length ? ` (${label(first[0])})` : ''}.${more} Each comes up in my hand and fires its own way.`, source: 'forge: the weapons table (slots, start) and the weapon cards', proofs: ['play'] });
   }
   if (E.length && waves.length) {
     out.push({ id: 'forge.waves', text: `Enemies rise in waves (${waves.length}); I can tell their kinds apart, each warns before it hits, and I can tell which wave I am on and when one is cleared.`, source: 'forge: the enemies and waves tables', proofs: ['play'] });

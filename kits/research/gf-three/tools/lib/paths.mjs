@@ -25,7 +25,7 @@ export const SCENIC_VERSION = '0.1.0-dev';
 // no three.js, no Rapier (the core's own physics is rapier3d in Rust)
 export const FORGE = join(REPO, 'research/gf-forge');
 export const FORGE_KIT = join(FORGE, 'kit');
-export const FORGE_VERSION = '0.5.0-wave3';
+export const FORGE_VERSION = '0.6.0-wave4';
 export const ENGINES = ['party', 'scenic', 'forge'];
 export const engineOf = spec => (spec?.engine === 'scenic' ? 'scenic' : spec?.engine === 'forge' ? 'forge' : 'party');
 

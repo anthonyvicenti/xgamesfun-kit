@@ -10,7 +10,7 @@
 // of the game's files; "delivered" is refused when either hash is not the hash of the files now.
 import {readFile,writeFile,mkdir,rename,readdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-import {dirname,join,resolve} from 'node:path';
+import {dirname,join,resolve,relative,isAbsolute} from 'node:path';
 
 export const STATE_SCHEMA='gf-loop/1';
 export const STATE_DIR='.gf-loop';
@@ -53,6 +53,12 @@ export function heldStore(file){
     /** → true once after a load() that found the file changed. */
     takeChanged(){const c=changed;changed=false;return c;},
   };
+}
+/** Is `file` inside the folder `dir`? A store with no `file` (memory, the host's own) is not known to be. */
+export function inside(dir,file){
+  if(!file)return false;
+  const r=relative(resolve(dir),resolve(file));
+  return r!==''&&!r.startsWith('..')&&!isAbsolute(r);
 }
 /**
  * A state file inside the game's folder must not count as a game asset: assets.json's coverage rule (verify check 1)

@@ -123,8 +123,8 @@
       "home": "part",
       "part": "mechanic:*",
       "run": "build",
-      "rule": "Each mechanic in the spec does its job in a real round, and the thing to defend is readable on screen at round start with its health on the HUD.",
-      "fix": "The detail names the mechanic and the sign that was missing. Wire that mechanic's callbacks in rules.js as its README shows. A waves target is a zone name from config/world.json → zones, never a prop's name; stand the thing to defend in the centre zone."
+      "rule": "Each mechanic in the spec does its job in a real round, and the thing to defend is readable on screen at round start with its health on the HUD. In a first-person wave game (forge), a new player who stands and fights is not felled by the first wave, and enemies fall to the starting weapon.",
+      "fix": "The detail names the mechanic and the sign that was missing. Wire that mechanic's callbacks in rules.js as its README shows. A waves target is a zone name from config/world.json → zones, never a prop's name; stand the thing to defend in the centre zone. A first wave that fells the player: make forge.waves[0] smaller, slower to rise or fewer at once (enemies, delay, spawnEvery, maxAlive, attackers) and ramp the later waves; never answer it with one-hit kills (check 16)."
     },
     "16": {
       "name": "hits read",

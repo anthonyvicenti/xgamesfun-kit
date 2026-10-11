@@ -105,6 +105,12 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
     const moved = j0 && jMe ? Math.hypot(jMe.x - j0.x, jMe.z - j0.z) : 0;
     const seen = await until(async () => { const g = await game(V); const p = g?.players?.find(x => x.id === js.you); return p && jMe && Math.hypot(p.x - jMe.x, p.z - jMe.z) < 2 ? g : null; }, 6000, 'J on V').catch(() => null);
     ok = step('the viewer draws the streamer where they really are (after a walk)', !!seen && moved >= 1, `J walked ${moved.toFixed(2)} m to ${jMe?.x},${jMe?.z}; V draws ${JSON.stringify(((await game(V))?.players ?? []).map(p => [p.id, p.x, p.z]))}`) && ok;
+    // A forge game (first person, CONTRACT §8 forge; gf-forge wave 4): the viewer looks out of the streamer's eyes, so
+    // the streamer has no name of their own on a viewer's screen. The streamer turns to their friend (the engine's QA
+    // call, as tools/play.mjs's `face`): the steps below then hold the viewer's view to a turn as well as a walk, and
+    // the friend's name must stand over the friend.
+    const faced = await frameOf(J).evaluate(() => { const g = window.__game, o = g?.snapshot?.()?.players?.find(p => !p.local); if (g?.engine !== 'forge' || !g.forge?.face || !o) return null; g.forge.face(o.x, o.y + 1.2, o.z); return o.name; }).catch(() => null);
+    if (faced) { record.faced = faced; await sleep(1800); }
     const gv = seen ?? await game(V);
     ok = step('the viewer has no player of its own in the game, and follows the streamer', !(gv?.players ?? []).some(p => p.local) && gv?.watch?.target === js.you && (gv?.players ?? []).length === 2, `players ${JSON.stringify((gv?.players ?? []).map(p => p.name))}; target ${gv?.watch?.target}`) && ok;
     const [cj, cv] = [await cam(J), await cam(V)];
@@ -112,7 +118,7 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
     const gap = cj && cv ? Math.hypot(...cj.eye.map((v, i) => v - cv.eye[i])) : 999;
     // third: the streamer's own rig, over the shoulder (until 2026-10-10 a viewer looked from the head: 1.8 m and 10° off
     // across a room, 4.7 m and 44° with a desk in front, and the bound was 12 m and 40°)
-    ok = step('the viewer sees as the streamer does', cj?.mode === 'first' ? gap < 0.4 && deg < 12 : cj?.mode === 'third' ? gap < 1 && deg < 8 : gap < 12 && deg < 40, `${cj?.mode}: cameras ${gap.toFixed(2)} m and ${deg.toFixed(1)}° apart`) && ok;
+    ok = step('the viewer sees as the streamer does', cj?.mode === 'first' ? gap < 0.4 && deg < 12 : cj?.mode === 'third' ? gap < 1 && deg < 8 : gap < 12 && deg < 40, `${cj?.mode}: cameras ${gap.toFixed(2)} m and ${deg.toFixed(1)}° apart${faced ? ` (after the streamer turned to face ${faced})` : ''}`) && ok;
     // the viewer keeps the round's clock and scores (play-test 1: only the 3D view and the bar)
     const vHud = await frameOf(V).evaluate(() => { const shown = s => { const e = document.querySelector(s); return !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0; }; return { timer: shown('.gf-timer'), scores: shown('.gf-scores'), card: shown('#gf-hud'), menu: shown('#gf-menu-button') }; }).catch(() => null);
     const hHud = await frameOf(H).evaluate(() => ({ timer: !!document.querySelector('.gf-timer') && getComputedStyle(document.querySelector('.gf-timer')).display !== 'none', scores: !!document.querySelector('.gf-scores')?.getBoundingClientRect().width })).catch(() => null);
@@ -125,11 +131,17 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
         const e = plates.find(x => x.lastChild?.textContent === p.name); if (!e) continue;
         const r = e.getBoundingClientRect(), at = window.__game.project(p.x, p.y + 1.7, p.z);
         if (!at?.front) continue;
-        out.push({ name: p.name, dx: Math.round(r.left + r.width / 2 - at.x), dy: Math.round(r.bottom - at.y) });
+        // (half: how many pixels half a metre is at that character's depth, for a first-person view of a friend close by)
+        const up = window.__game.project(p.x, p.y + 2.2, p.z);
+        out.push({ name: p.name, dx: Math.round(r.left + r.width / 2 - at.x), dy: Math.round(r.bottom - at.y), half: up ? Math.round(Math.abs(up.y - at.y)) : 0 });
       }
       return out;
     }).catch(() => []);
-    ok = step('a viewer\'s nameplates sit over the characters', tags.length >= 1 && tags.every(t => Math.abs(t.dx) <= 40 && Math.abs(t.dy) <= 120), JSON.stringify(tags)) && ok;
+    // 120 px either way. Through a forge streamer's eyes a friend can stand at arm's length, where the kit's plate (0.3 m
+    // over the head) is more than 120 px above the 1.7 m this step measures from (hello forge's two spawns, 2026-10-11:
+    // 150 px): there the bound is half a metre at the friend's depth, when that is more.
+    const far = t => (faced ? Math.max(120, t.half) : 120);
+    ok = step('a viewer\'s nameplates sit over the characters', tags.length >= 1 && tags.every(t => Math.abs(t.dx) <= 40 && Math.abs(t.dy) <= far(t)), JSON.stringify(tags)) && ok;
     const count = await until(async () => { const s = await J.page.evaluate(() => document.querySelector('#mp-live')?.textContent ?? ''); return /1 watching/.test(s) ? s : null; }, 6000, 'the count').catch(() => null);
     ok = step('the streamer sees how many watch', !!count, count ?? 'no count') && ok;
     await shot(V, 'viewer');

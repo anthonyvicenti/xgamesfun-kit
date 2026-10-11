@@ -27,14 +27,14 @@ export const REQUIRED_WORLD = [1, 2, 3, 4, 5, 7, 8, 11, 13, 14, 18, 19, 20, 21, 
  * ran, as on gf-three. Track F (tools/lib/forge-feel-check.mjs): 16 (hits read; a game with no weapon passes as not
  * applicable) and 10's feel half (the evade and death are the only ways control goes). Track A: 11 and 17 (the forge
  * world lint, gf/forge/arena.js) and 12 (a round with forge bots). Since the wave 1b integration every numbered check
- * up to 33 applies; mechanic modules and 34 (watch then play, CONTRACT §9b) are not yet for forge.
+ * up to 33 applies. Since wave 4 (track V): 34 (watch then play, CONTRACT §9b: the forge boot has a viewer's copy, the
+ * streamer's eyes for its camera and Go live in its own menu; tools/lib/friends-watch-check.mjs, a release's check as
+ * on the other engines). Mechanic modules are not yet for forge.
  */
-export const REQUIRED_FORGE = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 31, 32, 33];
+export const REQUIRED_FORGE = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 31, 32, 33, 34];
 /** What cannot apply to a forge game yet, and why: recorded "not yet for forge" (ok: null), never counted as passed. */
 export const NOT_YET_FORGE = {
   mechanics: 'no mechanic module runs on forge yet (tracks F and A); their params stay in config/game.json for the rules',
-  // (wave 3, track S3: the reason said a forge game 'offers no Go live yet'; that is true of its own menu only)
-  34: 'the forge boot has no Go live in its own menu and draws no viewer\'s camera (CONTRACT §9b is gf-three and worlds only); the friends page still offers Go live wherever streams are on, and what a viewer of a forge game would see is untried: settle it before a forge game is published (research/gf-forge/evidence/wave3-S3-2026-10-10/GO_LIVE.md)',
 };
 /** The forge pass rule: every REQUIRED_FORGE check ran and passed, no other check failed; not-yet checks never count. */
 export function passesForge(checks, required = REQUIRED_FORGE) {

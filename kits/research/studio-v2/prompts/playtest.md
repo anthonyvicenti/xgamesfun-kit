@@ -62,7 +62,7 @@ Keys: `Mouse`, `MouseRight`, `Space`, `ShiftLeft`, `KeyE`, `KeyF`, `KeyQ`, … A
 
 ## Write the report
 
-Write `{{DIR}}/out/playtest.json` **last** (draft it in `scratch/` first):
+{{REPORT_HOW}}
 
 For example (a dodgeball game, not this one):
 

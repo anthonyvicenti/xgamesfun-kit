@@ -10,7 +10,7 @@ import {readFile,writeFile,rm} from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {MAX_REPAIRS,RESCUE_ROUNDS,playable,readVerdict} from './verdict.mjs';
-import {STATE_SCHEMA,REFUSALS,stateFileOf,fileStore,proofOf,ignoreStateDir,cancelState} from './state.mjs';
+import {STATE_SCHEMA,REFUSALS,stateFileOf,fileStore,proofOf,ignoreStateDir,inside,cancelState} from './state.mjs';
 import {createRepairLedger} from './repair-ledger.mjs';
 import {beginPlaytest,finishPlaytest,packPlaytest,unpackPlaytest,briefHash,PLAYTEST_TIMEOUT_MIN} from './playtest.mjs';
 import {lockFiles,takeLock,lockProblems,restoreLock,sameLock,holdPromises} from './lock.mjs';
@@ -29,9 +29,10 @@ const same=s=>s;
  * host:
  *   job, game            folders (job holds game/, out/, spec.json, promises.json, playtest/); getters are read at use
  *   kind                 'build' | 'change'
+ *   session              an opaque string kept in the state as `session` (a tools host: the id of the session that is building, so a stop guard holds that session only)
  *   paths                as the agent sees them: {JOB, KIT_TOOLS, PLAYTEST}, and for a host with another layout
  *                        {GAME, OUT, DELIVERY, QUESTIONS, SPEC} (messages.mjs has the defaults: the worker's)
- *   playWords            {PLAY_HOW, PLAY_STEPS_AT, RUN_NODE}: the play-tester brief's shell-only words (prompts/playtest.md), as a tools host words them
+ *   playWords            {PLAY_HOW, PLAY_STEPS_AT, RUN_NODE, REPORT_HOW}: the play-tester brief's shell-only words (prompts/playtest.md), as a tools host words them
  *   toolNames            {verify, quick, play, catalog}: the host's own tools, named in the agent's messages instead of a shell command
  *   firstMessage         the first agent round's message
  *   specFile             the locked spec's file (default <job>/spec.json): with no hooks.prepare, the create step runs
@@ -87,6 +88,7 @@ export async function openBuildLoop(host){
   const S=loaded??{schema:STATE_SCHEMA,kind:host.kind??'build',status:'building',step:'create',why:'a new build',phase:null,agent:'build',repair:null,after:null,
     round:0,repairs:0,rescues:0,verifies:0,playtests:0,verify:null,kept:null,playtest:null,pt:null,gaveUp:null,fallback:null,fixes:[],ledger:[],done:{},handed:null,outcome:null,history:[],lock:null,refusals:[],before:null,tampered:false};
   S.refusals??=[];
+  if(host.session!=null)S.session=String(host.session);      // opaque: which session is building, for a stop guard that holds exactly that one
   const M={verdict:null,kept:null,pt:null,own:null,fixNotes:[],proof:null,workerDelivery:false,resumedRun:!!loaded};
   const ledger=createRepairLedger({rounds:S.ledger,write:host.ledgerLine??null});
   if(loaded){            // a run that was killed: what the files on disk still say
@@ -213,7 +215,7 @@ export async function openBuildLoop(host){
         await versions.keep('created');
       }
       S.status='building';
-      if(!host.store)await ignoreStateDir(D.game);       // the state file is in the game's folder: not a game asset
+      if(inside(D.game,St().file))await ignoreStateDir(D.game);       // the state file is in the game's folder: not a game asset (decided by where it is, not by who passed the store)
       // the spec is locked from here on (a change is locked when its change round is over: the fix step)
       if(S.kind!=='change'&&(!S.lock||S.lock.when==='host'))await lockNow('create');
       if(flags.resumed){const e=await hooks.settle?.(loop);if(e?.end)return end(e.end,'the host ended the build');cp();return go('verify','a resumed build delivers the game an earlier build made: it is verified again first');}
@@ -426,7 +428,7 @@ export async function openBuildLoop(host){
      * Run the step the state names, save, and say what comes next.
      * → {ran, next, why, outcome?} | {ran, waiting: 'agent' | 'playtest', message, model?} (handed over: do the round, call step() again)
      */
-    async step(){
+    async step(o={}){
       if(S.step==='done')return {ran:'done',next:'done',why:S.why,outcome:S.outcome};
       const ran=S.step;
       // The locked spec, before anything reads it: an edit is put back and refused, and the step is not run on this
@@ -435,7 +437,10 @@ export async function openBuildLoop(host){
       if(edited.length){
         const why=`the locked spec was changed after it was locked (${edited.map(p=>p.role==='game'?'the copy in the game':'the spec file').join(' and ')}) and was put back: call step() again`;
         S.history=[...S.history,{step:ran,next:ran,why,at:stamp(),refused:REFUSALS.SPEC_CHANGED}].slice(-60);
-        const message=words.refusalNote(S.refusals.filter(x=>!x.told),msgOpts());
+        const fresh=S.refusals.filter(x=>!x.told),message=words.refusalNote(fresh,msgOpts());
+        // A host that got the message from step() has it, so the agent is not told twice. run() never shows it to
+        // anyone (it passes told:false), so there the next round's own message carries it.
+        if(o.told!==false)for(const x of fresh)x.told=true;
         await save();
         return {ran,next:ran,why,refused:REFUSALS.SPEC_CHANGED,message};
       }
@@ -462,7 +467,7 @@ export async function openBuildLoop(host){
     },
     /** Step until the loop is done or a round is handed over. → the last step's answer (its `outcome` is the host's). */
     async run(){
-      for(;;){const r=await loop.step();if(r.next==='done'||r.waiting)return r;}
+      for(;;){const r=await loop.step({told:false});if(r.next==='done'||r.waiting)return r;}
     },
   };
   return loop;
