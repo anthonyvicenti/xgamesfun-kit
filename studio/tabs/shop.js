@@ -1,5 +1,5 @@
 // Studio tab: the game's shop. Ported from games.fun Creator Studio v2's Shop tab (components/studio/v2/earn.tsx):
-// one currency pick (SOL, the game's token or any classic SPL token; fixed once live), items made from the game's
+// one currency pick (SOL, the game's token or any other token, classic SPL or Token-2022; fixed once live), items made from the game's
 // pictures with what owning them changes in the game (its player looks, gf-three CONTRACT §6e), loot boxes with odds
 // from rarity, and one "Put it on sale" that is one wallet approval for every transaction (plus a signature for
 // each new upload).

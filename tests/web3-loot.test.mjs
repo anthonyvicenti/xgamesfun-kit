@@ -7,7 +7,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { encodeBorsh } from '../web3/gf-web3/chain/borsh.js';
-import { fromBase64, fromHex, toHex } from '../web3/gf-web3/chain/bytes.js';
+import { addressBytes } from '../web3/gf-web3/chain/base58.js';
+import { concat, fromBase64, fromHex, toHex, uintLE } from '../web3/gf-web3/chain/bytes.js';
 import { createCollectionInstruction } from '../web3/gf-web3/chain/core.js';
 import * as L from '../web3/gf-web3/chain/loot.js';
 import { TOKEN_2022_PROGRAM } from '../web3/gf-web3/chain/pda.js';
@@ -192,6 +193,18 @@ describe('Token-2022: the accounts a transfer needs', () => {
     assert.deepEqual(await transferExtras(rpcOf(classic), I.mint), []);
     const plain2022 = { [I.mint22]: { owner: T22, data: Buffer.alloc(82).toString('base64') } };
     assert.deepEqual(await transferExtras(rpcOf(plain2022), I.mint22), memo);
+  });
+});
+
+describe('accounts the IDL does not describe', () => {
+  it('a stake position: tag 10, stake, player, bump, amount, since, paid per token', () => {
+    const data = concat(Uint8Array.of(10), addressBytes(I.owner), addressBytes(I.player), Uint8Array.of(254), uintLE(50n, 8), uintLE(1760000000n, 8), uintLE(2n ** 70n, 16));
+    assert.deepEqual(L.decodePosition(data), { stake: I.owner, player: I.player, bump: 254, amount: 50n, since: 1760000000n, paid_per_token: 2n ** 70n });
+    assert.throws(() => L.decodePosition(fromBase64(F.accounts.stake.data)), /Not a Position/);
+  });
+  it('a lottery’s purchase lines: 40 bytes each after its record', () => {
+    const lines = concat(addressBytes(I.player), uintLE(3n, 8), addressBytes(I.to), uintLE(5n, 8));
+    assert.deepEqual(L.lotteryLines(concat(fromBase64(F.accounts.lottery.data), lines)), [{ buyer: I.player, end: 3n }, { buyer: I.to, end: 5n }]);
   });
 });
 

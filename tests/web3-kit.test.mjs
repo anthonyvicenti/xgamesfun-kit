@@ -172,6 +172,16 @@ describe('real mode against a chain', () => {
     assert.equal(result.asset, lootPda.asset(result.order, 1000n));
     assert.equal(chain.accounts.has(result.order), false, 'the order ended');
     assert.deepEqual(await kit.orders(), []);
+    // An order the player left open (a claim they declined) is listed, and finish() claims it.
+    const nonce = 77n;
+    const left = lootPda.order(game, player.address, nonce);
+    loot(left, 'Order', { game, player: player.address, nonce, mint: 'So11111111111111111111111111111111111111112', loot_box: '11111111111111111111111111111111', box_version: 0, status: 'Rolled', outcome: { Item: [1] }, serial: 9, paid: 50_000_000n, fee: 2_000_000n, shares: [], requested_slot: 1000n, bump: 255 });
+    const open = await kit.orders();
+    assert.deepEqual(open.map((o) => [o.order, o.status, o.serial]), [[left, 'Rolled', 9]]);
+    const done = await kit.finish(left);
+    assert.equal(done.settled, true);
+    assert.equal(done.item.asset, lootPda.asset(left, 1000n));
+    assert.deepEqual(await kit.orders(), []);
   });
 
   it('opens a box: pay and roll, then claim what it rolled; a failed roll is refunded', async () => {

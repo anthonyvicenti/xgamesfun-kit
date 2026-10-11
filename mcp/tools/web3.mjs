@@ -83,7 +83,7 @@ export const tools = [
   },
   {
     name: 'web3_set_currency',
-    description: 'What players pay with in the shop: SOL, MAIN (MAIN-dev), USDC (USDC-dev), token (the game’s own) or any classic SPL mint address. Fixed once the shop is live. No signature.',
+    description: 'What players pay with in the shop: SOL, MAIN (MAIN-dev), USDC (USDC-dev), token (the game’s own) or any mint address, classic SPL or Token-2022. Fixed once the shop is live. No signature.',
     inputSchema: { type: 'object', required: ['currency'], properties: { game, currency: { type: 'string' } }, additionalProperties: false },
     handler: async (input, ctx) => result(await call('currency', input.currency, { game: input.game }, ctx)),
   },
