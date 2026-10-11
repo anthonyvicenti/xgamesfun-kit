@@ -70,13 +70,15 @@ try {
     await shot(p, `${label}-2-idle`, 'Session idle with no wait open: press Enter once; the timeline shows the prompt and the Edit');
 
     // a request typed in the page
-    await p.fill('textarea.ask', 'make the enemies faster');
+    const ask = `make the enemies faster (${label})`;
+    const mine = p.locator('.req', { hasText: ask });
+    await p.fill('textarea.ask', ask);
     await p.click('text=Send to your session');
-    await until(async () => (await p.locator('.req').count()) === 1, 6000, 'request row');
-    check(await p.locator('.req[data-state="waiting"]').count() === 1, `${label}: the typed request shows as waiting`);
-    check(/Waiting for your session/.test(await text(p, '.req')), `${label}: the waiting words`);
+    await until(async () => (await mine.count()) === 1, 6000, 'request row');
+    check(await mine.and(p.locator('[data-state="waiting"]')).count() === 1, `${label}: the typed request shows as waiting`);
+    check(/Waiting for your session/.test(await mine.innerText()), `${label}: the waiting words`);
     const q1 = await s.queue();
-    check(q1.requests.length >= 1 && q1.requests.at(-1).text === 'make the enemies faster' && q1.requests.at(-1).state === 'waiting', `${label}: the bridge holds it as waiting`);
+    check(q1.requests.length >= 1 && q1.requests.at(-1).text === ask && q1.requests.at(-1).state === 'waiting', `${label}: the bridge holds it as waiting`);
     const rid = q1.requests.at(-1).id;
     await shot(p, `${label}-3-request-waiting`, 'The request waiting (Edit and Remove offered), session idle');
 
@@ -84,17 +86,17 @@ try {
     const wait = await s.wait();
     await until(() => wait.lines.length, 4000, 'wake');
     check(wait.lines[0]?.type === 'requests' && /GF_REQUEST/.test(wait.lines[0].text), `${label}: the wait delivered the request as GF_REQUEST`);
-    await until(async () => /Handed over/.test(await text(p, '.req')), 6000, 'handed in page');
+    await until(async () => /Handed over/.test(await mine.innerText()), 6000, 'handed in page');
     check(true, `${label}: the page says handed over`);
     await shot(p, `${label}-4-request-handed`, 'Request handed over to the session; the session is listening/working');
     await s.prompt(wait.lines[0].text);
-    await until(async () => /has seen it/.test(await text(p, '.req')), 6000, 'seen in page');
+    await until(async () => /has seen it/.test(await mine.innerText()), 6000, 'seen in page');
     check(true, `${label}: the page says seen after the session acted`);
-    check(!/Done/.test(await text(p, '.req-state')), `${label}: not shown as done before the session reported`);
+    check(!/Done/.test(await mine.innerText()), `${label}: not shown as done before the session reported`);
     const got = await s.collect();
     check(got.body.requests.some(r => r.id === rid), `${label}: GET requests returned it`);
     await s.done(rid, 'enemy speed 4 to 6');
-    await until(async () => /Done/.test(await text(p, '.req-state')), 6000, 'done in page');
+    await until(async () => /Done/.test(await mine.innerText()), 6000, 'done in page');
     check(true, `${label}: the page says Done after the tool reported`);
     await shot(p, `${label}-5-request-done`, 'Request Done after the session reported it through the tool');
     await s.stop('Done');
@@ -138,7 +140,7 @@ try {
     for (let i = 0; i < 2; i++) check((await s.stop()).body?.decision === 'block', `${label}: stop ${i + 1} with the request unreported is refused`);
     await s.stop();                                            // the third is let through; the request is dropped
     await until(async () => (await s.queue()).requests.find(r => r.id === sent2.id)?.state === 'dropped', 6000, 'dropped');
-    await until(async () => /send again/i.test(await text(p, '.req-state')), 6000, 'dropped in page');
+    await until(async () => /send again/i.test(await p.locator('.req', { hasText: 'add a boss' }).innerText()), 6000, 'dropped in page');
     await shot(p, `${label}-9-dropped`, 'A request the session ended two turns without reporting: "Not done: send again"');
     await p.locator('.req', { hasText: 'add a boss' }).locator('text=Remove').click();
     await sleep(500);
