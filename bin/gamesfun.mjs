@@ -51,4 +51,9 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log(command.usage ?? command.summary);
   process.exit(0);
 }
+const { startUpdateCheck } = await import('../lib/update.mjs');
+// The daily "is there a newer kit" check starts in the background and never delays the command; its note prints after
+// commands that talk to a person (not --json output, not the long-running dev server, not update itself).
+const notice = name === 'update' ? null : await startUpdateCheck().catch(() => null);
 process.exitCode = (await command.run(args)) ?? 0;
+if (notice && !args.includes('--json') && !['update', 'dev'].includes(name)) console.error(notice);
