@@ -1,11 +1,11 @@
 {
   "name": "ci-software",
-  "about": "Checks `gamesfun verify --quick --profile .github/ci-profile.json` leaves out on a GitHub runner, which has no graphics card (Chrome renders with SwiftShader, about 1.6 frames a second on 4 CPUs). A skipped check is recorded as skipped with its reason, never as passed, and the run is never a full pass. See docs/CI.md.",
+  "about": "Checks `gamesfun verify --quick --profile .github/ci-profile.json` leaves out on a GitHub runner. The Linux and Windows runners have two processors and no graphics card (Chrome draws with SwiftShader, 1 to 2 frames a second); the macOS runner has three and a virtual card, and runs the same list (which of these checks it could run was not tried). A skipped check is recorded as skipped with its reason, never as passed, and the run is never a full pass. See docs/CI.md.",
   "environment": { "GF_VERIFY_SOFTWARE": "1" },
   "skip": [
     { "check": 3,  "reason": "needs a round to start; under software rendering the page draws about 1.6 frames a second" },
     { "check": 4,  "reason": "plays the game and loads every ?gf-show subject on a page that draws too slowly" },
-    { "check": 5,  "legs": "lobby", "reason": "only the lobby legs run (room, WebRTC, both games ready); the in-round legs and the loadout leg wait for a round" },
+    { "check": 5,  "legs": "lobby", "reason": "only the lobby legs run (the host opens a room, a friend joins it over WebRTC, both pages list both players); the in-round legs and the loadout leg wait for a round" },
     { "check": 6,  "reason": "needs a round to reach results" },
     { "check": 7,  "reason": "records the audio of the solo round" },
     { "check": 10, "reason": "42 seconds of scripted play against bots" },

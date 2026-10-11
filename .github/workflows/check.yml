@@ -85,8 +85,7 @@ jobs:
       - name: Create a party game from the example
         run: node bin/gamesfun.mjs create games/ci --from soak-squad
       - name: Verify --quick under the CI profile (docs/CI.md)
-        # Not yet run on Windows or macOS: a failure there is reported, and fixed from its log, without blocking the pull request.
-        continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
+        # A hard failure on every system since 2026-10-11 (three green runs on Linux, Windows and macOS; docs/CI.md section 7).
         timeout-minutes: 12
         run: node bin/gamesfun.mjs verify games/ci --quick --profile .github/ci-profile.json
       - name: Keep the verify evidence
@@ -133,8 +132,7 @@ jobs:
           console.log(`Chrome at ${chrome}: ${version}`);
       - name: Create a scenic game from the example
         run: node bin/gamesfun.mjs create games/ci-scenic --from isle-run
-      - name: Verify --quick under the CI profile (software rendering; no WebGPU, so WebGL2 inside WebGPURenderer)
-        continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
+      - name: Verify --quick under the CI profile (no WebGPU on a runner, so WebGL2 inside WebGPURenderer)
         timeout-minutes: 12
         run: node bin/gamesfun.mjs verify games/ci-scenic --quick --profile .github/ci-profile.json
       - name: Keep the verify evidence

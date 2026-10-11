@@ -1,13 +1,26 @@
 # CI: what runs on a GitHub runner, and what cannot
 
-Status: written 2026-10-10, updated 2026-10-11 for `verify --profile`, the scenic job and stepped time. **Never run on GitHub** (Actions are off for this repository on purpose, gate G1). Every
-number below was measured on one Linux machine, except where it says estimate.
+Status: written 2026-10-10; **runs on GitHub since 2026-10-11** (Actions were turned on that day). The first run on
+Linux, Windows and macOS was red on five of six jobs; section 7 has each fault, its cause and its fix, and section 8
+what a person on a real Windows machine or a Mac still has to try by hand. Sections 1 to 3 keep the measurements made
+on one Linux machine before the first run, with a note where a runner proved them wrong.
 
-## 1. The runners have no graphics card
+## 1. What the runners are
 
-`ubuntu-latest`, `windows-latest` and `macos-latest` have no GPU. Chrome (all three images carry Google Chrome;
-`CHROME_PATH` is set per system in the workflow) draws WebGL with SwiftShader, on the CPU. The workflow sets
-`GF_VERIFY_SOFTWARE=1`, which makes verify launch Chrome without graphics flags.
+Read from the runs of 2026-10-11 (the workflow's "Runner facts" step and each gate record's `graphics`):
+
+| Runner | Processors | Memory | Chrome | WebGL is drawn by |
+|---|---|---|---|---|
+| `ubuntu-latest` | 2 (AMD EPYC or Intel Xeon) | 7.8 GB | 154.0.8037.97 | SwiftShader, on the processor |
+| `windows-latest` | 2 (AMD EPYC) | 8.0 GB | 154.0.8037.58 | SwiftShader, on the processor |
+| `macos-latest` | 3 (Apple M1, virtual) | 7.0 GB | 152.0.7977.83 | "Apple Paravirtual device" through Metal: a virtual graphics card |
+
+So Linux and Windows have no graphics card, and macOS has a virtual one. All three images carry Google Chrome; the
+workflow names its path per system (`CHROME_PATH`). The workflow sets `GF_VERIFY_SOFTWARE=1`, which makes verify and,
+since 2026-10-11, the multiplayer gate launch Chrome without graphics flags.
+
+The estimate below was made with four processors; the runners have two, and a page that draws a game there answers a
+click after 30 seconds (section 7, fault 4).
 
 ### Measured 2026-10-10 (before `--profile`): `create --from soak-squad`, `verify --quick`, software rendering
 
@@ -65,6 +78,13 @@ reason, never as passed; the verdict carries `profile` and `profilePass`, `pass`
 `PROFILE ci-software OK (not a full pass)` and exits 0 when everything that ran passed. `"legs": "lobby"` on check 5
 runs the gate's lobby legs only (room, WebRTC, both games in the room) and records the check as skipped.
 
+**The table below did not measure what it says.** It was taken before the first run on GitHub, on a machine with a
+graphics card, and its 7 seconds were not software rendering: the gate ignored `GF_VERIFY_SOFTWARE` and launched Chrome
+with the graphics-card flags, and on that machine those flags gave Chrome no WebGL at all, so the lobby's backdrop drew
+nothing and the join was instant. The same steps failed on every Linux and Windows runner (section 7, faults 4 and 5).
+Measured again on 2026-10-11 with the fixes, really on SwiftShader and on two processors (`taskset -c 0-1`): 7 s for
+the party game and 9 s for the scenic one, PROFILE OK, the same nine checks.
+
 Runs (2026-10-11, Linux, Chrome 148, Node 24.19.0, `GF_VERIFY_SOFTWARE=1`, `taskset -c 0-3`; the host was busy, load
 average about 22), the workflow's own commands in order:
 
@@ -95,60 +115,129 @@ the checks wait for frames.
 
 ## 4. What the workflow runs
 
-Per job (party, scenic), on Ubuntu and Windows for pull requests and on macOS as well for pushes to `main` and
-`workflow_dispatch` (the matrix is chosen by an expression on `github.event_name`): `npm ci`; party only: `npm test`, the skills
-mirror check, `doctor --skip-graphics`, `examples`, `catalog --all`; then `create` and
-`verify --quick --profile .github/ci-profile.json`, and the evidence uploaded. The verify step is a hard failure on
-Ubuntu; on Windows and macOS it is `continue-on-error` until a first run there says whether it holds.
+Two jobs, `party` and `scenic`, each on Linux, Windows and macOS. Pull requests run Linux and Windows; pushes to `main`
+run macOS as well. By hand, one system or one job runs alone:
+
+```bash
+gh workflow run check.yml --ref <branch>                               # every job on every system
+gh workflow run check.yml --ref <branch> -f system=windows -f job=scenic
+gh workflow run check.yml --ref <branch> -f system=linux-windows       # everything but macOS (a tenth of the cost)
+```
+
+`system` is `all`, `linux`, `windows`, `macos` or `linux-windows`; `job` is `all`, `party` or `scenic`. Runs started by
+hand never cancel each other; a newer push cancels the run of an older one.
+
+What each system runs, the same on all three (run 38155626989 and the three after it, 2026-10-11):
+
+| Step | party job | scenic job |
+|---|---|---|
+| `npm ci`, runner facts (processors, memory, Chrome's version) | yes | yes |
+| `npm test` (244 tests; 241 pass and 3 skip on every system) | yes | no |
+| `sync-skills --check`, `doctor --skip-graphics`, `examples`, `catalog --all` | yes | no |
+| `create` from the example | `soak-squad` | `isle-run` |
+| `verify --quick --profile .github/ci-profile.json` | yes | yes |
+| the evidence uploaded (`verdict.json`, the gate's `record.json` and its picture) | yes | yes |
+
+Inside verify, on every system and for both games:
+
+- **Run and passed:** 1 manifests, 2 kit copies unedited, 11 set dressing, 14 looks honoured, 17 the world is complete,
+  18 sounds play, 19 bodies hold their shape, and check 5's lobby legs (the gate's `record.json`: manifest valid, kit
+  identical, entry exists, solo untouched, shell boots, host opens a room, a joiner joins over WebRTC, no kit errors;
+  8 of 8).
+- **Run, with nothing to check in these two examples:** 23 looks like the references (the examples list no style
+  references) and 35 the game's own tests (the examples carry none). Both report that, and count as passed.
+- **Skipped by the profile, each recorded as skipped with its reason:** 3, 4, 5 (the in-round legs and the loadout leg),
+  6, 7, 10, 12, 13, 15, 16, 20, 21, 22, 24, 25. They all play a running game.
+- **Skipped by `--quick`:** 9 the contact sheet and perf. 8, 31 and 34 are release-only.
+
+The verdict is never a full pass: it prints `PROFILE ci-software OK (not a full pass)` and exits 0 when everything
+that ran passed. No step is `continue-on-error` (`tests/ci.test.mjs` holds that); a check that cannot run on a runner
+leaves the profile by name, with its reason.
+
+What the lobby legs do not cover on Linux and Windows: the lobby's backdrop (the game's world behind the waiting room).
+The kit leaves it out on a machine that draws on its processor (section 7, fault 4), so there the legs run without
+it. On macOS, with its virtual card, the backdrop is drawn and the legs pass with it.
+
 `sync-kits --check` is not a runner step: it compares `kits/` with a games.fun checkout, which a runner does not have.
-`tests/kits.test.mjs` (inside `npm test`) holds `kits/` to its recorded hashes on every system.
-The workflow was parsed as YAML and checked with `npx @action-validator/cli .github/workflows/check.yml` (exit 0; the
-same command exits 1 on a deliberately bad file).
+`tests/kits.test.mjs` (inside `npm test`) holds `kits/` to its recorded hashes on every system; it passed on Windows
+from the first run, so the checkout converts no line ending in `kits/`.
+The workflow is checked with `npx @action-validator/cli .github/workflows/check.yml`.
 
-## 5. Cost of a run (estimate, to decide G1)
+## 5. Cost of a run (measured 2026-10-11)
 
-Source: GitHub docs "Actions runner pricing" and "GitHub Actions billing" (docs.github.com/en/billing), read
-2026-10-10. The pages list dollar rates per minute for private repositories, not multipliers; the ratios to Linux
-($0.006) are Windows 2-core $0.010 (1.67x) and macOS 3 or 4-core $0.062 (10.3x). GitHub's long-standing included-minutes
-multipliers are Linux 1, Windows 2, macOS 10 (from memory; the pages fetched did not repeat them). Each job rounds up
-to a whole minute. Free plan: 2000 minutes a month, Pro and Team: 3000. Public repositories are free.
+Rates, from GitHub's docs "Actions runner pricing" (read 2026-10-10): Linux $0.006 a minute, Windows 2-core $0.010,
+macOS $0.062. The included-minutes multipliers are Linux 1, Windows 2, macOS 10. Each job rounds up to a whole minute.
 
-Job wall-time estimates (not measured on GitHub): checkout, Node and the npm cache about 0.5 to 1 min, `npm ci` about
-0.5 min (two small dependencies), tests 6 s, the rest seconds. Windows is slower to start and to `npm ci`.
+Job wall time in the green runs:
 
-| System | Wall minutes per run (party job) | Multiplier (included minutes) | Billed plan minutes | Dollars at the rate |
+| Job | Linux | Windows | macOS |
+|---|---|---|---|
+| party | 75 to 101 s | 160 to 189 s | 66 to 107 s |
+| scenic | 46 s | 65 to 68 s | 62 to 65 s |
+| verify alone, party / scenic | 15 to 18 s / 28 to 30 s | 19 to 21 s / 26 to 31 s | 17 s / 41 s |
+
+| One run of everything | Job minutes (rounded up per job) | Plan minutes |
+|---|---|---|
+| Linux | 3 | 3 |
+| Windows | 5 | 10 |
+| macOS | 4 | 40 |
+| **All three** | 12 | **about 53** (about $0.32 at the rates) |
+
+On the Free plan (2000 minutes a month) that is about 37 full runs; macOS is three quarters of it, which is why pull
+requests leave it out. `gh api repos/<owner>/<repo>/actions/runs/<id>/timing` reported 0 billable milliseconds for every
+run of 2026-10-11, so the numbers above are computed from the jobs' start and end times, not read from a bill.
+
+## 6. What a runner still cannot check
+
+- **Anything that plays a round** on Linux and Windows: a page that draws a game on two processors gives 1 to 2 frames
+  a second. Stepped time moves the game's clock, not the drawing (section 3).
+- **Looks.** A frame from SwiftShader or from a virtual card says nothing about how a game looks.
+- **WebGPU.** No runner has a hardware WebGPU adapter; the scenic game runs on WebGL2 inside `WebGPURenderer`. The
+  WebGPU path of the scenic engine has run only on one Linux machine with an NVIDIA card.
+- **macOS could run more than the profile lets it** (it has a virtual card and three processors). Which of the skipped
+  checks hold there was not tried; each try costs ten times a Linux minute.
+- **The network between two machines.** The gate's two players are two pages of one Chrome on one machine.
+
+## 7. The first runs on three systems (2026-10-11): each fault, its cause, its fix
+
+Run 38151812104 (the first ever on Windows and macOS) failed five of six jobs: both Windows jobs, both Linux jobs, and
+the macOS scenic job, which showed green only because its verify step was `continue-on-error`.
+
+| # | System | What was seen | Cause | Fix, and where |
 |---|---|---|---|---|
-| Linux | 2 to 3 | 1 | 3 | 0.018 |
-| Windows | 4 to 5 | 2 | 10 | 0.050 |
-| macOS | 3 to 4 | 10 | 40 | 0.248 |
-| **One run, all three** | | | **about 53** | **about $0.32** |
+| 1 | Windows | `npm test`: `one-line.test.mjs` read `'1\r\n'` where it wrote `'1\n'` | The test's own little repository had no `.gitattributes`, and Git for Windows checks text out with CRLF (`core.autocrlf=true`). The kit's repository has the line; a real clone is not affected | The fixture carries the kit's `* text=auto eol=lf` line. `tests/one-line.test.mjs` |
+| 2 | Windows | `npm test`: `web3-routes.test.mjs`, `write ECANCELED` on an upload the server refuses | The server answers 413 and closes while the body is still being written. The helper already took `ECONNRESET` and `EPIPE` as that refusal; Windows reports `ECANCELED` (or `ECONNABORTED`) | The helper knows the two Windows codes. `tests/web3/helpers.mjs` |
+| 3 | Windows | `create --from isle-run`: "world/world.js does not import (Cannot find module …\\gf-scenic\\three\\core\\util.js" | The tools map `gf-scenic/three/…` to the shared kit when a module is read in Node, and decided "is this file under that folder" with `startsWith(folder + '/')`, never true for a Windows path. Every scenic `create` failed on Windows | `below(base, file)` in `tools/lib/paths.mjs`, by the system's own path rules, tested for Windows from any system; used by `kit-import.mjs` and `likeness-check.mjs`. games.fun b095b4b1f |
+| 4 | Linux, Windows (both engines) | Check 5's lobby legs: "timed out waiting for both players in the room", or the joiner "Could not connect to the host", after 2 to 5 minutes; on Windows a click on Host or Join timed out after 30 s | The lobby shows the game's own world behind the waiting room, drawn by the host's page and by the friend's. On two processors with no graphics card that took the whole machine: pages stopped answering and the join ran into the kit's 20 s limit. Reproduced on Linux with SwiftShader on two processors: with the backdrop the join never completed, without it it took 1.6 s. It would do the same to a player on such a machine | The kit leaves the backdrop out on a machine that draws on its processor (`kit/core/quality.js` `drawsOnCard`, asked before anything is loaded; the seat colours still reach the lobby). Two questions, because headless Chrome on Linux grants a `failIfMajorPerformanceCaveat` context that Chrome on Windows refuses: the context, then the renderer's name. games.fun dafbd63b3, e9f3fc539 |
+| 5 | Linux (local) | The same steps had passed on the maintainer's machine "under software rendering" in 7 s | Three things. The gate did not read `GF_VERIFY_SOFTWARE` and launched Chrome with the graphics-card flags; on that machine those flags gave no WebGL at all, so the backdrop drew nothing; and the machine has 24 processors. Not a different Chrome, a timeout or the network | The gate launches plain Chrome under `GF_VERIFY_SOFTWARE` and records what drew (`record.json` → `renderer`, `graphics`). A join that fails now says where both pages stood, the WebRTC states in order, and a timeline of seconds per check. games.fun bb5766dd2, 43111c59b, e5bdd8520 |
+| 6 | macOS (both engines; the party job passed once and failed twice) | The lobby legs: the joiner "Could not connect to the host" after 20 s, on pages that answered at once | Not the adapters' routing: the connection never got that far. Every signaling message was delivered (6 relayed), and both connections stayed in the state "new". The gate's probe showed the only WebRTC candidate is a host candidate behind an mDNS name (`<uuid>.local`), which that machine does not look up (two connections in one page: not connected in 8 s); with real addresses in the candidates the same two connected in 0.1 s. Run 38155295826, `record.json` → `webrtc` | QA Chrome that plays two players on one machine launches with `WebRtcHideLocalIpsWithMdns` off (`qa/browser.mjs` `LOCAL_WEBRTC_OFF`), in one `--disable-features` switch together with Playwright's own list, because Chrome keeps only the last such switch. The gate and `launchForGame` use it. After a failed join the gate runs the probe with and without it. games.fun b2255688c, 5cfa0ea95 |
 
-On the Free plan that is about 37 runs a month inside the included minutes; macOS is three quarters of it. The scenic
-job adds a little more (the profile run is 7 s). macOS therefore runs only on pushes to `main` and `workflow_dispatch`, not on pull requests. The verify step's 12
-minute limit bounds a hang.
+Of the eight risks this document listed before the first run, five did not happen (the tools' start-up guard, line
+endings in `kits/`, long paths and `.cmd` spawns, Chrome discovery, Gatekeeper). "WebRTC over loopback" happened on
+macOS, for another reason than the one guessed (fault 6); "tests that assume POSIX" happened twice (faults 1 and 2);
+"slow runners" was right and worse than estimated (fault 4). Also seen: verify prints the game's folder with the
+system's separator on Windows (`verify games\ci`); the verdict file uses forward slashes.
 
-## 6. Risks on Windows and macOS runners, ranked
+After the fixes every job is green on every system: run 38155626989, then three consecutive runs on the commit that
+took `continue-on-error` off the verify steps (`gh run list --workflow check.yml --branch ci/three-systems`).
 
-Nothing of ours has run on either. Expected, most likely first:
+## 8. What a person on a real Windows machine or a Mac still has to try by hand
 
-1. **Windows: the tools' start-up guard.** 8 files compare `import.meta.url` with `argv[1]` in a form that breaks on
-   `C:\` paths and 29 in another (M1-A item). A tool run directly may do nothing and exit 0. Silent. (From the handoff; not
-   tested here.)
-2. **Windows: line endings in `kits/`.** `.gitattributes` marks `kits/** -text`, but the `* text=auto eol=lf`
-   line comes first and `core.autocrlf` on the runner can still convert; check 2 and `kits.test.mjs` compare hashes.
-3. **Windows: paths and processes.** Paths over 260 characters under `kits/` plus the checkout dir, a `spawn` of
-   `npx` or `.cmd` without a shell (needs `npx.cmd`), and killing a process tree (`SIGTERM` on Windows does not kill
-   children), which leaves Chrome and the dev server running and the job hanging until its timeout.
-4. **Windows and macOS: Chrome discovery.** `CHROME_PATH` is set in the matrix, but the Chrome versions on the images
-   move; a Chrome newer than Playwright 1.63 may refuse some flags. macOS's Chrome path has a space.
-5. **macOS: Gatekeeper and permission prompts** are not a problem for a preinstalled Chrome in headless, but a
-   Playwright-downloaded Chromium could be quarantined. Local network access prompts for the WebRTC gate (loopback)
-   are not expected on a runner.
-6. **macOS and Windows: the gate's WebRTC over loopback** with the runners' virtual network adapters: ICE can
-   pick an address that does not route. Watch check 5's lobby legs first.
-7. **Tests that assume POSIX:** the `npm test` suites (about 220 tests, 2 skipped on Linux) may include path assertions (not read); any
-   `\` versus `/` difference shows as a failure in `paths.test.mjs`, `kits.test.mjs`, `seams.test.mjs`.
-8. **Slow runners:** a 3-vCPU macOS image under SwiftShader will be no better than section 1's 1.6 fps; the profile
-   already leaves those checks out.
+A runner is a virtual machine without a real graphics card, and it ran the profile only. None of this has been done on
+a person's machine:
 
-Items 1 to 3 are the ones to read first in the first red run.
+1. **A full `gamesfun verify` (no profile) of a party game** on Windows and on a Mac with a real graphics card: every
+   check that plays a round (3, 4, 5 in full, 6, 7, 10, 12, 13, 15, 16, 20 to 22, 24, 25).
+2. **A scenic game on WebGPU**: Direct3D 12 on Windows, Metal on a Mac. `qa/browser.mjs` `gpuLaunchPlan` marks both
+   rows `measured: false`.
+3. **Two players on one Mac**, in `gamesfun dev` and in verify's check 25: the flag of fault 6 is passed by the QA
+   browser, not by a person's own Chrome. Two tabs of a person's Chrome on one Mac depend on mDNS lookups (macOS asks
+   for the Local Network permission); two friends on two machines do not.
+4. **The lobby with its backdrop on a real card** on Windows and on a Mac, and the lobby without it on a machine that
+   has none (a remote desktop, a virtual machine): the waiting room should stand on the page's own background.
+5. **`npx gamesfun` from a fresh clone** in PowerShell and in Terminal: `create`, `dev`, the Studio page, `doctor` with
+   its graphics probe (the runners ran `--skip-graphics`).
+6. **A path with a space or a non-ASCII letter** (`C:\Users\José\My Games`), and a clone with `core.autocrlf=true` on
+   Windows: `npm test` held on the runner's `D:\a\…` path only.
+7. **Chrome installed per user, Edge only, or no Chrome** (Playwright's Chromium is then downloaded): the runners
+   carry Chrome in the usual place.

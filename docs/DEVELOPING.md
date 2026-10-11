@@ -204,5 +204,6 @@ git is started with `GIT_TERMINAL_PROMPT=0` so a private remote fails instead of
 `.github/workflows/check.yml` runs `npm ci`, the tests, and create plus `verify --quick --profile
 .github/ci-profile.json` for the party and the scenic example on Ubuntu and Windows (pull requests) and macOS as well
 (pushes to `main`). `docs/CI.md` has the profile, what a runner can check, the measured software-rendering runs and the
-cost. Actions are off for this repository on purpose (the owner's billing decision); the workflow runs once they are
-turned on. It has not run on GitHub, Windows or macOS.
+cost. It runs on GitHub since 2026-10-11, green on Linux, Windows and macOS; `docs/CI.md` section 7 lists what the
+first runs found and section 8 what still has to be tried by hand on a real Windows machine or a Mac. One system or one
+job runs alone by hand: `gh workflow run check.yml --ref <branch> -f system=windows -f job=scenic`.
