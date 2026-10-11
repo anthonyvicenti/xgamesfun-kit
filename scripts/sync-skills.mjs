@@ -7,10 +7,15 @@
 //   node scripts/sync-skills.mjs --check   change nothing; exit 1 when a mirror has drifted (tests/skills.test.mjs)
 //
 // Edit skills/<name>/SKILL.md, never a mirror: the next sync overwrites it.
+//
+// Two files are generated first, from the build loop's tool list and its play-test prompt (scripts/gen-loop.mjs):
+// skills/build-loop/SKILL.md and plugin/agents/playtester.md. --check fails when either differs from what the tools
+// and the prompt give now, so a tool cannot change without its skill.
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain } from '../lib/main.mjs';
+import { generatedDrift } from './gen-loop.mjs';
 
 const ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 export const SOURCE = path.join(ROOT, 'skills');
@@ -60,9 +65,17 @@ export async function skillProblems(source = SOURCE) {
 
 async function main() {
   const check = process.argv.includes('--check');
+  let drift = 0;
+  for (const g of await generatedDrift()) {
+    if (g.same) continue;
+    if (check) { drift++; console.error(`${g.file}: differs from what the build loop's tools and prompts give (run node scripts/sync-skills.mjs)`); continue; }
+    const to = path.join(ROOT, ...g.file.split('/'));
+    await mkdir(path.dirname(to), { recursive: true });
+    await writeFile(to, g.text);
+    console.log(`${g.file}: generated`);
+  }
   const problems = await skillProblems();
   for (const p of problems) console.error(`problem: ${p}`);
-  let drift = 0;
   for (const mirror of MIRRORS) {
     const d = await diffMirror(mirror);
     const n = d.missing.length + d.changed.length + d.extra.length;

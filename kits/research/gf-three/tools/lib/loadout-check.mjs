@@ -36,6 +36,19 @@ export function testLoadouts(assets, defaults) {
   };
 }
 
+/**
+ * Why a player's page has no running game, from the party page's state (gate-lib snap) and the game's net snapshot.
+ * Pure, so a test holds the wording. A round that ended by itself is the usual cause: the leg needs about two minutes
+ * of a round with two players who mostly stand still.
+ */
+export function describeLost(party, net) {
+  if (!party) return 'the party page did not answer';
+  if (party.room === 'results' || party.card === 'results') return `the round had already ended (the party page shows the results${party.round ? ` of round ${party.round}` : ''}): this leg needs a round that lasts about two minutes with two players who mostly stand still, and this game's round ended by itself before that`;
+  if (party.phase === 'home') return 'its party page is back at the Host / Join lobby (it did not rejoin the room)';
+  if (net && net.started === false) return `its game loaded but the round has not started for it (party page: ${party.phase ?? '?'}${party.card ? `, ${party.card}` : ''})`;
+  return `its party page shows ${party.phase ?? '?'}${party.card ? ` (${party.card})` : ''}${party.room ? `, room ${party.room}` : ''} and no game frame`;
+}
+
 export async function checkLoadouts({ dir, outDir = null, log = () => {}, third = false, throwBall = false, loadouts = null, shots = [], seconds = 240 } = {}) {
   const assets = JSON.parse(await readFile(join(dir, 'assets.json'), 'utf8'));
   const game = JSON.parse(await readFile(join(dir, 'config/game.json'), 'utf8'));
@@ -77,7 +90,13 @@ export async function checkLoadouts({ dir, outDir = null, log = () => {}, third 
   const net = async P => frameOf(P)?.evaluate(() => window.__game?.snapshot()?.net ?? null).catch(() => null) ?? null;
   const entryOf = (L, id) => L?.players?.find(p => p.id === id) ?? null;
   const freeMouse = P => P.page.evaluate(() => { try { document.getElementById('game').contentDocument.exitPointerLock(); } catch {} }).catch(() => {});
-  const focus = async P => { const b = await P.page.locator('#game').boundingBox(); await P.page.mouse.click(Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2)).catch(() => {}); };
+  // the game's frame on the party page. It is gone when the round is over (the page shows the room or the results), so
+  // every step that clicks or turns in it asks first: a null box read as b.x was this leg's own crash ("Cannot read
+  // properties of null (reading 'x')", 9 of check 5's 11 failures in recorded builds).
+  const frameBox = P => P.page.locator('#game').boundingBox({ timeout: 2000 }).catch(() => null);
+  const focus = async P => { const b = await frameBox(P); if (!b) return false; await P.page.mouse.click(Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2)).catch(() => {}); return true; };
+  /** Where a player's page is when its game frame is gone, in words for the step's detail. */
+  const whereIs = async P => { const s = await snap(P.page).catch(() => null), n = await net(P); return describeLost(s, n); };
 
   /** What is wrong with how `entry` (a player as one copy draws them) wears loadout L (null: the game's own). */
   const problems = (entry, L, { streamed = false, ball = false } = {}) => {
@@ -122,7 +141,8 @@ export async function checkLoadouts({ dir, outDir = null, log = () => {}, third 
     return Math.atan2(Math.sin(want - have), Math.cos(want - have));
   };
   const turnTo = async (viewer, id) => {
-    const b = await viewer.page.locator('#game').boundingBox(); const cx = Math.round(b.x + b.width / 2), cy = Math.round(b.y + b.height / 2);
+    const b = await frameBox(viewer); if (!b) return false;
+    const cx = Math.round(b.x + b.width / 2), cy = Math.round(b.y + b.height / 2);
     const stroke = async px => {
       await viewer.page.mouse.move(cx, cy); await sleep(30);
       const n = Math.max(1, Math.ceil(Math.abs(px) / 20));
@@ -234,13 +254,17 @@ export async function checkLoadouts({ dir, outDir = null, log = () => {}, third 
 
     // ---- a late copy: the joiner reloads mid-round and must get the host's look from the host's pose ----
     await B.page.reload({ waitUntil: 'load' });
-    await until(async () => { const n = await net(B); return n?.started && n.peers?.some(p => p.id === aId && p.x != null); }, 90000, 'the joiner to drop back in').catch(() => null);
-    await focus(B);
-    const late = await seesLook(B, aId, T.A2, 15000);
-    const lateBack = await seesLook(A, bId, T.B, 15000);
-    step('a late copy (reloaded) gets the host\'s look', !late.length, late.length ? late.join('; ') : 'the reloaded joiner draws the host in the changed look');
-    step('the reloaded player\'s look reaches the host again', !lateBack.length, lateBack.length ? lateBack.join('; ') : 'the host draws the joiner in their look');
-    if (await turnTo(B, aId)) { await turnTo(A, bId); await fire(A, 1300, () => shot(B.page, 'joiner-after-reload-sees-host')); }
+    const back = await until(async () => { const n = await net(B); return n?.started && n.peers?.some(p => p.id === aId && p.x != null); }, 90000, 'the joiner to drop back in').then(() => true).catch(() => false);
+    if (!back || !(await focus(B))) {
+      // the reloaded joiner is not in a running round: say where its page is instead of reading a frame that is not there
+      step('a late copy (reloaded) gets the host\'s look', false, `the reloaded joiner did not drop back into the round within 90 s: ${await whereIs(B)}; the host: ${await whereIs(A)}`);
+    } else {
+      const late = await seesLook(B, aId, T.A2, 15000);
+      const lateBack = await seesLook(A, bId, T.B, 15000);
+      step('a late copy (reloaded) gets the host\'s look', !late.length, late.length ? late.join('; ') : 'the reloaded joiner draws the host in the changed look');
+      step('the reloaded player\'s look reaches the host again', !lateBack.length, lateBack.length ? lateBack.join('; ') : 'the host draws the joiner in their look');
+      if (await turnTo(B, aId)) { await turnTo(A, bId); await fire(A, 1300, () => shot(B.page, 'joiner-after-reload-sees-host')); }
+    }
 
     // ---- a third player who joins during the round plays the next one and sees the host's look ----
     if (third) {

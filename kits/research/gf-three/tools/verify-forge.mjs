@@ -56,7 +56,7 @@ import { checkLoadouts } from './lib/loadout-check.mjs';
 import { checkFriends } from './lib/friends-check.mjs';
 import { checkForgeSight } from './lib/forge-sight-check.mjs';
 import { RECORDER, recordingOf, firstLook, judgeAlive } from './lib/alive-check.mjs';
-import { passesForge, REQUIRED_FORGE, NOT_YET_FORGE } from './lib/verdict.mjs';
+import { passesForge, requiredFor, runsHere, NOT_YET_FORGE } from './lib/verdict.mjs';
 import { checkForgeHits, checkForgeFair } from './lib/forge-feel-check.mjs';
 import { checkForgeHealth } from './lib/forge-hud-check.mjs';
 import { forgeWorldProblems, listedCover } from './lib/forge-world-check.mjs';
@@ -73,11 +73,12 @@ const AFTER = [check15, check9, check23];
  *  mouse cannot turn one (chrome-headless-shell reports its moves as 0), so forge's sight leg stands in for them. */
 const GATE_LOOKS = ['a-friend-is-on-screen', 'both-see-each-other-on-screen'];
 
-export async function verifyForge(dir, { rec, outDir, add, log, t0, lap, quick = false, only = null, statics }) {
+export async function verifyForge(dir, { rec, outDir, add, log, t0, lap, quick = false, only = null, release = false, statics }) {
   rec.engine = 'forge';
   rec.notYet = [];
   const checks = rec.checks;
-  const want = n => only === null || [].concat(only).includes(n);
+  // a build's verify leaves out the kit's own checks (8 and 31 here: verdict.mjs RELEASE_ONLY); a release run makes them
+  const want = n => (only === null ? runsHere(n, { release }) : [].concat(only).includes(n));
   const env = {
     dir, rec, outDir, add, log, lap, quick, want, statics, checks,
     notYet: (n, name, why) => { if (!want(n)) return; checks.push({ n, name, ok: null, notYet: why, detail: `not yet for forge: ${why}` }); rec.notYet.push({ n, name, why }); log(`NOT YET FOR FORGE ${n} ${name} — ${why}`); },
@@ -134,8 +135,8 @@ export async function verifyForge(dir, { rec, outDir, add, log, t0, lap, quick =
   if (want(6) && !checks.some(c => c.n === 6)) check6(env, null);
 
   checks.sort((a, b) => (typeof a.n === 'number' ? a.n : 99) - (typeof b.n === 'number' ? b.n : 99));
-  rec.required = REQUIRED_FORGE;
-  rec.pass = only === null ? passesForge(checks) : checks.every(c => c.ok !== false);
+  rec.required = requiredFor('forge', { release });
+  rec.pass = only === null ? passesForge(checks, rec.required) : checks.every(c => c.ok !== false);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
   rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');

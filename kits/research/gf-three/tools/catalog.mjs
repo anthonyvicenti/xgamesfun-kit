@@ -24,6 +24,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { KIT, LIBRARY, KIT_VERSION, SPEC_SCHEMA, SCENIC, SCENIC_KIT, SCENIC_VERSION, FORGE_KIT, FORGE_VERSION } from './lib/paths.mjs';
 import { importKitModule } from './lib/kit-import.mjs';
+import { withDefaults } from './lib/schema.mjs';
 import { kitModuleFiles } from './lib/vendor.mjs';
 import { FAIR_DEFAULTS } from '../kit/core/fair-logic.js';
 
@@ -48,19 +49,136 @@ const BODY_GUIDE = [
   'bodies differ in silhouette, not only colour: pick a different build or height for the enemies than for the players',
 ];
 
-const PLANNED = {
-  projectile: 'Discrete and continuous streams, arcs, hits, splash', paint: 'Surface coverage per player or team; territory score',
-  pickup: 'Consumables that refill or modify a player\'s meters; respawn', health: 'Health, knockback, ragdoll and get-up, respawn',
-  carry: 'Grab, carry and throw props or players', waves: 'Host-owned enemies, spawners, a target to defend',
-  station: 'Interact with a prop: an in-world screen or panel UI, timed tasks, quotas', race: 'Checkpoints, laps, a finish order',
-  tag: 'Roles that pass between players on contact, hide and seek', teams: 'Team assignment, team score',
-  // research/gf-scenic/PLAN.md §3 (track M), either engine
-  melee: 'Swords, axes and fists: combo chains (windup, active, recover), arc and reach, damage, knockback and hit-stop; a dash with invulnerable frames; slash trails',
-  levels: 'A run of levels (one island or room set each): clear every enemy, the portal or door opens, everyone moves to the next; the last is the boss',
-  boss: 'A boss with phases and telegraphed attacks (slam, charge, volley, summon) and its health bar on the HUD',
-  loot: 'Drops, chests, coins, potions and weapons with rarity; pick one of three upgrades between levels',
+// ---------------------------------------------------------------------------------------------------------------------
+// Parts carry their own (open builder M2-B). A mechanic is one folder, kit/mechanics/<id>/, and everything the tools
+// know about it is `export const manifest` in its index.js: adding a mechanic adds a folder and changes no tool.
+// The shape follows GDevelop's behaviour declarations (research/open-builder/findings/gdevelop-behaviours-2026-10-10.md):
+// needs as parts and capabilities, a resource a part claims in place of a hand-written conflicts list, the state a
+// check reads derived from the part's own declaration.
+// ---------------------------------------------------------------------------------------------------------------------
+export const MANIFEST = {
+  id: 'the folder\'s name', examples: 'the `as` lines a pitch may use', params: 'JSON Schema of config/game.json → mechanics[…].params, with defaults',
+  describe: 'one line for the catalog', rank: '(optional) where the catalog lists it: lower first; a part without one comes after, by id',
+  engines: 'the engines it runs on (party, scenic); create refuses it on another',
+  needs: '{parts: [{id, why}], world: [{id, why}]} or params => that: other mechanics and world capabilities it cannot work without; create refuses a spec that lacks one, with the why',
+  uses: 'mechanics it works with when the game has them (never refused)',
+  owns: 'params => [{res, why, free, shared?}]: the resources it claims (input.<action>, player.socket.<name>, player.control, round.end, hud.scoreboard); create refuses two owners of one resource unless every claim on it is shared, and says how each lets go (free)',
+  state: '{key, fields}: its key in window.__game.snapshot().shared (null when it keeps none) and how to read each field',
+  events: '[{name, on, args, when}]: the callbacks rules.js can hook, who hears them and with what',
+  sync: '{owner: host | copy | none, how}: which copy decides',
+  note: 'at most three lines for the build agent, read only by builds whose spec uses the part',
+  stub: '{as, worked, traps}: its variable in rules.js, one worked line, its own traps; create writes rules.js from these and `events`',
+  signs: '{sample: (shared, stats) => {key: compact} | null, judge: view => void, reportOnly?}: verify check 15\'s sign of life. sample runs in the page 4 times a second (an arrow function that uses nothing outside itself); judge reads the samples in Node and adds its items',
 };
-const PLANNED_BY = { melee: 'track M', levels: 'track M', boss: 'track M', loot: 'track M' };
+const RESOURCE_RE = /^(input\.(key\.)?[A-Za-z0-9]+|player\.socket\.[a-z_]+|player\.control|round\.end|hud\.[a-z]+)$/;
+
+/** The mechanic folders of a kit: every kit/mechanics/<id>/index.js, sorted. */
+export async function mechanicIds(kit = KIT) {
+  const dir = join(kit, 'mechanics');
+  if (!existsSync(dir)) return [];
+  return (await readdir(dir, { withFileTypes: true })).filter(e => e.isDirectory() && /^[a-z0-9-]+$/.test(e.name) && existsSync(join(dir, e.name, 'index.js'))).map(e => e.name).sort();
+}
+
+/** What is wrong with a manifest's shape (empty when it is whole). */
+export function manifestProblems(id, m) {
+  const bad = [], isFn = f => typeof f === 'function', lines = a => Array.isArray(a) && a.every(s => typeof s === 'string' && s.trim());
+  if (!m || typeof m !== 'object') return [`mechanic ${id}: index.js exports no manifest`];
+  if (m.id !== id) bad.push(`manifest.id is "${m.id}", the folder is "${id}"`);
+  if (typeof m.describe !== 'string' || !m.describe.trim()) bad.push('describe: one line');
+  if (!Array.isArray(m.engines) || !m.engines.length || m.engines.some(e => !['party', 'scenic', 'forge'].includes(e))) bad.push('engines: a list of party, scenic, forge');
+  if (!(isFn(m.needs) || (m.needs && typeof m.needs === 'object'))) bad.push('needs: {parts, world} or params => that');
+  if (!Array.isArray(m.uses)) bad.push('uses: a list of mechanic ids');
+  if (!isFn(m.owns)) bad.push('owns: params => [{res, why, free}]');
+  if (!m.state || typeof m.state !== 'object' || !('key' in m.state) || typeof m.state.fields !== 'object') bad.push('state: {key, fields}');
+  if (!Array.isArray(m.events) || m.events.some(e => !/^on[A-Z]\w*$/.test(e?.name ?? '') || !e.on || typeof e.args !== 'string')) bad.push('events: [{name: "onX", on, args, when}]');
+  if (!['host', 'copy', 'none'].includes(m.sync?.owner) || typeof m.sync?.how !== 'string') bad.push('sync: {owner: host | copy | none, how}');
+  if (!lines(m.note) || m.note.length < 1 || m.note.length > 3) bad.push('note: one to three lines');
+  if (!/^[a-z][A-Za-z0-9]*$/.test(m.stub?.as ?? '') || typeof m.stub?.worked !== 'string' || /\n/.test(m.stub.worked) || !lines(m.stub?.traps) || !m.stub.traps.length) bad.push('stub: {as, worked (one line), traps}');
+  if (!isFn(m.signs?.sample) || !isFn(m.signs?.judge)) bad.push('signs: {sample, judge}');
+  else { try { new Function(`return (${m.signs.sample.toString()});`); } catch { bad.push('signs.sample: an arrow function that stands alone (it is sent to the page as text)'); } }
+  if (isFn(m.owns) && m.params) { try { for (const o of m.owns(withDefaults(m.params, {})) ?? []) if (!RESOURCE_RE.test(o?.res ?? '') || !o.why || !o.free) bad.push(`owns: "${o?.res}" needs a known resource name, why and free`); } catch (e) { bad.push(`owns throws: ${e.message}`); } }
+  return bad.map(b => `mechanic ${id}: manifest ${b}`);
+}
+
+/**
+ * Every mechanic of a kit with its module and manifest: [{id, status, module, manifest, problems}]. status is 'ready',
+ * or why it is not (does not import; no manifest; the manifest's faults). `kit` is a kit folder (the default is this one).
+ */
+export async function mechanicParts({ kit = KIT } = {}) {
+  const out = [];
+  for (const id of await mechanicIds(kit)) {
+    const m = await importKitModule(join(kit, `mechanics/${id}/index.js`));
+    if (m.error) { out.push({ id, status: `module does not import: ${m.error.message.split('\n')[0]}`, module: null, manifest: null, problems: [] }); continue; }
+    const problems = m.manifest ? manifestProblems(id, m.manifest) : [];
+    out.push({ id, status: typeof m.create !== 'function' || m.id !== id ? 'lacks id/create' : !m.manifest ? 'ready (no manifest: create composes it unchecked and check 15 has no sign for it)' : problems.length ? `manifest: ${problems.join('; ')}` : 'ready', module: m, manifest: m.manifest ?? null, problems });
+  }
+  const rank = p => (Number.isFinite(p.manifest?.rank) ? p.manifest.rank : Infinity);
+  return out.sort((a, b) => rank(a) - rank(b) || (a.id < b.id ? -1 : 1));
+}
+
+/** A part's needs and claims for one game's params (defaults filled): {needs: {parts, world}, owns: [{res, why, free, shared}]}. */
+export function partFor(part, params = {}) {
+  const m = part?.manifest; if (!m) return { needs: { parts: [], world: [] }, owns: [] };
+  const p = withDefaults(m.params ?? part.module?.params ?? {}, params ?? {});
+  const needs = typeof m.needs === 'function' ? m.needs(p) : m.needs ?? {};
+  const norm = l => (l ?? []).map(x => (typeof x === 'string' ? { id: x, why: '' } : x));
+  return { needs: { parts: norm(needs.parts), world: norm(needs.world) }, owns: (m.owns?.(p) ?? []).map(o => ({ shared: false, ...o })) };
+}
+
+/**
+ * Does this set of mechanics compose? spec.mechanics ([{id, params}]) against the parts' manifests, the engine and what
+ * the world provides (a list of capabilities, or null when the world is not known: then no world need is judged).
+ * → the refusals, each with its cause and the way out. A mechanic without a manifest is not judged.
+ */
+export function composeProblems(mechanics = [], parts = [], { engine = 'party', world = null, worldId = '' } = {}) {
+  const byId = new Map(parts.map(p => [p.id, p])), ids = new Set(mechanics.map(m => m.id)), out = [], claims = new Map();
+  for (const m of mechanics) {
+    const part = byId.get(m.id); if (!part?.manifest) continue;
+    const man = part.manifest, f = partFor(part, m.params);
+    if (Array.isArray(man.engines) && !man.engines.includes(engine)) out.push(`mechanics: "${m.id}" does not run on the ${engine} engine (it runs on ${man.engines.join(', ')}): pick one of those engines or leave it out`);
+    for (const n of f.needs.parts) if (!ids.has(n.id)) out.push(`mechanics: "${m.id}" needs the "${n.id}" mechanic${n.why ? ` (${n.why})` : ''}: add {"id": "${n.id}"} to mechanics, or change ${m.id}'s params`);
+    if (world) for (const n of f.needs.world) if (!world.includes(n.id)) out.push(`mechanics: "${m.id}" needs a world that provides "${n.id}"${n.why ? ` (${n.why})` : ''}, and world.template "${worldId}" provides ${world.length ? world.join(', ') : 'none of the capabilities it lists'}: pick a world that does, or leave ${m.id} out`);
+    for (const o of f.owns) { if (!claims.has(o.res)) claims.set(o.res, []); if (!claims.get(o.res).some(c => c.id === m.id)) claims.get(o.res).push({ id: m.id, ...o }); }
+  }
+  for (const [res, list] of claims) {
+    if (list.length < 2 || list.every(c => c.shared)) continue;
+    out.push(`mechanics: ${list.map(c => `"${c.id}"`).join(' and ')} both own ${res} (${list.map(c => `${c.id}: ${c.why}`).join('; ')}). One must let go: ${list.map(c => `${c.id}: ${c.free}`).join('; or ')}`);
+  }
+  return out;
+}
+
+/** A part as the catalog lists it (JSON): the manifest without its functions; needs and owns at the default params. */
+function partEntry(part) {
+  const m = part.manifest, mod = part.module;
+  const base = { id: part.id, status: part.status, describe: m?.describe ?? mod?.describe ?? '', examples: m?.examples ?? mod?.examples ?? [], params: summarizeParams(m?.params ?? mod?.params) };
+  if (!m) return base;
+  const f = partFor(part, {});
+  return { ...base, engines: m.engines ?? [], needs: f.needs, uses: m.uses ?? [], owns: f.owns.map(o => ({ res: o.res, ...(o.shared ? { shared: true } : {}), why: o.why, free: o.free })),
+    state: { key: m.state?.key ?? null, fields: m.state?.fields ?? {}, ...(m.state?.stats ? { stats: m.state.stats } : {}) }, events: m.events ?? [], sync: m.sync ?? null, note: m.note ?? [],
+    stub: m.stub ?? null, sign: typeof m.signs?.judge === 'function' ? (m.signs.reportOnly ? 'reported' : 'checked') : 'none' };
+}
+
+/**
+ * What each world template provides to the mechanics (its capabilities): the party recipes' zones and entries (read
+ * from the recipe itself, kit/world/templates/<id>.json, expanded), the voxel world's `voxel`, a scenic template's own
+ * templateInfo (research/gf-scenic/kit/world/generate.js). → { id: {engine, provides: [capability]} }
+ */
+export async function worldParts({ kit = KIT, scenicKit = SCENIC_KIT } = {}) {
+  const out = {};
+  const tdir = join(kit, 'world/templates');
+  if (existsSync(tdir)) {
+    const gen = await importKitModule(join(kit, 'world/generate.js'));
+    for (const f of (await readdir(tdir)).filter(x => x.endsWith('.json')).sort()) {
+      const t = await readJson(join(tdir, f)); if (!t || gen.error) continue;
+      const L = gen.generateLayout(t, { size: 'small' });
+      out[t.template ?? f.replace(/\.json$/, '')] = { engine: 'party', provides: [...Object.keys(L.zones ?? {}).map(z => `zone:${z}`), ...((L.entries ?? []).length ? ['entries'] : []), ...((L.rooms ?? []).length ? ['rooms'] : [])] };
+    }
+  }
+  if (existsSync(join(kit, 'world/voxel/default.json'))) out.voxel = { engine: 'any', provides: ['voxel'] };
+  const sw = existsSync(join(scenicKit, 'world/generate.js')) ? await importKitModule(join(scenicKit, 'world/generate.js')) : null;
+  if (sw && !sw.error) for (const id of sw.templates ?? []) out[id] = { engine: 'scenic', provides: sw.templateInfo?.[id]?.provides ?? [] };
+  return out;
+}
 
 // How a pitch picks the engine (research/gf-scenic/PLAN.md §0; creator, 2026-10-08: "I think the current kit has its
 // charm for silly games. I think we should keep this for more serious and scenic type games"). The checker
@@ -75,7 +193,8 @@ const ENGINE_GUIDE = [
   '* every card\'s spec says its engine; its world.template, look.preset and camera are that engine\'s (engines.<id>)',
   '* a prompt that names a serious genre (roguelike, brawler, dungeon crawler, hack and slash, RPG, adventure, survival …) and nothing silly gets scenic on card 1, or forge when it is first-person action',
 ];
-// The scenic worlds in words, until the scenic world module describes its own (templateInfo).
+// The scenic worlds in words, for a scenic kit whose world module does not describe its own yet (templateInfo in
+// research/gf-scenic/kit/world/generate.js, which the catalog reads first).
 const SCENIC_WORLDS = {
   island: { label: 'Island', describe: 'one island in the sea: cliffs, grass, trees, paths and water round it' },
   isles: { label: 'Floating isles', describe: 'floating islands over a void, one per level, joined by portals; cliff skirts below' },
@@ -95,19 +214,15 @@ const FORGE_LOOKS = {
 const readJson = async p => { try { return JSON.parse(await readFile(p, 'utf8')); } catch { return null; } };
 const summarizeParams = schema => Object.fromEntries(Object.entries(schema?.properties ?? {}).map(([k, s]) => [k, { type: s.type ?? (s.enum ? 'enum' : '?'), ...(s.enum ? { enum: s.enum } : {}), ...('default' in s ? { default: s.default } : {}), ...(s.minimum !== undefined ? { min: s.minimum } : {}), ...(s.maximum !== undefined ? { max: s.maximum } : {}), ...(s.description ? { describe: s.description } : {}) }]));
 
-export async function catalog() {
+export async function catalog({ kit = KIT } = {}) {
   const found = await kitModuleFiles();
   const out = { kit: { name: 'gf-three', version: KIT_VERSION }, fair: { defaults: { ...FAIR_DEFAULTS }, does: FAIR_DESCRIBE, config: 'config/game.json → fair (fair.* slots); off only when the creator asks' }, mechanics: [], worlds: [], bodies: [], looks: [], props: [], clips: [], spec: {} };
-  // mechanics
-  for (const id of Object.keys(PLANNED)) {
-    if (!found.mechanics.includes(id)) { out.mechanics.push({ id, status: `planned (${PLANNED_BY[id] ?? 'track K2'}; not built yet: never in a spec, list it in v1.notYet)`, describe: PLANNED[id], examples: [], params: {} }); continue; }
-    const m = await importKitModule(join(KIT, `mechanics/${id}/index.js`));
-    if (m.error) { out.mechanics.push({ id, status: `module does not import: ${m.error.message.split('\n')[0]}`, describe: PLANNED[id], examples: [], params: {} }); continue; }
-    out.mechanics.push({ id, status: 'ready', describe: m.describe ?? PLANNED[id], examples: m.examples ?? [], params: summarizeParams(m.params) });
-  }
-  for (const id of found.mechanics) if (!PLANNED[id]) { const m = await importKitModule(join(KIT, `mechanics/${id}/index.js`)); out.mechanics.push({ id, status: m.error ? 'does not import' : 'ready', describe: m.describe ?? '', examples: m.examples ?? [], params: summarizeParams(m.params) }); }
+  // mechanics: every folder under kit/mechanics, each as its own manifest describes it (no table here)
+  for (const part of await mechanicParts({ kit })) out.mechanics.push(partEntry(part));
+  out.mechanicFields = MANIFEST;
   // worlds
-  const tdir = join(KIT, 'world/templates');
+  const provides = await worldParts({ kit });
+  const tdir = join(kit, 'world/templates');
   const templates = existsSync(tdir) ? (await readdir(tdir)).filter(f => f.endsWith('.json')).sort() : [];
   const gen = await import('../kit/world/generate.js');
   for (const f of templates) {
@@ -115,7 +230,7 @@ export async function catalog() {
     // each size class as a game of that size gets it (the spec's world.size); the seed is the title's, so rooms vary
     const sizes = Object.fromEntries(gen.SIZES.map(k => { const L = gen.generateLayout(t, { size: k }); return [k, { size: L.size, area: L.size[0] * L.size[1], rooms: (L.rooms ?? []).map(r => r.label), entries: (L.entries ?? []).map(e => e.name), zones: Object.keys(L.zones ?? {}), ceiling: L.ceiling?.height ?? null }]; }));
     const small = gen.generateLayout(t, { size: 'small' });
-    out.worlds.push({ id: t.template ?? f.replace(/\.json$/, ''), label: t.label ?? '', describe: t.describe ?? '', kind: t.kind ?? 'outdoor', setPieces: t.setPieces ?? [], size: small.size, spawns: small.spawns?.length ?? 0, zones: Object.keys(small.zones ?? {}), props: [...new Set((small.props ?? []).map(p => p.prop))].length, sizes });
+    out.worlds.push({ id: t.template ?? f.replace(/\.json$/, ''), label: t.label ?? '', describe: t.describe ?? '', kind: t.kind ?? 'outdoor', setPieces: t.setPieces ?? [], size: small.size, spawns: small.spawns?.length ?? 0, zones: Object.keys(small.zones ?? {}), props: [...new Set((small.props ?? []).map(p => p.prop))].length, sizes, provides: provides[t.template ?? f.replace(/\.json$/, '')]?.provides ?? [] });
   }
   out.worldSizes = Object.fromEntries(gen.SIZES.map(k => [k, { area: gen.SIZE_CLASSES[k].area, describe: gen.SIZE_CLASSES[k].describe }]));
   for (const id of ['backyard', 'office', 'plaza', 'arena']) if (!out.worlds.some(w => w.id === id)) out.worlds.push({ id, label: id, describe: 'stand-in: a flat ground with the spec\'s props placed (track L\'s template is not in yet)', size: null, spawns: 0, zones: ['centre'], props: 0, standin: true });
@@ -177,7 +292,7 @@ async function scenicCatalog() {
   if (world.error || look.error) { out.status = 'does not import'; out.note = (world.error ?? look.error).message.split('\n')[0]; return out; }
   for (const id of world.templates ?? []) {
     const info = world.templateInfo?.[id] ?? SCENIC_WORLDS[id] ?? {};
-    out.worlds.push({ id, engine: 'scenic', label: info.label ?? id, describe: info.describe ?? '', kind: info.kind ?? 'outdoor', levels: id === 'isles' || id === 'dungeon' ? 'one island or room set per level (the levels mechanic)' : 'one place', sizes: Object.fromEntries(Object.entries(world.SIZE_RADIUS ?? {}).map(([k, r]) => [k, { radius: r, area: Math.round(Math.PI * r * r) }])) });
+    out.worlds.push({ id, engine: 'scenic', label: info.label ?? id, describe: info.describe ?? '', kind: info.kind ?? 'outdoor', levels: info.levels ?? (id === 'isles' || id === 'dungeon' ? 'one island or room set per level (the levels mechanic)' : 'one place'), provides: info.provides ?? [], sizes: Object.fromEntries(Object.entries(world.SIZE_RADIUS ?? {}).map(([k, r]) => [k, { radius: r, area: Math.round(Math.PI * r * r) }])) });
   }
   for (const [id, p] of Object.entries(look.presets ?? {})) out.looks.push({ id, engine: 'scenic', label: p.label ?? id, describe: p.describe ?? '', times: look.TIMES ?? ['day', 'golden', 'dusk', 'night'] });
   // the scenic art library (track C; tools/lib/char-library.mjs): KayKit bodies on gf-humanoid-1, which create resolves
@@ -234,6 +349,15 @@ if (isMain(import.meta)) {
   if (process.argv.includes('--json')) process.stdout.write(JSON.stringify(c, null, 2) + '\n');
   else print(c);
 }
+/** A mechanic's composition in words: what it needs, works with and owns, and its note. */
+function partLines(m) {
+  const out = [];
+  if (m.needs?.parts?.length || m.needs?.world?.length) out.push(`needs: ${[...m.needs.parts.map(n => `the ${n.id} mechanic`), ...m.needs.world.map(n => `a world with ${n.id}`)].join(', ')}`);
+  if (m.uses?.length) out.push(`works with: ${m.uses.join(', ')}`);
+  if (m.owns?.length) out.push(`owns: ${m.owns.map(o => `${o.res}${o.shared ? ' (shared)' : ''}`).join(', ')}`);
+  for (const n of m.note ?? []) out.push(`note: ${n}`);
+  return out;
+}
 function print(c) {
   console.log(`gf-three ${c.kit.version}: what the kit offers\n`);
   console.log(`FAIR PLAY (every game, on by default; ${c.fair.config})\n  ${Object.entries(c.fair.defaults).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')}\n${c.fair.does.map(d => `  - ${d}`).join('\n')}\n`);
@@ -243,7 +367,7 @@ function print(c) {
     console.log(`  how to pick (* the checker enforces):\n${c.engineGuide.map(g => `    ${g}`).join('\n')}\n`);
   }
   console.log('MECHANICS');
-  for (const m of c.mechanics) console.log(`  ${m.id.padEnd(11)} ${m.status === 'ready' ? '' : `[${m.status}] `}${m.describe}${m.examples.length ? `\n${' '.repeat(14)}as: ${m.examples.join(' · ')}` : ''}${Object.keys(m.params).length ? `\n${' '.repeat(14)}params: ${Object.entries(m.params).map(([k, p]) => `${k}${'default' in p ? `=${JSON.stringify(p.default)}` : ''}`).join(', ')}` : ''}`);
+  for (const m of c.mechanics) console.log(`  ${m.id.padEnd(11)} ${m.status === 'ready' ? '' : `[${m.status}] `}${m.describe}${m.examples.length ? `\n${' '.repeat(14)}as: ${m.examples.join(' · ')}` : ''}${Object.keys(m.params).length ? `\n${' '.repeat(14)}params: ${Object.entries(m.params).map(([k, p]) => `${k}${'default' in p ? `=${JSON.stringify(p.default)}` : ''}`).join(', ')}` : ''}${partLines(m).map(l => `\n${' '.repeat(14)}${l}`).join('')}`);
   console.log('\nWORLDS');
   for (const w of c.worlds) {
     console.log(`  ${w.id.padEnd(11)} ${w.label ? `${w.label}: ` : ''}${w.describe}${w.kind ? ` [${w.kind}]` : ''}${w.engine ? ` (${w.engine})` : ''}`);

@@ -180,3 +180,7 @@ phase, round, time, players `{id, name, score, alive, bot, local, x, y, z, anim}
 (`ctx.shared.snapshot()`), `rules` (**CONTRACT-REQUEST**: an optional `rules.observe(ctx)` adds the game's own
 fields), and `net` (the multiplayer gate's block; null alone). `coverage()` = `assets.coverage(scene)` plus
 `unknownSlots` (slot ids on meshes that `assets.json` lacks); `slots()` = per-slot drawables, triangles, on screen.
+
+## Refusals (M2-C)
+
+`core/refusals.js`: what the kit will not do for a game's code is refused at the call with a stable code, written to `console.error` (verify check 3 reads it) and listed, bounded, in `window.__game.snapshot().refusals` (`{code, message, count, first, last}`). Codes: `players-add-with-friends` (`ctx.players.add/remove/place` in a live round; alone they pass through), `sound-unlisted` (`ctx.audio.play` of an id `assets.json` lacks, unless `optional`), `slot-unknown` (`assets.tag` of an undeclared id; the object is still tagged), `shared-write-not-host` (a write to `ctx.shared`, nested too, on a copy that is not the host), `goal-too-short` (`ctx.ui.goal` or `text.goal` under 6 characters; the previous line stays). A game that does not make these calls behaves as before.

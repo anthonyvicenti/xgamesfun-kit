@@ -45,6 +45,7 @@ import { listenForHost, host as pageHost } from '../net/host.js';
 import { createSession } from '../net/session.js';
 import { listenForLoadout, pageLoadout } from '../net/looks.js';
 import { createFair } from './fair.js';
+import * as refusals from './refusals.js';
 import { net } from '../../mp/net.js';
 import { createHost, BTN, KIND, ENTITY_FLAG, BUILD_SHA256, VERSION as FORGE_VERSION } from '../../forge/host.js';
 import * as forgeTables from '../../forge/tables/index.js';
@@ -147,7 +148,7 @@ export async function boot({ rules = {} } = {}) {
       play(id, opts = {}) {
         const o = { ...opts };
         if (o.at) { const e = forge.eye(); const d = Math.hypot(o.at.x - e.x, (o.at.y ?? e.y) - e.y, o.at.z - e.z); o.gainDb = (o.gainDb ?? 0) - Math.min(18, Math.max(0, (d - 4) * 0.6)); delete o.at; }
-        if (!audio.has(id)) { if (!o.optional) console.warn(`gf-three audio: no sound "${id}"`); return null; }
+        if (!audio.has(id)) { if (!o.optional) refusals.refuse('sound-unlisted', `ctx.audio.play("${id}"): no sound with that id in assets.json → sounds → sounds (list it there, or pass { optional: true })`, id); return null; }
         return audio.play(id, o);
       },
       has: id => audio.has(id), stop: id => audio.stop(id),
@@ -162,8 +163,8 @@ export async function boot({ rules = {} } = {}) {
     const hud = createHud(ctx, ui, { onMenu: () => openPause() });
     // the feel's DOM side (track F: damage numbers, combo, the red edge, low-health stages, crosshair, ammunition, the death recap)
     ctx.feel = createFeel(ctx);
-    ctx.hud = hud; ui.goalTo = t => hud.goal(t);
-    hud.setGoal(game.text?.goal || game.round?.winBy || game.rules?.summary || game.text?.hook || game.hook || '');
+    ctx.hud = hud; ui.goalTo = t => { if (refusals.goalCall(t)) hud.goal(t); };
+    hud.setGoal(refusals.startGoal(game));
 
     // ---- mechanics: none runs on forge yet (track F/A); their params stay for the rules ----
     const list = [];
@@ -267,6 +268,7 @@ export async function boot({ rules = {} } = {}) {
       me: me.id, host: ctx.host, live: session.live, backdrop, view: menu.view ?? ui.view, paused: menu.paused && !session.live,
       players: ctx.players.list().map(p => ({ id: p.id, name: p.name, score: p.score, alive: p.alive, bot: p.isBot, local: p.local, x: r2(p.position.x), y: r2(p.position.y), z: r2(p.position.z), anim: p.anim, color: p.color, ring: null, ...ctx.fair.observe(p) })),
       fair: ctx.fair.summary(),
+      refusals: refusals.list(),
       winners: session.round.winners, reason: session.round.reason, results: session.round.rows,
       shared: ctx.shared.snapshot(),
       rules: (() => { try { return rules.observe?.(ctx) ?? null; } catch { return null; } })(),

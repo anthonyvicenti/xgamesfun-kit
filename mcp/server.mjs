@@ -17,6 +17,22 @@ import { BIN, KIT_ROOT } from '../lib/paths.mjs';
 export const TOOLS_DIR = path.join(KIT_ROOT, 'mcp', 'tools');
 const NAME = /^[a-zA-Z0-9_-]{1,64}$/;
 
+/**
+ * Tool families that are off unless an environment variable turns them on. The open builder is game creation only
+ * for now (HANDOFF section 1), so the web3_* tools are not offered to a session by default: GAMESFUN_WEB3=1 lists
+ * them again. Nothing in web3/ changes; the commands (`npx gamesfun web3 …`) work either way.
+ */
+export const OPTIONAL_TOOLS = [{ prefix: 'web3_', env: 'GAMESFUN_WEB3', why: 'tokens, shops and loot boxes (devnet)' }];
+const on = v => /^(1|true|yes|on)$/i.test(String(v ?? '').trim());
+/** Is this tool offered with this environment? */
+export const offered = (name, env = process.env) => !OPTIONAL_TOOLS.some(o => name.startsWith(o.prefix) && !on(env[o.env]));
+
+export const INSTRUCTIONS = [
+  'gamesfun builds multiplayer three.js browser games on games.fun\'s gf-three kit. Read AGENTS.md in the kit root first.',
+  'A build runs through the build loop, and the tools hold its order: call gamesfun_next {"game": "games/<name>"} first (also after a restart: it picks a build up at the right step), then the tool each answer names: gamesfun_step_pitch → gamesfun_step_spec → gamesfun_step_create → (you write rules.js; gamesfun_verify is your own quick check) → gamesfun_step_fix → gamesfun_step_verify → gamesfun_step_playtest → gamesfun_step_deliver. A tool called out of order is refused with the right one. gamesfun_rollback undoes an agent round; gamesfun_change starts a change to a delivered game; gamesfun_requests brings the studio page\'s requests.',
+  'gamesfun_catalog lists what the kit can build; gamesfun_dev_start plays a game with two tabs.',
+].join(' ');
+
 /** Run the gamesfun CLI as a child (keeps long browser runs and their output out of this process). */
 export function runCli(args, { onLine = null, cwd = KIT_ROOT, env = {} } = {}) {
   return new Promise((resolve, reject) => {
@@ -73,15 +89,16 @@ export function toResult(value) {
   return { content: [{ type: 'text', text }] };
 }
 
-export async function createServer({ toolsDir = TOOLS_DIR, log = (...a) => console.error(...a) } = {}) {
+export async function createServer({ toolsDir = TOOLS_DIR, log = (...a) => console.error(...a), env = process.env } = {}) {
   const { Server } = await import('@modelcontextprotocol/sdk/server/index.js');
   const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
   const { readFile } = await import('node:fs/promises');
   const pkg = JSON.parse(await readFile(path.join(KIT_ROOT, 'package.json'), 'utf8'));
-  const { tools } = await loadTools(toolsDir, log);
+  const { tools: all } = await loadTools(toolsDir, log);
+  const tools = new Map([...all].filter(([name]) => offered(name, env)));
   const server = new Server({ name: 'gamesfun', version: pkg.version }, {
     capabilities: { tools: {} },
-    instructions: 'gamesfun builds multiplayer three.js browser games on games.fun\'s gf-three kit. Read AGENTS.md in the kit root first. Typical order: gamesfun_catalog → write and lock a spec → gamesfun_create → edit the game\'s rules.js and config → gamesfun_verify (quick) until it passes → gamesfun_dev_start to play it with two tabs.',
+    instructions: INSTRUCTIONS,
   });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [...tools.values()].map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),

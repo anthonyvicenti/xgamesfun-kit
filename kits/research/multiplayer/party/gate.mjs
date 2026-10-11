@@ -2,7 +2,8 @@
 // The multiplayer gate: does this game really play with friends, as its multiplayer.json says?
 //
 //   node research/multiplayer/party/gate.mjs <game-dir> [--out <evidence-root>] [--seconds 75] [--draft <multiplayer.json>]
-//        [--dev-kit] [--no-record] [--port N] [--signal http|ws] [--json]
+//        [--dev-kit] [--no-record] [--port N] [--signal http|ws] [--legs lobby] [--json]
+//   --legs lobby (a live game): stop once both players are in the room over WebRTC; no round is played
 //
 // Every game: multiplayer.json is valid. A solo game passes on a real reason. A game written as a room is checked for
 // its files here and plays its own two-browser QA (research/multiplayer/p2p/qa.mjs is the pattern).
@@ -46,11 +47,14 @@ import { KIT_DIR, KIT_VERSION, MANIFEST, WORLD_SINCE, checkKitReleased, compareV
 import { checkTransport, inFrame, p2p, sleep, snap, until } from './gate-lib.mjs';
 import { gateLive } from './gate-live.mjs';
 
-export async function gate(gameDir, { out = null, seconds = 75, draft = null, devKit = false, record = true, port = 0, signal = null, log = console.log } = {}) {
+export async function gate(gameDir, { out = null, seconds = 75, draft = null, devKit = false, record = true, port = 0, signal = null, legs = null, log = console.log } = {}) {
   const dir = resolve(gameDir);
   const checks = [], notes = [];
   const check = (name, ok, detail = '', { soft = false } = {}) => { checks.push({ name, ok: !!ok, ...(soft ? { soft: true } : {}), detail: String(detail ?? '').slice(0, 500) }); log(`${ok ? 'PASS' : soft ? 'SOFT' : 'FAIL'} ${name}${detail ? ` — ${String(detail).slice(0, 220)}` : ''}`); return !!ok; };
   if (signal !== null && signal !== 'http' && signal !== 'ws') throw new Error(`--signal must be http or ws (got ${JSON.stringify(signal)})`);
+  // legs "lobby" (a live game): stop once both players are in the room over WebRTC. For a machine that cannot draw a
+  // round (a CI runner with no graphics card); the record says so and verify never counts it as the whole gate.
+  if (legs !== null && legs !== 'lobby') throw new Error(`--legs must be lobby (got ${JSON.stringify(legs)})`);
   const rec = { schemaVersion: 1, kind: 'mp-gate', game: relative(repo, dir), started: new Date().toISOString(), kit: { name: 'gf-multiplayer', version: KIT_VERSION, source: draft || devKit ? 'development sources (served over the game, nothing written)' : `${KIT_DIR}/ in the game` },
     signal: signal ?? 'default (the WebSocket on 127.0.0.1)', draft: !!draft, seconds, mode: null, verdict: 'fail', checks, notes, players: {}, shots: [] };
   const finish = async () => {
@@ -158,7 +162,8 @@ export async function gate(gameDir, { out = null, seconds = 75, draft = null, de
     const sq = signal ? `&signal=${signal}` : '';
 
     if (manifest.mode === 'live') {
-      await gateLive({ manifest, live: manifest.live, assets, dir, srv, player, check, notes, shot, rec, errors, seconds, browser, signal });
+      if (legs) rec.legs = legs;
+      await gateLive({ manifest, live: manifest.live, assets, dir, srv, player, check, notes, shot, rec, errors, seconds, browser, signal, legs });
       return finish();
     }
 
@@ -313,12 +318,12 @@ export async function gate(gameDir, { out = null, seconds = 75, draft = null, de
 
 if (isMain(import.meta)) {
   const a = process.argv.slice(2);
-  const flagsWithValue = ['--out', '--seconds', '--draft', '--port', '--signal'];
+  const flagsWithValue = ['--out', '--seconds', '--draft', '--port', '--signal', '--legs'];
   const opt = (k, d) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : d; };
   const dir = a.find((x, i) => !x.startsWith('--') && !flagsWithValue.includes(a[i - 1]));
-  if (!dir) { console.error('usage: gate.mjs <game-dir> [--out <evidence-root>] [--seconds 75] [--draft <multiplayer.json>] [--dev-kit] [--no-record] [--port N] [--signal http|ws] [--json]'); process.exit(2); }
+  if (!dir) { console.error('usage: gate.mjs <game-dir> [--out <evidence-root>] [--seconds 75] [--draft <multiplayer.json>] [--dev-kit] [--no-record] [--port N] [--signal http|ws] [--legs lobby] [--json]'); process.exit(2); }
   const json = a.includes('--json');
-  const rec = await gate(dir, { out: opt('--out', null), seconds: Number(opt('--seconds', 75)), draft: opt('--draft', null), devKit: a.includes('--dev-kit'), record: !a.includes('--no-record'), port: Number(opt('--port', 0)), signal: opt('--signal', null), log: json ? () => {} : console.log });
+  const rec = await gate(dir, { out: opt('--out', null), seconds: Number(opt('--seconds', 75)), draft: opt('--draft', null), devKit: a.includes('--dev-kit'), record: !a.includes('--no-record'), port: Number(opt('--port', 0)), signal: opt('--signal', null), legs: opt('--legs', null), log: json ? () => {} : console.log });
   if (json) console.log(JSON.stringify(rec, null, 2));
   else console.log(`\n${basename(dirname(resolve(dir)))}: ${rec.verdict.toUpperCase()} ${rec.passed}/${rec.total}${rec.outDir ? `  → ${relative(process.cwd(), rec.outDir)}` : ''}`);
   process.exit(rec.verdict === 'pass' ? 0 : rec.verdict === 'fail' ? 1 : 3);

@@ -21,7 +21,7 @@ import { HouseMaterial, U, adoptMaterials } from '../look/materials.js';
 import { createTerrainData, terrainColors, floorMaterial, runeNode, topGeometry, boxTopGeometry, cliffGeometry, rockMaterial, waterSurfaceMaterial, fallGeometry, fallMaterial } from './terrain.js';
 import { createGrass, createFoliage, createFlowers, leafRefs, pineRefs, towardCamera } from './vegetation.js';
 import { outlineRadius, walkRadius, rngOf, roundRectSdf } from './generate.js';
-export { templates, worldConfig, SIZE_RADIUS, generate, terrainData, levelCount, palettes } from './generate.js';
+export { templates, templateInfo, worldConfig, SIZE_RADIUS, generate, terrainData, levelCount, palettes } from './generate.js';
 
 const FILE = 'config/world.json';
 const DEG = Math.PI / 180;

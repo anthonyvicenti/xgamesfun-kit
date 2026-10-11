@@ -136,3 +136,38 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Surface coverage per player or team; territory score',
+  rank: 20,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: ['projectile', 'teams'],
+  owns: () => [],
+  state: { key: 'paint', fields: { g: 'the owner grid as a run-length string (decode with paint.coverage(), never by hand)' } },
+  events: [],
+  sync: { owner: 'host', how: 'the host owns the grid; every copy decodes the string and redraws the decal' },
+  note: [
+    'With the projectile mechanic, paint lands under every shot and stream by itself (fromProjectile); otherwise the host calls paint.splat(player, { x, z }).',
+    'paint.coverage() gives each owner\'s share on every copy: score from it in results() or check(), not per frame.',
+    'by "team" paints in team colours: for a game with the teams mechanic.',
+  ],
+  stub: {
+    as: 'paint',
+    worked: 'results(ctx) { return paint.coverage().map(c => ({ id: c.owner, name: c.label, value: Math.round(c.share * 100) })); }',
+    traps: ['paint.splat, clear and fill change the grid on the host only: keep them under if (ctx.host)'],
+  },
+  signs: {
+    sample: sh => { if (!sh.paint) return null; const g = sh.paint.g ?? ''; let h = 0; for (let i = 0; i < g.length; i++) h = (h * 31 + g.charCodeAt(i)) | 0; return { paint: `${h}:${g.length}` }; },
+    judge: v => {
+      const ok = v.others.paintChanged;
+      v.add('paint changes', ok ? 'ok' : 'dead', 'shared.paint.g', ok ? 'yes' : `no cell was painted on any page (${v.names})`, ok ? '' : 'check paint.fromProjectile and that shots land on the ground (or rules call paint.splat)');
+    },
+  },
+};

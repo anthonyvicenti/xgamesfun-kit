@@ -109,7 +109,6 @@ has an `assets.json` and adds its ignore entry at once. It reads the same JSON f
 
 | Fault | Where | Work-around here | Fix asked for |
 |---|---|---|---|
-| A static import of the forge engine's data tables: every tool that imports `promises.mjs` fails to load without `research/gf-forge` | `research/gf-three/tools/lib/promises.mjs:18` | `TOOL_FAULTS` in the sync script copies `gf-forge/kit/tables/` (8 modules, 64 KB, data only) and nothing else of the engine. The entry fails the sync once it is no longer needed | load it with `importPart` inside the forge branch, as `create.mjs` and `spec-config.mjs` do |
 | A forge HUD module loaded with a bare `import('../../../gf-forge/hud/create.mjs')` | `research/gf-three/tools/lib/spec-config.mjs:343` | none needed (it runs only for a forge spec); the sync records it as a part not taken | use `importPart`, so a checkout without the engine gets the plain "not in this checkout" error |
 | A forge spec without the engine is refused with a module-resolution error for `gf-forge/kit/look.js`, not the plain error | `research/gf-three/tools/create.mjs` (`decideModules`) | none (the refusal is correct and nothing is written; a test holds that) | check the engine folder once, first, with the `importPart` wording |
 | `verify.mjs` cannot load without the 3D tools' packages, even for a static check | `tools/lib/bodies-check.mjs` → `body-judge.mjs` → `char-node.mjs` | `gamesfun verify` installs them first (`ensureCharDeps`) | import the body judge when check 19 runs |

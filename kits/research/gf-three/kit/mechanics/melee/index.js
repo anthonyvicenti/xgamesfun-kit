@@ -563,3 +563,53 @@ export function create(ctx, params = {}) {
 }
 
 export { DEFAULT_WEAPONS, MOVE_DEFAULTS, UPGRADES, modsOf };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Swords, axes and fists: combo chains (windup, active, recover), arc and reach, damage, knockback and hit-stop; a dash with invulnerable frames; slash trails',
+  rank: 110,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: ['waves', 'boss', 'health', 'loot'],
+  // the inputs it reads by itself, and the right hand (the weapon model). research/open-builder/findings/
+  // x3-narrow-controller.md lists what it reaches for inside the player controller (the dash and the lunge).
+  owns: p => [
+    { res: 'player.socket.hand_r', why: 'the weapon is held on the hand_r socket', free: 'a game with melee holds nothing else in the right hand' },
+    ...[['action', 'swings the combo', 'melee.swing(p)'], ['heavyAction', 'is the heavy attack', 'melee.swing(p, \'heavy\')'], ['dashAction', 'dashes', 'melee.dash(p)']]
+      .filter(([k]) => p[k]).map(([k, does, call]) => ({ res: `input.${p[k]}`, why: `${p[k]} ${does} (params.${k})`, free: `set melee params.${k} to another input, or to "" and call ${call} from rules.js` })),
+  ],
+  state: { key: 'melee', fields: { w: '{ playerId: [weapon index, rarity] }', r: 'the last reported hit per player', n: '{ playerId: [swings, hits] }' } },
+  events: [
+    { name: 'onHit', on: 'host', args: '{ attacker, target, kind: \'enemy\' | \'boss\' | \'player\', damage, move, blocked, killed }', when: 'a swing hit something (each target once a swing)' },
+    { name: 'onSwing', on: 'the copy that owns the player', args: '{ player, key, serial }', when: 'a swing started' },
+  ],
+  sync: { owner: 'copy', how: 'the copy that owns a player runs their swings and finds the hits; the host checks each hit and applies the damage' },
+  note: [
+    'Nothing to wire: primary swings the combo, secondary is the heavy attack, jump (Space) dashes, and bots fight with it by themselves.',
+    'Swings hurt the waves mechanic\'s enemies, the boss, and other players unless the game is co-op (hitPlayers "auto").',
+    'With dashAction "jump" the players cannot jump: move the dash to another input in a game that needs jumping.',
+  ],
+  stub: {
+    as: 'melee',
+    worked: 'melee.onHit(h => { if (h.kind === \'player\' && h.attacker) h.attacker.score += 1; });',
+    traps: [
+      'a kill of an enemy already scores the waves mechanic\'s killPoints: score only what is yours in onHit',
+      'hit-stop and camera shake are this copy\'s own feel: never pause or slow the shared world for a hit',
+    ],
+  },
+  signs: {
+    sample: sh => { if (!sh.melee) return null; let sw = 0, hi = 0; for (const x of Object.values(sh.melee.n ?? {})) { sw += x?.[0] ?? 0; hi += x?.[1] ?? 0; } return { melee: [sw, hi] }; },
+    judge: v => {
+      const a = v.action, sw = v.aim?.melee ? v.aim : null;
+      if (sw?.hit) v.add('a swing hurts an enemy', 'ok', 'shared.waves.e hp and w[1] kills, while the player swung', `the player walked up to an enemy, aimed and swung: ${sw.kill ? 'it died' : `its hit points went ${sw.hpBefore} → ${sw.hpAfter}`}`);
+      if (a.hits > 0) v.add('swings land', 'ok', 'shared.melee.n (swings, hits per player)', `${a.hits} hits from ${a.swings} swings on the busiest page`);
+      else if (!sw?.hit) v.add('swings land', a.swings > 0 || sw?.measured ? 'dead' : 'unmeasured', 'shared.melee.n (swings, hits per player)', `${a.swings} swings and no hit on any page (${v.names})${sw ? `; the player's own swing: ${sw.why}` : ''}`,
+        'check the melee mechanic\'s reach and arc against the enemies, that waves hittable is on, and that rules.bot (or the kit\'s melee bots) walks up and swings');
+    },
+  },
+};

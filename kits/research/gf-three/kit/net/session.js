@@ -35,6 +35,7 @@ import { createShared } from './shared.js';
 // CONTRACT §8): the round, the net and the scores here are the same for every engine
 import { createLooks } from './looks.js';
 import { spawnOf } from '../core/util.js';
+import { refuse } from '../core/refusals.js';
 
 const r2 = v => Math.round(v * 100) / 100;
 
@@ -110,7 +111,19 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
   });
   const ownerOf = p => (p.isBot ? 'host' : p.id);
   const players = createPlayers(ctx, { spawnCharacter, characterFor, routeToOwner: (p, t, d) => { if (live) net.send('k', { t, id: p.id, ...d }, ownerOf(p)); } });
-  ctx.players = players;
+  // What a game's code sees. add, remove and place are the session's own (who plays, where a friend stands): in a friends
+  // round the room decides who plays, so a call from rules.js or a mechanic is refused with a code and does nothing
+  // (verify check 25 still plays the friends page and counts the players); alone, the call passes through as before.
+  const refuseSeat = (what, ret) => (...a) => {
+    if (!live) return players[what](...a);
+    refuse('players-add-with-friends', `ctx.players.${what}(...) in a friends round: the room decides who plays (no bots, no extra players with friends); keep rules.bot for playing alone`, what);
+    return ret;
+  };
+  ctx.players = Object.create(players, {
+    add: { value: refuseSeat('add', Promise.resolve(null)), enumerable: true },
+    remove: { value: refuseSeat('remove', undefined), enumerable: true },
+    place: { value: refuseSeat('place', undefined), enumerable: true },
+  });
   // player looks (CONTRACT §6e): this player's loadout from the page, everyone's over the net (kit/net/looks.js)
   const looks = createLooks(ctx, { live, net, localId });
   ctx.looks = looks;

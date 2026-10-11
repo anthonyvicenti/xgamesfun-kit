@@ -16,17 +16,24 @@
 // 1.3.0 (gf/gf-assets.js) and gf-audio 1.5.0 (audio/); writes config/*.json, assets/, assets.json (from the slot
 // declarations), multiplayer.json (mode live), index.html, main.js, a rules.js stub carrying the spec's rules as
 // comments, ATTRIBUTION.md, spec.json and gf-three.json (the build record). Exit 0 ok, 1 failed, 2 bad usage or spec.
+//
+// Parts carry their own (each mechanic's `manifest` in kit/mechanics/<id>/index.js; tools/catalog.mjs MANIFEST): the
+// spec's mechanics are composed by their manifests and a set that cannot work is refused with the cause (a mechanic on
+// an engine it does not run on, a part or a world capability it needs and the spec lacks, two owners of one resource);
+// rules.js is assembled from the stubs of the spec's mechanics: each one's callbacks as empty named handlers, one
+// worked line and its own traps.
 import { isMain } from './lib/main.mjs';
 import { readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { REPO, KIT, SCENIC_KIT, FORGE, FORGE_KIT, importPart, LIBRARY, KIT_VERSION, SCENIC_VERSION, FORGE_VERSION, SPEC_SCHEMA, GF_AUDIO, json, sha256, engineOf } from './lib/paths.mjs';
+import { REPO, KIT, SCENIC_KIT, FORGE, FORGE_KIT, importPart, LIBRARY, KIT_VERSION, SCENIC_VERSION, FORGE_VERSION, SPEC_SCHEMA, GF_AUDIO, json, sha256, engineOf, walk } from './lib/paths.mjs';
 import { check, withDefaults } from './lib/schema.mjs';
 import { put, vendorLibraries, vendorKit, vendorGfAssets, kitModuleFiles } from './lib/vendor.mjs';
 import { importKitModule } from './lib/kit-import.mjs';
 import { specToConfig, libraryPicture } from './lib/spec-config.mjs';
 import { assembleManifest } from './lib/slots-lib.mjs';
+import { mechanicIds, mechanicParts, composeProblems, worldParts } from './catalog.mjs';
 import { adopt } from '../../multiplayer/party/adopt.mjs';
 import { KIT_VERSION as MP_KIT_VERSION } from '../../multiplayer/party/manifest.mjs';
 
@@ -34,7 +41,7 @@ export const AUDIO_FILES = ['audio.js', 'zzfx.mjs', 'sounds.mjs', 'meter.mjs', '
 
 /** Which real modules to use: present in the kit source AND importable with the contract's exports.
  *  engine 'scenic' (CONTRACT §8): the look and world are research/gf-scenic/kit's, never stand-ins. */
-export async function decideModules({ standins = false, standinMechanics = false, engine = 'party' } = {}) {
+export async function decideModules({ standins = false, standinMechanics = false, engine = 'party', kit = KIT } = {}) {
   const found = await kitModuleFiles(), out = { look: false, world: false, character: false, mechanics: [] }, why = [];
   const scenic = engine === 'scenic';
   if (scenic) out.engine = 'scenic';
@@ -42,6 +49,7 @@ export async function decideModules({ standins = false, standinMechanics = false
   // mechanic module runs on it yet (their params stay in config for the rules); never stand-ins
   if (engine === 'forge') {
     out.engine = 'forge';
+    await importPart(join(FORGE_KIT, 'look.js'), 'the forge engine (research/gf-forge)');   // absent: the plain "not in this checkout" wording
     const mods = { mechanics: {} };
     for (const [key, rel, names] of [['look', 'look.js', ['presets', 'lookConfig', 'slotsFor', 'pack']], ['world', 'world.js', ['templates', 'worldConfig', 'slotsFor', 'loadWorld']]]) {
       const m = await importKitModule(join(FORGE_KIT, rel));
@@ -78,15 +86,16 @@ export async function decideModules({ standins = false, standinMechanics = false
   if (out.character && !(existsSync(join(LIBRARY, 'clips/gf-humanoid-1.glb')) && existsSync(join(LIBRARY, 'bodies')))) { out.character = false; why.push('character: library/clips/gf-humanoid-1.glb or library/bodies/ missing (stand-in)'); }
   mods.mechanics = {};
   if (standinMechanics) { why.push('mechanics: left out (--standin-mechanics: the rules do their part)'); return { modules: out, why, mods }; }
-  for (const id of found.mechanics) {
-    const m = await importKitModule(join(KIT, `mechanics/${id}/index.js`));
+  // `kit` (tests): the mechanics' declarations read from another kit folder; vendoring (tools/lib/vendor.mjs) still copies this kit
+  for (const id of kit === KIT ? found.mechanics : await mechanicIds(kit)) {
+    const m = await importKitModule(join(kit, `mechanics/${id}/index.js`));
     if (m.error || typeof m.create !== 'function' || m.id !== id) { why.push(`mechanic ${id}: ${m.error ? 'does not import' : 'lacks id/create'} (its params stay in config)`); continue; }
     out.mechanics.push(id); mods.mechanics[id] = m;
   }
   return { modules: out, why, mods };
 }
 
-export async function create(specPath, outDir, { force = false, newRules = false, standins = null, standinMechanics = null, log = () => {} } = {}) {
+export async function create(specPath, outDir, { force = false, newRules = false, standins = null, standinMechanics = null, kitDir = KIT, log = () => {} } = {}) {
   const t0 = performance.now();
   const dir = resolve(outDir);
   // a re-run makes the choices the first run made, unless told otherwise
@@ -96,6 +105,9 @@ export async function create(specPath, outDir, { force = false, newRules = false
   let spec;
   try { spec = JSON.parse(specBytes.toString('utf8')); } catch (e) { return { ok: false, code: 2, problems: [`spec is not JSON: ${e.message}`] }; }
   const schema = JSON.parse(await readFile(SPEC_SCHEMA, 'utf8'));
+  // which mechanics exist is the kit's to say (its folders), not a list to keep in step with it
+  const kitIds = await mechanicIds(kitDir), idSchema = schema.properties?.mechanics?.items?.properties?.id;
+  if (idSchema?.enum && kitIds.length) idSchema.enum = kitIds;
   const problems = check(schema, spec);
   // a round needs its length; a world (round.mode 'world', CONTRACT §9) has none, and needs the voxel world
   if (spec.round?.mode !== 'world' && !Number.isInteger(spec.round?.seconds)) problems.push('round.seconds: required (unless round.mode is world)');
@@ -106,7 +118,7 @@ export async function create(specPath, outDir, { force = false, newRules = false
 
   const engine = engineOf(spec);
   let decided;
-  try { decided = await decideModules({ ...options, engine }); } catch (e) { return { ok: false, code: 1, problems: [e.message] }; }
+  try { decided = await decideModules({ ...options, engine, kit: kitDir }); } catch (e) { return { ok: false, code: 1, problems: [e.message] }; }
   const { modules, why, mods } = decided;
   // the spec's world and look must be ones its engine has (CONTRACT §8)
   if (engine === 'scenic' || engine === 'forge') {
@@ -136,6 +148,13 @@ export async function create(specPath, outDir, { force = false, newRules = false
     for (const p of check(mod.params, m.params ?? {})) warnings.push(`mechanic ${m.id}: params ${p}`);
     mechanicDefaults[m.id] = withDefaults(mod.params, {});
   }
+  // do the spec's mechanics compose? Each part's manifest says what it needs and what it owns; a set that cannot work
+  // is refused here, with the cause and the way out, before anything is written. A mechanic whose module is not in
+  // this game (a forge game, --standin-mechanics) is not judged.
+  const parts = Object.entries(mods.mechanics ?? {}).map(([id, module]) => ({ id, module, manifest: module.manifest ?? null }));
+  const worldPart = modules.world && spec.world?.template ? (await worldParts({ kit: kitDir }))[spec.world.template] ?? null : null;
+  const refused = composeProblems(spec.mechanics, parts, { engine, world: worldPart?.provides ?? null, worldId: spec.world?.template ?? '' });
+  if (refused.length) return { ok: false, code: 2, problems: refused.map(p => `spec ${p}`) };
   const lookMod = modules.look ? mods.look : null;
   const standinLook = await importKitModule(join(KIT, 'core/standins/look.js'));
   const lookPreset = lookMod ? (id, time) => { const v = lookMod.presetValues?.(id, time) ?? lookMod.presets?.[id]; return v ? JSON.parse(JSON.stringify(v)) : null; } : null;
@@ -161,12 +180,17 @@ export async function create(specPath, outDir, { force = false, newRules = false
   if (C.props) await own('config/props.json', json(C.props));
   for (const a of C.assets) await own(a.to, await readFile(a.from));
   await own('multiplayer.json', json(C.multiplayer));
-  await own('rules.js', rulesStub(spec));
+  await own('rules.js', rulesStub(spec, parts));
   await gen('index.html', indexHtml(spec.title, engine));
   await gen('main.js', mainJs(engine));
 
   // the kit and everything vendored
   const kit = await vendorKit(dir, modules); wrote.push(...kit.wrote);
+  // `kitDir` (tests): vendoring is tools/lib/vendor.mjs's and copies this kit. A mechanic folder only the other kit
+  // has is carried in beside it, so the game still runs; gf/three/kit.js does not list it (verify check 2 would say so).
+  if (kitDir !== KIT) for (const id of modules.mechanics.filter(id => !existsSync(join(KIT, 'mechanics', id)))) {
+    for (const rel of await walk(join(kitDir, 'mechanics', id))) { if (/(^|\/)(fixture|tests?)(\/|$)/.test(rel) || /\.md$/i.test(rel)) continue; await put(join(dir, 'gf/three/mechanics', id, rel), await readFile(join(kitDir, 'mechanics', id, rel)), wrote, `gf/three/mechanics/${id}/${rel}`); }
+  }
   wrote.push(...(await vendorGfAssets(dir)).wrote);
   for (const f of AUDIO_FILES) await put(join(dir, 'audio', f), await readFile(join(GF_AUDIO, 'source', f)), wrote, `audio/${f}`);
   const ad = await adopt(dir, { log: () => {} });
@@ -248,9 +272,32 @@ ${JSON.stringify(map, null, 2)}
 
 const comment = (s, w = 110) => String(s ?? '').split(/\n/).flatMap(line => { const out = []; let cur = ''; for (const word of line.split(/\s+/)) { if ((cur + ' ' + word).trim().length > w) { out.push(cur); cur = word; } else cur = (cur + ' ' + word).trim(); } out.push(cur); return out; }).map(l => `//   ${l}`.trimEnd()).join('\n');
 
-function rulesStub(spec) {
+/** A mechanic's block of setup(): what it is, its note, a worked line, its traps, then each callback it offers as an
+ *  empty named handler (the manifest's `stub` and `events`). */
+function stubBlock(part, as, spec) {
+  const m = part.manifest, cap = x => x[0].toUpperCase() + x.slice(1), v = m.stub.as;
+  const out = [`    // ---- ${part.id}${as ? ` — "${as}"` : ''}: ${m.describe}`];
+  for (const n of m.note ?? []) out.push(`    //   ${n}`);
+  if (m.state?.key) out.push(`    //   state: window.__game.snapshot().shared.${m.state.key} (what a test reads; the rules read it through ${v}'s own methods) → ${Object.entries(m.state.fields ?? {}).map(([k, d]) => `${k}: ${d}`).join('; ')}`);
+  out.push(`    //   worked: ${m.stub.worked}`);
+  for (const t of m.stub.traps ?? []) out.push(`    //   trap: ${t}`);
+  if (!(m.events ?? []).length) { out.push(`    //   no callbacks: read it where the rules need it (const ${v} = ctx.mechanics.get('${part.id}');)`); return out.join('\n'); }
+  out.push(`    const ${v} = ctx.mechanics.get('${part.id}');`);
+  for (const e of m.events) out.push(`    ${v}?.${e.name}?.(function on${cap(part.id.replace(/-(.)/g, (_, c) => c.toUpperCase()))}${e.name.slice(2)}(e) {});   // ${e.on}: ${e.when ?? ''} · e = ${e.args}`);
+  return out.join('\n');
+}
+
+/** rules.js for a new game: the spec's rules as comments, the six hooks, and in setup() the stub of each mechanic the
+ *  spec uses (from its manifest). Nothing in it does anything yet: every handler is empty. */
+export function rulesStub(spec, parts = []) {
   const mech = spec.mechanics.map(m => `//   ${m.id}${m.as ? ` — "${m.as}"` : ''} ${JSON.stringify(m.params ?? {})}`).join('\n');
   const controls = Object.entries(spec.controls ?? {}).map(([k, v]) => `//   ${k}: ${v}`).join('\n') || '//   (none named)';
+  const byId = new Map(parts.filter(p => p.manifest?.stub && Array.isArray(p.manifest.events)).map(p => [p.id, p]));
+  const seen = new Set(), blocks = [];
+  for (const m of spec.mechanics) { if (seen.has(m.id) || !byId.has(m.id)) continue; seen.add(m.id); blocks.push(stubBlock(byId.get(m.id), m.as, spec)); }
+  const setup = blocks.length
+    ? `setup(ctx) {\n    // Each mechanic below offers these callbacks. Every handler is empty: write the ones this game needs and delete the\n    // rest. "host" handlers run on the host's copy only (it owns the shared world); never change scores elsewhere.\n${blocks.join('\n\n')}\n  },`
+    : 'setup(ctx) {},';
   return `// rules.js: THE GAME AGENT'S FILE. ${spec.title}: what makes this game this game (research/gf-three/CONTRACT.md §3).
 // Written by create.mjs as a stub from the spec; the kit already runs the home menu, the HUD, players, bots, the round and replay (CONTRACT §6g).
 //
@@ -261,7 +308,7 @@ ${comment(spec.rules.summary)}
 // Win: ${spec.round.winBy ?? 'most points when time runs out'}${spec.round.loseBy ? `\n// Lose: ${spec.round.loseBy}` : ''}
 // Round: ${spec.round.mode === 'world' ? 'none (a world: players drop in and out)' : `${spec.round.seconds} s`} · players ${spec.players.min}–${spec.players.max}${spec.players.bots !== false ? ', bots fill empty seats' : ''}
 // Tuning numbers (config/game.json → rules.params, each a rules.* slot): ${JSON.stringify(spec.rules.params ?? {})}
-// Mechanics (ctx.mechanics.get(id); params in config/game.json → mechanics):
+// Mechanics (ctx.mechanics.get(id); params in config/game.json → mechanics${blocks.length ? '; what each offers is in setup() below' : ''}):
 ${mech}
 // Controls (ctx.me.actions.<name>.pressed / .down):
 ${controls}
@@ -270,7 +317,7 @@ ${controls}
 
 export default {
   // Once on every copy, after the world, players and mechanics exist: register shared state, UI, listeners.
-  setup(ctx) {},
+  ${setup}
   // Every copy, when the round starts (the same moment for everyone).
   roundStart(ctx) {},
   // Every frame on every copy. Keep host-only logic under \`if (ctx.host)\`.

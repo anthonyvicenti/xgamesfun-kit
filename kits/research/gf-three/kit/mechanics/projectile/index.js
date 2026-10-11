@@ -592,3 +592,50 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Discrete and continuous streams, arcs, hits, splash',
+  rank: 10,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: ['health', 'teams', 'paint', 'waves', 'boss', 'carry'],
+  owns: () => [],
+  state: { key: 'prj', fields: { l: '[[id, x, y, z, vx, vy, vz, seat]] shots in flight', st: 'bots that are streaming' } },
+  events: [
+    { name: 'onHit', on: 'host', args: '{ kind: \'discrete\' | \'stream\' | \'splash\', shooter, target | null, point, dir, damage, counted, projectile }', when: 'a hit that counted (fair play let it through)' },
+    { name: 'onBlocked', on: 'host', args: '{ kind, shooter, target, why, projectile }', when: 'fair play refused a hit' },
+    { name: 'onEnd', on: 'host', args: '{ projectile: { id, tag, meta }, shooter, reason, point }', when: 'a shot ended (hit, wall, lifetime)' },
+    { name: 'onSurface', on: 'host', args: '{ kind: \'discrete\' | \'stream\', shooter, point, normal, projectile }', when: 'the world was hit (paint listens)' },
+    { name: 'onFire', on: 'every copy', args: '{ shooter, projectile, point }', when: 'a shot left a muzzle' },
+  ],
+  sync: { owner: 'host', how: 'the host owns every shot and every hit; a copy owns its own aim, trigger and tank' },
+  note: [
+    'Nothing fires by itself: rules.js calls prj.fire(p) on a press, or prj.stream(p, down) every frame for a stream, for the player and for each bot.',
+    'Shots land on the crosshair point. With the health mechanic a hit damages and knocks; waves and the boss register themselves as targets.',
+    'Score in onHit (host): it hears counted hits only, so a helpless player is never farmed.',
+  ],
+  stub: {
+    as: 'prj',
+    worked: 'update(ctx) { if (ctx.me.actions.primary.pressed) prj.fire(ctx.me); }   // continuous: prj.stream(ctx.me, ctx.me.actions.primary.down)',
+    traps: [
+      'prj.stream(p, on) is called every frame for an owned player, with on false too: a stream nobody turns off keeps running',
+      'a bot fires only when the rules make it: in bot(ctx, p) use ctx.bots.attack(p, target)',
+    ],
+  },
+  signs: {
+    sample: sh => (sh.prj ? { prj: [(sh.prj.l ?? []).length, (sh.prj.st ?? []).length] } : null),
+    judge: v => {
+      const o = v.others, w = v.waves;
+      const hit = w?.enemyHpDrop || w?.kills > 0 || o.hpFell || o.down || o.paintChanged;
+      if (!o.fired) v.add('shots fly', 'dead', 'shared.prj.l and .st', `no shot or stream was ever in flight on any page (${v.names})`, 'rules must fire: prj.fire(p) on primary for the player, and for bots in rules.bot (or ctx.bots.attack)');
+      else if (hit) v.add('a hit lands', 'ok', 'enemy hp, shared.hp.h, players down, paint', [w?.kills ? 'enemies killed' : '', o.hpFell ? 'hit points fell' : '', o.down ? 'players knocked down' : '', o.paintChanged ? 'paint changed' : ''].filter(Boolean).join(', ') || 'enemies hurt');
+      else v.add('a hit lands', 'dead', 'enemy hp, shared.hp.h, players down, paint', `shots flew but nothing they hit changed on any page (${v.names}): no hit points fell, nobody went down${v.has('paint') ? ', no paint changed' : ''}`, 'check damage and knockback in mechanics[projectile].params and that rules.bot aims at someone (ctx.bots.attack)');
+    },
+  },
+};

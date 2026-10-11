@@ -21,7 +21,10 @@
 //              thing to defend (window.__game.sight: its share of the view, depth-tested), and the waves target's
 //              health meter on the HUD.
 //
-// Signs, per mechanic (shared key → what counts):
+// Signs, per mechanic. Each one is the mechanic's own: `manifest.signs` in kit/mechanics/<id>/index.js (tools/catalog.mjs
+// MANIFEST) holds `sample` (what the page records of its shared state, 4 times a second) and `judge` (what counts, in
+// Node); this file reads them from the catalog (mechanicParts) and keeps no table of mechanics. A mechanic folder with a
+// manifest gets its sign with no change here. What the kit's mechanics count today (shared key → what counts):
 //   waves      shared.waves.e/w: enemies came; one closed ≥ APPROACH_M on its goal (the target zone, else the nearest
 //              player) or reached it; with a target: the zone exists in config/world.json, the HUD shows its meter, and
 //              undefended its health fell ≥ TARGET_DROP of its max; a player's aimed shot hurt or killed an enemy (else
@@ -43,8 +46,13 @@
 //              the boss level, the boss's hit points just above its first threshold) with 3 bots, the player swinging too.
 //   loot       shared.loot: something dropped and something was taken (coins, an opened chest, an upgrade card).
 // A staged page is read for these signs only (its label starts "demo-"), never for the others.
+//   build      shared.build: the saved edit number moved (reported only: a world is judged by tools/verify-world.mjs).
+//   shove      the local player's own count of shoves that landed (reported only).
+// Still here, not in a part: the readers several parts share (wavesSigns, otherSigns, actionSigns), the goal on screen,
+// and the browser scripts (the undefended page, the aimed shot, the swing, the two staged pages).
 import { calibrate, walkToward } from './hits-check.mjs';
 import { normalizeWeapons } from '../../kit/mechanics/melee/logic.js';
+import { mechanicParts } from '../catalog.mjs';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const r1 = v => Math.round(v * 10) / 10;
 const r2 = v => Math.round(v * 100) / 100;
@@ -61,8 +69,10 @@ export const ALIVE_LIMITS = {
 };
 /** A config/game.json prop whose role makes it the thing the players defend (the game's goal). */
 export const GOAL_ROLE = /\b(defend(ed)?|protect(ed)?|guard(ed)?|keep (it )?safe|save)\b/i;
-const KNOWN = ['waves', 'pickup', 'projectile', 'carry', 'station', 'paint', 'race', 'tag', 'teams', 'health', 'melee', 'levels', 'boss', 'loot'];
-const SHARED_KEY = { waves: 'waves', pickup: 'pk', projectile: 'prj', carry: 'carry', station: 'station', paint: 'paint', race: 'race', tag: 'tag', teams: 'teams', health: 'hp', melee: 'melee', levels: 'levels', boss: 'boss', loot: 'loot' };
+/** The kit's mechanics with their manifests (tools/catalog.mjs mechanicParts): where every sign comes from. Read once,
+ *  when this module is first imported; `partsOf(kit)` reads another kit folder's. */
+export const partsOf = kit => mechanicParts(kit ? { kit } : {});
+const PARTS = await partsOf();
 
 /**
  * In the page (installed with addInitScript): every SAMPLE_MS while a round plays, a compact copy of the observation.
@@ -70,14 +80,13 @@ const SHARED_KEY = { waves: 'waves', pickup: 'pk', projectile: 'prj', carry: 'ca
  * local, bot]], sh: {waves: {e, w}, pk: [state], hp: {id: hp}, carry: [holder], station: [[state, progress]], q,
  * paint: 'hash:length', race, tag, teams, prj: [shots, streams]}, mods: [stand-in mechanic ids]}.
  */
-export const RECORDER = () => {
+const RECORD = SAMPLERS => {
   if (window.__gfAlive) return;
   const rec = { samples: [], t0: performance.now() };
   const demoName = new URLSearchParams(location.search).get('gf-demo');
   // a staged moment is not a round (the action mechanics' own staged pages are read for their signs only)
   if (demoName && !/^(levels|boss)\./.test(demoName)) { window.__gfAlive = () => rec; return; }
   const R = v => Math.round(v * 100) / 100;
-  const hash = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
   const take = () => {
     const g = window.__game; if (!g?.snapshot || g.phase === 'show') return;
     let s; try { s = g.snapshot(); } catch { return; }
@@ -86,20 +95,16 @@ export const RECORDER = () => {
     if (s.phase === 'results' && last?.ph === 'results' && last.rd === s.round) return;
     if (rec.samples.length >= 900) return;
     const sh = s.shared ?? {}, o = {};
-    if (sh.waves) o.waves = { e: sh.waves.e ?? [], w: sh.waves.w ?? null };
-    if (sh.pk) o.pk = (sh.pk.p ?? []).map(q => q[3]);
-    if (sh.hp) o.hp = sh.hp.h ?? {};
-    if (sh.carry) o.carry = (sh.carry.i ?? []).map(e => e[4]);
-    if (sh.station) { o.station = (sh.station.s ?? []).map(x => [x[0], x[2]]); o.q = sh.station.q ?? null; }
-    if (sh.paint) o.paint = `${hash(sh.paint.g ?? '')}:${(sh.paint.g ?? '').length}`;
-    if (sh.race) o.race = sh.race.r ?? {};
-    if (sh.tag) o.tag = sh.tag.t ?? [];
-    if (sh.teams) o.teams = sh.teams.a ?? {};
-    if (sh.prj) o.prj = [(sh.prj.l ?? []).length, (sh.prj.st ?? []).length];
-    if (sh.melee) { let sw = 0, hi = 0; for (const v of Object.values(sh.melee.n ?? {})) { sw += v?.[0] ?? 0; hi += v?.[1] ?? 0; } o.melee = [sw, hi]; }
-    if (sh.levels) o.levels = [sh.levels.l ?? 0, sh.levels.ph ?? '', sh.levels.c ?? 0, sh.levels.v ?? 0];
-    if (sh.boss) { const a = sh.boss.a ?? []; o.boss = [a[0] ?? 0, a[3] ?? 0, a[4] ?? 0, a[5] ?? 0, a[6] ?? 0]; }
-    if (sh.loot) o.loot = [(sh.loot.d ?? []).length, Object.values(sh.loot.c ?? {}).reduce((n, v) => n + (v || 0), 0), Object.values(sh.loot.u ?? {}).reduce((n, v) => n + (v?.length ?? 0), 0), (sh.loot.d ?? []).filter(d => d[1] === 4).length];
+    // each mechanic this game uses says what to keep of its own state (its manifest's signs.sample). A sampler may ask
+    // for its mechanic's own stats (controls()), which is read once a sample and only when one asks; a kit copy that
+    // does not list its mechanics gets every sampler over the shared state alone.
+    const used = Array.isArray(s.modules?.mechanics) ? s.modules.mechanics.map(m => m.id) : null;
+    let ctl = null;
+    const stats = id => { if (!used) return null; try { ctl ??= g.controls?.() ?? {}; return ctl.mechanics?.find(m => m.id === id)?.stats ?? null; } catch { return null; } };
+    for (const [id, sample] of SAMPLERS) {
+      if (used && !used.includes(id)) continue;
+      try { const part = sample(sh, stats); if (part) Object.assign(o, part); } catch {}
+    }
     rec.samples.push({ w: R((performance.now() - rec.t0) / 1000), t: R(s.time?.round ?? 0), ph: s.phase, rd: s.round ?? 1,
       pl: (s.players ?? []).map(p => [p.id, R(p.x), R(p.z), p.score ?? 0, p.alive === false ? 0 : 1, p.down ? 1 : 0, p.local ? 1 : 0, p.bot ? 1 : 0]),
       sh: o, mods: (s.modules?.mechanics ?? []).filter(m => m.standin).map(m => m.id), ...(demoName ? { demo: demoName } : {}) });
@@ -107,6 +112,13 @@ export const RECORDER = () => {
   setInterval(take, 250);
   window.__gfAlive = () => rec;
 };
+/** The recorder for a set of parts: one function that stands alone (page.addInitScript sends its text), with each
+ *  part's own `signs.sample` written into it. */
+export function recorderFor(parts) {
+  const list = parts.filter(p => typeof p.manifest?.signs?.sample === 'function').map(p => `[${JSON.stringify(p.id)}, ${p.manifest.signs.sample.toString()}]`);
+  return new Function(`(${RECORD.toString()})([\n${list.join(',\n')}\n]);`);
+}
+export const RECORDER = recorderFor(PARTS);
 
 /** The first round a page played (later rounds are a replay of the same thing). */
 export const firstRound = samples => { const rd = samples.find(s => s.ph === 'playing')?.rd; return rd === undefined ? [] : samples.filter(s => s.rd === rd); };
@@ -262,7 +274,7 @@ export function mergeWaves(list) {
  * meters, phase} or null; aim: the aim-and-fire result or null. → {ok, items, detail}
  * An item: {mechanic, item, status: 'ok' | 'dead' | 'unmeasured' | 'note', reads, saw, fix}.
  */
-export function judgeAlive({ game = {}, world = {}, pages = [], firstLook = null, aim = null }) {
+export function judgeAlive({ game = {}, world = {}, pages = [], firstLook = null, aim = null, parts = PARTS }) {
   const L = ALIVE_LIMITS, goal = goalOf(game, world), items = [];
   const add = (mechanic, item, status, reads, saw, fix = '') => items.push({ mechanic, item, status, reads, saw, ...(fix ? { fix } : {}) });
   const used = [...new Set((game.mechanics ?? []).map(m => m.id))];
@@ -315,104 +327,23 @@ export function judgeAlive({ game = {}, world = {}, pages = [], firstLook = null
     if (W.aggro === 'players' && goal.props.length) add('waves', 'goes for the goal', 'dead', 'config/game.json → mechanics[waves].params.aggro', `aggro is "players": the enemies never go for the ${goal.props[0].name}`, 'set aggro to "target" (only the goal) or "nearest" (the goal or a player, whichever is closer)');
   }
 
-  // ---- each mechanic's sign of life ----
+  // ---- each mechanic's sign of life: its own (manifest.signs.judge), over what its own sample recorded ----
+  const byId = new Map(parts.map(p => [p.id, p]));
   for (const id of used) {
-    const key = SHARED_KEY[id];
-    if (!KNOWN.includes(id)) { add(id, 'sign of life', 'note', '—', `check 15 has no sign defined for "${id}"`); continue; }
+    const man = byId.get(id)?.manifest, signs = man?.signs, key = man?.state?.key ?? null;
+    if (typeof signs?.judge !== 'function') { add(id, 'sign of life', 'note', '—', `check 15 has no sign defined for "${id}"`); continue; }
     if (others.standins.has(id)) { add(id, 'sign of life', 'unmeasured', `snapshot().modules.mechanics`, `"${id}" runs as a stand-in, so nothing it does is real`, 'the game\'s kit copy lacks the module: node research/gf-three/tools/upgrade.mjs <game>'); continue; }
-    if (rounds.length && !others.keys.has(key)) { add(id, 'sign of life', 'unmeasured', `snapshot().shared.${key}`, `the ${id} mechanic never published its state (shared.${key}) on any page (${names})`, `is "${id}" in config/game.json → mechanics with the kit's module? rules must not replace it`); continue; }
+    if (!signs.reportOnly && key && rounds.length && !others.keys.has(key)) { add(id, 'sign of life', 'unmeasured', `snapshot().shared.${key}`, `the ${id} mechanic never published its state (shared.${key}) on any page (${names})`, `is "${id}" in config/game.json → mechanics with the kit's module? rules must not replace it`); continue; }
     if (!rounds.length) continue;
-    if (id === 'waves') {
-      const page = alive ?? null;
-      const ws = page ? wavesSigns(page.samples, goal) : wavesAll, wAll = wavesAll;
-      const where = page ? `undefended for ${secs(page)} s (no bots, the player standing still)` : `on ${names}`;
-      if (!ws.seen) { add('waves', 'enemies come', 'unmeasured', 'snapshot().shared.waves', `no waves state ${where}`); continue; }
-      if (!ws.maxAlive) add('waves', 'enemies come', 'dead', 'shared.waves.e', `no enemy came ${where} (firstDelay ${W.firstDelay} s, startCount ${W.startCount})`, 'check mechanics[waves].params (firstDelay, startCount, maxWaves) and that rules do not remove enemies');
-      else {
-        add('waves', 'enemies come', 'ok', 'shared.waves.e', `${ws.maxAlive} at once, the first at ${r1(ws.firstAt)} s`);
-        const goalWords = W.aggro === 'target' ? (W.zone ? `the target zone "${W.zone.name}"` : 'a target that does not exist') : W.aggro === 'players' ? 'the nearest player' : `the nearest player${W.zone ? ` or zone "${W.zone.name}"` : ''}`;
-        if (ws.closed >= L.APPROACH_M || ws.reached) add('waves', 'enemies go for their goal', 'ok', 'shared.waves.e positions', `they closed ${ws.closed} m on ${goalWords}${ws.reached ? ' and reached it' : ''}`);
-        else add('waves', 'enemies go for their goal', 'dead', 'shared.waves.e positions', `${W.aggro === 'target' && !W.zone ? 'the enemies had no goal (their target does not exist)' : `the enemies did not go for ${goalWords}`} ${where}: the most any closed on a goal was ${ws.closed} m, the farthest any moved ${ws.moved} m`,
-          W.zone || W.aggro !== 'target' ? 'check waves speed and that walls or props do not box the spawn edges in' : 'give waves a target zone (above), or set aggro "nearest" so they come for the players');
-      }
-      if (W.zone) {
-        if (!page) add('waves', 'an idle player loses the target', 'unmeasured', 'shared.waves.w[2] (target health), undefended', 'the undefended page did not run');
-        else {
-          const drop = ws.hp0 > 0 && ws.hpMin !== null ? (ws.hp0 - ws.hpMin) / ws.hp0 : 0;
-          if (ws.hp0 === null) add('waves', 'an idle player loses the target', 'unmeasured', 'shared.waves.w[2]', 'the target\'s health was never reported');
-          else if (drop >= L.TARGET_DROP || ws.hpMin <= 0) add('waves', 'an idle player loses the target', 'ok', 'shared.waves.w[2] (target health)', `nobody defended it: ${W.label} ${r1(ws.hp0)} → ${r1(ws.hpMin)} in ${secs(page)} s`);
-          else add('waves', 'an idle player loses the target', 'dead', 'shared.waves.w[2] (target health)', `nobody defended the ${W.label} for ${secs(page)} s and its health went ${r1(ws.hp0)} → ${r1(ws.hpMin)} (needs a ${L.TARGET_DROP * 100}% drop): ${ws.reached ? 'enemies reached it but did not hurt it' : `no enemy got within attackRange ${W.attackRange} m (+${L.REACH_SLACK})`}`,
-            ws.reached ? 'check waves damage and attackInterval, and that rules do not refill targetHp' : 'check attackRange against the size of what stands in the zone (enemies stop at its collider), and waves speed');
-        }
-      } else if (page && W.aggro !== 'target' && (game.mechanics ?? []).some(m => m.id === 'health')) {
-        // no target: the goal is the player's own skin, and an idle player alone must get hurt
-        const me = otherSigns(page.samples);
-        if (me.hpFell || me.down) add('waves', 'an idle player is hurt', 'ok', 'shared.hp.h, players down (undefended)', `the enemies reached the idle player and ${me.hpFell ? `hurt them (hit points down to ${me.hpMin})` : 'knocked them down'}`);
-        else add('waves', 'an idle player is hurt', 'dead', 'shared.hp.h, players down (undefended)', `the player stood still for ${secs(page)} s with no bots and was never hurt (the closest an enemy came: ${ws.reached ? 'in reach' : `${ws.closed} m closer than where it came in`})`,
-          'check waves damage, attackRange and aggro ("nearest" or "players"), and that rules do not protect the player');
-      }
-      // a player's shot hurts an enemy
-      if (W.hittable && (game.mechanics ?? []).some(m => m.id === 'projectile')) {
-        if (aim?.hit) add('waves', 'a shot hurts an enemy', 'ok', 'shared.waves.e hp and w[1] kills, while the player fired', `the player aimed at an enemy ${aim.distance} m away and fired: ${aim.kill ? 'it died' : `its hit points went ${aim.hpBefore} → ${aim.hpAfter}`}`);
-        else if (wAll.kills > 0 || wAll.enemyHpDrop) add('waves', 'a shot hurts an enemy', 'ok', 'shared.waves.w[1] kills', `${wAll.kills} killed on the pages with bots${aim ? `; the aimed shot did not land (${aim.why})` : ''}`);
-        else add('waves', 'a shot hurts an enemy', aim?.measured ? 'dead' : 'unmeasured', 'shared.waves.e hp and w[1] kills', `no enemy was hurt or killed on any page (${names})${aim ? `; the aimed player: ${aim.why}` : ''}`,
-          'check that waves.hittable is on and the shots reach the enemies (projectile speed, lifetime, the aim at the crosshair), and that rules.bot makes bots shoot them');
-      }
-      continue;
-    }
-    if (id === 'pickup') {
-      if (!others.pkPresent) add('pickup', 'pickups are there', 'dead', 'shared.pk.p[i][3]', `no pickup was out on any page (${names})`, 'check mechanics[pickup].params count and zone');
-      else if (others.pkTaken) add('pickup', 'one is taken', 'ok', 'shared.pk.p[i][3] 1 → 0', `${others.pkTaken} taken`);
-      else add('pickup', 'one is taken', 'dead', 'shared.pk.p[i][3] 1 → 0', `${others.pkPresent} pickups were out and nobody took one on any page (${names})`, 'make bots go for them (rules.bot: p.bot.seek(pk.nearest(p.position))) and keep them where players walk; collect "both" lets E take them');
-      continue;
-    }
-    if (id === 'projectile') {
-      const hit = wavesAll?.enemyHpDrop || wavesAll?.kills > 0 || others.hpFell || others.down || others.paintChanged;
-      if (!others.fired) add('projectile', 'shots fly', 'dead', 'shared.prj.l and .st', `no shot or stream was ever in flight on any page (${names})`, 'rules must fire: prj.fire(p) on primary for the player, and for bots in rules.bot (or ctx.bots.attack)');
-      else if (hit) add('projectile', 'a hit lands', 'ok', 'enemy hp, shared.hp.h, players down, paint', [wavesAll?.kills ? 'enemies killed' : '', others.hpFell ? 'hit points fell' : '', others.down ? 'players knocked down' : '', others.paintChanged ? 'paint changed' : ''].filter(Boolean).join(', ') || 'enemies hurt');
-      else add('projectile', 'a hit lands', 'dead', 'enemy hp, shared.hp.h, players down, paint', `shots flew but nothing they hit changed on any page (${names}): no hit points fell, nobody went down${(game.mechanics ?? []).some(m => m.id === 'paint') ? ', no paint changed' : ''}`, 'check damage and knockback in mechanics[projectile].params and that rules.bot aims at someone (ctx.bots.attack)');
-      continue;
-    }
-    if (id === 'health') { add('health', 'hit points', 'note', 'shared.hp.h', others.hpFell ? `hit points fell (lowest ${others.hpMin})` : 'nobody lost hit points on these pages'); continue; }
-    if (id === 'melee') {
-      const sw = aim?.melee ? aim : null;
-      if (sw?.hit) add('melee', 'a swing hurts an enemy', 'ok', 'shared.waves.e hp and w[1] kills, while the player swung', `the player walked up to an enemy, aimed and swung: ${sw.kill ? 'it died' : `its hit points went ${sw.hpBefore} → ${sw.hpAfter}`}`);
-      if (action.hits > 0) add('melee', 'swings land', 'ok', 'shared.melee.n (swings, hits per player)', `${action.hits} hits from ${action.swings} swings on the busiest page`);
-      else if (!sw?.hit) add('melee', 'swings land', action.swings > 0 || sw?.measured ? 'dead' : 'unmeasured', 'shared.melee.n (swings, hits per player)', `${action.swings} swings and no hit on any page (${names})${sw ? `; the player's own swing: ${sw.why}` : ''}`,
-        'check the melee mechanic\'s reach and arc against the enemies, that waves hittable is on, and that rules.bot (or the kit\'s melee bots) walks up and swings');
-      continue;
-    }
-    if (id === 'levels') {
-      const d = demoPage('demo-levels'), ds = d ? actionSigns(d.samples) : null;
-      if (action.movedOn) add('levels', 'a cleared level opens its portal and everyone moves on', 'ok', 'shared.levels (level, phase, cleared, travels)', `${action.travels} move${action.travels === 1 ? '' : 's'} through a portal, ${action.cleared} level${action.cleared === 1 ? '' : 's'} cleared${ds?.movedOn ? '; on the staged page the player walked into the open portal' : ''}`);
-      else add('levels', 'a cleared level opens its portal and everyone moves on', ds || action.opened ? 'dead' : 'unmeasured', 'shared.levels (level, phase, cleared, travels)',
-        ds ? (ds.opened ? 'the portal opened on the staged page (?gf-demo=levels.clear) but walking into it with real keys did not move the run on' : 'on the staged page (?gf-demo=levels.clear) the level was cleared and its portal never opened') : action.opened ? 'a portal opened but nobody moved on' : `no level was cleared on any page (${names})`,
-        'check config/world.json → levels (each with a portal zone), levels portalZone, and that nothing in rules.js holds the run');
-      continue;
-    }
-    if (id === 'boss') {
-      if (action.bossPhase >= 1) add('boss', 'the boss comes and changes phase', 'ok', 'shared.boss.a (active, hp, max, phase)', `it came and reached phase ${action.bossPhase + 1} (hit points down to ${action.bossHpMin} of ${action.bossMax})`);
-      else add('boss', 'the boss comes and changes phase', action.bossActive ? 'dead' : 'unmeasured', 'shared.boss.a (active, hp, max, phase)', action.bossActive ? `it came but never changed phase (hit points down to ${action.bossHpMin} of ${action.bossMax}) on the staged page (?gf-demo=boss.phase: it starts just above its first threshold) or any other` : 'the boss never came on any page (the staged page starts the run on the boss level)',
-        action.bossActive ? 'check the boss\'s phases (hit-point shares) and that melee and shots reach it (hittable, its radius)' : 'check that the levels mechanic\'s last level is the boss\'s (bossLevel "last") or boss auto, and startDelay');
-      continue;
-    }
-    if (id === 'loot') {
-      const takes = action.coins + action.upgrades + action.chestsOpened;
-      if (action.drops > 0 && takes > 0) add('loot', 'loot drops and is taken', 'ok', 'shared.loot (drops, coins, upgrades, opened chests)', `${action.drops} on the ground at once; ${action.coins} coins taken, ${action.chestsOpened} chest${action.chestsOpened === 1 ? '' : 's'} opened, ${action.upgrades} upgrade${action.upgrades === 1 ? '' : 's'} picked`);
-      else add('loot', 'loot drops and is taken', action.drops > 0 ? 'dead' : 'unmeasured', 'shared.loot (drops, coins, upgrades, opened chests)', action.drops > 0 ? `drops lay on the ground and nobody took one on any page (${names})` : `nothing dropped on any page (${names})`,
-        'check loot touch and magnet, that kills drop coins (waves onKill), and that the kit\'s melee bots walk over loot when no enemy is near');
-      continue;
-    }
-    const simple = {
-      carry: [others.carried, 'an item is held', 'shared.carry.i[…][4]', 'nobody picked an item up', 'make bots grab items (rules.bot) and check carry grabAction and reach'],
-      station: [others.station, 'a station is worked', 'shared.station.s progress, q', 'no station made progress', 'make bots work stations (rules.bot) and check station action and range'],
-      paint: [others.paintChanged, 'paint changes', 'shared.paint.g', 'no cell was painted', 'check paint.fromProjectile and that shots land on the ground (or rules call paint.splat)'],
-      race: [others.race, 'a gate is passed', 'shared.race.r', 'nobody passed a gate', 'call race.botStep(p) in rules.bot and check the gates are reachable'],
-      tag: [others.it, 'someone is it', 'shared.tag.t', 'nobody was it', 'tag makes an it at round start unless rules clear it'],
-      teams: [others.teams >= 2, 'two teams', 'shared.teams.a', `players were on ${others.teams} team(s)`, 'check players.teams in config/game.json and that rules do not reassign everyone'],
-    }[id];
-    const [ok, item, reads, deadSaw, fix] = simple;
-    add(id, item, ok ? 'ok' : 'dead', reads, ok ? 'yes' + (id === 'tag' && others.itPassed ? ', and it passed on' : '') : `${deadSaw} on any page (${names})`, ok ? '' : fix);
+    // what a part's judge is handed: its own `add`, the game, the pages' samples, and the readers parts share
+    const view = {
+      id, add: (item, status, reads, saw, fix = '') => add(id, item, status, reads, saw, fix),
+      game, world, goal, limits: L, aim, names, secs, r1, r2,
+      pages: rounds, allPages: allRounds, alive: alive ?? null, page: demoPage, has: x => used.includes(x),
+      others, action, waves: wavesAll,
+      othersOn: p => otherSigns(p.samples), actionOn: p => actionSigns(p.samples), wavesOn: p => wavesSigns(p.samples, goal),
+    };
+    try { signs.judge(view); } catch (e) { add(id, 'sign of life', 'unmeasured', `kit/mechanics/${id}/index.js → manifest.signs.judge`, `the ${id} mechanic's own sign threw: ${String(e?.message ?? e).split('\n')[0]}`); }
   }
 
   const bad = items.filter(i => i.status === 'dead' || i.status === 'unmeasured');
@@ -645,6 +576,46 @@ export async function walkAndSwing(p, { game, melee, seconds = 14, boss = false 
   return { melee: true, measured: swings > 0, hit: false, kill: false, ...(last ?? {}), swings, why: swings ? `${swings} swings in reach and no hit point fell` : 'never got within reach of an enemy' };
 }
 
+/**
+ * Where a player in a level made of rooms should walk next to reach `to`: through the level's doors. The rooms are
+ * joined as a graph by `doors` (each door joins two rooms whose middles line up, so the line between their middles
+ * passes through the doorway); the route is the shortest chain of room middles from the player's room to the room
+ * that holds `to`, and the next point is the first middle not yet reached. A level with no rooms (an island) → `to`.
+ * Pure. level: {rooms: [{id, rect}], doors: [{rooms: [a, b]}]}; me, to: {x, z}. → {x, z}
+ */
+export function roomRoute(level, me, to) {
+  const rooms = level?.rooms ?? [];
+  if (!rooms.length) return to;
+  const mid = r => ({ x: (r.rect[0] + r.rect[2]) / 2, z: (r.rect[1] + r.rect[3]) / 2 });
+  const inside = (r, q) => q.x >= r.rect[0] && q.x <= r.rect[2] && q.z >= r.rect[1] && q.z <= r.rect[3];
+  const closest = q => rooms.reduce((best, r) => (Math.hypot(mid(r).x - q.x, mid(r).z - q.z) < Math.hypot(mid(best).x - q.x, mid(best).z - q.z) ? r : best));
+  const goal = rooms.find(r => inside(r, to)) ?? closest(to);
+  // hops from every room to the goal room, over the doors
+  const hops = new Map([[goal.id, 0]]), queue = [goal.id];
+  while (queue.length) {
+    const id = queue.shift();
+    for (const d of level.doors ?? []) { const other = d.rooms[0] === id ? d.rooms[1] : d.rooms[1] === id ? d.rooms[0] : null; if (other && !hops.has(other)) { hops.set(other, hops.get(id) + 1); queue.push(other); } }
+  }
+  const here = rooms.find(r => inside(r, me));
+  if (here?.id === goal.id) return to;
+  if (here) {
+    const nextId = (level.doors ?? []).map(d => (d.rooms[0] === here.id ? d.rooms[1] : d.rooms[1] === here.id ? d.rooms[0] : null)).filter(id => id && hops.has(id)).sort((x, y) => hops.get(x) - hops.get(y))[0];
+    if (nextId === undefined || hops.get(nextId) >= (hops.get(here.id) ?? Infinity)) return to;
+    const from = mid(here), next = mid(rooms.find(r => r.id === nextId));
+    // off the line through the doorway (a doorway is one 3 m module wide): first back to the middle of this room
+    const ux = next.x - from.x, uz = next.z - from.z, len = Math.hypot(ux, uz) || 1;
+    return Math.abs((me.x - from.x) * uz - (me.z - from.z) * ux) / len > 1.0 ? from : next;
+  }
+  // in a doorway (between two rooms): on to the room of its two that is nearer the goal
+  const door = (level.doors ?? []).find(d => {
+    const [p, q] = d.rooms.map(id => mid(rooms.find(r => r.id === id))), len = Math.hypot(q.x - p.x, q.z - p.z) || 1;
+    const t = ((me.x - p.x) * (q.x - p.x) + (me.z - p.z) * (q.z - p.z)) / (len * len);
+    return t >= 0 && t <= 1 && Math.abs((me.x - p.x) * (q.z - p.z) - (me.z - p.z) * (q.x - p.x)) / len < 1.5;
+  });
+  const pick = door ? door.rooms.map(id => rooms.find(r => r.id === id)).sort((x, y) => (hops.get(x.id) ?? Infinity) - (hops.get(y.id) ?? Infinity))[0] : closest(me);
+  return mid(pick);
+}
+
 /** ?gf-demo=levels.clear, no bots: the level's enemies come and are taken down by the host; once the portal opens the
  *  scripted player walks into it with real keys; the level must move on. → {opened, moved, seconds} */
 async function levelsPage({ newPage, url, game, shot, log }) {
@@ -662,11 +633,14 @@ async function levelsPage({ newPage, url, game, shot, log }) {
     if (opened) {
       await shot(p, 'alive-portal-open');
       const k = await calibrate(p, obs);
+      // a level made of rooms (a dungeon) has walls: the portal is behind a doorway, so the route goes through the level's doors
+      const rooms = await p.evaluate(async () => { try { return (await (await fetch('config/world.json')).json()).levels.map(l => ({ rooms: l.rooms ?? [], doors: l.doors ?? [] })); } catch { return null; } }).catch(() => null);
       for (let t = Date.now(); k && Date.now() - t < 20000; ) {
         const o = await obs();
         if ((o.levels?.level ?? 0) > L0) { moved = true; break; }
         const pt = o.levels?.portal; if (!pt || !o.me) { await sleep(200); continue; }
-        await walkToward(p, k.F, k.R, pt.x - o.me.x, pt.z - o.me.z, 220);
+        const aim = roomRoute(rooms?.[o.levels?.level ?? 0], o.me, pt);
+        await walkToward(p, k.F, k.R, aim.x - o.me.x, aim.z - o.me.z, 220);
       }
       await sleep(900);
       await shot(p, 'alive-next-level');

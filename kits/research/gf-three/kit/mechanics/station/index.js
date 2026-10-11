@@ -261,3 +261,45 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Interact with a prop: an in-world screen or panel UI, timed tasks, quotas',
+  rank: 70,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: [],
+  owns: p => [{ res: `input.${p.action}`, shared: true, why: `${p.action} works a station in range (params.action)`, free: 'set station params.action to another input' }],
+  state: { key: 'station', fields: { s: '[[state, workerSeat, progress %, cooldown × 10]] per station', q: '[done, needed] the quota', x: 'screen text the rules set with station.show' } },
+  events: [
+    { name: 'onComplete', on: 'host', args: '{ station, player, quota: { done, needed, met } }', when: 'a task was finished' },
+    { name: 'onStart', on: 'host', args: '{ station, player }', when: 'a player began working a station' },
+    { name: 'onCancel', on: 'host', args: '{ station, player }', when: 'a player let go before it was done' },
+  ],
+  sync: { owner: 'host', how: 'the host owns each station\'s state and the quota; a copy sends its hold or taps' },
+  note: [
+    'A station is a screen in the world (text and a bar the kit draws); hold, tap or stand in range works it, with the HUD\'s prompt.',
+    'A finished task already scores pointsPerTask and counts toward quota; station.show(i, { title, lines, bar }) puts your own text on a screen.',
+    'Place stations by zone, position or prop: params.stations is [{ zone }], [{ at: [x, y, z] }] or [{ prop, index }].',
+  ],
+  stub: {
+    as: 'station',
+    worked: 'station.onComplete(({ quota }) => { if (quota.met) ctx.round.end(\'quota met\', ctx.players.list().map(p => p.id)); });',
+    traps: [
+      'adding score in onComplete counts every task twice (pointsPerTask is already added): set pointsPerTask to 0 first',
+      'bots work a station only when the rules send them: in bot(ctx, p) walk to it and call station.use(p, i, true)',
+    ],
+  },
+  signs: {
+    sample: sh => (sh.station ? { station: (sh.station.s ?? []).map(x => [x[0], x[2]]), q: sh.station.q ?? null } : null),
+    judge: v => {
+      const ok = v.others.station;
+      v.add('a station is worked', ok ? 'ok' : 'dead', 'shared.station.s progress, q', ok ? 'yes' : `no station made progress on any page (${v.names})`, ok ? '' : 'make bots work stations (rules.bot) and check station action and range');
+    },
+  },
+};

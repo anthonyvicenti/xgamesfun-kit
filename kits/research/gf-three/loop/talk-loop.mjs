@@ -1,0 +1,83 @@
+// The two steps before a build (open builder M2-F): the pitch (an agent round that answers with ideas or a locked
+// spec) and the spec check (the answer is held to its schema and the catalog; one repair round when it fails).
+// Lifted from the Studio worker's talkFlow; the checker is passed in, because the pitch's rules are the host's
+// (Studio: creator-studio/lib/pitch.mjs through tools/check-v2.mjs; a person's session: `create` checks the spec).
+import {STATE_SCHEMA,memoryStore} from './state.mjs';
+
+export const TALK_STEPS=['pitch','spec','deliver','done'];
+
+/**
+ * host:
+ *   kind              'pitch' | 'refine'
+ *   firstMessage      the agent round's message
+ *   flags             {stub}: the stub is never sent back
+ *   store             the state store (default: in memory; a pitch has no game folder yet)
+ *   agent(o)          the runner: o = {kind: 'pitch' | 'refine' | 'repair', message}. Absent: the round is handed over
+ *   check()           → {failure} | {errors, file} | {file, value}: the answer as the host's checker reads it
+ *   repairMessage(errors)  what the agent is told when its answer is not valid yet
+ *   say(key), log, checkpoint()
+ *   hooks: prepare(loop) (the job folder), fastLock(loop) → true when the host locked the spec with no agent,
+ *          beforeAgent(loop), afterAgent(loop), deliver(loop, answer) → the outcome
+ * → {state, mem, next(), step(), run()}
+ */
+export async function openTalkLoop(host){
+  const flags=host.flags??{},hooks=host.hooks??{};
+  const say=host.say??(()=>{}),log=host.log??(()=>{}),cp=host.checkpoint??(()=>{});
+  const store=host.store??memoryStore();
+  const S=(host.resume===false?null:await store.load())??{schema:STATE_SCHEMA,kind:host.kind,status:'building',step:'pitch',why:'a new request',fast:false,repaired:false,handed:null,outcome:null,history:[]};
+  const M={answer:null};
+  const go=(next,why)=>({next,why});
+  const round=async o=>{
+    cp();
+    if(host.agent){await host.agent(o);return null;}
+    if(S.handed?.step===S.step){S.handed=null;return null;}
+    S.handed={step:S.step,kind:o.kind};
+    return {waiting:'agent',kind:o.kind,message:o.message};
+  };
+  const steps={
+    async pitch(){
+      if(!S.handed){
+        await hooks.prepare?.(loop);cp();
+        if(await hooks.fastLock?.(loop)){S.fast=true;return go('spec','every answer was a default or a preset: the spec is locked with no agent round');}
+        say(S.kind==='pitch'?'researching':'thinking');
+        await hooks.beforeAgent?.(loop);
+      }
+      const w=await round({kind:S.kind,message:host.firstMessage});if(w)return w;
+      await hooks.afterAgent?.(loop);
+      return go('spec','the agent answered: its pitch or spec is checked');
+    },
+    async spec(){
+      cp();
+      let out=await host.check();
+      if(out.errors&&!flags.stub&&!S.fast&&!S.repaired){
+        if(!S.handed)log(`  ${S.kind} output invalid; one repair round`);
+        const w=await round({kind:'repair',message:host.repairMessage(out.errors)});if(w)return w;
+        S.repaired=true;
+        out=await host.check();
+      }
+      M.answer=out;
+      return go('deliver',out.errors?'the answer is still not valid after its repair round':out.failure?'the agent declined':'the answer is valid');
+    },
+    async deliver(){
+      cp();
+      const r=await hooks.deliver?.(loop,M.answer??await host.check())??{outcome:M.answer?.errors?'invalid-output':M.answer?.failure?'agent-declined':M.answer?.file==='spec.json'?'locked':'pitched'};
+      return {next:'done',why:'the answer was handed over',outcome:r};
+    },
+  };
+  const loop={
+    state:S,mem:M,
+    next:()=>({step:S.step,why:S.why}),
+    async step(){
+      if(S.step==='done')return {ran:'done',next:'done',why:S.why,outcome:S.outcome};
+      const ran=S.step,r=await steps[ran]();
+      if(r.waiting){await store.save(S);return {ran,...r,next:ran,why:'the agent has the round: call step() again when it is done'};}
+      S.step=r.next;S.why=r.why;
+      if(r.next==='done'){S.outcome=r.outcome?.outcome??null;S.status=S.outcome==='pitched'?'waiting-on-question':S.outcome==='locked'?'building':'failed';}
+      S.history=[...S.history,{step:ran,next:r.next,why:r.why}].slice(-20);
+      await store.save(S);
+      return {ran,...r};
+    },
+    async run(){for(;;){const r=await loop.step();if(r.next==='done'||r.waiting)return r;}},
+  };
+  return loop;
+}

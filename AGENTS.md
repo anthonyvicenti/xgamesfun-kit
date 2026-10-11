@@ -55,25 +55,27 @@ npx gamesfun create games/<name> --from soak-squad                  # or start f
 `create` vendors the kit, lays out the world, wires the mechanics from the spec, applies bodies and the look, writes
 `assets.json` (every slot) and `multiplayer.json` (mode `live`), and writes `games/<name>/AGENTS.md` for you.
 
+<!-- gf:game-building:start (generated: kits/research/gf-three/loop/brief.mjs agents; edit research/studio-v2/prompts/source/ in games.fun) -->
 ### 4. Write the rules
 
-`rules.js` holds only what makes this game this game; the kit already runs the lobby, players, bots, the round,
-results and replay, movement, the camera, friends drawn as characters, fair play, aiming, hits and the world. The
-hooks: `setup`, `roundStart`, `update`, `event`, `check`, `results`, `bot` (CONTRACT §3). Rules that hold:
+`rules.js` holds only what makes this game this game; the kit already runs the lobby, players, bots, the round, results and replay, movement, the camera, friends drawn as characters, fair play, aiming, hits and the world. The hooks: `setup`, `roundStart`, `update`, `event`, `check`, `results`, `bot` (CONTRACT §3). Each mechanic's own notes and callbacks are in the `rules.js` stub `create` wrote for this game, and in `npx gamesfun catalog`.
 
-- Host-owned state: anything shared is decided under `if (ctx.host)` and travels through `ctx.shared` or
-  `ctx.net.send(name, data, to)`. Events are edges (a grab, a hit), never per frame.
-- Randomness from `ctx.rng()`, never `Math.random`.
-- Use the mechanics: `ctx.mechanics.get('projectile').fire(p)` or `.stream(p, on)` with no direction lands on the
-  crosshair; pickups take E within reach; carry, station, waves, race, tag, teams, paint and health each do their
-  part. Read a mechanic's params from `config/game.json` → `mechanics`.
-- Fair play is the kit's: score only in `projectile.onHit` / `health.onDamage` (they skip refused hits); bots pick
-  foes with `ctx.bots.target(p, {range})` and fight with `ctx.bots.attack(p, t)`. Never turn `fair` off unless asked.
-- A basic enemy takes 2–4 hits (keep projectile `damage` below waves `hp`); never one-hit kills unless the spec says.
-- Never remove walls, the ceiling, doors or the outside of a world; stand the thing to defend in the `centre` zone.
-- A player's own look: read it per player, `ctx.assets.value(slotId, fallback, { player: p })`.
-- List in `config/game.json` → `controls` only controls that work (verify check 13 presses every one).
-- Every tuning number goes in `config/game.json` → `rules.params`, so it becomes a `rules.*` slot.
+Rules that hold for every game:
+
+- **Never edit** `games/<name>/gf/`, `games/<name>/audio/` or `games/<name>/vendor/`. `verify` fails a game whose kit copies changed.
+- **Everything visible is a slot** (CONTRACT §2). Don't draw art in code. Read values through `ctx.assets` and `ctx.config`. Expose new tuning numbers as `config/game.json` → `rules` (`rules.*` slots).
+- Keep host-only logic under `if (ctx.host)`. Use `ctx.rng()`, never `Math.random`. Send events on edges, never every frame.
+- **The home menu, the HUD and the wallet are the kit's** ([CONTRACT §6g](kits/research/gf-three/CONTRACT.md)). Every game opens on the kit's home menu (Play, Play with friends, How to play, Settings, Connect wallet), Esc pauses, and the kit's player card shows the player's health, knocked-down state and each mechanic's meter, with the goal line under the clock. Don't build a start screen, a pause menu, a health bar or a wallet button, and never skip, hide or cover the kit's: verify checks 20, 21 and 22 fail a game that does. Say the goal in one short line in `config/game.json` → `text.goal`; add the game's own meters with `ctx.ui.meter` (they sit in the player card) and change the goal line mid-round with `ctx.ui.goal(text)`.
+- **The mouse and the camera are the kit's too** ([CONTRACT §6d](kits/research/gf-three/CONTRACT.md) C5). Inside a post on X the frame refuses the pointer lock, so looking is click-drag and the kit's HUD offers a full-screen button. Never call `requestPointerLock`, hide `#gf-fullscreen` or swap the camera in `rules.js`: verify check 24 plays the game in a stand-in post and fails a game that breaks this.
+- **Playing with friends is the kit's** ([CONTRACT §6h](kits/research/gf-three/CONTRACT.md)). The friends page draws the waiting room (names players pick and can change, the room code once, everyone in their colour), and with friends the game's HUD and pause menu carry the round and the room. A friends round has no bots (the kit refuses `ctx.players.add` there), so keep `rules.bot` for playing alone. The results card shows each player the score you give them (`p.score`), so keep every player's own score in `p.score`, even in a co-op game. verify check 25 plays the friends page with two players and fails a game that adds players or shows a player a score the game did not count for them. It cannot tell when every player's score is the same (it notes a warning), so keeping each player's own score in `p.score` is yours to get right.
+
+Rules that hold when the game has the part they name:
+
+- **Fair play is the kit's** ([CONTRACT §6c](kits/research/gf-three/CONTRACT.md)). Knocked players are back up within `fair.downSeconds` and protected after that. Nobody hits a player who is down. Streams push and never knock over. In `rules.bot`, pick foes with `ctx.bots.target(p, {range})` and fight with `ctx.bots.attack(p, t)`, not the nearest player. Score only hits that counted: `projectile.onHit` and `health.onDamage` already skip refused ones. Never call `p.knock(…, {force: true})` for ordinary hits. verify check 10 measures it.
+- **Hits are the kit's** ([CONTRACT §6f](kits/research/gf-three/CONTRACT.md)): a hit on an enemy that does not kill shows a health bar over it, a flash and a flinch on every screen, and a kill falls and sinks. A basic enemy takes 2–4 hits from the game's weapon, so keep the projectile's `damage` (a stream's `streamDamage`) below waves `hp`. If a player can't see their shots land, fix the aim, the range or the firing in `rules.js`; never make enemies die in one hit. verify check 16 shoots enemies from the player's own view and fails one-hit kills.
+- **The world is the kit's** ([CONTRACT §4.3](kits/research/gf-three/CONTRACT.md)): `create` generated `config/world.json` from the template at the spec's `world.size`. An indoor world is a closed building (rooms, real doorways, a cutaway ceiling, a street outside); an outdoor one has its edge all round with gates. Enemies come in through its `entries` and walk through the doors by themselves. Stand the thing players defend or gather at in the `centre` zone (the main room's middle), add props inside the rooms, and never remove walls, the ceiling, doors or the outside. verify check 17 (`node kits/research/gf-three/tools/world.mjs games/<name>`) fails a world that is open, the wrong size, or has no doors for its enemies.
+- **Cosmetics are the kit's** ([CONTRACT §6e](kits/research/gf-three/CONTRACT.md)): each player may wear their own loadout (body, hat, body colour, shot or stream colour), and the kit draws every player in it on every screen. When rules draw something in a player's colour or model, read it per player: `ctx.assets.value(slotId, fallback, { player: p })`; never copy the game's value for everyone.
+<!-- gf:game-building:end -->
 
 ### 5. Verify until green (skill: `verify-and-playtest`)
 

@@ -21,7 +21,7 @@ import { checkTransport, endRound, inFrame, p2p, sleep, snap, until } from './ga
 
 const dist = (a, b) => Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0), (a.z ?? 0) - (b.z ?? 0));
 
-export async function gateLive({ manifest, live, assets, dir, srv, player, check, notes, shot, rec, errors, seconds, signal = null }) {
+export async function gateLive({ manifest, live, assets, dir, srv, player, check, notes, shot, rec, errors, seconds, signal = null, legs = null }) {
   const frameOf = page => page.frames().find(f => f.parentFrame() === page.mainFrame());
   const game = page => frameOf(page)?.evaluate(() => window.__game?.snapshot() ?? null).catch(() => null) ?? null;
   const net = async page => (await game(page))?.net ?? null;
@@ -54,6 +54,14 @@ export async function gateLive({ manifest, live, assets, dir, srv, player, check
   check('joiner-joins-over-webrtc', j0.you && j0.you !== h0.you && !j0.host && (await p2p(J.page))?.connected === true, `host ${h0.you} "${h0.names[h0.you]}", joiner ${j0.you} "${j0.names[j0.you]}"`);
   await checkTransport({ H, J, srv, signal, check, rec });
   await shot(H.page, 'host-lobby');
+  if (legs === 'lobby') {
+    // the lobby legs only (gate.mjs legs): the room is open and both players are in it over WebRTC; no round is played
+    const kitErrors = errors.filter(e => e.kit);
+    check('no-kit-errors', kitErrors.length === 0, kitErrors.slice(0, 3).map(e => `${e.who}: ${e.text}`).join(' | '));
+    notes.push('lobby legs only: no round was started, so nothing here says the players see each other in play');
+    rec.signaling = srv.sig.stats();
+    return;
+  }
 
   // ---- the round loads for everyone, then starts for everyone ----
   await H.page.click('#mp-start');

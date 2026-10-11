@@ -340,7 +340,7 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
   if (!look.palette?.accent) game.ui.accent = spec.look?.palette?.[0] ?? '#ff7a59';   // the look's accent wins when it has one
   // forge, wave 2 (track U; research/gf-forge/hud/create.mjs): the grim theme's colours, words and fonts, the forge keys
   // for How to play and touch, the library's sound files in place of the presets above, the friends page's colours
-  if (forge) (await import('../../../gf-forge/hud/create.mjs')).forgeHud({ spec, game, sounds, multiplayer, assets, world, notes });
+  if (forge) (await importPart(join(FORGE, 'hud/create.mjs'), 'the forge engine (research/gf-forge)')).forgeHud({ spec, game, sounds, multiplayer, assets, world, notes });
   const props = world.__catalog ?? null; delete world.__catalog;
   const worldArt = world.__art ?? null; delete world.__art;
   return { game, look, world, characters, props, sounds, multiplayer, assets, propFiles, named, bodies, notes, worldArt };

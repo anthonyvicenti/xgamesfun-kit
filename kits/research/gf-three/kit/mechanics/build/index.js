@@ -659,3 +659,48 @@ export function create(ctx, params = {}) {
     dispose() { ui?.dispose(); outline.removeFromParent(); ghost.removeFromParent(); debris.removeFromParent(); for (const i of [...fuses.keys()]) stopFuse(i); },
   };
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Place, break and paint blocks in a shared voxel world; signs and boom blocks; saved on the play host',
+  engines: ['party', 'scenic'],
+  // setup() throws without ctx.world.voxel
+  needs: { parts: [], world: [{ id: 'voxel', why: 'it edits the voxel grid (config/world.json template "voxel")' }] },
+  uses: ['shove'],
+  owns: () => [
+    { res: 'input.primary', why: 'a click uses the tool: places a block, paints, or opens a sign', free: 'the build tools are always on the click' },
+    { res: 'input.secondary', why: 'a right click (a long press) breaks a block', free: 'the build tools are always on the right click' },
+    { res: 'input.interact', shared: true, why: 'E changes the sign aimed at', free: 'set build params.signs to false' },
+  ],
+  state: { key: 'build', fields: { s: 'the room\'s last saved edit number', g: 'the world sequence the host has' } },
+  events: [],
+  sync: { owner: 'host', how: 'the host orders, checks and saves every edit; a copy shows its own edits at once and waits for the host\'s word' },
+  note: [
+    'A world game (round.mode "world", world.template "voxel"): the hotbar, placing, breaking, painting, signs and saving are all the kit\'s.',
+    'rules.js has no round to run: use it for what this world adds, and make an edit as the player would with build.edit(x, y, z, block).',
+    'Edits reach the shared world only in a room; the bare page alone is a practice copy.',
+  ],
+  stub: {
+    as: 'build',
+    worked: 'setup(ctx) { ctx.ui.toast(\'Build something together\'); }',
+    traps: [
+      'never write to the voxel grid from rules.js on a guest copy: every edit goes through the host (build.edit asks it)',
+      'there are no rounds, scores, bots or results in a world: check(ctx) stays null',
+    ],
+  },
+  signs: {
+    // reported, never failed here: a world is judged by tools/verify-world.mjs, which builds and reloads
+    reportOnly: true,
+    sample: sh => (sh.build ? { build: [sh.build.s ?? 0, sh.build.g ?? 0] } : null),
+    judge: v => {
+      let lo = null, hi = null;
+      for (const p of v.pages) for (const s of p.samples) { const b = s.sh?.build; if (!b) continue; const n = Math.max(b[0], b[1]); lo = lo === null ? n : Math.min(lo, n); hi = hi === null ? n : Math.max(hi, n); }
+      v.add('the world is shared', hi === null ? 'note' : 'ok', 'shared.build (saved edit number, world sequence)', hi === null ? 'no world state on these pages (a world is judged by verify-world)' : hi > lo ? `edits went through (${lo} → ${hi})` : `the world is up at edit ${hi}; nobody built on these pages`);
+    },
+  },
+};
