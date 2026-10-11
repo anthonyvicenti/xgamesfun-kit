@@ -1,4 +1,4 @@
-# gf-web3 API (`gf/web3/index.js`, version 1.0.0)
+# gf-web3 API (`gf/web3/index.js`, version 2.0.0)
 
 ```js
 import gfWeb3 from './gf/web3/index.js';   // from rules.js; create and upgrade keep gf/web3/ current
@@ -14,9 +14,11 @@ import gfWeb3 from './gf/web3/index.js';   // from rules.js; create and upgrade 
 | `ownedItems()` | `[{ id, name, description, rarity, look, image, serial, asset }]` | This game's collection only. `[]` for a guest. |
 | `owns(idOrName)` | boolean | |
 | `shop.list()` | `[{ id, name, description, rarity, look, image, price, priceText, currency, forSale }]` | Listed items only. `price` is in base units. `forSale` is false for items only in boxes. |
-| `shop.buy(idOrName)` | `{ item, asset, signatures, mock }` | One wallet approval |
+| `shop.buy(idOrName, { onStatus })` | `{ item, asset, order, signatures, mock }` | Two approvals (pay, then claim) |
 | `boxes()` | `[{ id, name, price, priceText, odds: [{ id, item, chance }] }]` | `chance` is 0–1 |
 | `openBox(id, { onStatus })` | `{ item, asset, order, signatures, mock }` | Two approvals (pay and roll, then claim). A failed roll throws after the refund. |
+| `orders()` | `[{ order, status, outcome, … }]` | The player's orders in this game that have not ended (a claim not approved yet, a slow roll) |
+| `finish(order)` | `{ settled, item }` or `{ refunded }` | Claims a rolled order, or refunds one the program lets go back (a failed roll at once, no roll after about 10 minutes, unclaimed after 7 days) |
 | `token()` | `{ mint, name, symbol, decimals, source, … }` or null | |
 | `loadout(items)` | `{ loadout, worn }` | Pure. One item per slot. |
 | `wear(items?)` | `{ loadout, worn }` | Sets `window.__GF_LOADOUT` (gf-three applies it). Remembered per game and wallet. |
@@ -36,7 +38,7 @@ fetchImpl, location, navigator, wallets, mock, rpc, storage, win }`.
 { "version": 1, "network": "devnet", "creator": "<wallet>",
   "token": { "mint": "…", "name": "Bean Brawl", "symbol": "BEAN", "decimals": 6, "program": "spl-token", "source": "launched", "pool": "…" },
   "shop": { "name": "Bean Brawl Items", "collection": "…", "game": "…", "treasury": "…",
-            "currency": { "mint": "So111…112", "symbol": "SOL", "decimals": 9, "native": true },
+            "currency": { "mint": "So111…112", "symbol": "SOL", "decimals": 9, "native": true, "program": "spl-token" },
             "items": [{ "id": 1, "name": "Golden Hat", "rarity": "Rare", "price": "50000000", "maxSupply": 0, "soulbound": false,
                         "look": { "values": { "character.tint.player": "#ffcc00" }, "files": {} },
                         "picture": "assets/hat.png", "image": "https://devnet.irys.xyz/…", "uri": "https://devnet.irys.xyz/…", "listed": true }],

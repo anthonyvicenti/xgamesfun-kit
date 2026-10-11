@@ -45,8 +45,8 @@ The MCP tools are the same operations: `web3_status`, `web3_list_pictures`, `web
   Up to 100 KB is free on Irys devnet. A bigger picture asks the wallet for a small SOL deposit first.
 - **What an item does in the game** is its `look`. Its slot ids come from `web3_player_looks`. See
   `cosmetics.md`.
-- **Currency.** A shop needs no token. It can be priced in SOL or in any classic SPL token, and the
-  price is fixed once the shop is live.
+- **Currency.** A shop needs no token. It can be priced in SOL or in any token, classic SPL or
+  Token-2022, and the currency is fixed once the shop is live.
 - **A token** is optional. To link an existing one, use `gamesfun web3 link --mint <address>`. To
   launch one, see step 3.
 

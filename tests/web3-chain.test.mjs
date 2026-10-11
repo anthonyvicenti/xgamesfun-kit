@@ -1,7 +1,8 @@
 // The kit's dependency-free Solana code agrees with the reference libraries (@solana/web3.js, @solana/spl-token,
-// the Meteora DBC SDK, @irys/bundles) and with games.fun's own loot client. The expected values are golden fixtures
-// made by tests/web3/fixtures/generate.mjs from those libraries and from real devnet accounts; the kit never
-// depends on them.
+// the Meteora DBC SDK, @irys/bundles). The expected values are golden fixtures made by tests/web3/fixtures/generate.mjs
+// from those libraries and from real devnet accounts; the kit never depends on them. The loot program (0.3) has its
+// own fixtures and tests: tests/web3-loot.test.mjs. chain.json's `loot` section is the retired 0.1 client's output,
+// kept here only as instructions to compile into messages.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
@@ -11,18 +12,7 @@ import { compactU16, fromBase64, fromHex, readCompactU16, toBase64, toHex } from
 import { isOnCurve } from '../web3/gf-web3/chain/curve.js';
 import { associatedTokenAddress, findProgramAddress, metadataAddress } from '../web3/gf-web3/chain/pda.js';
 import { sha256 } from '../web3/gf-web3/chain/sha256.js';
-import {
-  buyAndSettleInstructions,
-  createGameInstruction,
-  decodeLoot,
-  lootPda,
-  openBoxInstructions,
-  refundInstruction,
-  settleInstructions,
-  upsertBoxInstruction,
-  upsertItemInstruction,
-} from '../web3/gf-web3/chain/loot.js';
-import { createCollectionInstruction, parseCoreAsset } from '../web3/gf-web3/chain/core.js';
+import { parseCoreAsset } from '../web3/gf-web3/chain/core.js';
 import { computeUnitLimit, computeUnitPrice, withSolWrap } from '../web3/gf-web3/chain/programs.js';
 import { compileMessage, readMessage, readTransaction, signersOf, wireTransaction, withSignature } from '../web3/gf-web3/chain/tx.js';
 import { createPoolInstruction, dbcPda, firstBuyInstructions, readPoolConfig } from '../web3/gf-web3/chain/dbc.js';
@@ -75,75 +65,26 @@ describe('program addresses', () => {
   it('associated token accounts match spl-token, for wallets, PDAs and Token-2022', () => {
     for (const { owner, mint, program, address } of F.atas) assert.equal(associatedTokenAddress(owner, mint, program), address);
   });
-  it('Metaplex metadata and the loot program PDAs match', () => {
+  it('Metaplex metadata PDAs match', () => {
     assert.equal(metadataAddress(F.metadataPda.mint), F.metadataPda.address);
-    const { inputs, pdas } = F.loot;
-    assert.equal(lootPda.platform(), pdas.platform);
-    assert.equal(lootPda.game(inputs.collection), pdas.game);
-    assert.equal(lootPda.item(pdas.game, 7), pdas.item7);
-    assert.equal(lootPda.box(pdas.game, 3), pdas.box3);
-    assert.equal(lootPda.order(pdas.game, inputs.player, BigInt(inputs.nonce)), pdas.order);
-    assert.equal(lootPda.vrfIdentity(), pdas.vrfIdentity);
   });
 });
 
-describe('loot program and Metaplex Core instructions match games.fun’s loot client', () => {
-  const { inputs: I, pdas: P } = F.loot;
-  const treasury = associatedTokenAddress(I.creator, I.mint);
-  const nonce = BigInt(I.nonce);
-  const settle = { game: P.game, gameMint: I.mint, treasury, collection: I.collection, feeWallet: '8yPDcNeKHwfSmyx9MPNpgqU8o1W4xiCHxzYty7w3rnNV', player: I.player, itemId: 7 };
-
-  it('create_game, upsert_item, upsert_box', () => {
-    assert.deepEqual(plain(createGameInstruction({ authority: I.creator, collection: I.collection, mint: I.mint, treasury, burnBps: 0 })), F.loot.createGame);
-    assert.deepEqual(
-      plain(upsertItemInstruction({ admin: I.creator, game: P.game, itemId: 7, rarity: 3, soulbound: true, name: 'Golden Hat', uri: 'https://devnet.irys.xyz/abc', maxSupply: 100, price: 2500000n })),
-      F.loot.upsertItem,
-    );
-    assert.deepEqual(
-      plain(upsertBoxInstruction({ admin: I.creator, game: P.game, boxId: 3, price: 1000000n, entries: [{ itemId: 7, weight: 60 }, { itemId: 8, weight: 40 }] })),
-      F.loot.upsertBox,
-    );
-  });
-
-  it('a shop buy is buy_item then settle in one transaction', () => {
-    const built = buyAndSettleInstructions(I.player, settle, nonce);
-    assert.equal(built.order, P.order);
-    // games.fun's client builds buy_item alone (its keeper settles); the kit settles in the same transaction.
-    assert.deepEqual(plain(built.instructions[1]), F.loot.buyItem[0]);
-    assert.deepEqual(plain(built.instructions[2]), F.loot.settle[1]);
-  });
-
-  it('open_box, settle and refund', () => {
-    const open = openBoxInstructions({ player: I.player, game: P.game, mint: I.mint, boxId: 3, itemIds: [7, 8], nonce, clientSeed: fromHex(I.clientSeed) });
-    assert.deepEqual(open.instructions.map(plain), F.loot.openBox);
-    assert.deepEqual(settleInstructions(I.player, P.order, settle).map(plain), F.loot.settle);
-    assert.deepEqual(plain(refundInstruction({ signer: I.player, order: P.order, player: I.player, game: P.game, mint: I.mint })), F.loot.refund);
-  });
-
-  it('the Core collection names the loot game as update delegate', () => {
-    assert.deepEqual(
-      plain(createCollectionInstruction({ collection: I.collection, creator: I.creator, name: 'Bean Brawl Items', uri: 'https://devnet.irys.xyz/col', royaltyBps: 500 })),
-      F.loot.createCollection,
-    );
-  });
-
+describe('the SOL wrap around a purchase', () => {
   it('a SOL price wraps exactly the price around the purchase, budget first', () => {
     const [ata, transfer, sync, close, limit, price] = F.solWrap;
     assert.deepEqual(plain(computeUnitLimit(450000)), limit);
     assert.deepEqual(plain(computeUnitPrice(5000)), price);
-    const body = { programId: lootPda.platform(), keys: [], data: Uint8Array.of(1) };
-    const wrapped = withSolWrap(I.player, 'So11111111111111111111111111111111111111112', 2500000n, [computeUnitLimit(450000), body]);
+    const body = { programId: '11111111111111111111111111111111', keys: [], data: Uint8Array.of(1) };
+    const wrapped = withSolWrap(F.messages.payer, 'So11111111111111111111111111111111111111112', 2500000n, [computeUnitLimit(450000), body]);
     assert.deepEqual(wrapped.map(plain), [limit, ata, transfer, sync, plain(body), close]);
-    assert.deepEqual(withSolWrap(I.player, I.mint, 1n, [body]), [body]);
+    assert.deepEqual(withSolWrap(F.messages.payer, F.loot.inputs.mint, 1n, [body]), [body]);
   });
 });
 
 describe('transactions', () => {
   const M = F.messages;
-  const buy = () => {
-    const { inputs: I, pdas: P } = F.loot;
-    return [plainToIx(F.loot.buyItem[0])];
-  };
+  const buy = () => [plainToIx(F.loot.buyItem[0])];
   const plainToIx = (p) => ({ programId: p.programId, keys: p.keys, data: fromHex(p.data) });
 
   it('compiles v0 messages byte for byte like web3.js, with and without a lookup table', () => {
@@ -175,7 +116,7 @@ describe('transactions', () => {
     const signature = randomBytes(64);
     const signed = withSignature(wire, M.payer, signature);
     assert.deepEqual(readTransaction(signed).signatures[0], new Uint8Array(signature));
-    assert.throws(() => withSignature(wire, lootPda.platform(), signature), /does not sign/);
+    assert.throws(() => withSignature(wire, F.loot.pdas.platform, signature), /does not sign/);
     assert.deepEqual(signersOf(message), [M.payer]);
   });
 });
@@ -205,17 +146,9 @@ describe('accounts read from devnet decode like the reference readers', () => {
     const e = F.accounts.mainMint.expect;
     assert.deepEqual([main.decimals, main.supply, main.mintAuthority, main.freezeAuthority], [e.decimals, e.supply, e.mintAuthority, e.freezeAuthority]);
     assert.equal(main.program, 'spl-token');
-    assert.equal(main.lootReady, true);
     const usdc = parseMint(F.accounts.usdcMint.address, F.accounts.usdcMint.owner, bytesOf(F.accounts.usdcMint));
     assert.equal(usdc.decimals, 6);
     assert.equal(parseMint(F.accounts.lootGame.address, F.accounts.lootGame.owner, bytesOf(F.accounts.lootGame)), null);
-  });
-  it('loot Game, Platform, ItemDef and LootBox accounts', () => {
-    for (const [name, account] of [['Game', 'lootGame'], ['Platform', 'lootPlatform'], ['ItemDef', 'lootItem'], ['LootBox', 'lootBox']]) {
-      if (!F.accounts[account]) continue;
-      assert.deepEqual(normalize(decodeLoot(name, bytesOf(F.accounts[account]))), F.accounts[account].expect, name);
-    }
-    assert.throws(() => decodeLoot('Game', bytesOf(F.accounts.lootPlatform)), /Not a Game/);
   });
   it('a Core asset minted by the loot program', { skip: !F.accounts.coreAsset }, () => {
     assert.deepEqual(normalize(parseCoreAsset(bytesOf(F.accounts.coreAsset))), F.accounts.coreAsset.expect);

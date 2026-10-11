@@ -1,6 +1,6 @@
 // What a token mint is: its program, decimals, supply and authorities, plus a name, ticker and metadata link from
 // Metaplex token metadata or Token-2022's metadata extension. Used to link a token the creator already has and to
-// price a shop in any classic SPL token.
+// price a shop in any token (classic SPL or Token-2022: the loot program takes both).
 import { encodeBase58 } from './base58.js';
 import { fromUtf8, readUintLE } from './bytes.js';
 import { NATIVE_MINT, TOKEN_2022_PROGRAM, TOKEN_PROGRAM } from './pda.js';
@@ -87,7 +87,5 @@ export function parseMint(address, owner, data, metadataData = null) {
     name: native ? 'Solana' : meta?.name || null,
     symbol: native ? 'SOL' : meta?.symbol || null,
     uri: meta?.uri || null,
-    // The loot program takes classic SPL Token mints only.
-    lootReady: program === 'spl-token',
   };
 }

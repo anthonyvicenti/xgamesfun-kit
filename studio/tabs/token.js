@@ -147,7 +147,6 @@ export default {
         lookup.looking ? h('p', { class: 'dim' }, 'Looking it up…') : null,
         lookup.error ? h('p', { class: 'note error' }, lookup.error) : null,
         info ? h('div', { class: 'note', 'data-testid': 'mint-card' }, h('strong', {}, info.name ?? 'Unnamed token'), ` ${info.symbol ? `$${info.symbol}` : ''} · ${info.decimals} decimals${info.program === 'token-2022' ? ' · Token-2022' : ''}`) : null,
-        info && !info.lootReady ? h('p', { class: 'dim' }, 'This is a Token-2022 token. It can be your game’s token, but the shop can’t be priced in it.') : null,
         h('button', { class: 'primary', 'data-testid': 'link-go', disabled: !info, onclick: () => run(`${state.game.title} now uses $${info.symbol ?? short(info.mint)}.`, () => t.api('/token/link', { mint: info.mint })) }, `Use ${info?.symbol ? `$${info.symbol}` : 'this token'}`));
     }
 

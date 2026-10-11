@@ -5,14 +5,15 @@
 import { readUintLE, utf8 } from '../gf-web3/chain/bytes.js';
 import { createCollectionInstruction } from '../gf-web3/chain/core.js';
 import { createPoolInstruction, dbcPda, firstBuyInstructions, readVirtualPool } from '../gf-web3/chain/dbc.js';
-import { createGameInstruction, lootPda, upsertBoxInstruction, upsertItemInstruction } from '../gf-web3/chain/loot.js';
+import { createGameIx, lootPda, upsertBoxIx, upsertItemIx } from '../gf-web3/chain/loot.js';
 import { parseMetaplexMetadata } from '../gf-web3/chain/mint.js';
-import { associatedTokenAddress, metadataAddress } from '../gf-web3/chain/pda.js';
+import { associatedTokenAddress, metadataAddress, TOKEN_2022_PROGRAM, TOKEN_PROGRAM } from '../gf-web3/chain/pda.js';
 import { computeUnitLimit, createAssociatedTokenAccountIdempotent, transferLamports } from '../gf-web3/chain/programs.js';
 import { compileMessage, MAX_TRANSACTION_BYTES, readMessage, readTransaction, signersOf, wireTransaction } from '../gf-web3/chain/tx.js';
 import { explorerUrl } from '../gf-web3/network.js';
 import { fromUnits, gamePath, LIMIT, onChainUri, RuleError, text, ticker, toUnits } from '../gf-web3/rules.js';
 import {
+  boxOnChainArgs,
   chainStatus,
   collectionMetadata,
   collectionMetaSource,
@@ -58,7 +59,7 @@ function programNames(network, wallet) {
     ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL: 'Associated Token Account',
     CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d: 'Metaplex Core',
     metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s: 'Metaplex Token Metadata',
-    [network.loot.program]: 'games.fun loot program',
+    [network.loot.program]: 'games.fun loot program 0.3',
     [network.launchpad.dbcProgram]: 'Meteora Dynamic Bonding Curve',
   };
 }
@@ -357,12 +358,10 @@ export async function publishFlow(ctx, wallet) {
   if (config.creator && config.creator !== wallet) fail(`This game belongs to the wallet ${config.creator}. Connect that wallet.`);
   const status = await chainStatus(ctx.rpc, ctx.network, config, { pictureHash: async (p) => readPicture(ctx.gameDir, p).then((x) => x.sha256).catch(() => null) });
   const live = status.shop.exists;
-  if (live && status.shop.game.authority !== wallet) fail(`This shop’s loot game belongs to ${status.shop.game.authority}. Connect that wallet.`);
+  if (live && status.shop.game.owner !== wallet) fail(`This shop’s loot game belongs to ${status.shop.game.owner}. Connect that wallet.`);
   const currency = live ? shop.currency : shop.currency ?? defaultCurrency(config);
-  if (!live && !currency.native) {
-    const info = await mintInfo(ctx.rpc, currency.mint);
-    if (!info.lootReady) fail('Shops take classic SPL tokens and SOL; the chosen currency is Token-2022.');
-  }
+  // The token program that owns the currency, from the chain (a draft written before 0.3 may not say).
+  const tokenProgram = currency.native ? TOKEN_PROGRAM : (await mintInfo(ctx.rpc, currency.mint)).program === 'token-2022' ? TOKEN_2022_PROGRAM : TOKEN_PROGRAM;
   const pictures = new Map();
   for (const item of shop.items) if (item.picture) pictures.set(item.id, await readPicture(ctx.gameDir, item.picture).catch(() => null));
   const publishing = shop.items.filter((item) => status.shop.items[item.id].state !== 'published' && (item.image || pictures.get(item.id)));
@@ -438,7 +437,7 @@ export async function publishFlow(ctx, wallet) {
     );
   }
   const unit = (units) => `${fromUnits(units, currency.decimals)} ${currency.symbol}`;
-  const treasury = associatedTokenAddress(wallet, currency.mint);
+  const treasury = associatedTokenAddress(wallet, currency.mint, tokenProgram);
   let plan = null;
   steps.push(
     transactionsStep(ctx, {
@@ -452,18 +451,19 @@ export async function publishFlow(ctx, wallet) {
         if (!live) {
           setup.push(
             createCollectionInstruction({ collection: collection.address, creator: wallet, name: s.name, uri: s.metadataUri, royaltyBps: s.royaltyBps }),
-            createAssociatedTokenAccountIdempotent(wallet, wallet, currency.mint),
-            createGameInstruction({ authority: wallet, collection: collection.address, mint: currency.mint, treasury, burnBps: 0 }),
+            createAssociatedTokenAccountIdempotent(wallet, wallet, currency.mint, tokenProgram),
+            // The creator's wallet is the game's owner (its settings and catalog) and its authority (payouts).
+            createGameIx({ owner: wallet, authority: wallet, collection: collection.address, mint: currency.mint, treasury }),
           );
         }
         for (const item of publishing) {
           const it = s.items.find((i) => i.id === item.id);
           if (!upToDate(it, c)) fail(`${it.name}’s details were not uploaded. Press Approve again.`);
-          entries.push({ id: `item:${it.id}`, instruction: upsertItemInstruction({ admin: wallet, game, itemId: it.id, ...itemOnChainArgs(it) }) });
+          entries.push({ id: `item:${it.id}`, instruction: upsertItemIx({ owner: wallet, game, itemId: it.id, args: itemOnChainArgs(it) }) });
         }
         for (const box of boxes) {
           const b = s.boxes.find((x) => x.id === box.id);
-          entries.push({ id: `box:${b.id}`, instruction: upsertBoxInstruction({ admin: wallet, game, boxId: b.id, price: BigInt(b.price), entries: b.entries.map((e) => ({ itemId: e.item, weight: e.weight })) }) });
+          entries.push({ id: `box:${b.id}`, instruction: upsertBoxIx({ owner: wallet, game, boxId: b.id, args: boxOnChainArgs(b) }) });
         }
         const groups = [];
         if (setup.length) {
@@ -485,7 +485,7 @@ export async function publishFlow(ctx, wallet) {
           // Later transactions depend on the first landing (the loot game must exist), so only a live shop's are all dry-run.
           simulate: live ? wires.length : 1,
           details: [
-            ...(live ? [] : [`Collection ${collection.address} (Metaplex Core): your wallet is its update authority; ${s.royaltyBps / 100}% resale royalty to you. The loot program may mint into it.`, `Priced in ${currency.symbol}, fixed from now on. Sales go to your account ${treasury}; games.fun’s loot program keeps ${ctx.network.loot.platformFeeBps / 100}%.`]),
+            ...(live ? [] : [`Collection ${collection.address} (Metaplex Core): your wallet is its update authority; ${s.royaltyBps / 100}% resale royalty to you. The loot program may mint into it.`, `Priced in ${currency.symbol}${tokenProgram === TOKEN_2022_PROGRAM ? ' (a Token-2022 token)' : ''}, fixed from now on. Sales go to your account ${treasury} in full; games.fun’s loot program charges each buyer a flat ${sol(BigInt(ctx.network.loot.playerFeeLamports))} per purchase, on top of the price.`]),
             ...publishing.map((i) => `${i.name} (${i.rarity}): ${i.price === '0' ? 'loot boxes only' : unit(i.price)}`),
             ...boxes.map((b) => `Loot box ${b.name}: ${unit(b.price)}`),
             ...(packed.partial ? ['That is more than one approval holds; press “Put it on sale” again afterwards for the rest.'] : []),
@@ -496,11 +496,12 @@ export async function publishFlow(ctx, wallet) {
       landed: async (flow, signatures, partial) => {
         const landedIds = new Set(plan.groups.slice(0, signatures.length).flatMap((g) => g.ids));
         await updateConfig(ctx.gameDir, (c) => {
+          const priced = { ...currency, program: tokenProgram === TOKEN_2022_PROGRAM ? 'token-2022' : 'spl-token' };
           if (landedIds.has('setup') || landedIds.has('collection')) {
             c.creator = wallet;
-            Object.assign(c.shop, { collection: collection.address, currency });
+            Object.assign(c.shop, { collection: collection.address, currency: priced });
           }
-          if (landedIds.has('setup') || landedIds.has('game')) Object.assign(c.shop, { game: plan.game, treasury, currency });
+          if (landedIds.has('setup') || landedIds.has('game')) Object.assign(c.shop, { game: plan.game, treasury, currency: priced });
           for (const it of c.shop.items) if (landedIds.has(`item:${it.id}`)) it.listed = true;
           for (const b of c.shop.boxes) if (landedIds.has(`box:${b.id}`)) b.listed = true;
           return c;

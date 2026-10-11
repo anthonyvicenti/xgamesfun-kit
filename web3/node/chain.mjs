@@ -20,7 +20,7 @@ export async function mintInfo(rpc, address, { network = null } = {}) {
   const mint = String(address ?? '').trim();
   if (!isAddress(mint)) throw new RuleError('That is not a Solana address. Paste the token’s mint address.');
   if (mint === NATIVE_MINT)
-    return { mint, program: 'spl-token', native: true, decimals: 9, supply: null, mintAuthority: null, freezeAuthority: null, name: 'Solana', symbol: 'SOL', uri: null, lootReady: true };
+    return { mint, program: 'spl-token', native: true, decimals: 9, supply: null, mintAuthority: null, freezeAuthority: null, name: 'Solana', symbol: 'SOL', uri: null };
   const [account, metadata] = await rpc.accounts([mint, metadataAddress(mint)]);
   if (!account) throw new RuleError('There is no token at that address on devnet.');
   const info = parseMint(mint, account.owner, account.data, metadata?.data ?? null);
@@ -89,16 +89,22 @@ export const tokenMetadata = ({ name, symbol, description, image, contentType })
   properties: { files: [{ uri: image, type: contentType }], category: 'image', launchpad: 'games.fun' },
 });
 
-/** How an item's on-chain definition should read, from its config. */
+/** An item's on-chain definition (ItemArgs, program 0.3), from its config: a collectible, the whole sale to the treasury. */
 export const itemOnChainArgs = (item) => ({
   kind: 'Collectible',
   rarity: rarityIndex(item.rarity),
   soulbound: item.soulbound,
   name: item.name,
   uri: item.uri ?? '',
-  maxSupply: item.maxSupply,
+  max_supply: item.maxSupply,
   price: BigInt(item.price),
   active: true,
+});
+
+/** A box's on-chain definition (BoxArgs): priced in the game's own currency, one item per entry. */
+export const boxOnChainArgs = (box) => ({
+  price: BigInt(box.price),
+  entries: box.entries.map((e) => ({ outcome: { Item: [e.item] }, weight: e.weight })),
 });
 
 const sameItem = (item, onChain) =>
@@ -109,13 +115,15 @@ const sameItem = (item, onChain) =>
   onChain.max_supply === item.maxSupply &&
   onChain.soulbound === item.soulbound &&
   onChain.rarity === rarityIndex(item.rarity) &&
-  onChain.active === true;
+  onChain.active === true &&
+  !onChain.rise && !onChain.fall && !onChain.life && !onChain.shares.length;
 
 const sameBox = (box, onChain) =>
   onChain.price === BigInt(box.price) &&
   onChain.active === true &&
+  !onChain.currency && !onChain.rise && !onChain.fall && !onChain.shares.length &&
   onChain.entries.length === box.entries.length &&
-  onChain.entries.every((e, i) => e.item_id === box.entries[i].item && e.weight === box.entries[i].weight);
+  onChain.entries.every((e, i) => e.outcome?.Item?.[0] === box.entries[i].item && e.weight === box.entries[i].weight);
 
 /**
  * The game's token and shop as the chain has them. `pictureHash(path)` returns the current sha256 of a game picture
@@ -197,7 +205,7 @@ export async function chainStatus(rpc, network, config, { pictureHash = async ()
     out.shop = {
       exists: Boolean(gameAccount),
       collectionExists: Boolean(shop.collection && byAddress.get(shop.collection)),
-      game: gameAccount ? { mint: gameAccount.mint, treasury: gameAccount.treasury, authority: gameAccount.authority, paused: gameAccount.paused, orders: Number(gameAccount.orders) } : null,
+      game: gameAccount ? { mint: gameAccount.mint, treasury: gameAccount.treasury, owner: gameAccount.owner, authority: gameAccount.authority, paused: gameAccount.paused, orders: Number(gameAccount.orders) } : null,
       explorer: shop.collection ? explorerUrl(network, 'address', shop.collection) : null,
       items,
       boxes,

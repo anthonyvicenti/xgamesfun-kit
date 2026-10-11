@@ -6,7 +6,7 @@
 //   import gfWeb3 from './gf/web3/index.js';
 //   await gfWeb3.ready();                        // reads ./gamesfun.json
 //   const items = await gfWeb3.shop.list();      // what is on sale, priced in the shop's currency
-//   await gfWeb3.shop.buy(items[0].id);          // one wallet approval: pay, mint, deliver
+//   await gfWeb3.shop.buy(items[0].id);          // two wallet approvals: pay, then claim (the collectible is minted)
 //   await gfWeb3.wearOwned();                    // the owned items' looks → window.__GF_LOADOUT
 //
 // Mock mode (no network, a pretend wallet, deterministic rolls) runs when the page is automated or headless
@@ -20,8 +20,24 @@
 import { encodeBase58, isAddress } from './chain/base58.js';
 import { utf8 } from './chain/bytes.js';
 import { ownedAssetFilters, parseCoreAsset, MPL_CORE_PROGRAM } from './chain/core.js';
-import { buyAndSettleInstructions, decodeLoot, LootAccount, lootPda, openBoxInstructions, OrderStatus, refundInstruction, settleInstructions } from './chain/loot.js';
-import { associatedTokenAddress, NATIVE_MINT } from './chain/pda.js';
+import {
+  ata,
+  buyItemIxs,
+  currentFees,
+  decodeLoot,
+  ESCROW_LAMPORTS,
+  LOOT_PROGRAM,
+  LootAccount,
+  lootPda,
+  openBoxIxs,
+  OrderStatus,
+  priceAt,
+  refundable,
+  refundOrderIx,
+  settleOrderIxs,
+} from './chain/loot.js';
+import { NATIVE_MINT } from './chain/pda.js';
+import { transferExtras } from './chain/token2022.js';
 import { closeTokenAccount, withSolWrap } from './chain/programs.js';
 import { sha256 } from './chain/sha256.js';
 import { compileMessage, wireTransaction, transactionId } from './chain/tx.js';
@@ -47,6 +63,8 @@ const MESSAGE = {
   NotForSale: (name) => `${name} is not sold directly; it comes from loot boxes.`,
   NoBox: (id) => `There is no loot box ${id} in this shop.`,
   Short: (need) => `You need ${need} for this.`,
+  NoOrder: 'That order is gone: it was settled or refunded.',
+  NotYet: (slot) => `This order can be refunded from slot ${slot} on.`,
   RollFailed: 'The roll failed (everything in the box is sold out). Your payment was refunded.',
   RollSlow: 'The box was opened but the roll has not arrived yet. Check your items again in a minute.',
 };
@@ -265,21 +283,79 @@ export function createGfWeb3(options = {}) {
       }));
   }
 
-  /** The on-chain Game, Platform and (optionally) item or box accounts a purchase needs. */
+  /** The on-chain Game and Platform, and any item or box accounts a purchase needs. */
   async function readShop(shop, extra = []) {
     const [game, platform, ...rest] = await rpc().accounts([shop.game, lootPda.platform(), ...extra]);
     if (!game || !platform) throw new Error(MESSAGE.NotLive);
     return { game: decodeLoot(LootAccount.Game, game.data), platform: decodeLoot(LootAccount.Platform, platform.data), rest };
   }
 
-  async function checkFunds(player, mint, price, shop) {
-    const client = rpc();
-    const have = mint === NATIVE_MINT ? await client.balance(player) : await client.tokenBalance(associatedTokenAddress(player, mint));
-    if (have < BigInt(price)) throw new Error(MESSAGE.Short(priceText(shop, price)));
+  /** The token program that owns a mint (classic SPL or Token-2022). */
+  async function tokenProgramOf(mint) {
+    const [account] = await rpc().accounts([mint]);
+    if (!account) throw new Error(MESSAGE.NotLive);
+    return account.owner;
   }
 
-  /** Buy an item (by id or name): one wallet approval pays, mints the collectible and delivers it. */
-  async function buy(sku) {
+  /** The player holds the price, and the SOL an order holds until it ends (returned) plus the player fee. */
+  async function checkFunds(player, mint, price, platform, shop, tokenProgram) {
+    const client = rpc();
+    const sol = await client.balance(player);
+    const lamports = ESCROW_LAMPORTS + BigInt(currentFees(platform).player);
+    if (mint === NATIVE_MINT) {
+      if (sol < BigInt(price) + lamports) throw new Error(MESSAGE.Short(`${priceText(shop, BigInt(price) + lamports)} (the price, ${fromUnits(lamports, 9)} SOL held until it is delivered, and the fee)`));
+      return;
+    }
+    if ((await client.tokenBalance(ata(player, mint, tokenProgram))) < BigInt(price)) throw new Error(MESSAGE.Short(priceText(shop, price)));
+    if (sol < lamports) throw new Error(MESSAGE.Short(`${fromUnits(lamports, 9)} SOL (held until it is delivered, and the fee)`));
+  }
+
+  /** An order as the chain has it now, or null once it ended. */
+  async function readOrder(order) {
+    const [account] = await rpc().accounts([order]);
+    return account ? decodeLoot(LootAccount.Order, account.data) : null;
+  }
+
+  /** Wait until an order is no longer Pending (the oracle rolled it), or give up. */
+  async function waitForRoll(order) {
+    let o = null;
+    for (let poll = 0; poll < ROLL_POLLS; poll++) {
+      o = await readOrder(order);
+      if (!o || o.status !== OrderStatus.Pending) return o;
+      await new Promise((resolve) => setTimeout(resolve, options.rollPollMs ?? ROLL_POLL_MS));
+    }
+    return o;
+  }
+
+  /** The player signs the end of a rolled order: the collectible is minted to them, the payment goes to the game. */
+  async function settleOrder(player, order, o, game) {
+    const tokenProgram = await tokenProgramOf(o.mint);
+    const extras = await transferExtras(rpc(), o.mint, [{ source: ata(o.game, o.mint, tokenProgram), destination: game.treasury, authority: o.game, amount: o.paid }]);
+    return signAndSend(player, settleOrderIxs({ signer: player, order, orderAccount: o, gameAccount: game, tokenProgram, extras }));
+  }
+
+  /** The player signs a refund of their order; a SOL shop's refund is unwrapped back to plain SOL. */
+  async function refundOrder(player, order, o) {
+    const tokenProgram = await tokenProgramOf(o.mint);
+    const extras = await transferExtras(rpc(), o.mint, [{ source: ata(o.game, o.mint, tokenProgram), destination: ata(o.player, o.mint, tokenProgram), authority: o.game, amount: o.paid }]);
+    const instructions = [refundOrderIx({ signer: player, order, orderAccount: o, tokenProgram, extras })];
+    if (o.mint === NATIVE_MINT) instructions.push(closeTokenAccount(ata(player, NATIVE_MINT), player, player));
+    return signAndSend(player, instructions);
+  }
+
+  const wonItem = (config, o, order) => {
+    const id = o.outcome?.Item?.[0];
+    const item = id === undefined ? null : findItem(config, id);
+    const asset = id === undefined ? null : lootPda.asset(order, o.requested_slot);
+    return item ? ownedOf(item, asset, o.serial) : { id: id ?? null, name: id === undefined ? 'Nothing' : `Item ${id}`, rarity: 'Common', look: null, image: null, serial: o.serial, asset };
+  };
+
+  /**
+   * Buy an item (by id or name). Two wallet approvals: the purchase, then the claim that mints the collectible (its
+   * address depends on the slot the purchase lands in, so it cannot ride in the same transaction).
+   */
+  async function buy(sku, { onStatus } = {}) {
+    const say = (text) => (status(text), onStatus?.(text));
     const config = await ready();
     const item = findItem(config, sku);
     if (!item) throw new Error(MESSAGE.NoItem(sku));
@@ -293,19 +369,25 @@ export function createGfWeb3(options = {}) {
       return { item: bought, signatures: [], mock: true };
     }
     const shop = liveShop(config);
-    status('Getting the shop ready…');
+    say('Getting the shop ready…');
     const { game, platform, rest } = await readShop(shop, [lootPda.item(shop.game, item.id)]);
     const onChain = rest[0] ? decodeLoot(LootAccount.Item, rest[0].data) : null;
-    if (!onChain?.active || onChain.price === 0n) throw new Error(MESSAGE.NotForSale(item.name));
-    await checkFunds(player, game.mint, onChain.price, shop);
-    const context = { game: shop.game, gameMint: game.mint, treasury: game.treasury, collection: game.collection, feeWallet: platform.fee_wallet, player, itemId: item.id };
-    const sale = buyAndSettleInstructions(player, context);
-    status('Approve the purchase in your wallet…');
-    const signature = await signAndSend(player, withSolWrap(player, game.mint, onChain.price, sale.instructions));
-    const bought = ownedOf(item, sale.asset, null);
+    const price = onChain ? priceAt(onChain) : 0n;
+    if (!onChain?.active || price === 0n) throw new Error(MESSAGE.NotForSale(item.name));
+    const tokenProgram = await tokenProgramOf(game.mint);
+    await checkFunds(player, game.mint, price, platform, shop, tokenProgram);
+    const extras = await transferExtras(rpc(), game.mint, [{ source: ata(player, game.mint, tokenProgram), destination: ata(shop.game, game.mint, tokenProgram), authority: player, amount: price }]);
+    const sale = buyItemIxs({ player, game: shop.game, mint: game.mint, itemId: item.id, maxPrice: price, tokenProgram, extras });
+    say('Approve the purchase in your wallet…');
+    const paid = await signAndSend(player, withSolWrap(player, game.mint, price, sale.instructions));
+    const o = await readOrder(sale.order);
+    if (!o) throw new Error(MESSAGE.NoOrder);
+    say('Approve claiming it in your wallet…');
+    const claimed = await settleOrder(player, sale.order, o, game);
+    const bought = wonItem(config, o, sale.order);
     emit('items', bought);
-    status('');
-    return { item: bought, asset: sale.asset, signatures: [signature], mock: false };
+    say('');
+    return { item: bought, asset: bought.asset, order: sale.order, signatures: [paid, claimed], mock: false };
   }
 
   /** Open a loot box: pay and roll (one approval), wait for MagicBlock's VRF, then claim what it rolled (a second approval). */
@@ -332,35 +414,62 @@ export function createGfWeb3(options = {}) {
     const { game, platform, rest } = await readShop(shop, [lootPda.box(shop.game, box.id)]);
     const onChain = rest[0] ? decodeLoot(LootAccount.Box, rest[0].data) : null;
     if (!onChain?.active) throw new Error(MESSAGE.NoBox(id));
-    await checkFunds(player, game.mint, onChain.price, shop);
-    const open = openBoxInstructions({ player, game: shop.game, mint: game.mint, boxId: box.id, itemIds: onChain.entries.map((e) => e.item_id) });
+    const mint = onChain.currency ?? game.mint;
+    const price = priceAt(onChain);
+    const tokenProgram = await tokenProgramOf(mint);
+    await checkFunds(player, mint, price, platform, shop, tokenProgram);
+    const extras = await transferExtras(rpc(), mint, [{ source: ata(player, mint, tokenProgram), destination: ata(shop.game, mint, tokenProgram), authority: player, amount: price }]);
+    const open = openBoxIxs({ player, game: shop.game, mint, boxId: box.id, box: onChain, maxPrice: price, tokenProgram, extras });
     say('Approve opening the box in your wallet…');
-    const opened = await signAndSend(player, withSolWrap(player, game.mint, onChain.price, open.instructions));
+    const opened = await signAndSend(player, withSolWrap(player, mint, price, open.instructions));
     say('Rolling…');
-    let order = null;
-    for (let poll = 0; poll < ROLL_POLLS; poll++) {
-      const [account] = await rpc().accounts([open.order]);
-      order = account ? decodeLoot(LootAccount.Order, account.data) : null;
-      if (order && order.status !== OrderStatus.Pending) break;
-      await new Promise((resolve) => setTimeout(resolve, options.rollPollMs ?? ROLL_POLL_MS));
-    }
-    if (!order || order.status === OrderStatus.Pending) throw new Error(MESSAGE.RollSlow);
-    const context = { game: shop.game, gameMint: game.mint, treasury: game.treasury, collection: game.collection, feeWallet: platform.fee_wallet, player, itemId: order.item_id };
-    if (order.status === OrderStatus.Failed) {
+    const o = await waitForRoll(open.order);
+    if (!o) throw new Error(MESSAGE.NoOrder);
+    if (o.status === OrderStatus.Pending) throw new Error(MESSAGE.RollSlow);
+    if (o.status === OrderStatus.Failed) {
       say('Nothing left to win: approve the refund in your wallet…');
-      const refund = [refundInstruction({ signer: player, order: open.order, player, game: shop.game, mint: game.mint })];
-      // A SOL shop refunds into a re-created wrapped-SOL account: close it so the player keeps plain SOL.
-      if (game.mint === NATIVE_MINT) refund.push(closeTokenAccount(associatedTokenAddress(player, NATIVE_MINT), player, player));
-      await signAndSend(player, refund);
+      await refundOrder(player, open.order, o);
       throw new Error(MESSAGE.RollFailed);
     }
-    say('You won something! Approve claiming it in your wallet…');
-    const claimed = await signAndSend(player, settleInstructions(player, open.order, context));
-    const item = findItem(config, order.item_id);
-    const won = item ? ownedOf(item, lootPda.asset(open.order), order.serial) : { id: order.item_id, name: `Item ${order.item_id}`, rarity: 'Common', look: null, image: null, serial: order.serial, asset: lootPda.asset(open.order) };
-    emit('items', won);
+    say(o.outcome?.Item ? 'You won something! Approve claiming it in your wallet…' : 'Approve finishing the box in your wallet…');
+    const claimed = await settleOrder(player, open.order, o, game);
+    const won = wonItem(config, o, open.order);
+    if (won.asset) emit('items', won);
     say('');
     return { item: won, asset: won.asset, order: open.order, signatures: [opened, claimed], mock: false };
+  }
+
+  /** The connected player's orders in this game that have not ended yet (a claim they did not approve, a slow roll). */
+  async function orders() {
+    const config = await ready();
+    const player = address();
+    if (state.mock || !player || !config.shop?.game) return [];
+    const filters = [
+      { memcmp: { offset: 0, bytes: encodeBase58(Uint8Array.of(5)) } },
+      { memcmp: { offset: 1, bytes: config.shop.game } },
+      { memcmp: { offset: 33, bytes: player } },
+    ];
+    const found = await rpc().programAccounts(LOOT_PROGRAM, filters);
+    return found.map(({ pubkey, account }) => ({ order: pubkey, ...decodeLoot(LootAccount.Order, account.data) }));
+  }
+
+  /** Finish an order: claim it when it was rolled, refund it when it failed or waited too long. */
+  async function finish(order) {
+    const config = await ready();
+    const shop = liveShop(config);
+    const player = await connect();
+    const o = await readOrder(order);
+    if (!o) throw new Error(MESSAGE.NoOrder);
+    const { game } = await readShop(shop);
+    if (o.status === OrderStatus.Rolled) {
+      const signature = await settleOrder(player, order, o, game);
+      const won = wonItem(config, o, order);
+      if (won.asset) emit('items', won);
+      return { settled: true, item: won, signatures: [signature] };
+    }
+    const when = refundable(o, await rpc().call('getSlot', [{ commitment: 'confirmed' }]));
+    if (!when.ok) throw new Error(MESSAGE.NotYet(when.atSlot));
+    return { refunded: true, signatures: [await refundOrder(player, order, o)] };
   }
 
   /** The connected player's items from this game's collection (none for a guest). */
@@ -473,6 +582,8 @@ export function createGfWeb3(options = {}) {
     shop: { list: listShop, buy },
     boxes,
     openBox,
+    orders,
+    finish,
     token,
     loadout,
     wear,

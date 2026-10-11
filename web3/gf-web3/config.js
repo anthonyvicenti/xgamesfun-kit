@@ -85,7 +85,7 @@ function cleanCurrency(v) {
   const symbol = str(v.symbol, { maxChars: 40 });
   const decimals = whole(v.decimals, 0, MAX_DECIMALS);
   if (!mint || !symbol || decimals === undefined) return undefined;
-  return { mint, symbol, decimals, native: v.native === true };
+  return { mint, symbol, decimals, native: v.native === true, program: v.program === 'token-2022' ? 'token-2022' : 'spl-token' };
 }
 
 function cleanItem(v) {

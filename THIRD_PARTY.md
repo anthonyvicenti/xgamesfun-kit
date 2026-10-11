@@ -145,13 +145,13 @@ Not settled from the repository itself:
 
 The Solana layer has **no runtime npm dependencies**. Its Solana code is written in the kit's own plain ES modules,
 in `web3/gf-web3/chain/`. That covers base58, SHA-256, the ed25519 curve check, PDAs, Borsh, legacy and v0
-transactions, the loot program, Metaplex Core, the Meteora DBC launch instructions and mint parsing. Node's own
+transactions, the loot program (0.3, classic SPL and Token-2022 tokens), Metaplex Core, the Meteora DBC launch instructions and mint parsing. Node's own
 `node:crypto` provides ed25519 and SHA-384. The kit adopts nothing from `@solana/web3.js`, which pulls in
 `rpc-websockets` (LGPL-3.0-only).
 
 | What | Where it is used | Licence | How |
 | --- | --- | --- | --- |
-| games.fun loot program IDL (program `FWVap91D…f53D`) | `web3/gf-web3/chain/loot-idl.js` | games.fun's own | Copied from games.fun `launchpad/loot/client/idl.json` at commit `111d4f926be7ab62dce6e5f7344e23ac6afe2adc`, with doc comments removed |
+| games.fun loot program 0.3 IDL (program `88Labq6t…KXqM`, devnet) and its client | `web3/gf-web3/chain/loot-idl.js`, `loot.js`, `borsh.js`, `token2022.js` | games.fun's own (MIT) | The IDL is games.fun `launchpad/loot`'s `anchor build` output (`target/idl/loot.json`) at commit `905eb7e63`, with doc comments removed. The client is ported from `client/codec.mjs` and `devnet-e2e-0.3.mjs` at the same commit, and checked against them byte for byte (`tests/web3-loot.test.mjs`). The transfer-hook resolution follows the spl-transfer-hook-interface account list and is checked against `@solana/spl-token` 0.4.15 (Apache-2.0), which is not a dependency |
 | Meteora Dynamic Bonding Curve IDL facts (instruction discriminators, account orders, `PoolConfig`/`VirtualPool` field offsets, program version 0.2.1) | `web3/gf-web3/chain/dbc.js` | MIT, per the `license` field of `@meteora-ag/dynamic-bonding-curve-sdk` 1.5.12. The npm package ships no LICENSE file. | Read from the IDL inside that SDK. The kit does not copy the SDK's code. The kit's builders are checked against the SDK's output through golden fixtures. |
 | Wallet Standard protocol | `web3/gf-web3/wallet.js`, `studio/tabs/web3/wallet.js` | Specification (wallet-standard, Apache-2.0) | Implemented from the protocol's events (`wallet-standard:register-wallet`, `wallet-standard:app-ready`). No library is used. |
 | ANS-104 data items | `web3/node/irys.mjs` | Specification (ArweaveTeam/arweave-standards) | Implemented from the specification. The output is checked against `@irys/bundles` 0.0.5 (Apache-2.0) through golden fixtures. That package is not a dependency. |
