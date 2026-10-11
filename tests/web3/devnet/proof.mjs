@@ -4,6 +4,7 @@
 // The creator's steps are clicks in the real Token and Shop tabs; the player's go through the game's own gf-web3:
 //   Irys uploads → token launch (no initial buy) → collection + loot game + items + box in one approval →
 //   a player buys an item → the player opens the box (MagicBlock VRF roll, then settle) → owned items → loadout.
+// The loot program 0.3 alone, without Chrome or the faucet (test keys from files): tests/web3/devnet/loot-0.3.mjs.
 // It funds the keys from the public devnet faucet only. When the faucet refuses, it says so, runs what needs no SOL
 // (Irys uploads are free under 100 KB) and stops; the offline tests cover the rest.
 //   node tests/web3/devnet/proof.mjs
@@ -201,7 +202,7 @@ async function main() {
       const r = await kit.shop.buy(1);
       return { mock: kit.mock, item: r.item.name, asset: r.asset, signatures: r.signatures };
     });
-    step('the player buys Golden Hat (buy_item + settle, SOL wrapped around it, one approval)', { ...bought, explorer: explorerUrl(network, 'tx', bought.signatures[0]) });
+    step('the player buys Golden Hat (buy_item with SOL wrapped around it, then settle: two approvals)', { ...bought, explorer: explorerUrl(network, 'tx', bought.signatures[0]) });
     const opened = await gf(async () => {
       const kit = (await import('/game/gf/web3/index.js')).default;
       const r = await kit.openBox(1);
