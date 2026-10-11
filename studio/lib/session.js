@@ -13,7 +13,7 @@ export function normalizeEvent(raw) {
   let e = raw;
   if (typeof raw === 'string') { try { e = JSON.parse(raw); } catch { return null; } }
   if (!e || typeof e !== 'object' || typeof e.kind !== 'string') return null;
-  return { seq: e.seq ?? null, at: e.t ?? null, kind: e.kind, session: e.session ?? null, tool: e.tool ?? null, text: e.text ?? '', input: e.input ?? null,
+  return { run: e.run ?? null, seq: e.seq ?? null, at: e.t ?? null, kind: e.kind, session: e.session ?? null, tool: e.tool ?? null, text: e.text ?? '', input: e.input ?? null,
     ok: e.ok, denied: e.denied, allowed: e.allowed, reasons: e.reasons ?? [], reason: e.reason ?? null, open: e.open, message: e.message ?? e.why ?? '', permission: e.permission ?? null, request: e.request ?? null };
 }
 

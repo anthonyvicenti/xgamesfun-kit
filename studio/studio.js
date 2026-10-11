@@ -102,6 +102,11 @@ walletBtn.addEventListener('click', async () => {
 setTimeout(paintWallet, 500);
 
 // ---- tabs ----
+// The network badge belongs to the web3 side: hidden until the game has web3 settings or the person opens a web3 tab.
+const WEB3_TABS = new Set(['token', 'shop']);
+let networkShown = false;
+const paintNetwork = id => { $('#network').hidden = !(networkShown || WEB3_TABS.has(id)); };
+
 async function loadTabs(ctx) {
   const list = await api('studio/tabs');
   const tabs = [];
@@ -120,6 +125,7 @@ async function loadTabs(ctx) {
   const mounted = new Map(), cleanups = [];
   async function select(id) {
     store.set('tab', id);
+    paintNetwork(id);
     for (const b of bar.children) b.setAttribute('aria-selected', String(b.dataset.id === id));
     for (const p of panels.children) p.hidden = p.dataset.id !== id;
     if (!mounted.has(id)) {
@@ -152,6 +158,8 @@ async function main() {
   $('#game-title').textContent = game.title;
   $('#game-title').title = game.hook || '';
   $('#network').textContent = game.network || 'devnet';
+  networkShown = !!game.gamesfun;       // only a game with web3 settings (gamesfun.json) shows its network up front
+  paintNetwork(store.get('tab'));
   preview.show(preview.path);
   const ctx = { game, api, wallet, toast, preview, on, selection };
   window.__gamesfunStudioTabs = await loadTabs(ctx);

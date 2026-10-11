@@ -85,8 +85,13 @@ export default {
           acts.append(edit);
         }
         if (r.words.editable || r.words.again) {
-          const rm = el('button', { type: 'button', className: 'ghost' }, r.words.again ? 'Remove' : 'Remove');
-          rm.addEventListener('click', async () => { try { removed.add(r.id); await call(`request/${encodeURIComponent(r.id)}`, undefined, 'DELETE'); await refreshQueue(); } catch (e) { removed.delete(r.id); ctx.toast(e.message, 'error'); } });
+          // only a waiting request can be removed on the bridge (409 otherwise); a dropped one is just hidden here
+          const rm = el('button', { type: 'button', className: 'ghost' }, 'Remove');
+          rm.addEventListener('click', async () => {
+            removed.add(r.id);
+            if (!r.words.editable) { paintQueue(); return; }
+            try { await call(`request/${encodeURIComponent(r.id)}`, undefined, 'DELETE'); await refreshQueue(); } catch (e) { removed.delete(r.id); ctx.toast(e.message, 'error'); }
+          });
           acts.append(rm);
         }
         if (r.words.again) {
@@ -145,9 +150,9 @@ export default {
       if (e.seq != null && events.some(x => x.seq === e.seq)) return;
       events.push(e); if (events.length > 300) events.splice(0, events.length - 300);
       paintLine();
-      if (e.kind !== 'tool-start' && e.kind !== 'tool-end') refreshQueue();
+      if (e.kind !== 'tool-start' && e.kind !== 'tool-end' && e.kind !== 'hello') refreshQueue();
     }
-    closeEvents = openEvents(take);
+    closeEvents = openEvents(take, () => {}, () => { events.length = 0; answered.clear(); removed.clear(); queueRaw = null; paintLine(); });
     paintAll(); paintQueue();
     await refreshQueue();
     timer = setInterval(refreshQueue, 3000);
