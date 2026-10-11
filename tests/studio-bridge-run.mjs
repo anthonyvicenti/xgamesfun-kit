@@ -3,7 +3,7 @@
 //   gpu-run.sh node tests/studio-bridge-run.mjs <out dir> <port>        (--no-open is always on; never the person's Chrome)
 // Exit code 1 when any check fails. Every check prints PASS or FAIL.
 import { spawn } from 'node:child_process';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,6 +62,18 @@ try {
     check(/No session connected/.test(await text(p, '.conn')), `${label}: with no session the page says to start the agent`);
     await shot(p, `${label}-1-no-session`, 'Session tab before any session: "No session connected yet", start your agent in this folder');
     check((await clipped(p)).length === 0, `${label}: no clipped label in the header or tab row (${JSON.stringify(await clipped(p))})`);
+
+    // the title in the bar follows the game's files (found in the end-to-end run: the session renamed the game, a
+    // roll-back named it back, and the bar kept the old name until the page was reloaded)
+    {
+      const file = path.join(game, 'config', 'game.json'), was = await readFile(file, 'utf8');
+      const renamed = JSON.parse(was); renamed.title = `Renamed ${label}`; if (renamed.text?.title) renamed.text.title = renamed.title;
+      await writeFile(file, JSON.stringify(renamed, null, 2) + '\n');
+      const followed = await until(async () => (await p.locator('#game-title').innerText()) === `Renamed ${label}`, 8000, 'the bar shows the new title').then(() => true, () => false);
+      check(followed, `${label}: the bar's title follows a rename of the game on disk`);
+      await writeFile(file, was);
+      await until(async () => (await p.locator('#game-title').innerText()) !== `Renamed ${label}`, 8000, 'the bar shows the old title again').catch(() => {});
+    }
 
     // session starts, does a turn, stops: idle, no wait open
     await s.start(); await s.prompt('Make the arena bigger'); await s.tool('Edit', { file_path: 'config/world.json' }); await s.stop();

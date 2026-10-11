@@ -10,6 +10,7 @@
 //   type:<text>              type the text into the Session tab's box, with real keys, and click "Send to your session"
 //   states:<s1,s2,…>:<secs>  watch the newest request's row (the last one) until it has shown these states in this order
 //                            (a screenshot at each new state: <prefix>-<state>.png); prints the times
+//   permwait:<secs>          wait until a permission card is showing
 //   perm:allow|deny:<secs>   wait for a permission card and click its Allow or Deny button
 //   remove                   click Remove on the newest request (only a waiting one has the button)
 //   rollback:<id>:<secs>     in the Build tab, click "Roll back to this" on the row of that checkpoint and accept
@@ -82,6 +83,12 @@ try {
       await row.locator('button:has-text("Remove")').click({ timeout: 5000 });
       await sleep(800);
       say({ step, was, rows: await rows(), file: await shot(`${prefix}-removed`) });
+      continue;
+    }
+    if (kind === 'permwait') {   // a permission card is up (nothing is clicked)
+      await tab('session');
+      try { await page.locator('.perm').first().waitFor({ timeout: Number(arg) * 1000 }); say({ step, ok: true, banner: await banner() }); }
+      catch { failed = true; say({ step, ok: false }); }
       continue;
     }
     if (kind === 'perm') {

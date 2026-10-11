@@ -77,8 +77,12 @@ let reloadTimer = null;
 es.addEventListener('game', e => {
   const data = JSON.parse(e.data || '{}');
   clearTimeout(reloadTimer);
-  reloadTimer = setTimeout(() => { preview.reload(); fire('game', data); }, 120);
+  reloadTimer = setTimeout(() => { preview.reload(); fire('game', data); showTitle(); }, 120);
 });
+// The title in the bar follows the game's files: a change by the session or a roll-back may rename the game.
+function showTitle() {
+  api('game/info').then(g => { $('#game-title').textContent = g.title; $('#game-title').title = g.hook || ''; }).catch(() => {});
+}
 es.addEventListener('verify', e => fire('verify', JSON.parse(e.data || '{}')));
 es.addEventListener('studio', () => location.reload());
 
