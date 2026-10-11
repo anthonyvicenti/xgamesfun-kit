@@ -2,10 +2,10 @@
   "title": "Soak Squad",
   "summary": "A backyard water fight: buckets fill your tank, your spray claims the lawn, soaking friends steals points.",
   "verified": {
-    "result": "PASS 26/26 (check 9 skipped by --quick)",
-    "kits": "4c3585f89a64fe91fd5be84fc97a831dd54062d7",
-    "date": "2026-10-10",
-    "how": "npx gamesfun create <dir> --from soak-squad, npx gamesfun verify <dir> --quick (Linux, Chrome on the graphics card, 166 s); then two pages on gamesfun dev each drew the other player in place (25 of 25 samples)"
+    "result": "PASS 24/24 with --quick (check 9 skipped); PASS 27/27 with --quick --release",
+    "kits": "bce56abc5c643a0add7ec202a8f466b7164b42cf",
+    "date": "2026-10-11",
+    "how": "npx gamesfun create <dir> --from soak-squad, npx gamesfun verify <dir> --quick (125 s) and --quick --release (140 s) (Linux, Chrome on the graphics card, two verifies sharing the card)"
   },
   "engine": "party"
 }
