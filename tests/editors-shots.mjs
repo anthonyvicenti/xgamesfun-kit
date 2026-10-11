@@ -110,7 +110,7 @@ try {
     await frame(p, 'a-map', 'a ledge in reach, two coins: green');
     await p.click('button:has-text("Save & play")');
     await sleep(6000);
-    await shot(p, 'map-flat-4-playing', 'After Save & play: the slot world.map is written, the game reloads and plays the new map (the new ledge and coins top right)');
+    await shot(p, 'map-flat-4-playing', 'After Save & play: the slot world.map is written and the game reloads on its home menu with the new map behind it (the new ledge top right is out of this view: the camera starts on the player)');
     await frame(p, 'a-map', 'Save & play: the game reloads with the map');
     const world = JSON.parse(await readFile(path.join(games.flat, 'config/world.json'), 'utf8'));
     if (world.map.rows[2].slice(20, 24) !== '====') problems.push(`map save: row 3 is ${world.map.rows[2]}`);
@@ -189,11 +189,16 @@ try {
     await tab(p, 'items');
     await shot(p, 'items-1-open', 'Items tab on a melee party game: a card per item (the crate pickup with its mechanic\'s numbers, each pillow), plain words, the slot\'s own limits, the other pillow\'s value under each number');
     await frame(p, 'c-item', 'Items: a card per item');
-    const r = p.locator('.card:has(h4:text-is("Pillow")) input[type=range]').first();
+    // drag the pillow's knockback from 3.5 to about 8 (0 to 30 m/s) and let go
+    const r = p.locator('.card:has(h4:text-is("Pillow")) .field:has-text("knockback") input[type=range]').first();
+    await r.scrollIntoViewIfNeeded();
     const bb = await r.boundingBox();
-    await p.mouse.click(bb.x + bb.width * 0.03, bb.y + bb.height / 2);
+    await p.mouse.move(bb.x + 8 + (bb.width - 16) * (3.5 / 30), bb.y + bb.height / 2); await p.mouse.down();
+    await p.mouse.move(bb.x + 8 + (bb.width - 16) * (8 / 30), bb.y + bb.height / 2, { steps: 6 }); await p.mouse.up();
     await sleep(1500);
-    await frame(p, 'c-item', 'slide the pillow\'s damage and let go: saved through its slot');
+    const kb = JSON.parse(await readFile(path.join(games.pillow, 'config/game.json'), 'utf8')).mechanics[0].params.weapons[0].combo[0].knockback;
+    if (!(kb > 6 && kb < 10)) problems.push(`items: the pillow's knockback is ${kb} after the drag`);
+    await frame(p, 'c-item', `drag the pillow's knockback and let go: saved through its slot (now ${kb} m/s)`);
     await p.selectOption('.ask-box:has-text("Add an item like") select', 'weapon:pillow');
     await p.fill('.ask-box:has-text("Add an item like") input[type=text]', 'Feather duster');
     await p.fill('.ask-box:has-text("Add an item like") textarea', 'quick and long, but weak');

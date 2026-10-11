@@ -30,17 +30,9 @@ export default {
     const saveBtn = el('button', { type: 'button' }, 'Save the look');
     const resetBtn = el('button', { type: 'button', className: 'ghost' }, 'Put it back');
     tryon.append(saveBtn, resetBtn);
-    // the first time, the preview loads the turning player; after that a colour is handed to the running game with the
-    // kit's own loadout message (CONTRACT §6e: gf:loadout, applied within a second), so it changes without a reload
-    const showTryOn = () => {
-      if (!shown) return;
-      const f = ctx.preview.frame, here = (() => { try { return new URL(f.contentWindow.location.href); } catch { return null; } })();
-      const colour = cur().seats[seat];
-      if (here?.searchParams.get('gf-show') === 'character.player' && colour) {
-        try { f.contentWindow.postMessage({ type: 'gf:loadout', loadout: { values: { 'character.tint.player': colour }, files: {}, pass: null } }, location.origin); return; } catch {}
-      }
-      ctx.preview.show(tryOnPath('player', { colour }));
-    };
+    // the preview loads the turning player wearing the look (?gf-loadout=, CONTRACT §6e). A preview subject reads the
+    // loadout once at boot and does not follow later gf:loadout messages (a request to games.fun), so each try-on reloads
+    const showTryOn = () => { if (shown) ctx.preview.show(tryOnPath('player', { colour: cur().seats[seat] })); };
     const dirty = () => { const d = JSON.stringify(cur()) !== saved; tryon.hidden = !d; };
     const { bar: undoBtns, refresh: refreshUndo, off: offKeys } = undoBar(history, () => { paintSeats(); dirty(); showTryOn(); repaintFlat(); }, panel);
     const stage = next => { history.push(next); refreshUndo(); paintSeats(); dirty(); showTryOn(); repaintFlat(); };
