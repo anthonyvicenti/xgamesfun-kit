@@ -1,57 +1,79 @@
 # Third-party code and art
 
-Everything this repository carries that it did not write, with its licence and where the licence text sits. Licences
-travel with the code: each vendored copy keeps its LICENSE beside it, and `create` writes an `ATTRIBUTION.md` into every
-game listing the code and art that game carries.
+Everything this repository carries that it did not write: its licence, where the licence text sits, whether it asks for
+credit, and whether it is copied into the games people make. Audited from the repository itself on 2026-10-11; a thing
+whose licence the repository cannot show is listed at the end under "Needs a person" and is not described as settled.
+For the people and projects behind the art, see [CREDITS.md](CREDITS.md); for a plain-words version, see
+[docs/LICENSING.md](docs/LICENSING.md). `tests/licensing.test.mjs` fails when a library file has no licence record, when
+a CC-BY file is missing from `CREDITS.md`, or when `LICENSE` is missing or not MIT.
 
-This repository itself has no licence yet (its owner has not chosen one).
+This repository's own code is MIT (see [LICENSE](LICENSE); creator decision 2026-10-11, "Just keep it all MIT, yolo").
+That covers games.fun's own code and art in `kits/`. Everything below keeps its own licence.
+
+"In a game" means `create` copies it into the game folder; the game's own `ATTRIBUTION.md` then lists it (see "How a
+created game carries its credits" in [CREDITS.md](CREDITS.md)).
 
 ## games.fun's kits (`kits/`)
 
-A snapshot of the games.fun repository at the commit in `kits/KITS.json`, made by `scripts/sync-kits.mjs`. games.fun
-and this kit have the same owner.
+A snapshot of the games.fun repository at the commit in `kits/KITS.json`, made by `scripts/sync-kits.mjs`. games.fun and
+this kit have the same owner, so these are MIT under this repository's `LICENSE`.
 
-| Kit | Version | In `kits/` | Licence |
-|---|---|---|---|
-| gf-three (the three.js game kit and its tools) | 0.1.0-dev | `research/gf-three/` | games.fun |
-| gf-scenic (the scenic engine: WebGPU, generated islands and dungeons) | 0.1.0-dev | `research/gf-scenic/` | games.fun; the world code taken from folio carries its upstream's permissive LICENSE beside it |
-| gf-multiplayer | 1.6.3 | `research/foundations/kits/gf-multiplayer/1.6.3/` | MIT (its `kit.json`) |
-| gf-audio | 1.5.0 | `research/foundations/kits/gf-audio/1.5.0/` | games.fun; ZzFX inside is MIT |
-| gf-assets | 1.3.0 | `research/foundations/kits/gf-assets/1.3.0/` | games.fun |
-| local signaling, validators, QA (signal server, asset-manifest validator, audio gate, Chrome launcher) | as synced | `research/multiplayer/`, `research/asset-manifest/`, `research/audio/`, `research/foundations/qa/`, `creator-studio/lib/` | games.fun |
+| Kit | Version | In `kits/` | Licence | In a game |
+|---|---|---|---|---|
+| gf-three (the three.js game kit and its tools) | 0.1.0-dev | `research/gf-three/` | MIT (this repository) | kit part: yes (`gf/three/`); tools: no |
+| gf-scenic (the scenic engine: WebGPU, generated islands and dungeons) | 0.1.0-dev | `research/gf-scenic/` | MIT (this repository); the folio-2025 code inside is a separate row below | scenic games: yes (`gf/scenic/`) |
+| gf-multiplayer | 1.6.3 | `research/foundations/kits/gf-multiplayer/1.6.3/` | MIT (its `kit.json` and file headers) | yes (`gf/mp/`) |
+| gf-audio | 1.5.0 | `research/foundations/kits/gf-audio/1.5.0/` | MIT (this repository); ZzFX inside is a separate row below | yes (`audio/`) |
+| gf-assets | 1.3.0 | `research/foundations/kits/gf-assets/1.3.0/` | MIT (this repository) | yes (`gf/gf-assets.js`) |
+| local signaling, validators, QA (signal server, asset-manifest validator, audio gate, Chrome launcher) | as synced | `research/multiplayer/`, `research/asset-manifest/`, `research/audio/`, `research/foundations/qa/`, `creator-studio/lib/` | MIT (this repository) | no |
 
 ## Code inside the kits
 
-| What | Version | Licence | Licence text |
-|---|---|---|---|
-| three.js (build) | 0.186.0 | MIT | `kits/research/foundations/trials/fps-arena/source/vendor/three/LICENSE` |
-| three.js addons (curated copy: loaders, utils, postprocessing, …; meshopt decoder, ktx-parse, zstddec, fflate) | 0.186.0 | MIT | `kits/research/gf-three/tools/lib/vendor/three/LICENSE` |
-| Draco decoder, Basis Universal transcoder (from three.js) | 0.186.0 | Apache-2.0 | their `README.md` under `…/examples/jsm/libs/draco/` and `…/libs/basis/` |
-| @dimforge/rapier3d-compat | 0.19.2 | Apache-2.0 | `kits/research/foundations/trials/third-person-adventure/source/vendor/rapier/LICENSE` |
-| pmndrs postprocessing | 6.39.5 | Zlib | `kits/research/foundations/trials/fps-arena/source/vendor/postprocessing/LICENSE.md` |
-| N8AO | as vendored | MIT | `kits/research/foundations/trials/fps-arena/source/vendor/n8ao/LICENSE` |
-| pmndrs/ecctrl (floating-capsule logic, ported) | `e2cab804` | MIT, © 2023-2026 Erdong Chen | `kits/research/gf-three/kit/controller/LICENSE-ecctrl`, `NOTICE-ecctrl` |
-| ws (the signal server's WebSocket) | 8.21.3 | MIT | `kits/research/multiplayer/p2p/vendor/ws/LICENSE`, `../ATTRIBUTION.md` |
-| ZzFX (in gf-audio) | 1.3.2, adapted | MIT | `kits/research/foundations/kits/gf-audio/1.5.0/source/LICENSE-zzfx`, `ATTRIBUTION.md` |
+| # | What | Version | Licence | Licence text (path from the repository root) | Credit asked? | In a game |
+|---|---|---|---|---|---|---|
+| 1 | three.js (build) | 0.186.0 | MIT | `kits/research/foundations/trials/fps-arena/source/vendor/three/LICENSE` | keep the notice | yes, `vendor/three/` with its `LICENSE` |
+| 2 | three.js addons (curated copy: loaders, utils, postprocessing, ...) | 0.186.0 | MIT | `kits/research/gf-three/tools/lib/vendor/three/LICENSE`; `kits/research/gf-scenic/tools/lib/vendor/three/LICENSE` | keep the notice | yes (only what the game imports) |
+| 3 | three.js WebGPU build and TSL addons (scenic) | 0.186.0 | MIT | `kits/research/foundations/trials/third-person-adventure/source/vendor/three/LICENSE` | keep the notice | scenic games |
+| 4 | Draco decoder (from three.js) | 0.186.0 | Apache-2.0 | stated in its `README.md` under `.../examples/jsm/libs/draco/`; the full Apache text is not beside it | keep notices | yes, with its README |
+| 5 | Basis Universal transcoder (from three.js) | 0.186.0 | Apache-2.0 | stated in its `README.md` under `.../examples/jsm/libs/basis/`; the full Apache text is not beside it | keep notices | yes, with its README |
+| 6 | meshoptimizer decoder (in three.js addons) | as in three 0.186.0 | MIT | header of `.../jsm/libs/meshopt_decoder.module.js` (Copyright (C) 2016-2026 Arseny Kapoulkine) | keep the notice | yes, inside the addons |
+| 7 | fflate (in three.js addons) | as in three 0.186.0 | MIT | header of `.../jsm/libs/fflate.module.js` names MIT and links its LICENSE; no text beside it | keep the notice | yes, inside the addons |
+| 8 | ktx-parse, zstddec (in three.js addons) | as in three 0.186.0 | not shown by the files | no licence text or header in the repository | see "Needs a person" | yes, inside the addons |
+| 9 | @dimforge/rapier3d-compat | 0.19.2 | Apache-2.0 | `kits/research/foundations/trials/third-person-adventure/source/vendor/rapier/LICENSE` | keep notices | yes, `vendor/rapier/` with its `LICENSE` |
+| 10 | pmndrs postprocessing | 6.39.5 | Zlib | `kits/research/foundations/trials/fps-arena/source/vendor/postprocessing/LICENSE.md` | notice kept; no credit needed | party games, `vendor/postprocessing/` |
+| 11 | N8AO | as vendored | CC0-1.0 by the text beside it (earlier versions of this file said MIT; see "Needs a person") | `kits/research/foundations/trials/fps-arena/source/vendor/n8ao/LICENSE` | none (CC0) | party games, `vendor/n8ao/` |
+| 12 | pmndrs/ecctrl (floating-capsule logic, ported) | `e2cab804` | MIT, (c) 2023-2026 Erdong Chen | `kits/research/gf-three/kit/controller/LICENSE-ecctrl`, `NOTICE-ecctrl` | keep the notice | yes, beside `capsule.mjs` |
+| 13 | BUDDY: ROLLBACK (combat model, rewritten as data; nothing copied line for line) | `db51978` | MIT, (c) 2026 BUDDY: ROLLBACK contributors | `kits/research/gf-three/kit/mechanics/melee/LICENSE-buddy-rollback`, `NOTICE-buddy-rollback` | keep the notice | yes, beside the melee mechanic |
+| 14 | three.js manual example `voxel-geometry-culled-faces-ui` (adapted into the voxel world's grid) | r186, `148ef33e` | BSD-3-Clause, (c) 2018 Google Inc. (from threejsfundamentals) | named in the header of `kits/research/gf-three/kit/world/voxel/grid.mjs`; the licence text it promises (`LICENSE-three-voxel` beside it) is not in the snapshot | keep the notice | voxel games (`gf/three/world/voxel/`); see gap 2 |
+| 15 | folio-2025 by Bruno Simon (rendering, materials, lighting, terrain, vegetation, ported) | `41046b5` | MIT, (c) 2025 Bruno Simon | `kits/research/gf-scenic/kit/LICENSE-folio-2025` | keep the notice | scenic games, beside `gf/scenic/` |
+| 16 | ZzFX (in gf-audio) | 1.3.2, adapted | MIT | `kits/research/foundations/kits/gf-audio/1.5.0/source/LICENSE-zzfx`, `ATTRIBUTION.md` | keep the notice | yes, `audio/LICENSE-zzfx` |
+| 17 | ws (the signal server's WebSocket) | 8.21.3 | MIT | `kits/research/multiplayer/p2p/vendor/ws/LICENSE`, `../ATTRIBUTION.md` | keep the notice | no (Node side only) |
+| 18 | Mannequin animation clips and `hero.glb` (stand-in body) | Quaternius, via pmndrs/ecctrl `e2cab804` | CC0-1.0 | `kits/research/gf-three/tools/lib/standin-assets/LICENSE-mannequin.txt` | none (credit is courteous) | yes, as the stand-in body |
 
+Gap list from this table (each is a request to games.fun, where `kits/` is written; this repository never edits `kits/`):
+rows 4 and 5 and 8 lack a full licence text; row 14 lacks `LICENSE-three-voxel`; row 11 needs a person.
 The kit's own list is `kits/research/gf-three/kit/THIRD_PARTY.md`.
 
-## Art (`kits/research/gf-three/library/`)
+## Art (`kits/research/gf-three/library/` and `kits/research/gf-scenic/library/`)
 
-Every file has a record in `library/LICENSES.json` (licence, author, source page, download, sha256 of the source and the
-shipped file, what was changed). The sync ships only CC0 and permissive licences, and never Meshy output (its licence
-tier is unconfirmed).
+Every library file has a record in that library's `LICENSES.json` (licence, author, source page, download, sha256 of the
+source and of the shipped file, what was changed). The sync ships only CC0 and permissive licences, and never Meshy
+output (its licence tier is unconfirmed). `tests/licensing.test.mjs` fails when a library file has no record.
 
-| Source | Licence | Files |
-|---|---|---|
-| Kenney (kenney.nl) | CC0-1.0 | 139 props |
-| Quaternius (Universal Animation Library and character packs) | CC0-1.0 | 14 bodies and the shared clips |
-| games.fun (the bean bodies, procedural textures, previews) | CC0-1.0, or games.fun's own | 28 |
-| Poly Haven (stand-in ground texture) | CC0-1.0 | `tools/lib/standin-assets/grass.ktx2` |
-| Poly Pizza creators, below | CC-BY-3.0 | 10 props |
+| # | Source | Licence | Files | Credit asked? | In a game |
+|---|---|---|---|---|---|
+| A1 | Kenney (kenney.nl): props and textures | CC0-1.0 | 139 props + 28 textures | no | the ones the game uses |
+| A2 | Quaternius (Universal Animation Library and character packs) | CC0-1.0 | 13 bodies + the shared clips (`clips/gf-humanoid-1.glb`) | no | the ones the game uses |
+| A3 | games.fun (bean bodies, textures, previews) | CC0-1.0, or generated (previews, one noise texture) | 4 bodies + 10 textures + 19 generated | no | the ones the game uses |
+| A4 | Kay Lousberg, KayKit (scenic library: dungeon props, weapons, 9 character bodies) | CC0-1.0 | 84 | no | scenic games |
+| A5 | Poly Haven `leafy_grass` (stand-in ground) | CC0-1.0 | `tools/lib/standin-assets/grass.ktx2` | no | every party game's stand-in ground |
+| A6 | folio-2025 models and textures as scenic props (`library/folio/`) | MIT (Bruno Simon), `library/folio/LICENSE` | 15 files | keep the notice | scenic games that use them |
+| A7 | Poly Pizza creators (below) | **CC-BY-3.0** | **10 props** | **yes** | yes: soak-squad, the party example, carries 9 of them |
+| A8 | Meshy AI "Cyborg gecko" | recorded as CC-BY-4.0 (plan unconfirmed) | **0 shipped**: the record is in `LICENSES.json`; the file is left out of this kit by the sync | yes, if it is ever shipped | no |
 
-CC BY 3.0 requires credit. A game that uses one of these props carries the line in its `ATTRIBUTION.md` (create writes
-it); the lines:
+The ten CC-BY-3.0 props, each with the credit line exactly as the licence asks (author, title, a link to the work); the
+licence is [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). They were resized to metres, recentred, joined per
+material and meshopt-compressed (gltf-transform), which counts as a change:
 
 - "Slide" by Poly by Google, CC BY 3.0 (https://poly.pizza/m/dDe3njWPbg0)
 - "Cloud" by jeremy, CC BY 3.0 (https://poly.pizza/m/8CXbPO6p0n2)
@@ -64,29 +86,60 @@ it); the lines:
 - "Reel W/ Hose" by J-Toastie, CC BY 3.0 (https://poly.pizza/m/qXBsZPAaYQ)
 - "Water Cooler" by J-Toastie, CC BY 3.0 (https://poly.pizza/m/zWi9p5FSxD)
 
-Sounds are gf-audio presets, synthesised at run time: no audio files.
+The Meshy gecko's credit line, kept for the day it ships:
+
+- "Cyborg gecko (Meshy)" by Meshy AI (generated for games.fun), CC BY 4.0 (https://www.meshy.ai)
+
+The creator's count of 11 (2026-10-11, "keep them for now") is these ten plus the Meshy gecko record (A8), which is
+CC-BY-4.0 and credits Meshy AI; its file is not in this kit.
+
+Sounds are gf-audio presets, synthesised at run time: no audio files. The grim theme names two OFL-1.1 fonts (Grenze
+Gotisch and Grenze, Omnibus-Type) but their files are not in the snapshot, so nothing is shipped; see "Needs a person".
 
 ## The example game
 
 `templates/examples/soak-squad/` is adapted from "Bladder Brawl", a game games.fun's Studio v2 built and delivered
-(same owner). It uses only the library art above.
+(same owner, MIT with the rest). It uses only library art, and 9 of the 10 CC-BY props.
 
 `templates/examples/isle-run/` is games.fun's scenic sandbox spec, and `templates/examples/giant-four/` is the proof
 game of games.fun's board mechanic and turns loop (same owner). Each uses only the library art of its engine.
 
 ## npm dependencies (`package.json`, pinned exactly; installed by `npm ci`, not committed)
 
-| Package | Version | Licence |
-|---|---|---|
-| @modelcontextprotocol/sdk | 1.30.1 | MIT |
-| playwright-core | 1.63.0 | Apache-2.0 |
-| their dependencies (93 packages: express, hono, zod, ajv, …) | as locked in `package-lock.json` | MIT (84), ISC (7), BSD-3-Clause (2), BSD-2-Clause (1) |
+| Package | Version | Licence | In a game |
+|---|---|---|---|
+| @modelcontextprotocol/sdk | 1.30.1 | MIT | no (tools only) |
+| playwright-core | 1.63.0 | Apache-2.0 | no (tools only) |
+| their dependencies (93 packages: express, hono, zod, ajv, ...) | as locked in `package-lock.json` | MIT (83), ISC (7), BSD-3-Clause (2), BSD-2-Clause (1) | no |
 
-Installed on first use of `rig-check` or `meshy`, from `kits/research/gf-three/tools/lib/char-deps/package.json`:
-@gltf-transform/core, extensions, functions 4.5.1 (MIT), meshoptimizer 1.1.1 (MIT), sharp 0.35.5 (Apache-2.0; its
-prebuilt libvips binaries are LGPL-3.0, dynamically linked), three 0.186.0 (MIT).
+The licence texts of npm packages are in their folders under `node_modules/` after `npm ci`; the repository does not
+commit them.
+
+Installed on first use of `rig-check` or `meshy`, from `kits/research/gf-three/tools/lib/char-deps/package.json`
+(tools only, never in a game): @gltf-transform/core, extensions, functions 4.5.1 (MIT), meshoptimizer 1.1.1 (MIT),
+sharp 0.35.5 (Apache-2.0; its prebuilt libvips binaries are LGPL-3.0, dynamically linked), three 0.186.0 (MIT).
 
 When Playwright's Chromium is downloaded (no Chrome or Edge on the machine), it comes under Chromium's own licences.
+
+## Needs a person
+
+Not settled from the repository itself:
+
+1. **N8AO.** The licence text beside the vendored copy is CC0 1.0, but earlier lists in this repository and in
+   games.fun's `kit/THIRD_PARTY.md` say MIT. The repository does not show which is the upstream's. Both are permissive;
+   what a person should confirm is only the label. Also unconfirmed: the version.
+2. **ktx-parse and zstddec** (inside the three.js addons): no licence text or header in the repository. They are the
+   copies three.js 0.186.0 ships; confirm against that tarball.
+3. **Draco and Basis Universal**: the repository states Apache-2.0 in their READMEs but has no copy of the full text.
+4. **folio-2025 art** (A6): the record cites Bruno Simon's `license.md` (MIT, text beside the files). Whether the 3D
+   models and textures in that repository fall under the same licence is something the MIT text alone does not say; a
+   person should read the upstream repository's terms for its art.
+5. **Quaternius bodies** fetched through Poly Pizza: each record says the Poly Pizza page showed "CC0 1.0" on the day
+   it was retrieved; the repository keeps no copy of that page.
+6. **The grim theme's fonts** (OFL-1.1): not in the snapshot; if they are added they bring OFL-1.1's own conditions
+   (the licence text with the font; the font may not be sold by itself).
+7. **Chromium** downloaded by Playwright and sharp's libvips (LGPL-3.0): not shipped by this repository; mentioned only.
+
 
 ## web3 (`web3/`, `server/routes/web3.mjs`, `commands/web3.mjs`, `mcp/tools/web3.mjs`, `studio/tabs/{token,shop}.js`)
 
