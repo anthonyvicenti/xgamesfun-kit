@@ -1,7 +1,7 @@
 // The studio page's modules (no browser), the build route, and the page's calls against the session stub.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { startDevServer } from '../server/index.mjs';
 import { tempGame } from './helpers.mjs';
@@ -122,9 +122,24 @@ test('build route: no state, then the state file and the newest verdict', async 
   await writeFile(path.join(game.dir, '.gf-loop', 'state.json'), JSON.stringify(draft));
   r = await call('/api/build/state');
   assert.equal(r.body.loop.step, 'repair');
-  assert.equal(r.body.rollback, false);
-  r = await call('/api/build/rollback', { method: 'POST', body: JSON.stringify({ id: 'x' }), headers: { 'content-type': 'application/json' } });
-  assert.equal(r.status, 501, 'no checkpoint library yet: said plainly');
+  assert.equal(r.body.rollback, true, 'the route found lib/checkpoint.mjs under the names it asks for');
+  // the roll-back button: a checkpoint the loop tools keep (the same store) is listed and restored byte for byte
+  const { checkpointStore, treeHash } = await import('../lib/checkpoint.mjs');
+  const before = await treeHash(game.dir), rules = path.join(game.dir, 'rules.js'), was = await readFile(rules, 'utf8');
+  await checkpointStore(game.dir).keep('round-1', { step: 'agent', kind: 'build', before: true });
+  await writeFile(rules, was + '\n// a round wrote this\n');
+  await writeFile(path.join(game.dir, 'added-by-the-round.txt'), 'x');
+  r = await call('/api/build/state');
+  assert.deepEqual(r.body.checkpoints.map(c => [c.id, c.round, c.label]), [['round-1', 1, 'Before round 1 of your session\'s work (build)']]);
+  assert.ok(r.body.checkpoints[0].at);
+  r = await call('/api/build/rollback', { method: 'POST', body: JSON.stringify({ id: 'round-1' }), headers: { 'content-type': 'application/json' } });
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.restored, r.body.written, r.body.removed], ['round-1', 1, 1]);
+  assert.equal(await treeHash(game.dir), before, 'the folder is what it was');
+  assert.equal(await readFile(rules, 'utf8'), was);
+  r = await call('/api/build/rollback', { method: 'POST', body: JSON.stringify({ id: 'round-9' }), headers: { 'content-type': 'application/json' } });
+  assert.equal(r.status, 400, 'an unknown checkpoint is refused');
+  assert.match(r.body.error, /no checkpoint/);
   r = await call('/api/build/rollback', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
   assert.equal(r.status, 400);
   await rm(path.join(game.dir, '.gf-loop'), { recursive: true, force: true });   // a building game would hold every stop in the bridge tests below
