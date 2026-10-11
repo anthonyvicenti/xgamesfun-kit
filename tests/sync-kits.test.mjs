@@ -8,7 +8,7 @@ import path from 'node:path';
 import { GF3_TOOLS, KIT_ROOT, KITS } from '../lib/paths.mjs';
 import { runToolJson } from '../lib/run-tool.mjs';
 import { tempDir } from './helpers.mjs';
-import { closure, DATA, ENTRIES, excludedByName, kitVersions, LEFT_OUT, libraryDecision, licenceOfText, namedPaths, pathConstants, portabilityProblems, scanSecrets, stripComments, TOOL_ENTRIES } from '../scripts/sync-kits.mjs';
+import { closure, DATA, ENTRIES, excludedByName, kitVersions, LEFT_OUT, libraryDecision, licenceOfText, namedPaths, pathConstants, portabilityProblems, scanSecrets, maskTemplates, stripComments, TOOL_ENTRIES } from '../scripts/sync-kits.mjs';
 
 const LIC = {
   'props/tree.glb': { spdx: 'CC0-1.0', author: 'Kenney (www.kenney.nl)', from: 'kenney:nature/tree' },
@@ -117,6 +117,14 @@ test('comments are removed without mistaking a string, a line comment or a regul
   assert.ok(!out.includes('gone.mjs') && !out.includes('never closes') && !out.includes('trailing'));
   assert.ok(out.includes('\'kit/*\'') && out.includes('/\\/\\*/') && out.includes('http://x/y') && out.includes('tpl // not a comment'));
   assert.equal(out.split('\n').length, src.split('\n').length, 'line numbers hold');
+});
+
+test('source a tool writes into a template literal is not an import of the tool', () => {
+  const src = 'import { a } from \'./a.mjs\';\nconst w = (x) => `${x}import { F } from \'./gf/forge/feel.js\';\n${`n`}`;\nimport(\'./c.mjs\');';
+  const out = maskTemplates(stripComments(src));
+  assert.ok(out.includes('./a.mjs') && out.includes('./c.mjs'));
+  assert.ok(!out.includes('feel.js'));
+  assert.equal(out.split('\n').length, src.split('\n').length);
 });
 
 const PATHS_SRC = `
