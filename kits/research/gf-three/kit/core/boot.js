@@ -48,15 +48,19 @@ async function loadModules(worldCfg = {}, used = null) {
   const scenic = ENGINE === 'scenic';
   // a voxel world (CONTRACT §9, worlds) is its own world module, whichever engine draws the rest
   const voxel = worldCfg?.template === 'voxel';
-  const [look, world, character] = await Promise.all([
-    scenic ? import('../../scenic/look/look.js') : m.look ? import('../look/look.js') : import('./standins/look.js'),
-    voxel ? import('../world/voxel/world.js') : scenic ? import('../../scenic/world/world.js') : m.world ? import('../world/world.js') : import('./standins/world.js'),
-    m.character ? import('../character/character.js') : import('./standins/character.js'),
+  // a flat (2D) game (kit.js modules.flat: 'top' | 'side') takes the flat look, world and body, and brings its own
+  // controller (kit/flat/): everything else is this kit's, as for a 3D game
+  const flat = m.flat ?? null;
+  const [look, world, character, controller] = await Promise.all([
+    flat ? import('../flat/look.js') : scenic ? import('../../scenic/look/look.js') : m.look ? import('../look/look.js') : import('./standins/look.js'),
+    flat ? import('../flat/world.js') : voxel ? import('../world/voxel/world.js') : scenic ? import('../../scenic/world/world.js') : m.world ? import('../world/world.js') : import('./standins/world.js'),
+    flat ? import('../flat/character.js') : m.character ? import('../character/character.js') : import('./standins/character.js'),
+    flat ? import('../flat/controller.js') : null,
   ]);
   const mechanics = new Map();
   // only the mechanics this game uses (kit.js lists every one the kit carries; a phone in a post loads less)
   for (const id of m.mechanics ?? []) if (!used || used.has(id)) mechanics.set(id, await import(`../mechanics/${id}/index.js`));
-  return { look, world, character, mechanics, engine: ENGINE, voxel, standins: { look: !scenic && !m.look, world: !scenic && !voxel && !m.world, character: !m.character } };
+  return { look, world, character, controller, flat, mechanics, engine: ENGINE, voxel, standins: { look: !flat && !scenic && !m.look, world: !flat && !scenic && !voxel && !m.world, character: !flat && !m.character } };
 }
 
 export async function boot({ rules = {} } = {}) {
@@ -115,7 +119,8 @@ export async function boot({ rules = {} } = {}) {
     // a look may need to finish setting up its renderer first (WebGPURenderer.init(): the scenic engine, CONTRACT §8)
     await mods.look.ready?.(renderer);
     assets.setRenderer(renderer);
-    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 600);
+    // the camera is the look's when it brings one (a flat game's orthographic camera), else the kit's perspective one
+    const scene = new THREE.Scene(), camera = mods.look.createCamera?.(lookValues) ?? new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 600);
     Object.assign(ctx, { scene, camera, renderer });
     const look = mods.look.applyLook(ctx, lookValues) ?? {};
     ctx.look = look;
@@ -131,7 +136,7 @@ export async function boot({ rules = {} } = {}) {
       res.ratio = Math.max(Math.min(dpr, 1), res.target * (governor?.scale ?? 1));
       renderer.setPixelRatio(res.ratio);
     };
-    const resize = () => { governor?.reset(); applyRatio(); renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / Math.max(1, innerHeight); camera.updateProjectionMatrix(); look.resize?.(innerWidth, innerHeight); };
+    const resize = () => { governor?.reset(); applyRatio(); renderer.setSize(innerWidth, innerHeight, false); if (camera.isPerspectiveCamera) { camera.aspect = innerWidth / Math.max(1, innerHeight); camera.updateProjectionMatrix(); } else mods.look.resizeCamera?.(camera, innerWidth, innerHeight, renderer); look.resize?.(innerWidth, innerHeight); };
     addEventListener('resize', resize); watchPixelRatio(globalThis, resize); resize();
     ctx.resolution = res;
 
@@ -157,7 +162,8 @@ export async function boot({ rules = {} } = {}) {
         const o = { ...opts };
         if (o.at) {
           v1.set(o.at.x, o.at.y ?? 0, o.at.z).applyMatrix4(camera.matrixWorldInverse);
-          const d = v1.length();
+          // an orthographic camera hangs far from the plane: how far a sound is, is its distance across the screen
+          const d = camera.isOrthographicCamera ? Math.hypot(v1.x, v1.y) : v1.length();
           o.pan = Math.max(-0.8, Math.min(0.8, v1.x / Math.max(3, d)));
           o.gainDb = (o.gainDb ?? 0) - Math.min(18, Math.max(0, (d - 4) * 0.6));
           delete o.at;
@@ -189,6 +195,10 @@ export async function boot({ rules = {} } = {}) {
       list.push(inst);
     }
     ctx.mechanicsList = list;
+    // where a player is, when a part holds the body and gives the player a mark instead (it owns player.control: a
+    // board's cursor). The part says so itself, presence(p) → { x, y, z }; null → the body. Read by the observation
+    // (snapshot().players[].mark, controls().mark) and by the block the two-player gate reads (kit/net/session.js).
+    ctx.presenceOf = p => { for (const m of list) { if (m.standin || typeof m.presence !== 'function') continue; try { const q = m.presence(p); if (q && Number.isFinite(q.x) && Number.isFinite(q.z)) return q; } catch (e) { console.error(e); } } return null; };
     // an aimed mechanic (projectile; carry with a throw action) means a crosshair, and the shooter turns to the aim while
     // firing (CONTRACT §6d); rules may still call ui.crosshair themselves
     ctx.aimed = list.some(m => !m.standin && m.aimed === true);
@@ -299,7 +309,7 @@ export async function boot({ rules = {} } = {}) {
       time: { now: r2(ctx.time.now), round: r2(ctx.time.round), left: r2(ctx.time.left) },
       me: me.id, host: ctx.host, live: session.live, backdrop, view: menu.view ?? ui.view, paused: menu.paused && !session.live,
       players: ctx.players.list().map(p => ({ id: p.id, name: p.name, score: p.score, alive: p.alive, bot: p.isBot, local: p.local, x: r2(p.position.x), y: r2(p.position.y), z: r2(p.position.z), anim: p.anim,
-        color: p.color, ring: ringColor(p), ...ctx.fair.observe(p) })),
+        color: p.color, ring: ringColor(p), ...ctx.fair.observe(p), ...(m => (m ? { mark: { x: r2(m.x), z: r2(m.z) } } : {}))(ctx.presenceOf(p)) })),
       fair: ctx.fair.summary(),
       refusals: refusals.list(),
       winners: session.round.winners, reason: session.round.reason, results: session.round.rows,
@@ -325,6 +335,9 @@ export async function boot({ rules = {} } = {}) {
       coverage: () => coverageReport(scene),
       slots: () => assets.stats(scene, camera),
       controls: () => JSON.parse(JSON.stringify(controlsReport())),
+      // which sounds played, by id, as the audio kit counted them (verify check 7, research/audio/qa-gate-v5.mjs:
+      // the listed sounds are heard, not only something loud enough); dropped: plays the kit did not start, by reason
+      sounds: () => JSON.parse(JSON.stringify({ plays: audio.stats?.plays ?? {}, dropped: audio.stats?.dropped ?? {} })),
       panels: () => JSON.parse(JSON.stringify(ui.panels.observe())),      // the shared panels (CONTRACT §6j)
       menu: () => JSON.parse(JSON.stringify(menu.observe())),      // verify checks 20 and 22 (CONTRACT §6g)
       hud: () => JSON.parse(JSON.stringify({ phase: session.round.phase, covered: ui.covered, ...hud.observe() })),   // verify check 21
@@ -391,7 +404,12 @@ export async function boot({ rules = {} } = {}) {
       const inter = [];
       for (const m of list) { if (m.standin || typeof m.interactables !== 'function') continue; try { for (const it of m.interactables()) inter.push({ ...it, x: r2(it.x), y: r2(it.y ?? 0), z: r2(it.z), d: r2(Math.hypot(it.x - me.position.x, it.z - me.position.z)) }); } catch (e) { console.error(e); } }
       inter.sort((a, b) => a.d - b.d);
+      // what a part lets the player point at and click now (a board with a cursor: the cells of a legal move), in CSS pixels
+      const points = [];
+      for (const m of list) { if (m.standin || typeof m.points !== 'function') continue; try { for (const it of m.points()) points.push({ ...it, x: Math.round(it.x), y: Math.round(it.y) }); } catch (e) { console.error(e); } }
+      const mark = ctx.presenceOf(me);
       return {
+        points, mark: mark ? { x: r2(mark.x), z: r2(mark.z) } : null, held: me.controller ? me.controller.enabled === false : false,
         camera: game.camera ?? 'third', crosshair: ui.crosshairOn, aimed: !!ctx.aimed, controls: game.controls ?? {}, prompt: ui.promptText,
         viewport: { w: innerWidth, h: innerHeight },
         aim: { dir: (me.aim ?? []).map(r2), dist: Number.isFinite(me.aimDist) ? r2(me.aimDist) : null, point: pt(aimP), hit: me.aimHit ?? null, onSelf: !!me.aimOnSelf, screen: screenOf(aimP) },
@@ -475,6 +493,9 @@ export async function boot({ rules = {} } = {}) {
       for (const p of ctx.players.list()) {
         if (p.local || (p.id === watchCam.target && camMode === 'first')) continue;     // a viewer in first person sees from the streamer's eyes
         const shown = (p.owned || p.drawn) && p.character?.object3d.visible;
+        // a body may say where its name goes (seen from above, "over the head" is up the screen, not +Y)
+        const po = p.character?.plateOffset ?? null;
+        if (po) plate.set(p.position.x + po.x, p.position.y + po.y, p.position.z + po.z).project(camera); else
         plate.set(p.position.x, p.position.y + (p.character?.height ?? 1.7) + 0.3, p.position.z).project(camera);
         const vis = !!shown && plate.z > -1 && plate.z < 1 && Math.abs(plate.x) < 1.05 && Math.abs(plate.y) < 1.05;
         plates.push({ id: p.id, text: p.name, color: p.color, x: (plate.x * 0.5 + 0.5) * w, y: (-plate.y * 0.5 + 0.5) * h, visible: vis });
@@ -488,7 +509,7 @@ export async function boot({ rules = {} } = {}) {
         // a viewer who joined: their own body is theirs again (first person keeps it hidden), the streamer's too
         if (watchCam.was) { watchCam.was = false; watchCam.on = false; watchCam.target = null; if (camMode !== 'first' && me.character?.object3d) me.character.object3d.visible = true; if (watchCam.hidden?.character?.object3d) watchCam.hidden.character.object3d.visible = true; watchCam.hidden = null; }
         if (phase === 'lobby' && worldMode) worldCamera(dt);
-        else if (phase === 'lobby' && menu.view && !session.live && (game.camera ?? 'third') !== 'first') homeCamera(dt);
+        else if (phase === 'lobby' && menu.view && !session.live && (game.camera ?? 'third') !== 'first' && !me.controller?.rig?.place) homeCamera(dt);      // a rig that places itself (a flat game's) keeps the menu over the field as it is
       }
       // an undrawn stepped frame still leaves every matrix as a drawn one does (the renderer updates them when it
       // draws): the next frame's aim, sounds and observation read the scene and the camera where they are now
@@ -510,8 +531,10 @@ export async function boot({ rules = {} } = {}) {
       const id = f ? (worldMode ? f.cid ?? f.id : f.id) : null;
       const p = id ? ctx.players.get(id) : null;
       if (watchCam.hidden && watchCam.hidden !== p) { if (watchCam.hidden.character?.object3d && watchCam.hidden.drawn) watchCam.hidden.character.object3d.visible = true; watchCam.hidden = null; }
-      if (!p || !p.drawn) { watchCam.target = null; watchCam.on = false; if (worldMode) worldCamera(dt); else { orbit.a += dt * 0.05; camera.position.set(Math.sin(orbit.a) * 18, 12, Math.cos(orbit.a) * 18); camera.lookAt(0, 0, 0); } return; }
+      if (!p || !p.drawn) { watchCam.target = null; watchCam.on = false; if (me.controller?.rig?.place) me.controller.rig.place({ x: 0, y: 0, z: 0 }, 0); else if (worldMode) worldCamera(dt); else { orbit.a += dt * 0.05; camera.position.set(Math.sin(orbit.a) * 18, 12, Math.cos(orbit.a) * 18); camera.lookAt(0, 0, 0); } return; }
       watchCam.target = p.id;
+      // a rig that places itself over a point (a flat game's): a viewer sees the field over the streamer, as the streamer does
+      if (me.controller?.rig?.place) { me.controller.rig.place(p.position, watchCam.on ? dt : 0); watchCam.on = true; return; }
       const C = { ...(RIG_DEFAULTS[camMode] ?? RIG_DEFAULTS.third), ...(me.controller?.rig?.settings ?? {}) };
       const h = p.character?.height ?? 1.7, a = Array.isArray(p.aim) && p.aim.length === 3 ? p.aim : null;
       watchCam.wdir.set(a ? a[0] : Math.sin(p.yaw ?? 0), a ? a[1] : 0, a ? a[2] : Math.cos(p.yaw ?? 0));
@@ -639,6 +662,8 @@ async function showMode(ctx, subject, mods, characterFor, look) {
   net.loop(t => {
     const dt = last === null ? 0 : Math.max(0, Math.min(0.1, (t - last) / 1000)); last = t;
     for (const fn of ctx.onFrame) fn(dt);
+    // a look that frames the preview itself (a flat game is seen straight on, never from the turntable's orbit)
+    mods.look.frameSubject?.(ctx, state, subject);
     ctx.world.update?.(dt);
     look.update?.(dt, { x: 0, y: 0, z: 0 });
     if (look.render) look.render(ctx.camera); else ctx.renderer.render(ctx.scene, ctx.camera);

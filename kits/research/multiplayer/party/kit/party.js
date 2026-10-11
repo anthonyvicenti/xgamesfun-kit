@@ -1073,7 +1073,7 @@
   // ---- the streamer ----
   var LV = { relay: null, studio: null, state: 'off', ws: null, id: null, key: null, viewers: 0, link: null, error: null, fns: [], timer: null,
     tries: 0, stopping: false, parts: [], size: 0, batchT: 0, poses: {}, world: null, worldFrom: null, rosterKey: '', keyAt: 0, metaAt: 0,
-    metaKey: '', badgeAt: 0, sent: { key: 0, d: 0, meta: 0 }, lastErr: null, popup: false };
+    metaKey: '', badgeAt: 0, sent: { key: 0, d: 0, meta: 0 }, lastErr: null, popup: false, saved: takeSavedStream(), savedShut: false };
   var BADGES = {};                                 // room id → {on, n, at}: who in this room is streaming
   function inRoom() { return WORLD ? WS.status === 'in' : S.phase === 'room' && !!S.code; }
   function liveAvailable() { return !!LV.relay && (WORLD || LIVE) && (inRoom() || LV.state !== 'off'); }
@@ -1088,14 +1088,14 @@
     if (LIVE_API) return LIVE_API;
     LIVE_API = Object.freeze({
       get available() { return liveAvailable(); }, get state() { return LV.state; }, get link() { return LV.link; },
-      get viewers() { return LV.viewers; }, get error() { return LV.error; },
+      get viewers() { return LV.viewers; }, get error() { return LV.error; }, get saved() { return !!LV.saved; },
       start: function () { return liveStart(); }, stop: function () { liveStop('stop'); },
       share: function () { if (LV.state !== 'off') { LV.popup = true; livePopup(); } },
       onChange: function (fn) { if (typeof fn === 'function') LV.fns.push(fn); },
     });
     return LIVE_API;
   }
-  function liveChanged() { LV.fns.forEach(function (fn) { try { fn(LIVE_API); } catch (e) { console.error(e); } }); renderLiveBadge(); if (!WORLD && S.phase === 'room') { cardKey = null; render(); } }
+  function liveChanged() { LV.fns.forEach(function (fn) { try { fn(LIVE_API); } catch (e) { console.error(e); } }); renderLiveBadge(); renderSaved(); if (!WORLD && S.phase === 'room') { cardKey = null; render(); } }
   function setLive(st, err) { LV.state = st; LV.error = err || null; liveChanged(); }
   function rand36(n) { var a = new Uint8Array(n), s = ''; crypto.getRandomValues(a); for (var i = 0; i < n; i++) s += (a[i] % 36).toString(36); return s; }
   function rand64(n) { var a = new Uint8Array(n), s = ''; crypto.getRandomValues(a); for (var i = 0; i < n; i++) s += String.fromCharCode(a[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
@@ -1112,6 +1112,36 @@
       try { sessionStorage.setItem(k, JSON.stringify(c)); } catch (e) {}
     }
     return c;
+  }
+  // Kit 1.6.5 (the creator, 2026-10-11: "If I close my game but want to stream live from the same link as before, how
+  // can I do that?"): the share sheet hands the streamer a private streamer link, this friends page with the channel in
+  // its #fragment (never sent to a server). Opened later, in any tab, it puts that channel back in this tab's
+  // sessionStorage and the next Go live is on the same public link, so an old post on X goes live again. The secret
+  // lives in the streamer's own bookmark or notes, not in storage every game on the origin can read.
+  function takeSavedStream() {
+    var m = /(?:^#|&)gf-stream=([a-z0-9]{12})\.([A-Za-z0-9_-]{43})(?:&|$)/.exec(location.hash);
+    if (!m || WATCH_ID) return null;
+    try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) {}
+    try { sessionStorage.setItem('gf-watch:' + gameRoot.pathname, JSON.stringify({ id: m[1], key: m[2] })); } catch (e) { return null; }
+    return m[1];
+  }
+  function streamerLink() {
+    if (!LV.id || !LV.key) return null;
+    var u = new URL(location.href); u.search = ''; u.hash = '';
+    if (params.get('signal')) u.searchParams.set('signal', params.get('signal'));
+    return u.href + '#gf-stream=' + LV.id + '.' + LV.key;
+  }
+  function renderSaved() {
+    var stage = $('stage'); if (!stage) return;
+    var b = $('mp-live-saved'), show = !!LV.saved && !LV.savedShut && LV.state === 'off' && !!LV.relay;
+    if (!show) { if (b) b.hidden = true; return; }
+    if (!b) {
+      b = el('div', { id: 'mp-live-saved', class: 'live-saved', role: 'status' }, [el('i', { class: 'rec off' }),
+        el('span', { text: 'Saved stream link ready: Go live to reuse it.' }),
+        el('button', { class: 'quiet x', type: 'button', 'aria-label': 'Close', text: '\u00d7', onclick: function () { LV.savedShut = true; renderSaved(); } })]);
+      stage.append(b);
+    }
+    b.hidden = false;
   }
   function watchLink(id) {
     var slug = /^\/p\/([a-z0-9]+(?:-[a-z0-9]+)*)\//.exec(gameRoot.pathname);
@@ -1280,7 +1310,7 @@
   function livePopup() {
     var p = $('mp-live-share'), show = LV.popup && (LV.state === 'on' || LV.state === 'starting' || LV.state === 'error');
     if (!show) { if (p) p.hidden = true; return; }
-    var key = JSON.stringify([LV.state, LV.link, LV.error]);
+    var key = JSON.stringify([LV.state, LV.link, LV.error, LV.id]);
     if (!p) { p = el('section', { id: 'mp-live-share', class: 'live-share', role: 'dialog', 'aria-label': 'Your stream' }); $('stage').append(p); }
     p.hidden = false;
     if (p.dataset.key === key) return;
@@ -1297,13 +1327,17 @@
       var a = []; try { var cur = window; for (var i = 0; i < 6 && cur.parent && cur.parent !== cur; i++) { a.push(cur.parent); cur = cur.parent; } } catch (x) {}
       a.forEach(function (t) { try { t.postMessage({ type: 'gf:open', url: intent }, '*'); } catch (x) {} });
     } }, [document.createTextNode('Post on X')]);
-    p.replaceChildren(
+    var keep = el('button', { id: 'mp-live-keep', class: 'quiet', type: 'button', text: 'Copy my streamer link', onclick: function () { var s = streamerLink(); if (s) copyText(s, keep, 'Copy my streamer link'); } });
+    p.replaceChildren.apply(p, [
       el('div', { class: 'live-head' }, [el('b', { text: LV.state === 'error' ? 'Stream stopped' : LV.state === 'starting' ? 'Going live…' : 'You’re live' }),
         el('button', { id: 'mp-live-close', class: 'quiet x', type: 'button', 'aria-label': 'Close', text: '×', onclick: function () { LV.popup = false; livePopup(); focusGame(); } })]),
       LV.error ? el('p', { class: 'err', text: LV.error }) : el('p', { class: 'muted', text: 'Anyone with this link watches you play, then can jump in. Everyone here sees that you’re live.' }),
       el('div', { class: 'link' }, [link, copy]),
+      LV.state === 'error' ? null : el('div', { class: 'keep' }, [
+        el('p', { class: 'muted', text: 'Want this same link next time? Keep your streamer link and open it before you go live. It\u2019s private: anyone with it can stream as you.' }),
+        keep]),
       el('div', { class: 'row' }, LV.state === 'error' ? [el('button', { id: 'mp-live-again', class: 'primary', type: 'button', text: 'Go live again', onclick: function () { LV.state = 'off'; liveStart(); } })]
-        : [post, el('button', { id: 'mp-live-stop', class: 'quiet', type: 'button', text: 'Stop streaming', onclick: function () { liveStop('stop'); } })]));
+        : [post, el('button', { id: 'mp-live-stop', class: 'quiet', type: 'button', text: 'Stop streaming', onclick: function () { liveStop('stop'); } })])].filter(Boolean));
   }
 
   // ---- a live round's viewer (kit 1.6.1): no room; each round's page loads with that round's seed ----
@@ -1547,7 +1581,7 @@
         world: WORLD ? { key: WS.key, status: WS.status, code: WS.status === 'in' ? S.code : null, n: WS.n, max: WS.max, host: WS.status === 'in' && isWorldHost(), handoffs: WS.handoffs,
           lastHandoffMs: WS.lastHandoffMs, lastWhy: WS.lastWhy, cid: WS.cid, name: WS.name, players: worldPlayers(), started: WS.started, frame: WS.frameUrl, session: !!S.session } : null,
         // kit 1.6.0: streaming (this copy's own stream) and watching (a viewer)
-        live: { available: liveAvailable(), state: LV.state, id: LV.id, link: LV.link, viewers: LV.viewers, error: LV.error, sent: LV.sent, relay: LV.relay, badges: Object.keys(BADGES) },
+        live: { available: liveAvailable(), state: LV.state, id: LV.id, saved: LV.saved, link: LV.link, viewers: LV.viewers, error: LV.error, sent: LV.sent, relay: LV.relay, badges: Object.keys(BADGES) },
         watch: WS.watch ? { id: WS.watch.id, state: WS.watch.state, live: WS.watch.live, ended: WS.watch.ended, keyed: WS.watch.keyed, mismatch: WS.watch.mismatch, full: WS.watch.full,
           viewers: WS.watch.viewers, follow: watchInfo(WS.watch).follow, roster: WS.watch.roster.length, queued: WS.watch.queue.length, got: WS.watch.got, joinOpen: WS.watch.joinOpen } : null,
         results: S.results, card: card.hidden ? null : (card.firstElementChild && card.firstElementChild.dataset.view) || 'fatal',

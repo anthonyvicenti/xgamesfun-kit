@@ -17,7 +17,7 @@ Part of the gf-three kit (track K2). Add it to a spec as `{ "id": "tag", "as": "
 Contact is the closest approach of both walkers between their last two samples; the toast and sound fire on the change of the it list, not per frame.
 
 ## Methods for rules.js
-- Every copy: `isIt(player)`, `its()`, `notIt()`, `itTime(player)`, `hiding()`. Host: `makeIt(p)`, `clearIt(p)`, `tag(from, to)`, `onTag(fn)` `{from, to}`, `botStep(bot)` (call from `rules.bot`).
+- Every copy: `isIt(player)`, `its()`, `notIt()`, `itTime(player)`, `itSeconds(player)` (whole seconds: the one to score with while the round runs, since a fraction never matches on two screens), `hiding()`. Host: `makeIt(p)`, `clearIt(p)`, `tag(from, to)`, `onTag(fn)` `{from, to}`, `botStep(bot)` (call from `rules.bot`).
 
 Example: `tag.onTag(({ to }) => { to.score -= 1; });  check(ctx) { return tag.notIt().length === 0 ? { winners: [], reason: 'all tagged' } : null; }`
 

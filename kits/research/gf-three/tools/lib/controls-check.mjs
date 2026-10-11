@@ -48,6 +48,7 @@
 // clock, as before; the record's `clock` says which.
 import { prepareStepped, stepUrl, clockFor, mouseTaken } from './stepped.mjs';
 import { flowSigns, flowIdOf } from './flow-signs.mjs';
+import { holdsBody } from './part-signs.mjs';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 /** Stepped time: the game time between two frames taken while a button is held. */
 export const FRAME_MS = 60;
@@ -177,6 +178,10 @@ export async function checkControls({ newPage, browser, url, game, shot = async 
         continue;
       }
       if (action === 'interact') { results.push(await interact({ p, obs, game, words, shot, L, t0, clock })); continue; }
+      // primary / secondary in a game whose part holds the body and lists what to point at (a board with a cursor):
+      // the real mouse goes to a point the part lists, clicks, and the game must take it (point-and-click, below)
+      const pc = await pointAndClick({ p, obs, action, words, game, shot, clock });
+      if (pc) { results.push(pc); continue; }
       // primary / secondary: held near the crosshair
       results.push(await fire({ p, obs, png, view, browser, action, words, crosshair, hasObs, game, shot, L, clock }));
     }
@@ -254,13 +259,48 @@ async function interact({ p, obs, game, words, shot, L, clock }) {
     const o2 = await obs();
     await shot(p, 'controls-interact-after');
     const changed = !unchanged(t, o2, game);
-    const what = t.kind === 'pickup' ? 'took the pickup' : t.kind === 'carry' ? 'picked the item up' : t.kind === 'loot' ? `${t.what === 'weapon' ? 'took the weapon' : 'opened the chest'}` : 'worked the station';
+    // an interactable may carry its own verb (a board's cell: "dropped a piece in the column"); else by kind
+    const what = typeof t.verb === 'string' && t.verb ? t.verb : t.kind === 'pickup' ? 'took the pickup' : t.kind === 'carry' ? 'picked the item up' : t.kind === 'loot' ? `${t.what === 'weapon' ? 'took the weapon' : 'opened the chest'}` : 'worked the station';
     if (changed) return { action: 'interact', words, ok: true, kind: t.kind, at, prompt, why: `E ${at} m from a ${t.kind} (touch ${t.touch || 0} m, press ${t.reach} m) ${what}${prompt ? `; the HUD said "${prompt}"` : ''}`, legacy: !!t.legacy };
     return { action: 'interact', words, ok: false, kind: t.kind, at, prompt, legacy: !!t.legacy,
       why: `E ${at} m from a ${t.kind} (the HUD's "E: ${words}") changed nothing${t.touch ? ` (it is only taken by walking into it, within ${t.touch} m)` : ''}${prompt ? '' : '; no prompt showed near it'}. ` +
         (t.kind === 'pickup' ? 'The kit pickup takes a press of interact within `reach` when collect is "both" (the default since 2026-10-07): upgrade the game\'s kit, and do not set collect "touch" while the HUD lists interact' : t.kind === 'carry' ? 'Check carry grabAction "interact" and reach' : 'Check station action and range') };
   }
   return { action: 'interact', words, ok: false, why: `could not reach anything to interact with in ${L.WALK_SECONDS} s (${tried.join('; ') || 'none tried'})` };
+}
+
+/**
+ * Point and click (wave 8, track V): for a part that holds the body (it owns player.control by its manifest) or lists
+ * points for this action (window.__game.controls().points: CSS pixels of what may be clicked now, on the player's
+ * turn). The real mouse moves to one, clicks, and the part must take it: the point leaves the list (a piece picked: the
+ * list becomes where it may go; a move played: the turn passes) and, after the last step, the shared state changed.
+ * → null when this is not such a game (the caller holds the button at the crosshair, as before).
+ */
+async function pointAndClick({ p, obs, action, words, game, shot, clock }) {
+  const held = holdsBody(game);
+  const mine = o => (o.controls?.points ?? []).filter(x => (x.action ?? 'primary') === action);
+  let o = await obs();
+  if (!held && !mine(o).length) return null;
+  // alone, a turn game seats a bot: wait while it is the bot's turn (game time)
+  for (let t = clock.now(); !mine(o).length && clock.now() - t < 14000; ) { await clock.wait(300); o = await obs(); }
+  const btn = action === 'primary' ? 'left' : 'right';
+  if (!mine(o).length) return { action, words, ok: false, point: true, why: `the ${held?.id ?? 'game'} holds the player's body${held ? ' (it owns player.control)' : ''} and lists nothing to point at for ${action} in 14 s (window.__game.controls().points was empty: is it ever this player's turn, and does the part give points()?)` };
+  const sig = x => JSON.stringify(x.shared), before = sig(o), clicks = [];
+  for (let stepN = 0; stepN < 3; stepN++) {
+    const list = mine(o); if (!list.length) break;
+    const it = list[0];
+    await p.mouse.move(it.x, it.y, { steps: 4 }); await clock.wait(160);
+    await p.mouse.down({ button: btn }); await clock.wait(70); await p.mouse.up({ button: btn }); await clock.wait(450);
+    const o1 = await obs(), gone = !mine(o1).some(x => x.id === it.id);
+    clicks.push({ id: it.id, at: [it.x, it.y], took: gone, verb: it.verb ?? null });
+    o = o1;
+    if (!gone || (it.step ?? 1) >= (it.of ?? 1)) break;
+  }
+  await shot(p, `controls-${action}-pointed`);
+  const last = clicks.at(-1), changed = sig(o) !== before, ok = !!last?.took && changed;
+  return { action, words, ok, point: true, clicks, changed,
+    why: ok ? `the real mouse pointed at ${clicks.map(c => `${c.at[0]},${c.at[1]}`).join(' then ')} and clicked: ${clicks.map(c => c.verb ?? 'taken').join(', then ')}; the shared state changed (points from ${held?.id ?? 'the part'}'s own list)`
+      : `a click on a point the ${held?.id ?? 'part'} lists as playable (${last ? `${last.at[0]},${last.at[1]} px, ${last.id}` : 'none'}) ${last?.took ? 'was taken but the shared state did not change' : 'changed nothing: the point stayed listed'}. The HUD says "${words}": a click on a legal cell must play it (or say why not on the player's own screen)` };
 }
 
 /** Hold primary or secondary; look near the crosshair. */

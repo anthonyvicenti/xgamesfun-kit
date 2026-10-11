@@ -138,7 +138,7 @@ export function enemyToughness(mechanics) {
   return `waves: hp ${hp} → ${to}, so an enemy takes 3 hits from the ${stream ? 'stream' : 'shot'} (damage ${dmg}) and each one shows (a health bar, a flash); set waves oneHitKills only when the creator asks for one-hit kills`;
 }
 
-export async function specToConfig(spec, { modules, lookPreset = null, lookConfig = null, standinPresetValues, mechanicDefaults = {}, mechanicSounds = {}, worldConfig = null, flow = null }) {
+export async function specToConfig(spec, { modules, lookPreset = null, lookConfig = null, standinPresetValues, mechanicDefaults = {}, mechanicSounds = {}, worldConfig = null, flow = null, flat = null }) {
   const notes = [];
   const rng = createRng(hashString(`${spec.title}|layout`));
   const P = spec.players ?? { min: 1, max: 4 };
@@ -147,12 +147,15 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
 
   // ---- props: layout pieces and gameplay props ----
   const gameProps = [], layoutProps = [], propFiles = {}, named = {};   // named: the spec's prop name → its slot id
-  for (const p of spec.world?.props ?? []) (GAMEPLAY.test(`${p.role ?? ''} ${p.name}`) ? gameProps : layoutProps).push(p);
+  // (a flat game has no layout pieces: its world is a tile map, so every prop the spec names is the game's own)
+  for (const p of spec.world?.props ?? []) (flat || GAMEPLAY.test(`${p.role ?? ''} ${p.name}`) ? gameProps : layoutProps).push(p);
   // with the real world module the layout pieces come from its catalog (realWorld below); here: the gameplay props,
   // and with the stand-in world every prop
   // (a forge world places every spec prop itself, from its own library: CONTRACT §8 forge)
   for (const p of spec.engine === 'forge' ? [] : spec.world?.props ?? []) {
     if (modules.world && layoutProps.includes(p)) continue;
+    // a flat (2D) game's prop is a picture (kit/flat): an image slot, a stand-in in the game's art style until one is made
+    if (flat) { named[p.name] = `prop.${p.name}`; propFiles[p.name] = flat.part.propFor(p, { style: flat.style, assets, repoFile: flat.repoFile }); continue; }
     const made = p.from === 'generate' || p.from === 'reference';   // the worker makes it (tools/meshy-prop.mjs) and places it here
     const lib = !made ? await libraryProp(p.name, p.describe) : null;
     const to = `assets/models/${p.name}.glb`;
@@ -206,7 +209,9 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
     }
     notes.push(`characters: friends see each other as the co-op hunters, one body a seat (slots ${W.BODY}, ${W.bodySlot(1)}, …), skinned by the forge renderer, their cloth in the player's colour${held.length ? `, holding ${held.join(', ')}` : ''}${forgeWear.fp ? '; the first-person arms and weapons, a kill\'s pieces, a coin and the effect pictures are slots too' : ''}`);
   }
-  for (const c of forge ? [] : spec.characters ?? [{ role: 'player', body: { from: 'bean' } }]) {
+  // a flat (2D) game's body is a picture sheet (kit/flat/character.js, the gf-flat-1 standard)
+  if (flat) for (const c of spec.characters ?? [{ role: 'player', body: { from: 'sprite' } }]) { const b = flat.part.bodyFor(c, { plane: flat.plane, style: flat.style, assets, repoFile: flat.repoFile }); roles[c.role] = b.role; bodies[c.role] = b.record; notes.push(b.note); }
+  for (const c of forge || flat ? [] : spec.characters ?? [{ role: 'player', body: { from: 'bean' } }]) {
     const to = `assets/models/body-${c.role}.glb`;
     const lib = modules.character ? await libraryBody(c.body) : null;
     if (lib) {
@@ -237,7 +242,7 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
   if (modules.character && !forge && existsSync(join(LIBRARY, 'clips/gf-humanoid-1.glb'))) assets.push({ to: 'assets/clips/gf-humanoid-1.glb', from: join(LIBRARY, 'clips/gf-humanoid-1.glb'), license: (await libraryLicense('clips/gf-humanoid-1.glb', 'gf-humanoid-1')) ?? { spdx: 'CC0-1.0', author: 'Quaternius (Universal Animation Library), retargeted by games.fun', url: 'https://quaternius.itch.io/universal-animation-library' } });
 
   // ---- the ground (stand-in world only: the real world draws its own from colour slots and a noise texture) ----
-  if (!modules.world && !forge) assets.push({ to: 'assets/textures/ground.ktx2', from: join(STANDIN_ASSETS, 'grass.ktx2'), license: { spdx: 'CC0-1.0', author: 'Poly Haven', url: 'https://polyhaven.com/a/leafy_grass' } });
+  if (!modules.world && !forge && !flat) assets.push({ to: 'assets/textures/ground.ktx2', from: join(STANDIN_ASSETS, 'grass.ktx2'), license: { spdx: 'CC0-1.0', author: 'Poly Haven', url: 'https://polyhaven.com/a/leafy_grass' } });
 
   // ---- config files ----
   const mechanics = (spec.mechanics ?? []).map(m => ({ id: m.id, ...(m.as ? { as: m.as } : {}), params: { ...(mechanicDefaults[m.id] ?? {}), ...specParams(spec, m), ...(m.params ?? {}) } }));
@@ -271,6 +276,8 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
   // fair play is about knocks and bots, which the forge engine has neither of yet (tracks F and A): no fair.* values
   // (slots that would change nothing) until it does
   if (forge) delete game.fair;
+  // a flat (2D) game: its plane, its jump and its controls are the flat part's to set (kit/flat/slots.js gameFor)
+  if (flat) Object.assign(game, flat.part.gameFor(spec, game));
   // the forge data tables (spec.forge: player, physics, weapons, enemies, waves, cards), every value filled and a slot
   // (research/gf-forge/kit/tables; create has already refused what the core can't do)
   const forgeTables = forge ? await importPart(join(FORGE_KIT, 'tables/index.js'), 'the forge engine (research/gf-forge)') : null;

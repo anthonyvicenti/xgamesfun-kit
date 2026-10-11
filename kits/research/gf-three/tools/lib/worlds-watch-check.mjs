@@ -10,13 +10,17 @@
 //      sent to the relay as a viewer closes that socket (1008). H leaves: A becomes the host and the block A places
 //      next reaches B. B presses Join, names itself and enters the same world without the game reloading. C watches;
 //      A stops; C's bar says it ended, with Play and no stray words; C presses Play solo: the world's own page, a
-//      practice copy with nobody else. No console errors.
+//      practice copy with nobody else. D, A on another day (a new browser), opens the streamer link A copied from the
+//      share sheet, enters and goes live: the same link as before, the secret gone from the address bar and kept out
+//      of localStorage, and E, opening the old link, sees D live. No console errors.
 //      Beside Join a viewer's bar offers Play solo, and no room of one's own (a world is one shared world per link).
 // Play-test 1 (research/watch/evidence/playtest-1/report.md) found what the later steps hold: the secret in localStorage,
 // the viewer looking at the sky near a wall, misplaced or missing name tags, the first block after a handoff lost for
 // viewers, "null" in the bar. The creator, 2026-10-10: "add an option to start own lobby or play solo" (gf-multiplayer
-// 1.6.3; research/watch/evidence/own-room-or-solo-request-2026-10-10.json).
+// 1.6.3; research/watch/evidence/own-room-or-solo-request-2026-10-10.json). The creator, 2026-10-11: "If I close my game
+// but want to stream live from the same link as before, how can I do that?" (gf-multiplayer 1.6.5, the streamer link).
 import { player } from './worlds-room-check.mjs';
+import { streamerLinkFrom } from './friends-watch-check.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
@@ -39,7 +43,7 @@ async function viewer(browser, server, id, name, errors) {
 export async function checkWorldWatch({ browser, server, log = () => {}, shot = null }) {
   const steps = [], errors = [], record = { steps };
   const step = (name, ok, detail = '') => { steps.push({ name, ok: !!ok, detail }); log(`  ${ok ? 'ok  ' : 'FAIL'} [watch] ${name}${detail ? ` — ${detail}` : ''}`); return !!ok; };
-  let H = null, A = null, B = null, C = null;
+  let H = null, A = null, B = null, C = null, D = null, E = null;
   try {
     if (!server.relay) { step('the world server carries the stream relay', false, 'startWorldServer({watch: false})'); return done(); }
     // ---- H hosts; A enters, builds, goes live from the menu ----
@@ -61,6 +65,8 @@ export async function checkWorldWatch({ browser, server, log = () => {}, shot = 
       `link ${sheet.link}; badge "${sheet.badge}"`);
     const leaked = await A.page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('gf-watch:')).length).catch(() => -1);
     step('the stream\'s secret is not in the origin\'s shared storage', leaked === 0, leaked ? `localStorage holds ${leaked} gf-watch entries` : 'sessionStorage only');
+    const keep = await streamerLinkFrom(A.page);                          // kit 1.6.5: the same link next time
+    step('the share sheet hands the streamer a private link for the same stream next time', !!keep && keep.includes(`#gf-stream=${live.id}.`) && !keep.includes('watch='), keep ? keep.replace(/(#gf-stream=[a-z0-9]{12}\.).*/, '$1…') : 'no #mp-live-keep, or it copied nothing');
     await A.page.click('#mp-live-close').catch(() => {});
     if (shot) await shot(A.page, 'watch-live');
     // ---- B watches ----
@@ -168,16 +174,34 @@ export async function checkWorldWatch({ browser, server, log = () => {}, shot = 
     await C.page.click('#mp-watch-solo').catch(() => {});
     const solo = await until(() => C.page.evaluate(() => window.__game?.ready === true && document.querySelector('#gf-play') ? { url: location.href, net: window.__game.snapshot().net ?? null, play: document.querySelector('#gf-play').textContent } : null), 60000, 'the world alone on C').catch(() => null);
     step('Play solo: the world\'s own page, a practice copy with nobody else', !!solo && solo.net === null && !/\/gf\/mp\//.test(new URL(solo.url).pathname) && !new URL(solo.url).searchParams.has('watch'), solo ? `${solo.url}; "${solo.play}"` : `still at ${C.page.url()}`);
+    // ---- another day: A's streamer link in a new browser, the same public link (kit 1.6.5) ----
+    let again = null, dUrl = '', dNote = false, dLeak = -1, eLive = null;
+    if (keep) {
+      D = await player(browser, { ...server, friendsUrl: keep }, 'Ada', errors);
+      dUrl = D.page.url();
+      dNote = await until(() => D.page.evaluate(() => !!document.querySelector('#mp-live-saved:not([hidden])')), 8000, 'the saved-link note').catch(() => false);
+      await D.enter();
+      await D.page.keyboard.press('Escape'); await sleep(400);
+      await D.frame.click('#gf-live').catch(() => {});
+      again = await until(async () => { const s = (await D.page.evaluate(() => window.__party.snapshot())).live; return s.state === 'on' ? s : null; }, 15000, 'D live').catch(() => null);
+      dLeak = await D.page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('gf-watch:')).length).catch(() => -1);
+      if (again) {
+        E = await viewer(browser, server, live.id, 'viewer E', errors);
+        eLive = await until(async () => { const w2 = (await E.party()).watch; return w2?.live && !w2.ended ? w2 : null; }, 15000, 'E sees D live').catch(() => null);
+      }
+    }
+    step('another day, the streamer link goes live on the same link, and the old link shows it', !!again && again.id === live.id && again.link === live.link && !!eLive && !/gf-stream/.test(dUrl) && dNote && dLeak === 0,
+      again ? `live on ${again.id} (was ${live.id}); the old link ${eLive ? 'shows it live' : 'does not show it live'}; the address bar ${/gf-stream/.test(dUrl) ? 'still holds the secret' : 'is clean'}; the note ${dNote ? 'shown' : 'not shown'}; localStorage ${dLeak} gf-watch entries` : `D is ${keep ? 'not live' : 'never opened: no streamer link'}`);
     step('no console errors', errors.length === 0, errors.slice(0, 4).join(' | '));
   } catch (e) {
     step('the flow ran to the end', false, e.message);
   } finally {
-    for (const P of [H, A, B, C]) await P?.ctx.close().catch(() => {});
+    for (const P of [H, A, B, C, D, E]) await P?.ctx.close().catch(() => {});
   }
   return done();
 
   function done() {
     const failed = steps.filter(s => !s.ok);
-    return { ok: steps.length > 0 && !failed.length, detail: failed.length ? failed.map(s => `${s.name}: ${s.detail}`).slice(0, 3).join(' · ') : `${steps.length} steps: Go live, watch where the streamer is and as they look, blocks before, during and after a handoff, read-only, Join in place, Stop, the game alone`, record };
+    return { ok: steps.length > 0 && !failed.length, detail: failed.length ? failed.map(s => `${s.name}: ${s.detail}`).slice(0, 3).join(' · ') : `${steps.length} steps: Go live, watch where the streamer is and as they look, blocks before, during and after a handoff, read-only, Join in place, Stop, the game alone, the same link another day`, record };
   }
 }

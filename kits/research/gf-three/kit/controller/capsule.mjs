@@ -45,6 +45,9 @@ export function createCapsule(RAPIER, world, cfg, start, { userData = null } = {
   const slopeMax = M.slopeMaxDeg * Math.PI / 180;
   const rot0 = { x: 0, y: 0, z: 0, w: 1 }, down = { x: 0, y: -1, z: 0 };
   const ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, down);
+  // what the ground probe sees. A part whose ground is not the same for every body at every moment sets it per step
+  // (setQuery): a flat game's ledges hold a body coming down and let a rising one through (kit/flat/controller.js).
+  let query = SOLID_QUERY;
 
   const s = {
     onGround: false, wasOnGround: false, falling: false, jumpActive: false, jumpTimer: 0, coyote: 0, buffer: 0,
@@ -55,12 +58,12 @@ export function createCapsule(RAPIER, world, cfg, start, { userData = null } = {
 
   function groundCast(p) {
     const origin = { x: p.x, y: p.y - C.halfHeight, z: p.z };
-    const hit = world.castShape(origin, rot0, down, ball, 0, F.rayLength, false, undefined, SOLID_QUERY, collider, body);
+    const hit = world.castShape(origin, rot0, down, ball, 0, F.rayLength, false, undefined, query, collider, body);
     if (!hit) return null;
     const n = hit.normal1, slope = Math.acos(Math.min(1, Math.max(-1, n.y)));
     if (slope < slopeMax) return { toi: hit.time_of_impact, normal: [n.x, n.y, n.z], slope, friction: hit.collider.friction() };
     ray.origin = origin; ray.dir = down;
-    const rh = world.castRayAndGetNormal(ray, F.rayLength + F.rayRadius, false, undefined, SOLID_QUERY, collider, body);
+    const rh = world.castRayAndGetNormal(ray, F.rayLength + F.rayRadius, false, undefined, query, collider, body);
     if (rh) {
       const sl = Math.acos(Math.min(1, Math.max(-1, rh.normal.y)));
       if (sl < slopeMax) return { toi: rh.timeOfImpact - F.rayRadius, normal: [rh.normal.x, rh.normal.y, rh.normal.z], slope: sl, friction: rh.collider.friction() };
@@ -69,7 +72,7 @@ export function createCapsule(RAPIER, world, cfg, start, { userData = null } = {
   }
   function probeGroundY(p, maxDown = 60) {
     ray.origin = { x: p.x, y: p.y - C.halfHeight, z: p.z }; ray.dir = down;
-    const h = world.castRay(ray, maxDown, true, undefined, SOLID_QUERY, collider, body);
+    const h = world.castRay(ray, maxDown, true, undefined, query, collider, body);
     return h ? p.y - C.halfHeight - h.timeOfImpact : -Infinity;
   }
 
@@ -170,5 +173,5 @@ export function createCapsule(RAPIER, world, cfg, start, { userData = null } = {
     Object.assign(s, { onGround: false, wasOnGround: false, jumpActive: false, coyote: 0, buffer: 0, stun: 0, slip: 0, facing: yaw ?? s.facing });
   }
 
-  return { body, collider, state: s, step, post, knock, push, reset, feetOffset, config: cfg, probeGroundY };
+  return { body, collider, state: s, step, post, knock, push, reset, feetOffset, config: cfg, probeGroundY, setQuery(groups) { query = groups ?? SOLID_QUERY; } };
 }

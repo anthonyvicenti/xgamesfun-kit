@@ -259,7 +259,8 @@ function helpLine(c = {}, camera = 'third', world = false, brief = false) {
     p.push('Esc: menu');
     return p.join(' · ');
   }
-  const parts = ['WASD move', camera === 'follow' ? 'mouse aim' : 'mouse look'];
+  // (the 'side' camera is a flat game's side-on view, kit/flat: A and D run, W is not a direction, the cursor aims)
+  const parts = camera === 'side' ? ['A/D move', 'mouse aim'] : ['WASD move', camera === 'follow' ? 'mouse aim' : 'mouse look'];
   if (brief) {
     // a themed HUD's line: one word a control, nothing for a control the game says does nothing yet
     const act = (k, v) => (v && !/^nothing/i.test(String(v)) ? `${k}: ${short(v, '').toLowerCase()}` : null);

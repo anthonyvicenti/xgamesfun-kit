@@ -214,7 +214,7 @@ export function create(ctx, params = {}) {
             const cur = { x: p.position.x, y: p.position.y, z: p.position.z }, prev = lastPos.get(p.id) ?? cur;
             lastPos.set(p.id, cur);
             if (p.alive === false) continue;
-            if (canTouch()) for (let i = 0; i < pool.spots.length; i++) { const s = pool.spots[i]; if (s.state === 1 && touches(s, prev, cur, V('radius'))) { collectBy(i, p, 'touch'); } }
+            if (canTouch()) for (let i = 0; i < pool.spots.length; i++) { const s = pool.spots[i]; if (s.state === 1 && touches(s, prev, cur, V('radius'), P.touchHeight)) { collectBy(i, p, 'touch'); } }
             // a press of the action by an owned player (the host's own, every bot); friends ask through pickup:press
             if (p.owned && p.actions?.[V('action')]?.pressed) hostPress(p);
           }

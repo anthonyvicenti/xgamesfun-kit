@@ -68,7 +68,8 @@ export function createPlayers(ctx, { spawnCharacter, characterFor, routeToOwner 
     if (p.owned) {
       const spawn = spawnOf(ctx.world, p.seat);
       const C = ctx.config.controller ?? {};
-      p.controller = createController(ctx, { player: p, character: p.character, camera: p.local ? (ctx.config.camera ?? 'third') : null, speed: C.speed, jump: C.jump, sprint: C.sprint, spawn, settings: C.camera?.[ctx.config.camera ?? 'third'] ?? {} });
+      // the controller is the game's kind's when its parts bring one (a flat game: kit/flat/controller.js), else the kit's own
+      p.controller = (ctx.modules?.controller?.createController ?? createController)(ctx, { player: p, character: p.character, camera: p.local ? (ctx.config.camera ?? 'third') : null, speed: C.speed, jump: C.jump, sprint: C.sprint, spawn, settings: C.camera?.[ctx.config.camera ?? 'third'] ?? {} });
       p.body = p.controller.body;
       p.position.copy(p.controller.feet.set(spawn.x, spawn.y, spawn.z));
       p.yaw = spawn.yaw;
@@ -161,7 +162,8 @@ export function createPlayers(ctx, { spawnCharacter, characterFor, routeToOwner 
     chest.set(p.position.x, p.position.y + h * 0.6, p.position.z);
     v.copy(chest).project(cam);
     if (!(v.z > -1 && v.z < 1 && Math.abs(v.x) < 0.97 && Math.abs(v.y) < 0.97)) return false;
-    const from = cam.position, dir = { x: chest.x - from.x, y: chest.y - from.y, z: chest.z - from.z }, d = Math.hypot(dir.x, dir.y, dir.z);
+    // an orthographic camera sees along parallel lines: the line to the chest is the view's own direction, not one from the camera's middle
+    const from = cam.isOrthographicCamera ? cam.getWorldDirection(new THREE.Vector3()).multiplyScalar(-40).add(chest) : cam.position, dir = { x: chest.x - from.x, y: chest.y - from.y, z: chest.z - from.z }, d = Math.hypot(dir.x, dir.y, dir.z);
     const hit = fixedRay(ctx, from, dir, d);
     return !(hit !== null && hit < d - 0.4);
   }

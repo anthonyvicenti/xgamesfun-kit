@@ -46,6 +46,9 @@ export const KIT_PROMISES = [
   // proved by verify alone (no 'play' proof: the play-tester is not asked). Since M2-C the kit refuses what the brief forbids at
   // the call, with a code on console.error (kit/core/refusals.js), so check 3 is where a refused call shows up.
   { id: 'kit.boots', text: 'The game opens and plays without errors: nothing in a round throws, and no call the kit refuses (a sound that is not listed, a slot that does not exist, a goal line that is too short) goes unnoticed.', proofs: ['verify:3'], check: 'boots with no console errors' },
+  // (check 1: assets.json lists exactly the slots the declarations give; check 4: every mesh on screen carries one, and
+  // the game's own code builds nothing to draw)
+  { id: 'kit.slots', text: 'Everything I see in the game is a piece that can be shown and swapped in Studio: a model, a picture or a number with a slot of its own, never a shape drawn in the game\'s code.', proofs: ['verify:1', 'verify:4'], check: 'slot coverage' },
   { id: 'kit.friends', text: 'With friends in the game, I see each of them as a character with a name, where they really are.', proofs: ['verify:5'], check: 'friends visible' },
   { id: 'kit.round', text: 'A round ends on a results screen that says who won, and I can play again.', proofs: ['verify:6', 'play'], check: 'a round to results and replay' },
   { id: 'kit.fair', text: 'When I get knocked down I am back up within a moment, and nobody can keep me on the floor.', proofs: ['verify:10', 'play'], check: 'fair play' },

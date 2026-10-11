@@ -20,7 +20,10 @@
 //      forge's own leg (tools/lib/forge-round-check.mjs): a lost round ends (alone and felled, the results come)
 //   7  audio gate v4                   8  swap proof (the forge way: a model slot and the texture slot, on screen)
 //   13 controls work: forge's own (tools/lib/forge-controls-check.mjs: each listed control on a quiet staged page must
-//      make the game's state answer and the screen show it)     14 looks honoured · 18 sounds play (static)
+//      make the game's state answer and the screen show it), and a phone's (wave 5, tools/lib/forge-touch-check.mjs:
+//      at 844×390, 390×844 and 667×375 the touch buttons there at rest cover little of the screen, no seat is over
+//      the middle, a readout or the menu button or under 44 px, and every action is done by fingers)
+//      14 looks honoured · 18 sounds play (static)
 //   15 the loop is alive (the goal's share of the first look, from the core's slot-ID pass), and forge's own leg
 //      (tools/lib/forge-first-wave-check.mjs): the first wave can be fought (a player who stands and fights with a new
 //      player's hand is not felled by it, and something falls)
@@ -56,6 +59,7 @@ import { gate } from '../../multiplayer/party/gate.mjs';
 import { launchChrome, GPU_TROUBLE } from '../../foundations/qa/browser.mjs';
 import { installAudioTap, resetAudioTap, audioReport } from '../../audio/qa-gate-v4.mjs';
 import { checkForgeControls } from './lib/forge-controls-check.mjs';
+import { checkForgeTouch } from './lib/forge-touch-check.mjs';
 import { checkMenu, checkHud, checkWallet } from './lib/menu-check.mjs';
 import { checkEmbed } from './lib/embed-check.mjs';
 import { checkScreens } from './lib/screens-check.mjs';
@@ -114,8 +118,9 @@ export async function verifyForge(dir, { rec, outDir, add, log, t0, lap, quick =
   if (needsBrowser || want(32)) env.srv = await startParty({ dir, port: 0 });
   {
     env.shot = async (page, name) => { const f = `${String(rec.shots.length + 1).padStart(2, '0')}-${name}.jpg`; rec.shots.push(f); await page.screenshot({ path: join(outDir, f), type: 'jpeg', quality: 80 }).catch(() => {}); return f; };
-    env.newPage = async (label, { overrides = null, audio = false, record = false, viewport = { width: 1280, height: 720 }, b = env.browser } = {}) => {
-      const ctx = await b.newContext({ viewport });
+    // context: more of the browser context's own options (a phone: {hasTouch, isMobile, deviceScaleFactor}; check 13's phone leg)
+    env.newPage = async (label, { overrides = null, audio = false, record = false, viewport = { width: 1280, height: 720 }, context = {}, b = env.browser } = {}) => {
+      const ctx = await b.newContext({ viewport, ...context });
       const page = await ctx.newPage();
       const errors = [];
       page.on('pageerror', e => errors.push(`${label}: ${e.message}`));
@@ -352,14 +357,18 @@ async function check8(env) {
 }
 
 /** 13 (track S2, tools/lib/forge-controls-check.mjs): every control the HUD lists answers and shows, on a quiet staged
- *  page (the shared check passed a dead control on forge: in a wave fight "some state changed" is always true). */
+ *  page (the shared check passed a dead control on forge: in a wave fight "some state changed" is always true). And a
+ *  phone's controls (wave 5, track U2, tools/lib/forge-touch-check.mjs): at three phone sizes the touch buttons leave
+ *  the picture to the game, and every action a player needs is done by fingers. */
 async function check13(env) {
   const { want, add, rec, newPage, browser, srv, game, log, shot } = env;
   if (!want(13)) return;
   await env.section([[13, 'controls work']], async () => {
     const cc = await checkForgeControls({ newPage, browser, url: srv.url, game, log, shot });
     rec.controls = cc.record; if (cc.warnings.length) rec.notes.push(...cc.warnings);
-    add(13, 'controls work', cc.ok, cc.detail);
+    const tc = await checkForgeTouch({ newPage, url: srv.url, game, dir: env.dir, log, shot }).catch(e => ({ ok: false, detail: `a phone's controls could not be played: ${e.message}`, record: null, warnings: [] }));
+    rec.touch = tc.record; if (tc.warnings.length) rec.notes.push(...tc.warnings);
+    add(13, 'controls work', cc.ok && tc.ok, cc.ok && tc.ok ? `${cc.detail}; ${tc.detail}` : cc.ok ? tc.detail : `${cc.detail}${tc.ok ? '' : ` Also: ${tc.detail}`}`);
     env.lapNow('controls');
   });
 }

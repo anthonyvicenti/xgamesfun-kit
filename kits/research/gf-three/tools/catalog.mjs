@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // gf-three catalog: what the kit offers, for the pitch agent and for builders.
 //
-//   node research/gf-three/tools/catalog.mjs [--json] [--engine party|scenic|forge]
+//   node research/gf-three/tools/catalog.mjs [--json] [--engine party|scenic|forge|flat]
 //
 // loops      how a game is played (spec.loop; open builder M4-B): a timed round, a level run, a world that stays, and the
 //            ones the session cannot run yet, each `ready` or planned, with how a pitch picks one (loopGuide)
@@ -73,6 +73,10 @@ export const MANIFEST = {
   asks: '(optional) [{about: "body" | "together", why}]: what a pitch must ask the creator when their words do not settle it and a card uses this part (a board with no player body asks how each player is shown); held by the pitch step (loop/pitch-rules.mjs), never by a build',
   signs: '{sample: (shared, stats) => {key: compact} | null, judge: view => void, reportOnly?}: verify check 15\'s sign of life. sample runs in the page 4 times a second (an arrow function that uses nothing outside itself); judge reads the samples in Node and adds its items',
 };
+/** The kit an engine id runs on: a flat (2D) game is the party kit on a plane (kit/flat), so a mechanic or a flow that
+ *  runs on party runs there as far as the kit is concerned; which mechanics have been RUN on a plane is the flat part's
+ *  own list (kit/flat/index.js manifest.runs), held by create. */
+export const kitEngineOf = e => (e === 'flat' || e == null ? 'party' : e);
 const RESOURCE_RE = /^(input\.(key\.)?[A-Za-z0-9]+|player\.socket\.[a-z_]+|player\.control|round\.end|hud\.[a-z]+)$/;
 
 /** The mechanic folders of a kit: every kit/mechanics/<id>/index.js, sorted. */
@@ -133,7 +137,8 @@ export function partFor(part, params = {}) {
  * the world provides (a list of capabilities, or null when the world is not known: then no world need is judged).
  * → the refusals, each with its cause and the way out. A mechanic without a manifest is not judged.
  */
-export function composeProblems(mechanics = [], parts = [], { engine = 'party', world = null, worldId = '' } = {}) {
+export function composeProblems(mechanics = [], parts = [], { engine: asked = 'party', world = null, worldId = '' } = {}) {
+  const engine = kitEngineOf(asked);
   const byId = new Map(parts.map(p => [p.id, p])), ids = new Set(mechanics.map(m => m.id)), out = [], claims = new Map();
   for (const m of mechanics) {
     const part = byId.get(m.id); if (!part?.manifest) continue;
@@ -330,7 +335,7 @@ export function loopProblems(spec, loops, { require = false } = {}) {
   const L = loops.find(l => l.id === spec.loop);
   if (!L) return [`loop: "${spec.loop}" is not a loop in the catalog (${list})`];
   if (!isReady(L)) return [`loop: "${L.id}" (${L.label}) is ${String(L.status).split(/[:(]/)[0].trim()}, not built yet: a spec uses a ready loop (${ready.join(', ')}). Pick the closest one and say what is lost (in a pitch: play.loop.closest and lost, and card 1's v1.notYet)`];
-  const out = [], engine = spec.engine ?? 'party';
+  const out = [], engine = kitEngineOf(spec.engine);
   if (Array.isArray(L.engines) && !L.engines.includes(engine)) out.push(`loop: "${L.id}" (${L.label}) does not run on the ${engine} engine (it runs on ${L.engines.join(', ')})`);
   const shape = LOOP_DEFS.find(d => d.id === L.id)?.shape?.(spec);
   if (shape) out.push(`loop: "${L.id}" (${L.label}), but ${shape}. Its shape: ${L.spec}`);
@@ -344,6 +349,8 @@ const ENGINE_GUIDE = [
   'party (gf-three): silly party games with friends: pranks, chaos, slapstick, friendslop, crude humour; jelly-bean or toon looks, flat lots and buildings',
   'scenic (gf-scenic): serious, scenic or action games: adventure, roguelite, brawler, dungeon crawler, hack and slash, exploration, survival, RPG-like; anything that names a serious game; reference images that look like polished 3D art',
   'forge (gf-forge): first-person or close-camera action with weight: a shooter, a dark roguelite run, survival nights, arena fights; the feel of a modern FPS (a Rust core on WebGPU); co-op for 2-4. Its play is the data tables (spec.forge: weapons, enemies, waves, cards) and rules.js, not mechanic modules',
+  'flat (gf-three on a plane, kit/flat): a 2D game: the creator says 2D, pixel art, sprite, retro, side-scroller, platformer or top-down, or names a 2D game; also a grid or board seen from above with a cursor each. Pick its `plane` (engines.flat.planes: top or side) and a look in the art style asked for (pixel unless they say drawn, cartoon, hand-drawn or vector)',
+  '* a flat spec says its `plane`; its camera is that plane\'s (top or side), its world is field (top) or stage (side), every body is {from: "sprite"}, and it lists only mechanics run on that plane (engines.flat.mechanics.<plane>): create refuses anything else, and what the idea needs beyond them goes in v1.notYet',
   'when unsure, scenic for anything that is not silly',
   '* forge is never a card for a game meant to open inside a post on X (or another in-app browser) yet: it draws with WebGPU, or with its WebGL2 build where there is none (since wave 3), and that build has not been run inside an in-app browser or on a phone (research/rust-engine/PLAN.md §10)',
   '* a forge spec lists no mechanic; a forge card promises only what its tables run today (catalog.json → engines.forge.tables: a table whose `runs` is null goes in v1.notYet)',
@@ -365,11 +372,13 @@ const SCENIC_WORLDS = {
 const FORGE_WORLDS = {
   'crypt-room': { label: 'Crypt room', kind: 'indoor', describe: 'a torch-lit stone room of KayKit dungeon pieces (3, 4 or 5 tiles of 3 m a side by size), barrels and crates, the spec\'s own props by the far wall' },
   'ruins-arena': { label: 'Ruins arena', kind: 'outdoor', describe: 'a moonlit ruined courtyard generated from world.seed (8, 10 or 12 tiles of 3 m a side by size): broken walls and a gate, braziers and torches, cover between a stone plaza and the walls, graves enemies rise from, dead trees past the walls; the spec\'s own props round the plaza' },
+  'town-street': { label: 'Town street', kind: 'outdoor', describe: 'a gaslit old-town street at night generated from world.seed: wet cobbles 9 m wide and 30, 36 or 42 m long that open into a small square at the middle (21 by 12, 27 by 18 or 33 by 18 m), timber-framed and brick house fronts on both sides with lit windows and shop signs, gas lamps, four side alleys, a barricade at one end and iron railings in fog at the other, roofs and a church tower past the houses; carts, barrels, crates and a market stall for cover; enemies come up from cellar hatches and street drains. The thing to guard stands in the middle of the square: name it "pump" for the town pump' },
 };
 const FORGE_LOOKS = {
   'moonlit-ruins': { label: 'Moonlit ruins', describe: 'a cold moon with shadows, teal fog, warm fires and bloom, square texels and grain: the ruins arena\'s look' },
   'ember-crypt': { label: 'Ember crypt', describe: 'dark red fog and red-orange fire light: the crypt room\'s look' },
   'ash-storm': { label: 'Ash storm', describe: 'a dim sun through falling ash, thick warm fog' },
+  'gaslit-street': { label: 'Gaslit street', describe: 'warm, nearly steady gas light in pools on wet cobbles under a cold high moon, slate-blue fog that thins the far end of a street, lit windows that glow, square texels and grain: the town street\'s look' },
 };
 const readJson = async p => { try { return JSON.parse(await readFile(p, 'utf8')); } catch { return null; } };
 const summarizeParams = schema => Object.fromEntries(Object.entries(schema?.properties ?? {}).map(([k, s]) => [k, { type: s.type ?? (s.enum ? 'enum' : '?'), ...(s.enum ? { enum: s.enum } : {}), ...('default' in s ? { default: s.default } : {}), ...(s.minimum !== undefined ? { min: s.minimum } : {}), ...(s.maximum !== undefined ? { max: s.maximum } : {}), ...(s.description ? { describe: s.description } : {}) }]));
@@ -433,6 +442,10 @@ export async function catalog({ kit = KIT } = {}) {
   const forge = await forgeCatalog();
   out.worlds.push(...forge.worlds); out.looks.push(...forge.looks);
   out.engines.forge = forge.engine;
+  // the flat (2D) engine (kit/flat): the party kit on a plane. Its planes, worlds, looks, cameras and the mechanics run
+  // on each plane are the part's own manifest; nothing about it is listed here by hand.
+  const flat = await flatCatalog({ kit });
+  if (flat) { out.worlds.push(...flat.worlds); out.looks.push(...flat.looks); out.engines.flat = flat.engine; }
   out.engineGuide = ENGINE_GUIDE;
   // how a game is played, apart from the engine (M4-B): what the session runs today, and what is planned
   out.loops = await loopParts({ kit });
@@ -481,10 +494,10 @@ async function scenicCatalog() {
 export const FORGE_OPEN = process.env.GF_FORGE_OPEN === '1';
 const FORGE_CLOSED = 'not open yet (gf-forge is still being built: never a card until the catalog says ready)';
 async function forgeCatalog() {
-  const engine = { id: 'forge', kit: `gf-forge ${FORGE_VERSION}`, for: 'first-person and close-camera action with weight: shooters, dark roguelite runs, survival nights, arena fights; co-op for 2-4 friends who see each other', look: 'dark retro first person: a cold moon, fog and fire light, bloom, square texels and grain (moonlit-ruins, ember-crypt, ash-storm); every model, texture and value a slot', camera: 'first', cameras: ['first'], worlds: [], looks: [], status: FORGE_OPEN ? 'ready' : FORGE_CLOSED,
+  const engine = { id: 'forge', kit: `gf-forge ${FORGE_VERSION}`, for: 'first-person and close-camera action with weight: shooters, dark roguelite runs, survival nights, arena fights; co-op for 2-4 friends who see each other', look: 'dark retro first person: a cold moon, fog and fire light, bloom, square texels and grain (moonlit-ruins, ember-crypt, ash-storm, gaslit-street); every model, texture and value a slot', camera: 'first', cameras: ['first'], worlds: [], looks: [], status: FORGE_OPEN ? 'ready' : FORGE_CLOSED,
     note: 'WebGPU where the browser has it (Chrome, Edge, Chrome on Android, Safari 26+), else its WebGL2 build (wave 3; not yet run on a phone or inside an in-app browser); not inside a post on X yet. No mechanic modules: its play is spec.forge (the data tables) and rules.js (commands in, events out; prompts/build.md)',
     multiplayer: 'live co-op for 2-4: the host\'s core owns the world and replays each friend\'s inputs; each player moves at once on their own screen (predicted) and sees the others as a hunter in their colour (one body a seat), holding their weapon',
-    tables: {}, bodies: ['the four co-op hunters, one a seat: hooded, templar, rogue, witchfinder (what friends see; their cloth takes the player\'s colour)', 'enemies: the grim skeletons by archetype (chaser, caster, soldier, brute, lord), holding their weapons'],
+    tables: {}, bodies: ['the four co-op hunters, one a seat: hooded, templar, rogue, witchfinder (what friends see; their cloth takes the player\'s colour)', 'enemies: two sets by archetype, chosen by each enemy row\'s `body`: the grim skeletons (skeleton-grim-chaser, skeleton-grim-caster, skeleton-grim-soldier, skeleton-grim-brute, skeleton-grim-lord; the default) and the risen townsfolk, zombie-like (zombie-shambler for a chaser, zombie-sprinter for a runner, zombie-spitter for a caster, zombie-bulwark for a shield, zombie-butcher for a brute, zombie-mayor for a boss), each holding its own things'],
     // what a forge spec looks like beside the tables (the worked example: research/gf-forge/specs/vigil.spec.json), and
     // what the engine cannot do yet, so no pitch promises it (wave 3, track S3; the checker holds the starred guide lines)
     spec: {
@@ -492,15 +505,15 @@ async function forgeCatalog() {
       round: 'seconds: the longest a run may last (600-900 for three waves and a boss; the rules end it when the run is won or everyone has fallen); winBy and loseBy in plain words',
       controls: '{jump, primary: "fire"} and, for 2-4 players, interact: "raise a fallen friend (hold)". Nothing else: create adds the engine\'s own keys to How to play (Shift evades, R reloads, V is a quick melee, the number keys pick a weapon); secondary (right click) does nothing yet, so never list it',
       characters: '[{role: "player", describe: …, body: {from: "bean", why: "the forge engine draws its own hunters"}}] and no other role',
-      props: 'world.props: one, the thing the players guard, named "chest" ({name: "chest", describe, role: "what you guard"})',
+      props: 'world.props: one, the thing the players guard, named "chest" ({name: "chest", describe, role: "what you guard"}); in a town-street name it "pump" (the town pump in the middle of the square)',
       example: 'research/gf-forge/specs/vigil.spec.json',
     },
-    props: ['chest (the forge library\'s iron-bound reliquary: the thing to guard; verify looks for it on screen at the start)'],
+    props: ['chest (the forge library\'s iron-bound reliquary: the thing to guard; verify looks for it on screen at the start)', 'pump (the forge library\'s town pump: a stone pillar with an iron handle, a trough and a bucket; the thing to guard in a town-street)'],
     cannot: [
-      'more than one place: no levels, rooms to clear, doors, portals, a second map or a shop (one arena a game: crypt-room or ruins-arena)',
+      'more than one place: no levels, rooms to clear, doors, portals, a second map or a shop (one arena a game: crypt-room, ruins-arena or town-street)',
       'any camera but first person; versus or teams (players cannot hurt each other: co-op for 2-4 only)',
       'the party and scenic mechanics (pickups to carry, stations, paint, races, a base with health to defend): the play is the tables and rules.js',
-      'new bodies or props made for the game: the players are the kit\'s four hunters, the enemies the library\'s grim skeletons in six archetypes (a row renames and retunes one), the prop a library piece',
+      'new bodies or props made for the game: the players are the kit\'s four hunters, the enemies one of the library\'s two sets in six archetypes, the grim skeletons or the risen townsfolk (a row renames and retunes one and names its `body`), the prop a library piece',
       'an alternate fire (right click), thrown things, grenades, vehicles, mounts, building',
       'spending coins (they are counted, nothing is sold); a reward after the last wave (cards are dealt after any earlier wave marked "reward")',
       'playing inside a post on X (its WebGL2 build has not been run in an in-app browser yet)',
@@ -508,7 +521,7 @@ async function forgeCatalog() {
   const worlds = [], looks = [];
   try {
     const world = await importKitModule(join(FORGE_KIT, 'world.js')), look = await importKitModule(join(FORGE_KIT, 'look.js')), tables = await importKitModule(join(FORGE_KIT, 'tables/index.js'));
-    for (const id of world.templates ?? []) { const info = FORGE_WORLDS[id] ?? {}; worlds.push({ id, engine: 'forge', label: info.label ?? id, describe: info.describe ?? '', kind: info.kind ?? 'indoor', sizes: Object.fromEntries(Object.entries(world.WORLD_SIZES?.[id] ?? world.SIZES ?? {}).map(([k, n]) => [k, { size: [n * (world.TILE ?? 3), n * (world.TILE ?? 3)] }])) }); }
+    for (const id of world.templates ?? []) { const info = FORGE_WORLDS[id] ?? {}; worlds.push({ id, engine: 'forge', label: info.label ?? id, describe: info.describe ?? '', kind: info.kind ?? 'indoor', sizes: Object.fromEntries(Object.entries(world.WORLD_SIZES?.[id] ?? world.SIZES ?? {}).map(([k, n]) => [k, { size: world.WORLD_FOOTPRINTS?.[id]?.[k] ?? [n * (world.TILE ?? 3), n * (world.TILE ?? 3)] }])) }); }
     for (const [id, p] of Object.entries(look.presets ?? {})) { const info = FORGE_LOOKS[id] ?? {}; looks.push({ id, engine: 'forge', label: p.label ?? info.label ?? id, describe: p.describe ?? info.describe ?? '', times: ['night'] }); }
     for (const [t, r] of Object.entries(tables.RUNS ?? {})) engine.tables[t] = { runs: r.now ?? null, notYet: r.notYet ?? null };
     const W = tables.weapons ?? {}, E = tables.enemies ?? {}, C = tables.cards ?? {};
@@ -518,6 +531,24 @@ async function forgeCatalog() {
     engine.tablesHow = 'spec.forge = {player, weapons: [{id, preset | kind, …}], enemies: [{id, archetype, …}], waves: [{id, enemies: [{type, count}]}], cards: [{id, rarity, stat, add}]}; every value a slot; node research/gf-forge/tools/tables.mjs <spec> checks one (create refuses what the core cannot do)';
   } catch (e) { engine.status = `does not import: ${e.message.split('\n')[0]}`; }
   engine.worlds = worlds.map(w => w.id); engine.looks = looks.map(l => l.id);
+  return { engine, worlds, looks };
+}
+
+/** The flat (2D) engine, from kit/flat/index.js → manifest; null when the kit has no flat part. */
+export async function flatCatalog({ kit = KIT } = {}) {
+  if (!existsSync(join(kit, 'flat/index.js'))) return null;
+  const mod = await importKitModule(join(kit, 'flat/index.js')), M = mod.manifest;
+  if (mod.error || !M) return { engine: { id: 'flat', kit: `gf-three ${KIT_VERSION} (kit/flat)`, for: '2D games', status: `does not import: ${mod.error?.message.split('\n')[0] ?? 'no manifest'}`, worlds: [], looks: [], cameras: [], camera: 'top' }, worlds: [], looks: [] };
+  const worlds = Object.entries(M.worlds).map(([id, w]) => ({ id, engine: 'flat', plane: w.plane, label: w.label, describe: w.describe, kind: 'outdoor', sizes: Object.fromEntries(Object.entries(w.sizes).map(([k, [c, r]]) => [k, { size: [c, r], cells: true }])) }));
+  const looks = Object.entries(M.looks).map(([id, l]) => ({ id, engine: 'flat', label: l.label, describe: l.describe, style: l.style, times: ['day'] }));
+  const engine = {
+    id: 'flat', kit: `gf-three ${KIT_VERSION} (kit/flat, ${M.standard})`, for: '2D games: seen from above or from the side, in pixel art or drawn art, on a tile map; friends see each other as picture characters',
+    look: 'pictures on a plane through a fixed camera: pixel art (hard pixels) or drawn art (smooth), chosen by the look', camera: 'top', cameras: Object.values(M.cameras), worlds: worlds.map(w => w.id), looks: looks.map(l => l.id), status: 'ready',
+    planes: M.planes, styles: M.styles, mechanics: M.runs, body: M.body, map: M.map, side: M.side,
+    spec: { engine: 'flat', plane: 'top | side', camera: 'the plane\'s (top | side)', world: '{template: field (top) | stage (side), size, props: pictures, map?: the level as rows of text}', characters: '[{role, describe, body: {from: "sprite"}}]', look: '{preset: one of looks}' },
+    loops: 'the party kit\'s (round, turns, endless, match): a flat game is played by the same flows',
+    cannot: ['a mechanic not in mechanics.<plane> (not run on a plane yet: melee, waves, boss, projectile, carry, tag, race, teams, health, shove, station, loot, levels, paint, build, panels)', 'generated or library 3D bodies and props (every body and prop is a picture slot)', 'slopes, moving platforms, more than one screen-depth layer, a camera that turns', 'bots that plan a route up the ledges (they hop)'],
+  };
   return { engine, worlds, looks };
 }
 

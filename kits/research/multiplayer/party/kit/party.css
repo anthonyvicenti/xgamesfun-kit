@@ -222,3 +222,11 @@ button.dice { flex: none; padding: 0 13px; font-size: 20px; line-height: 1; bord
   .watch-bar button { padding: 7px 12px; }
   .live-share { top: 90px; }
 }
+/* kit 1.6.5: the streamer link (keep the same link next time), and the note on a page opened from it */
+.live-share .keep { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--mp-line); }
+.live-share .keep p { margin: 0 0 8px; font-size: 12px; }
+.live-saved { position: absolute; top: 10px; left: 10px; z-index: 8; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 20px); padding: 5px 6px 5px 12px;
+  border-radius: 999px; background: rgba(13, 15, 21, .85); border: 1px solid var(--mp-line); color: var(--mp-fg); font: 600 13px var(--mp-font); backdrop-filter: blur(4px); }
+.live-saved[hidden] { display: none; }
+.live-saved span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-saved .x { padding: 2px 9px; font-size: 16px; line-height: 1; }

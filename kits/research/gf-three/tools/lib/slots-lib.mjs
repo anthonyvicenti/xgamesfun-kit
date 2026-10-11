@@ -148,7 +148,8 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null,
     // the data tables (config/game.json → forge: player, physics, weapons, enemies, waves, cards): every value a slot
     if (cfg.game?.forge) push(fromModule(await provider(gameDir, 'tables/index.js', { forge }), cfg), 'tables');
   } else {
-  const standins = await provider(gameDir, 'core/standins/slots.js');
+  // a flat (2D) game's look, world and picture bodies declare theirs in kit/flat/slots.js (the same three functions)
+  const standins = await provider(gameDir, mods.flat ? 'flat/slots.js' : 'core/standins/slots.js');
   push(mods.character ? fromModule(await provider(gameDir, 'character/character.js'), cfg) : standins.characterSlots(cfg), 'character');   // track C's slotsFor takes {characters, …}
   // a voxel world (CONTRACT §9, worlds) is its own world module, whichever engine draws the rest
   if (cfg.world?.template === 'voxel') push(fromModule(await provider(gameDir, 'world/voxel/world.js'), cfg.world), 'world');

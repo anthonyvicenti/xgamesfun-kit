@@ -503,7 +503,32 @@ export function create(ctx, params = {}) {
     interactables() {
       if (cursorMode || !S || !G || !playing() || over() || mover() !== ctx.me || P.input === 'move') return [];
       const reach = Math.max(0.5, (G.cell / 2 - 0.25) / 0.6);
-      return candidates(state(), R, S.t, P.input).slice(0, 24).map(m => { const cell = P.input === 'drop' ? [m.to[0], rows - 1] : m.to, at = G.centre(...cell); return { kind: 'board', id: `board:${S.n}:${cell[1] * cols + cell[0]}`, x: at.x, y: 0, z: at.z, reach, touch: 0, action: P.action }; });
+      return candidates(state(), R, S.t, P.input).slice(0, 24).map(m => { const cell = P.input === 'drop' ? [m.to[0], rows - 1] : m.to, at = G.centre(...cell); return { kind: 'board', id: `board:${S.n}:${cell[1] * cols + cell[0]}`, x: at.x, y: 0, z: at.z, reach, touch: 0, action: P.action, turn: true, verb: P.input === 'drop' ? 'dropped a piece in the column' : 'placed a piece' }; });
+    },
+    /**
+     * What the local player can point at and click now (QA, verify check 13 and the test player that takes its turn):
+     * with a cursor, on their turn, the cells a legal move starts on (input "move": the pieces that can move, then,
+     * once one is picked, where it may go). → [{ kind, id, x, y (CSS pixels on this screen), cell, action, turn, step, of }]
+     */
+    points() {
+      if (!cursorMode || !S || !G || !playing() || over() || mover() !== ctx.me) return [];
+      const moves = candidates(state(), R, S.t, P.input), px = api.screen(), seen = new Set(), out = [];
+      const two = P.input === 'move', picked = two && sel && moves.some(m => m.from[0] === sel[0] && m.from[1] === sel[1]);
+      for (const m of moves) {
+        if (picked && !(m.from[0] === sel[0] && m.from[1] === sel[1])) continue;
+        const cell = two && !picked ? m.from : P.input === 'drop' ? [m.to[0], rows - 1] : m.to, i = cell[1] * cols + cell[0];
+        if (seen.has(i) || !px[i]) continue; seen.add(i);
+        out.push({ kind: 'board', id: `board:${S.n}:${two ? (picked ? 'to' : 'pick') : 'at'}:${i}`, x: px[i][0], y: px[i][1], cell, action: 'primary', turn: true, step: two && !picked ? 1 : two ? 2 : 1, of: two ? 2 : 1,
+          verb: two && !picked ? 'picked a piece' : two ? 'moved the piece' : P.input === 'drop' ? 'dropped a piece in the column' : 'placed a piece' });
+      }
+      return out.slice(0, 24);
+    },
+    /** Where a player IS, when this part holds their body (a cursor: the mark over the cells), for the kit's observation and the two-player gate; null → the body. */
+    presence(p) {
+      if (!cursorMode || !S || !G || !playing() || !p) return null;
+      const c = p.local ? (mine.on === false ? null : mine) : cursors.get(p.id) ?? null;
+      if (!c) return null;
+      const at = G.centre(c.c, c.r); return { x: at.x, y: 0.1, z: at.z };
     },
     get stats() { return { moves: S?.n ?? 0, refused: refusals, cleared }; },
     /** QA: where each cell's middle is on this screen, in CSS pixels ([x, y] per cell from row 0), so a test or a play-tester can point at one. */
