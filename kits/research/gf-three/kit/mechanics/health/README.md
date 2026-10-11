@@ -1,14 +1,16 @@
 # mechanic: health
 
-Hit points (or none: a hit only knocks over), knockback with ragdoll and get-up, death, respawn with protection, regeneration, a HUD meter for the local player.
+Hit points (or none: a hit only knocks over), knockback with ragdoll and get-up, death, respawn with protection, regeneration. The local player's hit points and state (knocked down, out, protected) are on the kit's HUD (`kit/ui/hud.js`, CONTRACT §6g), never drawn by the mechanic or the rules.
 
 Part of the gf-three kit (track K2). Add it to a spec as `{ "id": "health", "as": "...", "params": {...} }`; `create` fills the defaults.
 
 ## Params
-`hp` (0 = no meter, hits knock only), `regen`, `regenDelay`, `ragdollOnHit`, `getUpSeconds`, `respawnSeconds` (0 = out for the round), `respawnInvuln`, `respawnZone`, `killY`, `meter`, `label`, `color`, `soundHurt`, `soundDown`.
+`hp` (0 = no hit points, hits knock only: the HUD shows the knocked-down state alone), `regen`, `regenDelay`, `ragdollOnHit`, `getUpSeconds`, `respawnSeconds` (0 = out for the round), `respawnInvuln`, `respawnZone`, `killY`, `meter` (kept for old configs, ignored: the HUD always shows hit points), `label`, `color`, `soundHurt`, `soundDown`.
 
 ## Slots
-`mechanic.health.hp`, `.respawn-seconds`, `.color` (the HUD meter), `.label` ... no meshes of its own (the body is the character; the meter is HUD). `.get-up-seconds` is advanced and applies only with fair play off; with it on, the main-tier `fair.down-seconds` rules every knock.
+`mechanic.health.hp`, `.respawn-seconds`, `.color` (the HUD's health colour), `.label` ... no meshes of its own (the body is the character; the health bar is the kit HUD's). `.get-up-seconds` is advanced and applies only with fair play off; with it on, the main-tier `fair.down-seconds` rules every knock.
+
+**QA's staged moment** `?gf-demo=health.hurt` (host): from 3 s into the round the local player loses 1 hit point every 2.5 s (a push: never a knock), so verify check 21 can watch the HUD's health follow it.
 
 ## Fair play (CONTRACT §6c, kit/core/fair.js; on by default)
 - `damage()` does nothing and returns false, and `onDamage` doesn't fire, when the target can't be hit. That is a target who is down (knocked, getting up, out) or protected, a hit in the round's start grace, or a bot's hit on a human another bot is already fighting (`fair.botsPerTarget`).
@@ -25,7 +27,7 @@ A body that is down is not knocked again until it has got up, so hits cannot jug
 
 ## Methods for rules.js
 - Host: `damage(target, amount, {from, impulse, knockSeconds, push, point, source})` -> bool (false: refused); `down(target)`; `revive(target)`; `heal(target, n)`; `protect(target, secs)`.
-- Every copy: `hpOf(player)`, `maxHp()`, `onHurt(fn)` `{player, hp, delta}`. Host: `isDown(p)`, `isProtected(p)`, `onDamage(fn)` `{target, from, amount, hp, lethal, knocked, source}`, `onDown(fn)`, `onRespawn(fn)`.
+- Every copy: `hpOf(player)`, `maxHp()`, `respawnIn(player)` (host; null elsewhere), `onHurt(fn)` `{player, hp, delta}`. Host: `isDown(p)`, `isProtected(p)`, `onDamage(fn)` `{target, from, amount, hp, lethal, knocked, source}`, `onDown(fn)`, `onRespawn(fn)`.
 
 Example: `hp.onDamage(d => { if (d.from && d.knocked) d.from.score += 1; });`
 

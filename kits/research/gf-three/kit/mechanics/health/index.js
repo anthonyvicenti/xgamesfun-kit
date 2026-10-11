@@ -1,5 +1,6 @@
 // mechanic: health (track K2). Hit points (or none: hits only knock), knockback with ragdoll and get-up, death and
-// respawn, invulnerability after respawn, and a meter for the local player. README.md has ownership and API.
+// respawn, invulnerability after respawn. The local player's hit points are on the kit's HUD (kit/ui/hud.js, CONTRACT §6g).
+// README.md has ownership and API.
 //
 //   const hp = ctx.mechanics.get('health');
 //   hp.onDamage(d => { if (d.from && d.knocked) d.from.score += 1; });   // host only
@@ -32,7 +33,7 @@ export const params = {
     respawnInvuln: { ...num('Seconds of protection after respawning', 0, 10), default: D.respawnInvuln },
     respawnZone: { type: 'string', default: D.respawnZone, description: 'World zone to respawn in ("": the player\'s own spawn point)' },
     killY: { ...num('Falling below this height (m) counts as falling out of the world', -200, 0), default: D.killY },
-    meter: { type: 'boolean', default: D.meter, description: 'Show the local player\'s hit points as a HUD meter' },
+    meter: { type: 'boolean', default: D.meter, description: 'Kept for old configs; the kit HUD always shows hit points when hp > 0 (CONTRACT §6g)' },
     label: { type: 'string', default: D.label, description: 'Meter label' },
     color: { type: 'string', default: D.color, description: 'Meter colour' },
     soundHurt: { type: 'string', default: D.soundHurt, description: 'Sound id when someone loses hit points ("": none)' },
@@ -64,7 +65,8 @@ export function create(ctx, params = {}) {
   const pool = createPool({ hp: V('hp'), regen: V('regen'), regenDelay: V('regenDelay'), respawnSeconds: V('respawnSeconds'), respawnInvuln: V('respawnInvuln'), getUpSeconds: ctx.fair?.on ? ctx.fair.params.downSeconds : V('getUpSeconds') });
   const L = { damage: [], down: [], respawn: [], hurt: [] };
   const lastSeen = new Map();       // every copy: the hp last seen per id (the edge for onHurt)
-  let S = null, meter = null, meterKey = '';
+  let S = null, demoAt = 0;
+  const demoHurt = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('gf-demo') === 'health.hurt'; } catch { return false; } })();
   const now = () => ctx.time.now;
   const player = idOrP => (typeof idOrP === 'string' ? ctx.players.get(idOrP) : idOrP);
 
@@ -127,6 +129,8 @@ export function create(ctx, params = {}) {
     /** Hit points of a player (every copy, from the host's snapshot). hp:0 games answer 0. */
     hpOf(target) { const t = player(target); if (!t || !S) return 0; return ctx.host ? pool.hp(t.id) : (S.h?.[t.id] ?? V('hp')); },
     maxHp: () => V('hp'),
+    /** Seconds until an out player respawns (the host's copy; other copies answer null). */
+    respawnIn: target => { const t = player(target); if (!t || !ctx.host) return null; const s = pool.deadLeft(t.id, now()); return s === null ? null : s; },
     /** Is this body down right now (knocked, ragdolled, getting up, or out): fair play's view when it is on (every copy), else the pool's (host). */
     isDown: target => { const t = player(target); if (!t) return false; return ctx.fair?.on ? ctx.fair.isDown(t) : pool.isDown(t.id, now()); },
     /** Protected (after getting up or respawning). */
@@ -146,6 +150,9 @@ export function create(ctx, params = {}) {
       if (!S) { if (!(ctx.shared && ctx.players && ctx.me)) return; S = ctx.shared.register('hp', { h: {} }); }
       const hp0 = V('hp');
       if (ctx.host && ctx.round?.phase === 'playing') {
+        // QA's staged moment (?gf-demo=health.hurt, verify check 21): the local player loses 1 hit point every 2.5 s from
+        // 3 s into the round (a push: it never knocks over), so the HUD's health has something to follow
+        if (demoHurt && hp0 > 0 && ctx.me && (ctx.round?.clock ?? ctx.time?.round ?? 0) > 3 && (demoAt += dt) >= 2.5) { demoAt = 0; api.damage(ctx.me, 1, { push: true, source: 'demo' }); }
         for (const p of ctx.players.list()) {
           if (!pool.has(p.id)) pool.hp(p.id);                              // everyone has a record from the start
           if (p.position.y < V('killY')) { if (hp0 > 0 && p.alive !== false) { api.down(p, null, null); } else if (hp0 <= 0) { const s = spawnOf(ctx.world, p.seat); p.teleport(s, s.yaw); } }
@@ -162,20 +169,13 @@ export function create(ctx, params = {}) {
           const was = lastSeen.get(p.id);
           if (was !== undefined && v < was - 1e-6) {
             // a hit on a player reads on every screen: the body flinches (gf-humanoid-1 `hit`) with its hurt face, and
-            // the hurt player's own Health meter pulses (a knocked-down body already shows the hurt face by itself)
+            // the kit HUD flashes for the local player (kit/ui/hud.js listens to onHurt)
             if (v > 0) { p.character?.play?.('hit', { fade: 0.05 }); p.character?.express?.('hurt', 0.6); }
-            if (p === ctx.me) meter?.flash?.();
             if (V('soundHurt')) ctx.audio?.play(V('soundHurt'), { at: p.position, optional: true });
             if (v <= 0 && V('soundDown')) ctx.audio?.play(V('soundDown'), { at: p.position, optional: true });
             for (const fn of L.hurt.slice()) try { fn({ player: p, hp: v, delta: v - was }); } catch (e) { console.error(e); }
           }
           lastSeen.set(p.id, v);
-        }
-        // the local meter
-        if (V('meter') && ctx.ui?.meter && ctx.me) {
-          const v = h[ctx.me.id] ?? hp0, key = `${v}/${hp0}`;
-          if (!meter) meter = ctx.ui.meter('health', { label: V('label'), value: v, max: hp0, color: V('color') });
-          if (key !== meterKey) { meterKey = key; meter.set(v, hp0); }
         }
       }
     },
@@ -186,7 +186,7 @@ export function create(ctx, params = {}) {
       if (name === 'dmg') api.damage(t, Math.min(Math.max(0, d.a), 1000), { from: ctx.players.get(d.f) ?? null, impulse: Array.isArray(d.i) ? { x: d.i[0], y: d.i[1], z: d.i[2] } : null, knockSeconds: d.s, push: !!d.p, source: 'remote' });
       else if (name === 'heal') pool.heal(t.id, Math.min(Math.max(0, d.a), 1000));
     },
-    dispose() { meter?.remove(); },
+    dispose() {},
   };
   return api;
 }

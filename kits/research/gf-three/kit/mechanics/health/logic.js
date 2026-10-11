@@ -32,6 +32,7 @@ export function createPool({ hp = 3, regen = 0, regenDelay = 3, respawnSeconds =
     heal(id, amount) { const r = get(id); if (r.deadUntil !== null) return r.hp; r.hp = Math.min(hp, r.hp + amount); return r.hp; },
     kill(id, now) { const r = get(id); if (r.deadUntil !== null) return false; r.hp = 0; r.deadUntil = respawnSeconds > 0 ? now + respawnSeconds : Infinity; r.downUntil = now + getUpSeconds; return true; },
     /** Ids whose respawn time has come. */
+    deadLeft(id, now) { const r = rec.get(id); if (!r || r.deadUntil === null) return null; return Number.isFinite(r.deadUntil) ? Math.max(0, r.deadUntil - now) : Infinity; },
     due(now) { const out = []; for (const [id, r] of rec) if (r.deadUntil !== null && r.deadUntil <= now) out.push(id); return out; },
     revive(id, now) { const r = get(id); r.hp = hp; r.deadUntil = null; r.downUntil = 0; r.invulnUntil = now + respawnInvuln; },
     /** Regenerate everyone who has been left alone for regenDelay. → ids whose hp changed */

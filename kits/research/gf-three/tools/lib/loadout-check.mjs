@@ -11,8 +11,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { startParty } from '../../../multiplayer/party/lib.mjs';
-import { snap, sleep, until } from '../../../multiplayer/party/gate-lib.mjs';
+import { endRound, snap, sleep, until } from '../../../multiplayer/party/gate-lib.mjs';
 import { launchChrome, GPU_TROUBLE } from '../../../foundations/qa/browser.mjs';
+import { launchForGame } from './paths.mjs';
 import { getPointer } from '../../../asset-manifest/runtime/gf-assets.js';
 
 const TINT = 'character.tint.player';
@@ -51,7 +52,9 @@ export async function checkLoadouts({ dir, outDir = null, log = () => {}, third 
   if (!T.tint && !SHOT) return { ok: true, detail: 'no player-look colour slots in this game; nothing to check', record, warnings: ['loadouts: the game declares no player-look colours'] };
 
   const srv = await startParty({ dir, port: 0 });
-  const browser = await launchChrome(process.env.GF_VERIFY_SOFTWARE ? {} : { gpu: 'webgl' });
+  // a scenic game on WebGPU, a party game on WebGL (CONTRACT §8; paths.mjs launchForGame)
+  const { browser, note: gpuNote } = await launchForGame(launchChrome, dir);
+  if (gpuNote) warnings.push(`loadouts: ${gpuNote}`);
   const shot = async (page, name) => {
     if (!outDir) return null;
     const f = `loadout-${String(record.shots.length + 1).padStart(2, '0')}-${name}.jpg`;
@@ -143,7 +146,7 @@ export async function checkLoadouts({ dir, outDir = null, log = () => {}, third 
    *  take it with E, face `to`, throw (F) and screenshot `viewer` while it flies. → whether a ball left */
   const grabAndThrow = async (P, to, viewer) => {
     const ctl = () => frameOf(P)?.evaluate(() => window.__game?.controls?.() ?? null).catch(() => null);
-    const step = async k => { const a = (await ctl())?.me; await P.page.keyboard.down(k); await sleep(200); await P.page.keyboard.up(k); await sleep(250); const b = (await ctl())?.me; const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz); return l > 0.05 ? [dx / l, dz / l] : null; };
+    const step = async k => { const a = (await ctl())?.me; await P.page.keyboard.down(k); await sleep(200); await P.page.keyboard.up(k); await sleep(250); const b = (await ctl())?.me; if (!a || !b) return null; const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz); return l > 0.05 ? [dx / l, dz / l] : null; };
     const f = await step('KeyW'), rt = await step('KeyD');
     if (!f || !rt) { record.throwWhy = 'the host did not move on W or D'; return false; }
     const deadline = Date.now() + 15000;
@@ -178,7 +181,10 @@ export async function checkLoadouts({ dir, outDir = null, log = () => {}, third 
   try {
     // ---- a room: the host (A) and a joiner (B), each with their own loadout ----
     const A = await player('A', T.A), B = await player('B', T.B);
-    await A.page.goto(`${srv.partyUrl}?max=${seconds}&gq=${encodeURIComponent('bots=0')}`, { waitUntil: 'load' });
+    // a game with enemies plays the leg on waves' staged moment (one enemy standing still, no waves), so idle test
+    // players are not downed before their looks are compared (gf-scenic wave 1: a run of levels was lost mid-leg)
+    const calm = (game.mechanics ?? []).some(m => m.id === 'waves') ? '&gf-demo=waves.hit' : '';
+    await A.page.goto(`${srv.partyUrl}?max=${seconds}&gq=${encodeURIComponent(`bots=0${calm}`)}`, { waitUntil: 'load' });
     await until(async () => (await snap(A.page))?.phase === 'home', 20000, 'the lobby');
     await A.page.fill('#gfp-name', 'Ana'); await A.page.click('#gfp-host');
     await until(async () => { const s = await snap(A.page); return s?.phase === 'room' && s.code && s.host ? s : null; }, 20000, 'the host to open a room');
@@ -245,7 +251,7 @@ export async function checkLoadouts({ dir, outDir = null, log = () => {}, third 
       await until(async () => (await snap(A.page))?.racers.length === 3, 30000, 'the third player in the room');
       const cs = await snap(C.page);
       record.third = { watching: cs?.racers?.find(r => r.id === cs.you)?.watching ?? null };
-      await freeMouse(A); await A.page.click('#stop', { timeout: 4000 }).catch(() => {});
+      await freeMouse(A); await endRound(A.page);
       await until(async () => (await snap(A.page))?.room === 'results', 20000, 'round 1 to end');
       await sleep(900); await freeMouse(A);
       await A.page.click(await A.page.isVisible('#mp-again') ? '#mp-again' : '#start');

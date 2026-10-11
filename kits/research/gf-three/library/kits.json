@@ -199,6 +199,16 @@
       "author": "Kenney (www.kenney.nl)",
       "spdx": "CC0-1.0",
       "licenseText": "License.txt in the zip: Creative Commons Zero, CC0"
+    },
+    "voxel-pack": {
+      "title": "Voxel Pack",
+      "page": "https://kenney.nl/assets/voxel-pack",
+      "download": "https://kenney.nl/media/pages/assets/voxel-pack/a3a73d0ff7-1677662501/kenney_voxel-pack.zip",
+      "zipSha256": "667c05e3f6d95718aaef888c7fc06f7137ba5dede95f4574deb17d4436257958",
+      "author": "Kenney (www.kenney.nl)",
+      "spdx": "CC0-1.0",
+      "licenseText": "License.txt in the zip: Creative Commons Zero, CC0",
+      "retrieved": "2026-10-09"
     }
   },
   "polypizza": {

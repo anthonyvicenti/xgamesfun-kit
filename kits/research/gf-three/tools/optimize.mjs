@@ -13,6 +13,7 @@
 //   --tint-mix    how far the tint replaces their colour, 0–1 (default 1; detailed bodies look better around 0.4)
 // Always: Meshy's emissive copy of the albedo removed, dedup, prune, weld, then quantize + meshopt (KTX2 is not
 // produced here: toktx is not installed; see RIG.md §7). Prints the size and runs rig-check when normalising.
+import { isMain } from './lib/main.mjs';
 import './lib/char-node.mjs';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -37,7 +38,7 @@ export async function optimizeBody(bytes, { normalize = false, height, texture =
   return { bytes: out, report, notes, stats: bodyStats(doc, out.length) };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta)) {
   const args = process.argv.slice(2);
   const val = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
   const flags = new Set(['--normalize', '--no-meshopt', '--keep-animations']);

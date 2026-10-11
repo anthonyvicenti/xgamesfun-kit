@@ -18,6 +18,9 @@ export const RIG = 'gf-humanoid-1';
 
 /** The clip names every gf-humanoid-1 clip file carries (CONTRACT §4.4). */
 export const CLIPS = ['idle', 'walk', 'run', 'jump', 'fall', 'land', 'hit', 'knockdown', 'getup', 'aim', 'carry', 'interact', 'emote_wave', 'emote_cheer'];
+/** The melee clips the standard clip file carries since 2026-10-08 (KayKit, RIG.md §4). Not required at load: a game
+ *  whose clip file predates them still loads, and the melee mechanic falls back when a name is missing. */
+export const MELEE_CLIPS = ['slash_1', 'slash_2', 'slash_3', 'heavy', 'dash', 'block', 'cast', 'death', 'attack_enemy'];
 
 const side = (s, list) => list.map(([n, p, req]) => [s + n, p && p.replace('$', s), req]);
 const FINGERS = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'];
@@ -53,6 +56,10 @@ export const SWING = { LeftArm: 'LeftForeArm', LeftForeArm: 'LeftHand', RightArm
 /** Bones that take their parent's swing (so wrists and ankles don't bend when an arm or leg is lined up). */
 export const INHERIT = new Set(['LeftHand', 'RightHand', 'LeftFoot', 'RightFoot', 'LeftToeBase', 'RightToeBase',
   ...['Left', 'Right'].flatMap(s => FINGERS.flatMap(f => [1, 2, 3].map(i => `${s}Hand${f}${i}`)))]);
+
+/** A finger whose bone 1 sits nearer the wrist than this share of bone 2's distance starts inside the palm (createRetarget). */
+export const PALM_FIRST = 0.45;
+const FINGER_SEG = /^((?:Left|Right)Hand(?:Index|Middle|Ring|Pinky))([123])$/;
 
 /** Upper-body mask for overlay clips (aim, carry, hit, interact, throw): spine above the hips, arms, head. */
 export const UPPER = new Set(BONE_NAMES.filter(n => !/^(Hips|Spine02|(Left|Right)(UpLeg|Leg|Foot|ToeBase))$/.test(n)));
@@ -265,6 +272,30 @@ export function createRetarget(root, std, { rig = findRig(root) } = {}) {
   const stdReach = std.rest.has('LeftUpLeg') ? reach(n => std.rest.get(n), std.ground) : std.hipsHeight;
   const k = reach(n => bp.pos.get(n), ground) / stdReach;
 
+  // finger chains (RIG.md §2, "Fingers"): which standard bone drives each body bone. The standard's finger 1 is the
+  // knuckle. A rig whose finger 1 sits inside the palm (Quaternius: Index1 0.028 m from the wrist, the knuckle Index2,
+  // the tip a fourth bone) is shifted one bone outward: finger 1 rides with the hand, 2 takes the clip's 1, 3 its 2 and
+  // the bone after 3 its 3. Mapped by name, the clip's knuckle curl and spread bent the palm and the real knuckles took
+  // the middle joints' curl (creator, Token Call Centre, 2026-10-07: "the hand is crooked"). gf_body extras
+  // gfFingers: "by-name" turns this off for a rig the measure reads wrongly.
+  const driver = new Map(order.map(n => [n, n]));
+  const driven = [];   // non-standard bones a shifted chain drives (its tips): {key, bone, driver, parent}
+  const tipPos = new Map();   // bone 3 of a shifted chain → its tip's bind position (the end of its segment)
+  const fingers = {};
+  const byName = root.getObjectByName?.('gf_body')?.userData?.gfFingers === 'by-name';
+  for (const s of ['Left', 'Right']) for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) {
+    const [n1, n2, n3] = [1, 2, 3].map(i => `${s}Hand${f}${i}`);
+    if (byName || !has(n1) || !has(n2) || !has(`${s}Hand`)) continue;
+    const w = bp.pos.get(`${s}Hand`), d1 = bp.pos.get(n1).distanceTo(w), d2 = bp.pos.get(n2).distanceTo(w);
+    if (!(d2 > 0 && d1 / d2 < PALM_FIRST)) continue;
+    driver.set(n1, `${s}Hand`); driver.set(n2, n1);
+    if (has(n3)) {
+      driver.set(n3, n2);
+      const tip = rig.bones.get(n3).children.find(o => o.isBone && !CANON.has(o.name) && bp.bind.has(o));
+      if (tip) { driven.push({ key: `${n3}>tip`, bone: tip, driver: n3, parent: n3 }); tipPos.set(n3, new THREE.Vector3().setFromMatrixPosition(bp.bind.get(tip))); }
+    }
+    (fingers[s] ??= []).push(f);
+  }
   // R(b): own swing or inherited
   const R = new Map(), swingDeg = new Map();
   for (const n of BONE_NAMES) {
@@ -278,6 +309,18 @@ export function createRetarget(root, std, { rig = findRig(root) } = {}) {
     } else if (INHERIT.has(n)) {
       const p = canonicalParent(n, has);
       if (p && R.has(p)) r.copy(R.get(p));
+      // a finger (not the thumb) also lines each segment up with the clips' finger, on top of the hand's swing: a hand
+      // whose fingers rest fanned apart (Quaternius, ~18° at the knuckles) otherwise closes a fist into a loose claw
+      const fm = FINGER_SEG.exec(n), dn = driver.get(n), sm = dn && FINGER_SEG.exec(dn);
+      if (fm && sm) {
+        const next = has(`${fm[1]}${+fm[2] + 1}`) ? bp.pos.get(`${fm[1]}${+fm[2] + 1}`) : tipPos.get(n);
+        const sNext = std.rest.get(`${sm[1]}${+sm[2] + 1}`);
+        if (next && sNext && std.rest.has(dn)) {
+          const db = next.clone().sub(bp.pos.get(n)).applyQuaternion(r).normalize();
+          const ds = sNext.clone().sub(std.rest.get(dn)).normalize();
+          if (db.lengthSq() > 0 && ds.lengthSq() > 0) r.premultiply(_q.setFromUnitVectors(db, ds));
+        }
+      }
     }
     R.set(n, r);
     swingDeg.set(n, THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, Math.abs(r.w)))));
@@ -296,8 +339,9 @@ export function createRetarget(root, std, { rig = findRig(root) } = {}) {
       staticParentMat.set(n, pm.clone().invert());
     }
   }
+  for (const t of driven) { bp.bind.get(t.bone).decompose(_v, _q, _s); C.set(t.key, R.get(t.parent).clone().multiply(_q)); }
   const D = new Map(order.map(n => [n, new THREE.Quaternion()]));
-  const W = new Map(order.map(n => [n, new THREE.Quaternion()]));
+  const W = new Map([...order, ...driven.map(t => t.key)].map(n => [n, new THREE.Quaternion()]));
   const stdWorld = new Map();
   const stdOrder = BONE_NAMES.filter(n => std.bones.has(n));
   const hipsPos = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
@@ -327,11 +371,16 @@ export function createRetarget(root, std, { rig = findRig(root) } = {}) {
       for (const n of SPINE) { const d = sw.get(n); if (!d) continue; _rel.copy(_hq).invert().multiply(d).slerp(_I, 1 - spineBend); d.copy(_hq).multiply(_rel); }
     }
     for (const n of order) {
-      const d = sw.get(n) ?? sw.get(canonicalParent(n, x => sw.has(x)));
+      const dn = driver.get(n);
+      const d = sw.get(dn) ?? sw.get(canonicalParent(dn, x => sw.has(x)));
       W.get(n).copy(d).multiply(C.get(n));
       const bone = rig.bones.get(n), p = parentOf.get(n);
       if (p) bone.quaternion.copy(tmpQ.copy(W.get(p)).invert().multiply(W.get(n)));
       else bone.quaternion.copy(staticParentInv.get(n)).multiply(W.get(n));
+    }
+    for (const t of driven) {
+      W.get(t.key).copy(sw.get(t.driver) ?? W.get(t.parent)).multiply(C.get(t.key));
+      t.bone.quaternion.copy(tmpQ.copy(W.get(t.parent)).invert().multiply(W.get(t.key)));
     }
     // hips position: the standard's (character space), legs scaled, feet on this body's ground
     const sh = proxy.get('Hips').position;
@@ -339,5 +388,5 @@ export function createRetarget(root, std, { rig = findRig(root) } = {}) {
     const hips = rig.bones.get('Hips');
     if (parentOf.get('Hips')) hips.position.copy(hipsPos); else hips.position.copy(hipsPos.applyMatrix4(staticParentMat.get('Hips')));
   }
-  return { apply, k, ground, height, swing: swingDeg, missing, order, bind: bp, R, C, world: W, standardWorld, spineBend };
+  return { apply, k, ground, height, swing: swingDeg, missing, order, bind: bp, R, C, world: W, standardWorld, spineBend, fingers, driver };
 }

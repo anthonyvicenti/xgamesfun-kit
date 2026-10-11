@@ -7,12 +7,15 @@ import { registerHooks } from 'node:module';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { VENDOR, GF_ASSETS, GF_AUDIO, PARTY, KIT_VERSION } from './paths.mjs';
+import { VENDOR, GF_ASSETS, GF_AUDIO, PARTY, KIT, SCENIC, FORGE, KIT_VERSION } from './paths.mjs';
 
 let installed = false;
 const addon = rel => { for (const d of VENDOR.threeAddons) { const p = join(d, 'examples/jsm', rel); if (existsSync(p)) return p; } return null; };
 const BARE = {
   three: join(VENDOR.threeBuild, 'build/three.module.js'),
+  // the scenic engine's modules (CONTRACT §8) import the WebGPU build; in Node only their declarations are read
+  'three/webgpu': join(VENDOR.threeWebgpu, 'build/three.webgpu.js'),
+  'three/tsl': join(VENDOR.threeWebgpu, 'build/three.tsl.js'),
   postprocessing: join(VENDOR.postprocessing, 'postprocessing.module.js'),
   n8ao: join(VENDOR.n8ao, 'N8AO.js'),
   '@dimforge/rapier3d-compat': join(VENDOR.rapier, 'rapier.mjs'),
@@ -37,6 +40,13 @@ export function installKitImports() {
         const target = new URL(specifier, context.parentURL);
         if (!existsSync(fileURLToPath(target))) {
           if (/\/three\/kit\.js$/.test(target.pathname) || /\/kit\/kit\.js$/.test(target.pathname)) return { url: KIT_STUB, shortCircuit: true };
+          // the scenic engine's dev tree imports the shared kit as a game sees it (gf/scenic/x → ../../three/core/…):
+          // research/gf-scenic/three/<rel> is research/gf-three/kit/<rel> (CONTRACT §8)
+          const file = fileURLToPath(target), sc = join(SCENIC, 'three') + '/';
+          if (file.startsWith(sc)) { const k = join(KIT, file.slice(sc.length)); if (existsSync(k)) return { url: pathToFileURL(k).href, shortCircuit: true }; }
+          // the forge engine's kit the same way (gf/forge/x → ../three/core/…): research/gf-forge/three/<rel> (CONTRACT §8 forge)
+          const fo = join(FORGE, 'three') + '/';
+          if (file.startsWith(fo)) { const k = join(KIT, file.slice(fo.length)); if (existsSync(k)) return { url: pathToFileURL(k).href, shortCircuit: true }; }
           for (const [re, file] of GAME_FILES) if (re.test(target.pathname)) return { url: pathToFileURL(file).href, shortCircuit: true };
         }
       }

@@ -91,15 +91,18 @@ export function rayCylinder(o, d, c, h, r) {
 }
 
 /**
- * The point under the crosshair: a ray from `from` (the camera) along `dir` (unit) into the world. self: the local
+ * The point under the crosshair: a ray from `from` (the camera) along `dir` (unit) into the world (fromCamera: the
+ * follow camera's cursor ray, counted from the camera). self: the local
  * player (the ray starts at their depth along it, and onSelf says whether their own body covers the crosshair; pass
  * selfVisible: false in first person, where the body is hidden);
  * exclude: their capsule collider. → {x, y, z, t (m from `from`), hit: 'world'|'player'|'body'|'ground'|null, onSelf, player, body (an aimBodies id)}
  */
-export function crosshairPoint(ctx, from, dir, { self = null, selfVisible = true, exclude = null, max = AIM_MAX, players = null } = {}) {
+export function crosshairPoint(ctx, from, dir, { self = null, selfVisible = true, exclude = null, max = AIM_MAX, players = null, fromCamera = false } = {}) {
   const l = Math.hypot(dir.x, dir.y, dir.z) || 1, d = { x: dir.x / l, y: dir.y / l, z: dir.z / l };
   let start = 0, onSelf = false;
-  if (self?.position) {
+  // fromCamera (the 'follow' camera's cursor ray, CONTRACT §8): the whole ray counts, so a point on the ground between
+  // the camera and the player can be aimed at; the player's own body is still never a target
+  if (self?.position && !fromCamera) {
     const h = self.character?.height ?? 1.7, c = { x: self.position.x, y: self.position.y + h * 0.6, z: self.position.z };
     start = Math.max(0, (c.x - from.x) * d.x + (c.y - from.y) * d.y + (c.z - from.z) * d.z);
     const t = selfVisible ? rayCylinder(from, d, self.position, h, SELF_RADIUS) : null;

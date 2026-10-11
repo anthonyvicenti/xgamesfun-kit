@@ -20,7 +20,9 @@
 //   - refreshes the vendored copies verify check 2 compares: gf/three (the kit and its kit.js hashes), gf/mp
 //     (gf-multiplayer via adopt), gf/gf-assets.js, audio/ (gf-audio), vendor/ (three addons the kit now imports);
 //     index.html and main.js are regenerated (they are create's, never the agent's);
-//   - keeps rules.js, multiplayer.json, assets/ and every config/*.json value the game set;
+//   - keeps rules.js, multiplayer.json, assets/ and every config/*.json value the game set; a live multiplayer.json gets
+//     the kit's own keys it lacks (gf-multiplayer 1.4.0: live.backdrop "gf-backdrop=1" and live.hud "game"), as create
+//     writes them;
 //   - adds what the current kit expects and the game lacks: new config blocks and keys (e.g. `fair`, `ui.crosshair`)
 //     and new mechanic params, with the kit's defaults; arrays (layouts, props, mechanics lists) are never merged;
 //   - holds waves to the hits rule create applies (tools/lib/spec-config.mjs enemyToughness): when the game's weapon
@@ -31,19 +33,20 @@
 //   - regenerates assets.json from the slot declarations (the sound list is kept);
 //   - records the upgrade in gf-three.json (`upgrades`), and prints what changed.
 // Exit 0 ok, 1 failed, 2 bad usage.
+import { isMain } from './lib/main.mjs';
 import { readFile, writeFile, mkdir, cp, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, resolve, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { REPO, KIT, KIT_VERSION, SPEC_SCHEMA, GF_AUDIO, LIBRARY, json, walk, sha256 } from './lib/paths.mjs';
-import { put, vendorLibraries, vendorKit, vendorGfAssets, kitFiles } from './lib/vendor.mjs';
+import { REPO, KIT, KIT_VERSION, SPEC_SCHEMA, GF_AUDIO, LIBRARY, FORGE, FORGE_KIT, FORGE_VERSION, importPart, json, walk, sha256 } from './lib/paths.mjs';
+import { put, vendorLibraries, vendorKit, vendorGfAssets, kitFiles, forgeFiles } from './lib/vendor.mjs';
 import { importKitModule } from './lib/kit-import.mjs';
-import { specToConfig, libraryPicture, specParams, enemyToughness } from './lib/spec-config.mjs';
+import { specToConfig, libraryPicture, specParams, enemyToughness, FORGE_GATE_QUERY } from './lib/spec-config.mjs';
 import { assembleManifest } from './lib/slots-lib.mjs';
 import { withDefaults, check } from './lib/schema.mjs';
 import { loadWorldSubject, checkWorld } from './lib/world-check.mjs';
-import { decideModules, AUDIO_FILES, indexHtml, attribution } from './create.mjs';
+import { decideModules, AUDIO_FILES, indexHtml, mainJs, attribution } from './create.mjs';
 import { adopt } from '../../multiplayer/party/adopt.mjs';
 import { checkKitReleased } from '../../multiplayer/party/manifest.mjs';
 
@@ -89,6 +92,8 @@ export async function upgrade(gameDir, { out = null, world = false, log = () => 
   }
   const readJson = async rel => JSON.parse(await readFile(join(dir, rel), 'utf8'));
   const record = await readJson('gf-three.json');
+  // a forge game (CONTRACT §8 forge): its own way (upgradeForge: gf/forge and its pinned wasm, the forge configs)
+  if (record.kit?.engine === 'forge') return upgradeForge(dir, { src, out, record, t0 });
   const before = { kit: await kitHashes(dir), slots: await slotIds(dir), files: new Set(await walk(dir)) };
   const changes = { kit: [], vendor: [], config: [], bodies: [], slots: { added: [], removed: [] }, world: null, notes: [] };
 
@@ -122,6 +127,14 @@ export async function upgrade(gameDir, { out = null, world = false, log = () => 
   const tough = enemyToughness(game.mechanics ?? []);
   if (tough) { changes.config.push(`config/game.json/mechanics/${game.mechanics.findIndex(m => m.id === 'waves')}/params/hp`); changes.notes.push(tough); }
   await writeConfig(dir, 'config/game.json', game);
+  // the kit draws the screen's real pixels within a budget since 2026-10-09 (kit/core/resolution.js): a look's fixed
+  // quality.<tier>.pixelRatio (1 on the low tier: a third of a phone's resolution) is no longer read, so it leaves the
+  // game's look and its Studio slot
+  const lookNow = await readJson('config/look.json').catch(() => null);
+  if (lookNow?.quality && typeof lookNow.quality === 'object') {
+    const gone = Object.entries(lookNow.quality).filter(([, q]) => q && typeof q === 'object' && 'pixelRatio' in q).map(([t, q]) => { delete q.pixelRatio; return `config/look.json/quality/${t}/pixelRatio (removed: the kit sizes the canvas to the screen)`; });
+    if (gone.length) { changes.config.push(...gone); await writeConfig(dir, 'config/look.json', lookNow); }
+  }
   if (fresh) {
     for (const [name, deep] of [['look', true], ['characters', true], ['world', false]]) {
       const cur = await readJson(`config/${name}.json`).catch(() => null);
@@ -188,6 +201,18 @@ export async function upgrade(gameDir, { out = null, world = false, log = () => 
   const kit = await vendorKit(dir, modules); changes.kit.push(...kit.wrote);
   changes.vendor.push(...(await vendorGfAssets(dir)).wrote);
   for (const f of AUDIO_FILES) await put(join(dir, 'audio', f), await readFile(join(GF_AUDIO, 'source', f)), changes.vendor, `audio/${f}`);
+  // the multiplayer kit's own keys a live game lacks (gf-multiplayer 1.4.0): the world behind the waiting room, and the
+  // game's own HUD and room menu in a round. Values the game set are kept.
+  try {
+    const mp = await readJson('multiplayer.json');
+    if (mp?.mode === 'live' && isObj(mp.live)) {
+      const add = [];
+      if (mp.live.backdrop === undefined) { mp.live.backdrop = 'gf-backdrop=1'; add.push('backdrop'); }
+      if (mp.live.hud === undefined) { mp.live.hud = 'game'; add.push('hud'); }
+      if (typeof mp.live.shares === 'string' && /, the bots(?= and)/.test(mp.live.shares)) { mp.live.shares = mp.live.shares.replace(/, the bots(?= and)/, ''); add.push('shares'); }
+      if (add.length) { await writeFile(join(dir, 'multiplayer.json'), json(mp)); changes.config.push(...add.map(k => `multiplayer.json/live/${k}`)); }
+    }
+  } catch {}
   const ad = await adopt(dir, { log: () => {} });
   if (!ad.ok) return { ok: false, code: 1, problems: ad.problems };
   changes.vendor.push(...ad.wrote);
@@ -236,6 +261,126 @@ export async function upgrade(gameDir, { out = null, world = false, log = () => 
   return { ok: true, code: 0, dir, src, ms: Math.round(performance.now() - t0), modules, kit: kitDiff, vendor: changes.vendor.filter(f => !f.startsWith('gf/three/')), config: changes.config, bodies: changes.bodies, slots: changes.slots, world: changes.world, notes: changes.notes, warnings: A.warnings, slotCount: A.slotCount, main: A.mainCount };
 }
 
+// ---- forge games (CONTRACT §8 forge; research/rust-engine/PLAN.md §4 track S) ----
+
+/** What a forge game's gf/three/kit.js records against what create would vendor today. */
+async function forgeBehind(dir) {
+  const { modules } = await decideModules({ engine: 'forge' });
+  const want = await kitFiles(modules), wantForge = await forgeFiles();
+  let have = {}, haveForge = {}, haveWasm = null;
+  try { const t = await readFile(join(dir, 'gf/three/kit.js'), 'utf8'); const r = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); have = r.files ?? {}; haveForge = r.forge?.files ?? {}; haveWasm = r.forge?.wasm ?? null; } catch {}
+  let wasm = null; try { wasm = JSON.parse(await readFile(join(FORGE_KIT, 'BUILD.json'), 'utf8')).wasm?.sha256 ?? null; } catch {}
+  const diff = (w, h) => ({ added: Object.keys(w).filter(k => !(k in h)), changed: Object.keys(w).filter(k => k in h && h[k] !== w[k]), removed: Object.keys(h).filter(k => !(k in w)) });
+  return { modules, kit: diff(want, have), forge: diff(wantForge, haveForge), wasm: { have: haveWasm, want: wasm, behind: !!wasm && haveWasm !== wasm } };
+}
+
+/** --plan for a forge game. */
+async function forgePlan(dir) {
+  const b = await forgeBehind(dir), why = [];
+  const n = k => k.added.length + k.changed.length + k.removed.length;
+  if (n(b.kit)) why.push(`gf/three is ${n(b.kit)} file${n(b.kit) > 1 ? 's' : ''} behind the kit (${b.kit.changed.length} changed, ${b.kit.added.length} added, ${b.kit.removed.length} removed since create)`);
+  if (n(b.forge)) why.push(`gf/forge is ${n(b.forge)} file${n(b.forge) > 1 ? 's' : ''} behind research/gf-forge/kit (${b.forge.changed.length} changed, ${b.forge.added.length} added, ${b.forge.removed.length} removed)`);
+  if (b.wasm.behind) why.push(`the core's wasm is ${String(b.wasm.have ?? 'none').slice(0, 12)}, the kit's release is ${String(b.wasm.want).slice(0, 12)}`);
+  const mp = await checkKitReleased(dir);
+  if (!mp.ok || !mp.latest) why.push(mp.ok ? `gf/mp is gf-multiplayer ${mp.version}, not the current one` : 'gf/mp is not an unedited gf-multiplayer release');
+  return { ok: true, code: 0, dir, engine: 'forge', behind: why.length > 0, why, kit: b.kit, forge: b.forge, wasm: b.wasm, mp: { version: mp.version ?? null, latest: !!mp.latest }, world: { relay: false, why: 'a forge room is the spec\'s (create re-lays it); --world is for gf-three\'s stock templates' } };
+}
+
+/**
+ * Upgrade a forge game: gf/three (the forge closure), gf/forge and its pinned release wasm, gf/mp, gf-assets and audio
+ * re-copied; index.html and main.js regenerated (the forge boot); the configs get what the current forge kit expects
+ * and the game lacks (fillMissing: e.g. characters.json → forge, the body friends see) and the files those name that
+ * the game lacks (the co-op body, its clips, each held weapon: a file the game has is kept, it may be a Studio swap);
+ * multiplayer.json keeps the game's values (create's own old forge sentences become the current ones); assets.json from
+ * the declarations (the sound list kept, the tables' sounds added); the upgrade recorded in gf-three.json.
+ */
+async function upgradeForge(dir, { src, out, record, t0 }) {
+  const readJson = async rel => JSON.parse(await readFile(join(dir, rel), 'utf8'));
+  const changes = { kit: [], vendor: [], config: [], files: [], notes: [] };
+  const before = await forgeBehind(dir);
+  const { modules, mods } = await decideModules({ engine: 'forge' });
+  const specBytes = await readFile(join(dir, 'spec.json')).catch(() => null);
+  const spec = specBytes ? JSON.parse(specBytes.toString('utf8')) : null;
+  let fresh = null;
+  if (spec) {
+    const probs = check(JSON.parse(await readFile(SPEC_SCHEMA, 'utf8')), spec);
+    if (probs.length) changes.notes.push(`spec.json no longer validates against the current schema (${probs.slice(0, 2).join('; ')}); only the kit's files are refreshed`);
+    else {
+      const forgeLib = await (await importPart(join(FORGE, 'tools/library.mjs'), 'the forge engine (research/gf-forge)')).forgeLibrary();
+      const lookConfig = mods.look?.lookConfig ? (id, time) => { const c = clone(mods.look.lookConfig(id, { time })); delete c.id; return c; } : null;
+      const standinLook = await importKitModule(join(KIT, 'core/standins/look.js'));
+      fresh = await specToConfig(spec, { modules, lookPreset: null, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults: {}, worldConfig: (s, o) => mods.world.worldConfig(s, { ...o, library: forgeLib }) });
+    }
+  }
+  if (fresh) {
+    for (const [name, skip] of [['game', GAME_SKIP], ['look', new Set()], ['characters', new Set()]]) {
+      const cur = await readJson(`config/${name}.json`).catch(() => null);
+      if (!cur || !fresh[name]) continue;
+      const added = fillMissing(cur, fresh[name], { skip });
+      if (added.length) { changes.config.push(...added.map(p => `config/${name}.json${p}`)); await writeConfig(dir, `config/${name}.json`, cur); }
+    }
+    // the files the current forge kit names that the game lacks (a file the game has is kept: it may be a Studio swap)
+    for (const a of fresh.assets) if (!existsSync(join(dir, a.to))) { await put(join(dir, a.to), await readFile(a.from)); changes.files.push(a.to); }
+    for (const [k, b] of Object.entries(fresh.bodies ?? {})) if (!record.bodies?.[k]) (record.bodies ??= {})[k] = b;
+  }
+  // multiplayer.json: the kit's keys the game lacks; create's own old forge sentences become the current ones
+  try {
+    const mp = await readJson('multiplayer.json');
+    if (mp?.mode === 'live' && isObj(mp.live)) {
+      const add = [];
+      if (mp.live.backdrop === undefined) { mp.live.backdrop = 'gf-backdrop=1'; add.push('backdrop'); }
+      if (mp.live.hud === undefined) { mp.live.hud = 'game'; add.push('hud'); }
+      // the friends page in the forge theme's colours (research/gf-forge/hud/create.mjs), when the game set none
+      if (mp.theme === undefined && fresh?.multiplayer?.theme) { mp.theme = fresh.multiplayer.theme; await writeFile(join(dir, 'multiplayer.json'), json(mp)); changes.config.push('multiplayer.json/theme'); }
+      const OLD = 'Each player sees the others as their character, in their seat colour, with a ring at their feet and their name above.';
+      if (mp.live.sees === OLD && fresh?.multiplayer?.live?.sees) { mp.live.sees = fresh.multiplayer.live.sees; mp.live.shares = fresh.multiplayer.live.shares; add.push('sees', 'shares'); }
+      // the gate's query for a forge game (spec-config.mjs FORGE_GATE_QUERY): added when the game has none of its own
+      const gq = fresh?.multiplayer?.check?.query ?? FORGE_GATE_QUERY;
+      const addCheck = isObj(mp.check ??= {}) && mp.check.query === undefined;
+      if (addCheck) mp.check.query = gq;
+      if (add.length || addCheck) { await writeFile(join(dir, 'multiplayer.json'), json(mp)); changes.config.push(...add.map(k => `multiplayer.json/live/${k}`), ...(addCheck ? ['multiplayer.json/check/query'] : [])); }
+    }
+  } catch {}
+  // the kit and everything vendored (verify check 2): gf/three's forge closure, gf/forge with its pinned wasm
+  const kit = await vendorKit(dir, modules); changes.kit.push(...kit.wrote);
+  changes.vendor.push(...(await vendorGfAssets(dir)).wrote);
+  for (const f of AUDIO_FILES) await put(join(dir, 'audio', f), await readFile(join(GF_AUDIO, 'source', f)), changes.vendor, `audio/${f}`);
+  const ad = await adopt(dir, { log: () => {} });
+  if (!ad.ok) return { ok: false, code: 1, problems: ad.problems };
+  changes.vendor.push(...ad.wrote);
+  const rulesText = await readFile(join(dir, 'rules.js'), 'utf8').catch(() => '');
+  changes.vendor.push(...(await vendorLibraries(dir, [...kit.sourceTexts, rulesText], { engine: 'forge' })).wrote);
+  const title = spec?.title ?? (await readJson('config/game.json').catch(() => ({}))).title ?? 'A forge game';
+  await put(join(dir, 'index.html'), indexHtml(title, 'forge'), changes.vendor, 'index.html');
+  await put(join(dir, 'main.js'), mainJs('forge'), changes.vendor, 'main.js');
+  // the build record and assets.json (the sound list kept; the sounds the current tables name added)
+  const oldRecord = clone(record);
+  const slotsBefore = await slotIds(dir);
+  record.kit = { name: 'gf-three', version: KIT_VERSION, engine: 'forge', forge: FORGE_VERSION };
+  record.modules = modules;
+  let sounds = null;
+  try { sounds = (await readJson('assets.json')).sounds ?? null; } catch {}
+  // a sound the game lacks is added; one still on the untouched preset create used to list takes the forge library's
+  // file (research/gf-forge/hud/create.mjs records that preset in fresh.sounds.replaced); anything else is the game's
+  for (const [id, snd] of Object.entries(fresh?.sounds?.sounds ?? {})) if (sounds?.sounds && (!sounds.sounds[id] || fresh.sounds.replaced?.[id] === JSON.stringify(sounds.sounds[id].src))) { const had = !!sounds.sounds[id]; sounds.sounds[id] = snd; changes.notes.push(`sound ${id}: ${had ? 'the library\'s sound in place of the preset' : 'added'} (${snd.label})`); }
+  const A = await assembleManifest(dir, { sounds, modules });
+  await put(join(dir, 'assets.json'), json(A.manifest), changes.vendor, 'assets.json');
+  if (spec) {
+    const cur = await readFile(join(dir, 'ATTRIBUTION.md'), 'utf8').catch(() => null);
+    if (cur === null || cur === attribution(spec, oldRecord)) await writeFile(join(dir, 'ATTRIBUTION.md'), attribution(spec, record));
+    else if (changes.files.length) {
+      const rows = fresh.assets.filter(a => changes.files.includes(a.to)).map(a => `| ${a.to} | ${relative(REPO, a.from)} | ${a.license?.spdx ?? 'see the library\'s LICENSES.json'}${a.license?.author ? `, ${a.license.author}` : ''} |`);
+      await writeFile(join(dir, 'ATTRIBUTION.md'), `${cur.trimEnd()}\n\n## Art added by tools/upgrade.mjs (${new Date().toISOString().slice(0, 10)})\n\n| File | From | Licence |\n|---|---|---|\n${rows.join('\n')}\n`);
+    }
+  }
+  const after = new Set(A.manifest.slots.map(s => s.id));
+  const slots = { added: [...after].filter(id => !slotsBefore.has(id)), removed: [...slotsBefore].filter(id => !after.has(id)) };
+  const entry = { at: new Date().toISOString(), kit: KIT_VERSION, forge: FORGE_VERSION, from: out ? relative(dirname(dir), src) : null, wasm: { from: before.wasm.have, to: before.wasm.want }, gfForge: before.forge, config: changes.config, files: changes.files };
+  record.upgrades = [...(record.upgrades ?? []), entry];
+  await writeFile(join(dir, 'gf-three.json'), json(record));
+  return { ok: true, code: 0, dir, src, engine: 'forge', ms: Math.round(performance.now() - t0), modules, kit: before.kit, forge: before.forge, wasm: before.wasm, vendor: changes.vendor.filter(f => !f.startsWith('gf/three/') && !f.startsWith('gf/forge/')), config: changes.config, files: changes.files, slots, notes: changes.notes, warnings: A.warnings, slotCount: A.slotCount, main: A.mainCount };
+}
+
 /**
  * --plan (read-only): is the game behind the current kit, and is --world for it? The Studio worker asks before a change
  * job's agent starts (research/foundations/studio-worker/lib/v2.mjs upgradeBase; Hang Up On Them, 2026-10-07: a change to
@@ -253,6 +398,9 @@ export async function upgradePlan(gameDir) {
   if (!existsSync(join(dir, 'gf-three.json')) || !existsSync(join(dir, 'config/game.json'))) return { ok: false, code: 2, problems: [`${dir} is not a gf-three game (no gf-three.json or config/game.json)`] };
   const record = JSON.parse(await readFile(join(dir, 'gf-three.json'), 'utf8'));
   const why = [];
+  // forge (CONTRACT §8 forge): behind when gf/three, gf/forge or its pinned wasm is not what create would vendor today,
+  // or gf/mp is an older gf-multiplayer; --world is not for forge (its room comes from the spec, not a stock template)
+  if (record.kit?.engine === 'forge') return forgePlan(dir);
   const { modules } = await decideModules({ standins: !!record.options?.standins, standinMechanics: !!record.options?.standinMechanics });
   const want = await kitFiles(modules);
   let have = {};
@@ -325,7 +473,7 @@ async function kitHashes(dir) {
 }
 async function slotIds(dir) { try { return new Set(JSON.parse(await readFile(join(dir, 'assets.json'), 'utf8')).slots.map(s => s.id)); } catch { return new Set(); } }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const opt = k => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : null; };
   const dir = a.find((x, i) => !x.startsWith('--') && a[i - 1] !== '--out');
@@ -336,7 +484,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     if (a.includes('--json')) process.stdout.write(JSON.stringify(p, null, 2) + '\n');
     else if (!p.ok) { for (const x of p.problems) console.error(`problem: ${x}`); console.error('upgrade --plan: FAILED'); }
     else {
-      console.log(`kit     ${p.behind ? `behind: ${p.why.join('; ')}` : 'current (gf/three and gf/mp are what create would write today)'}`);
+      console.log(`kit     ${p.behind ? `behind: ${p.why.join('; ')}` : `current (gf/three${p.engine === 'forge' ? ', gf/forge and its wasm' : ''} and gf/mp are what create would write today)`}`);
       const w = p.world;
       console.log(`world   ${w.complete ? 'complete (check 17 passes)' : w.complete === false ? `NOT COMPLETE (${w.errors.join(', ')}); ${w.stock ? 'stock' : w.stock === false ? 'not stock' : 'unknown'}: ${w.why}` : w.why}`);
       console.log(`upgrade --plan: ${p.behind || w.relay ? `run node research/gf-three/tools/upgrade.mjs ${relative(process.cwd(), p.dir) || '.'}${w.relay ? ' --world' : ''}` : 'nothing to do'}`);
@@ -350,6 +498,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   else {
     const list = (xs, n = 8) => `${xs.slice(0, n).join(', ')}${xs.length > n ? ` and ${xs.length - n} more` : ''}`;
     console.log(`kit     gf/three: ${r.kit.changed.length} changed, ${r.kit.added.length} added, ${r.kit.removed.length} removed${r.kit.changed.length + r.kit.added.length ? ` (${list([...r.kit.added.map(f => `+${f}`), ...r.kit.changed])})` : ''}`);
+    if (r.engine === 'forge') console.log(`forge   gf/forge: ${r.forge.changed.length} changed, ${r.forge.added.length} added, ${r.forge.removed.length} removed; the core's wasm ${r.wasm.behind ? `${String(r.wasm.have ?? 'none').slice(0, 12)} → ${String(r.wasm.want).slice(0, 12)}` : 'already the kit\'s release'}${r.files?.length ? `; copied ${list(r.files)}` : ''}`);
     if (r.vendor.length) console.log(`vendor  ${list(r.vendor)}`);
     console.log(`config  ${r.config.length ? `added ${list(r.config, 12)}` : 'nothing added (every value the game set is kept)'}`);
     if (r.bodies?.length) console.log(`bodies  refreshed ${list(r.bodies)} (the current library bean)`);

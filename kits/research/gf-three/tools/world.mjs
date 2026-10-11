@@ -6,12 +6,13 @@
 //   node research/gf-three/tools/world.mjs office:medium --layout out.json     write the generated layout
 //
 // Prints one line per problem (errors fail check 17, warnings are notes) and a summary. Exit 0 = complete, 1 = not.
+import { isMain } from './lib/main.mjs';
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadWorldSubject, checkWorld, worldLines } from './lib/world-check.mjs';
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const opt = k => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : null; };
   const target = a.find((x, i) => !x.startsWith('--') && a[i - 1] !== '--layout');

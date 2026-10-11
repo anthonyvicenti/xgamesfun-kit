@@ -21,12 +21,17 @@
 //                   read from the page) is shown over that enemy, at least BAR_MIN_W × BAR_MIN_H px, near its head,
 //                   showing the hit points left, and its fill is drawn in its colour on the screenshot.
 // The detail says the hits per kill and what changed on a hit, because the build agent repairs from it.
-// No waves mechanic or no projectile: nothing to shoot, passes (n/a). About 10–20 s on the solo browser.
+// With the melee mechanic (gf-scenic wave 1, track M): the scripted player walks up to the staged enemy with real keys
+// (camera-relative, calibrated), aims at it (the follow camera: the mouse cursor on it; third person: the crosshair) and
+// swings with real clicks until KILLS kills; the same hits-per-kill rule and the same reading of a hit. With the follow
+// camera a projectile game aims by moving the cursor onto the enemy.
+// No waves mechanic, or neither projectile nor melee: nothing to hit, passes (n/a). About 10–25 s on the solo browser.
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { median } from '../../kit/mechanics/waves/logic.js';
+import { normalizeWeapons } from '../../kit/mechanics/melee/logic.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const r2 = v => Math.round(v * 100) / 100;
@@ -75,7 +80,7 @@ export function judgeHits(m, L = HIT_LIMITS) {
   if (m.oneHit?.config && !m.oneHit.asked) fails.push(`config/game.json sets waves oneHitKills, but the locked spec does not ask for one-hit kills (${m.oneHit.why}): set it back to false`);
   const oneHitOk = !!(m.oneHit?.config && m.oneHit.asked);
   if (!m.enemies) fails.push(`no enemy stood in front of the player in ${m.seconds} s (?gf-demo=waves.hit)`);
-  else if (!m.hits) fails.push(`${m.shots} shots at an enemy under the crosshair and none hit it (is the projectile mechanic's hittable on, and do the rules fire on primary?)`);
+  else if (!m.hits) fails.push(m.melee ? `${m.shots} swings at an enemy in reach and none hit it (is waves hittable on; does melee's action match the primary control; does the swing follow the aim?)` : `${m.shots} shots at an enemy under the crosshair and none hit it (is the projectile mechanic's hittable on, and do the rules fire on primary?)`);
   if (per.length && med !== null && med < L.MIN_HITS && !oneHitOk) {
     fails.push(`${med === 1 ? '1 hit per kill' : `${med} hits per kill`} (${per.length} kills: ${per.join('/')}): every hit kills, so a player never sees a hit land (the creator: "The zombies are instant killed to I couldn't even tell what was happened. There was no healthbar or anything"). ` +
       `Keep the weapon's damage below the enemies' hit points so a basic enemy takes 2–4 hits (config/game.json → mechanics: projectile damage, or streamDamage for a stream, against waves hp). The kit shows every hit that does not kill (a health bar, a flash, a flinch); never make kills one-shot to make hits visible. Only a spec that asks for one-hit kills sets waves oneHitKills`);
@@ -101,7 +106,8 @@ export function judgeHits(m, L = HIT_LIMITS) {
   const ok = fails.length === 0;
   const h = m.hit, b = h?.bar;
   const seen = h ? `a hit that did not kill showed ${b ? `a health bar at ${Math.round((b.frac ?? 0) * 100)}% (${Math.round(b.w)}x${Math.round(b.h)} px over the enemy)` : 'no bar'} and changed ${r2(h.change * 100)}% of the enemy's pixels (noise ${r2(h.noise * 100)}%${h.clip ? `; ${h.clip === 'hit' ? 'the hit clip' : 'a squash'} and a flash` : ''})` : 'no hit left an enemy standing';
-  const head = `${m.kills?.length ?? 0} kill${m.kills?.length === 1 ? '' : 's'} by the player in ${m.seconds} s, ${perText}${oneHitOk ? ' (one-hit kills, as the spec asks: waves oneHitKills)' : ''}; ${m.hits} hit${m.hits === 1 ? '' : 's'} from ${m.shots} shot${m.shots === 1 ? '' : 's'}`;
+  const unit = m.melee ? 'swing' : 'shot';
+  const head = `${m.kills?.length ?? 0} kill${m.kills?.length === 1 ? '' : 's'} by the player in ${m.seconds} s, ${perText}${oneHitOk ? ' (one-hit kills, as the spec asks: waves oneHitKills)' : ''}; ${m.hits} hit${m.hits === 1 ? '' : 's'} from ${m.shots} ${unit}${m.shots === 1 ? '' : 's'}`;
   return { ok, detail: ok ? `${head}; ${seen}${m.death ? `; ${m.death}` : ''}` : `${fails.join('; ')}. Measured: ${head}; ${seen}` };
 }
 
@@ -143,12 +149,17 @@ async function analyse(browser, before, after, box, bar) {
 export async function checkHits({ newPage, browser, url, game, dir, shot = async () => null, log = () => {} }) {
   const L = HIT_LIMITS, t0 = Date.now(), warnings = [];
   const mech = game.mechanics ?? [];
-  const waves = mech.find(m => m.id === 'waves'), prj = mech.find(m => m.id === 'projectile');
-  const m = { applies: !!(waves && prj), why: !waves ? 'no enemies (no waves mechanic): nothing to hit' : 'enemies are not shot at (no projectile mechanic): nothing for the player to fire', seconds: 0, enemies: 0, shots: 0, hits: 0, kills: [], hit: null, death: null };
+  const waves = mech.find(m => m.id === 'waves'), prj = mech.find(m => m.id === 'projectile'), melee = mech.find(m => m.id === 'melee');
+  const m = { applies: !!(waves && (prj || melee)), why: !waves ? 'no enemies (no waves mechanic): nothing to hit' : 'enemies are not shot at or struck (no projectile or melee mechanic): nothing for the player to hit', seconds: 0, enemies: 0, shots: 0, hits: 0, kills: [], hit: null, death: null };
   if (!m.applies) { const j = judgeHits(m, L); return { ok: j.ok, detail: j.detail, warnings, record: { applies: false } }; }
   m.oneHit = { config: waves.params?.oneHitKills === true, ...(await oneHitAsked(dir)) };
-  const stream = (prj.params?.kind ?? 'discrete') === 'continuous';
-  const cooldown = Math.max(0.12, Number(prj.params?.cooldown ?? 0.45));
+  // melee: when the game swings on primary (or has no projectile at all)
+  const useMelee = !!melee && (!prj || (melee.params?.action ?? 'primary') === 'primary');
+  m.melee = useMelee;
+  const stream = !useMelee && (prj.params?.kind ?? 'discrete') === 'continuous';
+  const WPN = useMelee ? (() => { const ws = normalizeWeapons(melee.params?.weapons); return ws.find(w => w.id === melee.params?.weapon) ?? ws[0]; })() : null;
+  const reach = WPN ? WPN.combo[0].reach : 0;
+  const cooldown = useMelee ? Math.max(0.3, WPN.combo[0].windup + WPN.combo[0].active + WPN.combo[0].recover * 0.5) : Math.max(0.12, Number(prj.params?.cooldown ?? 0.45));
   const mode = game.camera ?? 'third';
   const cam = { ...RIG[mode] ?? RIG.third, ...(game.controller?.camera?.[mode] ?? {}) };
   const T = await newPage('hits', { overrides: { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: 180 }] } });
@@ -157,7 +168,8 @@ export async function checkHits({ newPage, browser, url, game, dir, shot = async
   const png = () => p.screenshot({ type: 'png' });
   const vp = p.viewportSize() ?? { width: 1280, height: 720 }, cursor = { x: Math.round(vp.width / 2), y: Math.round(vp.height * 0.55) };
   const look = async (dx, dy) => { const n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 30)); for (let i = 1; i <= n; i++) { cursor.x += dx / n; cursor.y += dy / n; await p.mouse.move(cursor.x, cursor.y); } };
-  const record = { url: `?seed=7&bots=0&gf-demo=waves.hit`, limits: L, camera: mode, stream, cooldown, shotsLog: [], measured: [] };
+  const record = { url: `?seed=7&bots=0&gf-demo=waves.hit`, limits: L, camera: mode, stream, cooldown, melee: useMelee ? { weapon: WPN.id, reach } : null, shotsLog: [], measured: [] };
+  let F = null, R = null;                                          // camera-relative W and D on the ground (melee walks)
   let me = null;
   try {
     await p.goto(`${url}?seed=7&bots=0&gf-demo=waves.hit`, { waitUntil: 'load' });
@@ -179,15 +191,29 @@ export async function checkHits({ newPage, browser, url, game, dir, shot = async
       const e = (o.w?.enemies ?? []).filter(x => x.hp > 0 && x.body).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
       if (!e) { await sleep(150); continue; }
       m.enemies = Math.max(m.enemies, 1);
-      // aim: the enemy's body under the crosshair (the mouse turns the camera; pointer lock reads the movement)
+      // aim: the follow camera aims with the cursor itself (CONTRACT §8): the mouse goes onto the enemy's body; else the
+      // enemy's body under the crosshair (the mouse turns the camera; pointer lock reads the movement)
       const f = (H / 2) / Math.tan((cam.fov * Math.PI / 180) / 2), off = [e.body.x - W / 2, e.body.y - H / 2];
-      if (mode !== 'top' && cam.sensitivity > 0 && (!e.body.front || Math.hypot(off[0], off[1]) > L.AIM_PX) && aimTries < 40) {
+      if (mode === 'follow') { if (e.body.front) { cursor.x = e.body.x; cursor.y = e.body.y; await p.mouse.move(cursor.x, cursor.y); } }
+      // (a swing covers an arc: it needs the enemy roughly ahead, not under the crosshair to the pixel)
+      else if (mode !== 'top' && cam.sensitivity > 0 && (!e.body.front || Math.hypot(off[0], useMelee ? 0 : off[1]) > (useMelee ? 48 : L.AIM_PX)) && aimTries < 40) {
         aimTries++;
         const dx = e.body.front ? Math.atan(off[0] / f) / cam.sensitivity : 600, dy = e.body.front ? Math.atan(off[1] / f) / cam.sensitivity : 0;
         await look(dx * 0.9, dy * 0.9); await sleep(90);
+        F = null;                                                  // the camera turned: W and D point elsewhere now
         continue;
       }
       aimTries = 0;
+      // melee: walk up to it with real keys (camera-relative), into the first swing's reach
+      if (useMelee) {
+        const d = Math.hypot(e.x - me.x, e.z - me.z);
+        if (d > reach * 0.78) {
+          if (mode !== 'follow' && mode !== 'top') { await p.keyboard.down('KeyW'); await sleep(Math.min(260, 60 + (d - reach * 0.7) * 90)); await p.keyboard.up('KeyW'); await sleep(60); continue; }
+          if (!F) { const k = await calibrate(p, obs); if (!k) { warnings.push('hits: the player did not move on W or D'); break; } F = k.F; R = k.R; continue; }
+          await walkToward(p, F, R, e.x - me.x, e.z - me.z, Math.min(260, 60 + (d - reach * 0.7) * 90)); await sleep(60);
+          continue;
+        }
+      }
       // a hit to measure from the player's own screen: frames before, the shot, frames after
       const measure = !m.hit;
       const before = measure ? [await png(), (await sleep(120), await png())] : [];
@@ -195,9 +221,10 @@ export async function checkHits({ newPage, browser, url, game, dir, shot = async
       m.shots++;
       if (stream) await p.mouse.down();
       else { await p.mouse.down(); await sleep(70); await p.mouse.up(); }
+      // a swing hits in its active frames, after its windup
       // wait for the hit: the enemy's hit points drop (it stands: a hit to measure) or it is gone (a kill)
       let after = null, outcome = 'miss', o2 = null;
-      for (let t = Date.now(); Date.now() - t < (stream ? 1600 : 900); ) {
+      for (let t = Date.now(); Date.now() - t < (stream ? 1600 : useMelee ? 1100 : 900); ) {
         o2 = await obs();
         const now = (o2?.w?.enemies ?? []).find(x => x.id === id);
         if (now && now.hp < hp0 - 1e-6) { outcome = 'hit'; if (measure) after = [await png(), await png(), (await sleep(60), await png())]; break; }
@@ -248,4 +275,26 @@ export async function checkHits({ newPage, browser, url, game, dir, shot = async
   record.seconds = Math.round((Date.now() - t0) / 1000);
   log(`  hits: ${j.ok ? 'ok' : 'FAIL'} ${j.detail.slice(0, 200)}`);
   return { ok: j.ok, detail: j.detail, warnings, record };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Walking with real keys (shared with checks 13 and 15: controls-check.mjs, alive-check.mjs)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Which way W and D move the local player on the ground now (the camera does not turn while measuring): {F, R} or null. */
+export async function calibrate(p, obs) {
+  const at = async () => { const o = await obs(); return o?.me ?? null; };
+  const step = async k => { const a = await at(); await p.keyboard.down(k); await sleep(200); await p.keyboard.up(k); await sleep(220); const b = await at(); if (!a || !b) return null; const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz); return l > 0.05 ? [dx / l, dz / l] : null; };
+  const F = await step('KeyW'), R = await step('KeyD');
+  return F && R ? { F, R } : null;
+}
+/** Hold the keys that move the player toward (dx, dz) for `ms`. */
+export async function walkToward(p, F, R, dx, dz, ms = 160) {
+  const l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
+  const pf = ux * F[0] + uz * F[1], pr = ux * R[0] + uz * R[1], keys = [];
+  if (pf > 0.38) keys.push('KeyW'); if (pf < -0.38) keys.push('KeyS'); if (pr > 0.38) keys.push('KeyD'); if (pr < -0.38) keys.push('KeyA');
+  for (const k of keys) await p.keyboard.down(k);
+  await sleep(ms);
+  for (const k of keys) await p.keyboard.up(k);
+  return keys;
 }

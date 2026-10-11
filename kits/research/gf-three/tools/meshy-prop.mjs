@@ -18,8 +18,9 @@
 //   4. a sidecar <out>.json: licence, tasks, credits, size, the words or reference it was made from.
 // Cost: about 36 credits (6 + 30). Every paid task is in library/meshy-ledger.jsonl and the wave's cap (GF_MESHY_WAVE,
 // GF_MESHY_CAP; tools/lib/char-meshy.mjs) is checked before each one. Licence: Meshy output, unconfirmed tier, recorded as
-// CC BY 4.0 crediting Meshy (the same record as meshy-character.mjs).
+// LicenseRef-Meshy-Paid: the creator's paid plan, confirmed 2026-10-10 (the same record as meshy-character.mjs).
 // Exit 0 made, 1 failed (Meshy or the network: worth one retry), 2 bad usage, 3 refused (the credit cap, or no key: no retry).
+import { isMain } from './lib/main.mjs';
 import './lib/char-node.mjs';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname, basename, extname } from 'node:path';
@@ -134,8 +135,8 @@ export async function generateProp(opts) {
   const sidecar = {
     id, kind: 'prop', file: basename(out), from: image ? 'reference' : 'generate', tags: ['generated', 'meshy'],
     describe: describe ?? prompt ?? 'generated from a reference image', size,
-    license: { spdx: 'CC-BY-4.0', author: 'Meshy AI (generated for games.fun)', url: 'https://www.meshy.ai',
-      note: 'Meshy output; the account plan (and so the licence) is unconfirmed, so it is treated as CC BY 4.0 with Meshy credited (STUDIO_BUILD_PLAYBOOK §5)' },
+    license: { spdx: 'LicenseRef-Meshy-Paid', author: 'Meshy AI (generated for games.fun)', url: 'https://www.meshy.ai',
+      note: 'Meshy output generated on the creator\'s paid Meshy plan (the creator, 2026-10-10: "They are paid"); under Meshy\'s paid-plan terms the output belongs to the account holder, so no attribution is required (STUDIO_BUILD_PLAYBOOK §5)' },
     meshy: { wave: meshy.WAVE, tasks, credits, polycount, concept: !!conceptTask, generated: new Date().toISOString() },
     reference: image ? { file: image, sha256: sha(refBytes) } : null, prompt: prompt ?? null,
     model: { bytes: r.bytes.length, sha256: sha(Buffer.from(r.bytes)), triangles: r.report.triangles, size: r.report.size },
@@ -145,7 +146,7 @@ export async function generateProp(opts) {
   return { ok: true, file: resolve(out), sidecar: sidecarPath, id, credits, tasks, report: r.report, notes: r.notes, work };
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const val = k => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : undefined; };
   const out = val('--out');

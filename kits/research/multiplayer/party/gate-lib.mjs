@@ -40,3 +40,22 @@ export const inFrame = (page, frame, size) => {
     return typeof v === 'function' ? v.bind(from) : v;
   } });
 };
+
+/**
+ * The host ends the round, as a player would. A game whose rail is out (kit 1.4.0, live.hud "game") carries End round
+ * in its own menu: the HUD's menu button, then #gf-end-round (the host's copy ends its round, so every player's real
+ * score reaches the results). Otherwise the rail's End round (#stop). → true when a button was clicked.
+ */
+export async function endRound(page) {
+  try { await page.evaluate(() => { try { document.getElementById('game').contentDocument.exitPointerLock(); } catch {} try { document.exitPointerLock(); } catch {} }); } catch {}
+  if (await page.isVisible('#stop').catch(() => false)) { await page.click('#stop', { timeout: 4000 }).catch(() => {}); return true; }
+  const frame = page.frames().find(f => f.parentFrame() === page.mainFrame());
+  if (!frame) return false;
+  for (let i = 0; i < 3; i++) {
+    if (await frame.isVisible('#gf-end-round').catch(() => false)) { await frame.click('#gf-end-round', { timeout: 4000 }).catch(() => {}); return true; }
+    if (await frame.isVisible('#gf-menu-button').catch(() => false)) await frame.click('#gf-menu-button', { timeout: 3000 }).catch(() => {});
+    else { await frame.focus('canvas').catch(() => {}); await page.keyboard.press('Escape').catch(() => {}); }
+    await sleep(500);
+  }
+  return false;
+}

@@ -11,7 +11,9 @@
 <!-- games.fun multiplayer kit: the party shell. Kit-owned and byte-identical in every game (never edit a copy).
      It wraps the game's own single-player page (../../index.html) in a frame, so the game needs no multiplayer code:
      vendor/gf.js (the host-join kit) draws the Host / Join lobby and carries the room over WebRTC, room.js is the
-     generic race room, and party.js reads the game's outcome as ../../multiplayer.json says.
+     generic race room, and party.js reads the game's outcome as ../../multiplayer.json says. Kit 1.4.0: the waiting
+     room (names you can change, the game's colours, the game's own world behind it) and the results are party.js's.
+     Kit 1.5.0: worlds (mode "world"): one room per game found by its key, the world card over the game, no rounds.
      Standard: research/multiplayer/STANDARD.md -->
 <div id="party" data-phase="boot">
   <main id="stage">
@@ -28,6 +30,10 @@
     <div id="controls">
       <button id="start" class="primary" hidden>Start</button>
       <button id="stop" hidden>End round</button>
+    </div>
+    <div id="room-controls">
+      <button id="rail-invite" type="button">Copy invite link</button>
+      <button id="rail-leave" type="button" class="quiet">Leave</button>
     </div>
   </aside>
 </div>

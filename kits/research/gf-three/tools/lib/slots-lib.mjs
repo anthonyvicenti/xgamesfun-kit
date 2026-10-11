@@ -3,12 +3,17 @@
 //
 //   const m = await assembleManifest(gameDir, { sounds });   // → the gf-assets/1 object (not written)
 //
+// The ignore list (files in the game folder that are not game assets) is the kit's own entries (BASE_IGNORE), then
+// the entries a checkout configures (GF_MANIFEST_IGNORE: a JSON file holding [{path, reason}], e.g. the guide files a
+// coding agent's project carries), then whatever further entries the game's assets.json already has. Those are kept
+// the way its sound list is kept, so `slots --write`, a second create and upgrade never drop them.
+//
 // Declarations are read from the game's own kit copy (gf/three/) when it has one, else from the kit source.
 // Main tier: at most MAIN_MAX slots stay "main", by each declaration's `rank` (the rest become "advanced").
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { KIT, LIBRARY, walk } from './paths.mjs';
+import { KIT, SCENIC_KIT, FORGE_KIT, LIBRARY, walk } from './paths.mjs';
 import { importKitModule } from './kit-import.mjs';
 
 export const MAIN_MAX = 40;
@@ -18,11 +23,54 @@ export const GROUPS = [
 ];
 const readJson = async p => JSON.parse(await readFile(p, 'utf8'));
 
+/** What every gf-three game ignores: the files create vendors and the records beside them. */
+export const BASE_IGNORE = [
+  { path: 'vendor/**', reason: 'pinned library code: three.js 0.186.0, Rapier 0.19.2, postprocessing, N8AO (licences beside each copy)' },
+  { path: 'gf/**', reason: 'kit copies: gf-three, gf-multiplayer, gf-assets (vendored by create, never edited)' },
+  { path: 'audio/**', reason: 'gf-audio 1.5.0 kit' },
+  { path: 'evidence/**', reason: 'QA evidence (verify runs), append-only' },
+  { path: 'spec.json', reason: 'the game spec this project was made from (research/studio-v2/game-spec.schema.json)' },
+  { path: 'gf-three.json', reason: 'build record from create: kit version, modules, where each asset came from' },
+  { path: 'generated.json', reason: 'record of the models the spec asked to generate and what happened (the Studio worker writes it; verify check 14 reads it)' },
+  { path: 'multiplayer.json', reason: 'multiplayer manifest (research/multiplayer/STANDARD.md)' },
+];
+const ignoreEntry = e => e && typeof e.path === 'string' && e.path && typeof e.reason === 'string' && e.reason;
+
+/** The ignore entries a checkout adds to every game: GF_MANIFEST_IGNORE names a JSON file holding [{path, reason}]. */
+export function configuredIgnore({ env = process.env, read = p => readFileSync(p, 'utf8') } = {}) {
+  const file = env.GF_MANIFEST_IGNORE;
+  if (!file) return [];
+  let list;
+  try { list = JSON.parse(read(file)); } catch (e) { throw new Error(`GF_MANIFEST_IGNORE: ${file} is not readable JSON (${e.message.split('\n')[0]})`); }
+  if (!Array.isArray(list) || !list.every(ignoreEntry)) throw new Error(`GF_MANIFEST_IGNORE: ${file} must hold a list of {path, reason}`);
+  return list.map(e => ({ path: e.path, reason: e.reason }));
+}
+
+/**
+ * A manifest's ignore list: the kit's entries, then the configured ones, then the game's own further entries
+ * (`existing`: the ignore list of the assets.json the game has now). One entry per path; the kit's wording wins for
+ * its own paths, so a game cannot reword or drop them. Pure.
+ */
+export function mergeIgnore({ configured = [], existing = [] } = {}) {
+  const out = BASE_IGNORE.map(e => ({ ...e })), seen = new Set(out.map(e => e.path));
+  for (const e of [...configured, ...(Array.isArray(existing) ? existing : [])]) {
+    if (!ignoreEntry(e) || seen.has(e.path)) continue;
+    seen.add(e.path); out.push({ path: e.path, reason: e.reason });
+  }
+  return out;
+}
+
 /** A module file from the game's kit copy, else the kit source. */
 const kitFile = (gameDir, rel) => { const g = join(gameDir, 'gf/three', rel); return existsSync(g) ? g : join(KIT, rel); };
 
-async function provider(gameDir, rel) {
-  const mod = await importKitModule(kitFile(gameDir, rel));
+// the scenic engine's look and world (CONTRACT §8): the game's gf/scenic copy, else research/gf-scenic/kit
+const scenicFile = (gameDir, rel) => { const g = join(gameDir, 'gf/scenic', rel); return existsSync(g) ? g : join(SCENIC_KIT, rel); };
+
+// the forge engine's look and world (CONTRACT §8 forge): the game's gf/forge copy, else research/gf-forge/kit
+const forgeFile = (gameDir, rel) => { const g = join(gameDir, 'gf/forge', rel); return existsSync(g) ? g : join(FORGE_KIT, rel); };
+
+async function provider(gameDir, rel, { scenic = false, forge = false } = {}) {
+  const mod = await importKitModule(forge ? forgeFile(gameDir, rel) : scenic ? scenicFile(gameDir, rel) : kitFile(gameDir, rel));
   if (mod.error) throw new Error(`${rel}: could not be imported in Node (${mod.error.message}); a module must not touch the DOM at import`);
   return mod;
 }
@@ -61,8 +109,11 @@ export async function readConfig(gameDir) {
   return { game, look, world, characters, record, files, catalog, licences };
 }
 
-export async function assembleManifest(gameDir, { sounds = null, modules = null } = {}) {
+
+/** ignore: the game's further ignore entries; left out, they are read from the assets.json the game already has. */
+export async function assembleManifest(gameDir, { sounds = null, modules = null, ignore = undefined } = {}) {
   const cfg = await readConfig(gameDir);
+  if (ignore === undefined) { try { ignore = (await readJson(join(gameDir, 'assets.json'))).ignore ?? []; } catch { ignore = []; } }
   const rec = cfg.record;
   const mods = modules ?? rec.modules ?? { look: false, world: false, character: false, mechanics: [] };
   cfg.propFiles = rec.props ?? {};
@@ -86,10 +137,23 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null 
   }
 
   push((await provider(gameDir, 'ui/slots.js')).slotsFor(cfg), 'ui');
+  const scenic = mods.engine === 'scenic', forge = mods.engine === 'forge';
+  if (forge) {
+    // the forge engine (CONTRACT §8 forge): its world and look modules, and the player bodies friends see (gf/forge/wear.js:
+    // the seat colours, a player look (§6e); the co-op body, its clips, each held weapon)
+    push(fromModule(await provider(gameDir, 'wear.js', { forge }), cfg), 'character');
+    push(fromModule(await provider(gameDir, 'world.js', { forge }), cfg), 'world');
+    push(fromModule(await provider(gameDir, 'look.js', { forge }), cfg), 'look');
+    // the data tables (config/game.json → forge: player, physics, weapons, enemies, waves, cards): every value a slot
+    if (cfg.game?.forge) push(fromModule(await provider(gameDir, 'tables/index.js', { forge }), cfg), 'tables');
+  } else {
   const standins = await provider(gameDir, 'core/standins/slots.js');
   push(mods.character ? fromModule(await provider(gameDir, 'character/character.js'), cfg) : standins.characterSlots(cfg), 'character');   // track C's slotsFor takes {characters, …}
-  push(mods.world ? fromModule(await provider(gameDir, 'world/world.js'), cfg.world, cfg.catalog, cfg.licences) : standins.worldSlots(cfg), 'world');
-  push(mods.look ? fromModule(await provider(gameDir, 'look/look.js'), cfg.look) : standins.lookSlots(cfg), 'look');
+  // a voxel world (CONTRACT §9, worlds) is its own world module, whichever engine draws the rest
+  if (cfg.world?.template === 'voxel') push(fromModule(await provider(gameDir, 'world/voxel/world.js'), cfg.world), 'world');
+  else push(scenic || mods.world ? fromModule(await provider(gameDir, 'world/world.js', { scenic }), cfg.world, cfg.catalog, cfg.licences) : standins.worldSlots(cfg), 'world');
+  push(scenic || mods.look ? fromModule(await provider(gameDir, 'look/look.js', { scenic }), cfg.look) : standins.lookSlots(cfg), 'look');
+  }
   // the props the spec names are the game's own: main tier, with the game's description; a gameplay prop the world
   // does not place still needs its model slot
   // (rec.named: the spec's prop name → its slot id; scenery the world template brings stays advanced)
@@ -168,7 +232,10 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null 
   const used = new Set(finalSlots.map(s => s.group));
 
   const roles = Object.keys(cfg.characters.roles ?? {});
-  const propNames = [...named.keys()].filter(n => seen.has(`prop.${n}`));   // the game's own props (scenery has no preview view of its own)
+  // the game's own props (scenery has no preview view of its own), else, for a game that names none (a scenic game's
+  // generated world is all scenery), its first few scenery props, so Studio can show one and verify check 8 can swap one
+  const ownProps = [...named.keys()].filter(n => seen.has(`prop.${n}`));
+  const propNames = ownProps.length ? ownProps : finalSlots.filter(s => s.type === 'model' && s.id.startsWith('prop.') && !s.id.slice(5).includes('.')).slice(0, 4).map(s => s.id.slice(5));
   const has = id => seen.has(id);
   const showcase = [
     ...roles.map(r => ({ id: `character.${r}`, label: r === 'player' ? 'Player character' : `${r} character`, query: `?gf-show=character.${r}`, slots: [`character.body.${r}`, `character.tint.${r}`, `character.height.${r}`].filter(has) })),
@@ -187,20 +254,13 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null 
     slots: finalSlots,
     sounds: sounds ?? { version: 1, sounds: {} },
     ...(cfg.catalog ? { embed: [{ path: 'config/props.json', reason: 'the prop catalog entries the world module reads (sizes, colliders, materials)' }] } : {}),
+    // a forge game draws only with WebGPU (CONTRACT §8 forge): capture, the gates and the worker's play-tests need an adapter
+    ...(forge ? { runtime: { gpu: 'webgpu' } } : {}),
     check: {
       steps: [{ waitFor: "window.__game && window.__game.phase === 'lobby'", timeout: 90000 }, { wait: 500 }],
       play: { steps: [{ clickSelector: '#gf-play' }, { wait: 4500 }, { hold: 'KeyW', ms: 1200 }, { key: 'KeyE' }, { click: 'centre' }, { wait: 800 }], avoidKeys: [] },
     },
-    ignore: [
-      { path: 'vendor/**', reason: 'pinned library code: three.js 0.186.0, Rapier 0.19.2, postprocessing, N8AO (licences beside each copy)' },
-      { path: 'gf/**', reason: 'kit copies: gf-three, gf-multiplayer, gf-assets (vendored by create, never edited)' },
-      { path: 'audio/**', reason: 'gf-audio 1.5.0 kit' },
-      { path: 'evidence/**', reason: 'QA evidence (verify runs), append-only' },
-      { path: 'spec.json', reason: 'the game spec this project was made from (research/studio-v2/game-spec.schema.json)' },
-      { path: 'gf-three.json', reason: 'build record from create: kit version, modules, where each asset came from' },
-      { path: 'generated.json', reason: 'record of the models the spec asked to generate and what happened (the Studio worker writes it; verify check 14 reads it)' },
-      { path: 'multiplayer.json', reason: 'multiplayer manifest (research/multiplayer/STANDARD.md)' },
-    ],
+    ignore: mergeIgnore({ configured: configuredIgnore(), existing: ignore }),
   };
   return { manifest, warnings, mainCount: finalSlots.filter(s => s.tier === 'main').length, slotCount: finalSlots.length };
 }

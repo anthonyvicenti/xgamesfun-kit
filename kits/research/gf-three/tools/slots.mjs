@@ -7,6 +7,7 @@
 //   (no flag)  print the slot count, the main tier and any warnings
 //   --write    write assets.json (after an agent adds a prop, a rules param, a mechanic, or a file under assets/)
 //   --check    exit 1 when assets.json differs from what the declarations give
+import { isMain } from './lib/main.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -27,7 +28,7 @@ export async function slots(gameDir, { write = false } = {}) {
   return { ...r, same, wrote: write && !same };
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const dir = a.find(x => !x.startsWith('--'));
   if (!dir) { console.error('usage: slots.mjs <game> [--write] [--check] [--json]'); process.exit(2); }

@@ -34,13 +34,14 @@
 // which. Signaling: the kit on 127.0.0.1 uses the WebSocket at /signal by default; --signal http plays the whole gate
 // over HTTP signaling (/signal/v1, the transport of Studio's play origin) and checks both players really used it
 // (--signal ws forces the WebSocket). Both need a kit with HTTP signaling (1.3.0+).
+import { isMain } from '../../gf-three/tools/lib/main.mjs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { launchChrome, manifestGpu } from '../../foundations/qa/browser.mjs';
 import { fuzz, reachPlay, runSteps } from '../../asset-manifest/play-driver.mjs';
-import { KIT_DIR, KIT_VERSION, MANIFEST, checkKitReleased, kitFiles, kitHasSignal, readManifest, repo, sha256, startParty, validateMultiplayer } from './lib.mjs';
+import { KIT_DIR, KIT_VERSION, MANIFEST, WORLD_SINCE, checkKitReleased, compareVersions, kitFiles, kitHasSignal, readManifest, repo, sha256, startParty, validateMultiplayer } from './lib.mjs';
 
 import { checkTransport, inFrame, p2p, sleep, snap, until } from './gate-lib.mjs';
 import { gateLive } from './gate-live.mjs';
@@ -83,6 +84,19 @@ export async function gate(gameDir, { out = null, seconds = 75, draft = null, de
     return finish();
   }
 
+  // A world (kit 1.5.0) has no rounds to race or play through here: this gate checks its kit copy and entry, and the
+  // two-browser checks are the world's own (gate-world.mjs for the fixture contract; gf-three verify for a gf-three world).
+  if (manifest.mode === 'world') {
+    if (!draft && !devKit) {
+      const k = await checkKitReleased(dir);
+      rec.kit.version = k.version;
+      check('kit-identical', k.ok && compareVersions(k.version, WORLD_SINCE) >= 0, k.ok ? `${KIT_DIR}/ is kit ${k.version}${compareVersions(k.version, WORLD_SINCE) >= 0 ? '' : ` (a world needs ${WORLD_SINCE} or later)`}`
+        : `not any released kit; against ${k.version}: ${[...k.missing.map(f => `missing ${f}`), ...k.changed.map(f => `changed ${f}`), ...k.extra.map(f => `extra ${f}`)].slice(0, 8).join('; ')}`);
+    }
+    check('entry-exists', existsSync(join(dir, (manifest.world.entry ?? 'index.html').split(/[?#]/)[0])), manifest.world.entry ?? 'index.html');
+    notes.push('A world plays in gate-world.mjs (one room by key, handoffs, full, reload; HTTP and WebSocket) or gf-three verify; this gate checks its manifest, kit copy and entry only.');
+    return finish();
+  }
   const race = manifest.mode === 'live' ? manifest.live : manifest.race;
   if (!draft && !devKit) {
     const k = await checkKitReleased(dir);
@@ -297,7 +311,7 @@ export async function gate(gameDir, { out = null, seconds = 75, draft = null, de
   return finish();
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const flagsWithValue = ['--out', '--seconds', '--draft', '--port', '--signal'];
   const opt = (k, d) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : d; };

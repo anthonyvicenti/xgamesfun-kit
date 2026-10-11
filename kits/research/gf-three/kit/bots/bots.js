@@ -166,11 +166,65 @@ export function createBots(ctx) {
 }
 
 /**
- * Default behaviour when the rules have no bot(): with a projectile mechanic, fight fairly through ctx.bots (a target
- * that can be hit, spread across bots, human reaction and aim); otherwise wander, and now and then jump.
+ * Melee steering (track M, gf-scenic wave 1): a bot with the melee mechanic walks into the portal when a level's portal
+ * is open; else goes for the nearest enemy (the waves mechanic's, or the boss), stops at its weapon's reach, faces it
+ * and swings (holding the button runs the combo), sometimes a heavy attack, and dashes away from an enemy winding up
+ * next to it as often as its skill allows (fair.botSkill); with nothing to fight it picks up loot nearby or opens a
+ * chest; in a versus game it fights players fairly through ctx.bots.attack. → true when it found something to do
+ */
+export function meleeBot(ctx, player) {
+  const M = id => { const m = ctx.mechanics?.get?.(id); return m && !m.standin ? m : null; };
+  const melee = M('melee'), levels = M('levels'), waves = M('waves'), boss = M('boss'), loot = M('loot');
+  if (!melee) return false;
+  const b = player.bot, p = player.position, rng = b.rng;
+  const act = k => melee.params?.[k] ?? { action: 'primary', heavyAction: 'secondary', dashAction: 'jump' }[k];
+  const traits = ctx.bots?.traits ?? { reaction: 0.4, aimError: 0.1, duty: 0.6 };
+  const dist = (x, z) => Math.hypot(x - p.x, z - p.z);
+  // the portal is open: everyone in
+  const ls = levels?.state?.();
+  if (ls && (ls.phase === 'open' || ls.phase === 'travel') && ls.portal) { b.seek({ x: ls.portal.x, z: ls.portal.z }, { stop: 0.3 }); return true; }
+  // the nearest enemy, or the boss
+  const W = melee.weaponOf?.(player), reach = (W?.combo?.[0]?.reach ?? 2) * 0.9;
+  let t = null, d = Infinity, danger = false;
+  for (const e of waves?.enemies?.() ?? []) {
+    const dd = dist(e.x, e.z);
+    if (dd < d) { d = dd; t = { x: e.x, z: e.z, r: 0.45 }; }
+    if (e.st === 1 && dd < 2.6) danger = true;            // winding up beside this bot
+  }
+  const bs = boss?.state?.();
+  if (bs?.active && !bs.dead) { const dd = dist(bs.x, bs.z) - 1; if (dd < d) { d = dd; t = { x: bs.x, z: bs.z, r: 1.1, boss: true }; } if (bs.attack && dd < 5) danger = true; }
+  if (t && d < 24) {
+    if (danger && rng() < (1 - traits.reaction) * 0.08) { b.flee(t); if (act('dashAction')) b.press(act('dashAction')); return true; }
+    b.seek(t, { stop: Math.max(0.6, reach * 0.65 + t.r) });
+    b.aimAt({ x: t.x, y: (p.y ?? 0) + 0.9, z: t.z });
+    if (d <= reach + t.r + 0.25 && rng() < traits.duty * Math.min(1, (ctx.time.dt || 0.016) * 9)) {
+      if (act('heavyAction') && rng() < 0.12) b.press(act('heavyAction')); else b.hold(act('action') || 'primary', 0.18);
+    }
+    return true;
+  }
+  // nothing to fight: loot nearby (walk over coins and potions; open a chest)
+  const drops = loot?.drops?.() ?? [];
+  let best = null, bd = 12;
+  for (const x of drops) { if (x.kind === 'open' || x.kind === 'weapon') continue; const dd = dist(x.x, x.z); if (dd < bd) { bd = dd; best = x; } }
+  if (best) { b.seek(best, { stop: best.kind === 'chest' ? 1.1 : 0.2 }); if (best.kind === 'chest' && bd < 1.6) b.press('interact'); return true; }
+  // a versus game: fight the players, fairly
+  const hits = melee.params?.hitPlayers;
+  if ((hits === true || (hits !== false && (ctx.config?.players?.mode ?? '') !== 'coop')) && ctx.bots) {
+    const tp = ctx.bots.target(player, { range: 12 });
+    if (tp) { ctx.bots.attack(player, tp, { stop: Math.max(0.8, reach * 0.65), action: act('action') || 'primary', hold: 0.18 }); return true; }
+  }
+  return false;
+}
+
+/**
+ * Default behaviour when the rules have no bot(): with the melee mechanic, meleeBot; with a projectile mechanic, fight
+ * fairly through ctx.bots (a target that can be hit, spread across bots, human reaction and aim); otherwise wander,
+ * and now and then jump.
  */
 export function defaultBot(ctx, player) {
   if (player.alive === false) { player.bot.stop(); return; }
+  const mel = ctx.mechanics?.get?.('melee');
+  if (mel && !mel.standin && meleeBot(ctx, player)) return;
   const prj = ctx.mechanics?.get?.('projectile');
   if (prj && !prj.standin && ctx.bots) {
     const stream = prj.params?.kind === 'continuous';

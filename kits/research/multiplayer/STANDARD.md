@@ -14,12 +14,15 @@ v1 of this standard (2026-10-04) counted `race` mode as multiplayer. v2 does not
 
 One player hosts in their own browser and the others join with a code or a link (the host-join kit, `p2p/README.md`). There is no game server.
 
+**Friends play friends (creator, 2026-10-08: "We really shouldn't have bots in multiplayer modes").** A round with friends has no bots, and needs two players in the room before the host can start; bots are for playing alone. Every player picks a name before hosting or joining and can change it in the waiting room, the waiting room shows the room once with everyone in the colour their character wears, and the results show each player their own score (kit 1.4.0, `kits/gf-multiplayer/1.4.0/README.md`; gf-three verify check 25).
+
 ## The modes
 
 | Mode | Meets the bar | What friends get | What the game needs | Use it for |
 |---|---|---|---|---|
 | `live` | **yes** | **One game, and you see each other.** Every player is drawn as a character on everyone's screen. Whatever is shared (enemies, waves, pickups, the clock) exists once, in the host's copy. Everyone starts together and nobody can pause the world. | The game imports the kit's `gf/mp/net.js`: it sends its player's pose and draws the others, and the host's copy owns the shared world. `party/LIVE_HANDBOOK.md` is the how-to; `party/fixtures/arena` is a 130-line example. | **Every game with a player character or a shared space**, new or existing. |
 | `room` | **yes** | The same thing, with the rules in a separate module: versus, co-op, turns, hidden roles. | The game is written as a room: `room.js` (the rules, run on the host's machine), `bot.js`, and a client that talks only through `gf.room` (`ROOM_GUIDE.md`). Solo play is the same room with bots. | New games built multiplayer-first, and games with hidden information (each player is sent only their own view). |
+| `world` | **yes** | **One shared place that stays.** Opening the page puts you in *the* room for that world (no codes, no Start, no rounds); friends drop in and out, up to 8 at once, each drawn as a character; when the host leaves another copy takes over. What is built is saved on the play host (kit 1.5.0, 2026-10-09; `research/worlds/PLAN.md`). Since 1.5.1 the room runs every name through the play host's word filter, in every mode. | The friends page in world mode: the world card (a name, Enter), one room per `world:<slug>` key in signaling, the game frame loaded once. The game is a gf-three world (CONTRACT §9: `round.mode` world, a voxel world, the build mechanic). Gate: `party/gate-world.mjs`; gf-three verify's world checks 5, 25, 27. | Sandboxes and hangouts: a place people build or meet, not a match. |
 | `race` | **no** | Separate copies of the game on the same seed, and a rail showing each player's number. | Nothing in the game's code: a manifest that says which number ranks a run, and the kit folder `gf/mp/`. | A stopgap only. 56 showcase games have it (2026-10-05) and each needs the `live` conversion; its `upgrade` line says what that is. |
 | `solo` | n/a | Nothing. | A `reason`: one full sentence on why playing with friends makes no sense for this game. | A story for one reader, a private toy with nothing to share. |
 
@@ -74,13 +77,21 @@ It sits at the root of the folder the game is served from, beside `assets.json` 
     "metric": "time", "direction": "lower", "unit": "s",
     "maxSeconds": 600,
     "sees": "Each player sees the others as a survivor in their own colour, carrying a shotgun, with their name above.",
-    "shares": "The zombies, the waves, the dusk and the clock"       // what exists once, in the host's copy
+    "shares": "The zombies, the waves, the dusk and the clock",      // what exists once, in the host's copy
+    "backdrop": "gf-backdrop=1",    // optional (kit 1.4.0): the game's page with this query stands behind the waiting room
+    "hud": "game"                   // optional (kit 1.4.0): the game draws everyone's scores and the room (net.room); no rail
   },
   "check": { "near": 2.5, "seconds": 90 }   // optional, the gate only: how far a drawn friend may be from where they really are
 }
 
 // mode "solo"
 { "schemaVersion": 2, "mode": "solo", "reason": "A branching story for one reader: there is no result to compare and no moment two players would share." }
+
+// mode "world" (gf-multiplayer 1.5.0)
+{ "schemaVersion": 2, "mode": "world", "title": "Blockhaven", "players": { "min": 1, "max": 8 },
+  "world": { "entry": "index.html", "query": "", "key": "auto",      // auto: world:<slug> under /p/<slug>/, else a local key
+    "tagline": "A block world everyone shares.", "hud": "game",       // hud game: the game shows the room in its own menu
+    "sees": "…", "shares": "…" } }
 
 // mode "room"
 { "schemaVersion": 2, "mode": "room", "players": { "min": 2, "max": 4 },
@@ -139,7 +150,7 @@ A `solo` game passes on a real reason. A `room` game is checked for its files; i
 - **Not deployed yet.** HTTP signaling for Studio's play origin is built (2026-10-07): `POST /signal/v1` with a long-poll, backed by Postgres (`creator-studio/lib/signal-http.mjs`, migration `0012_signal.sql`). Kit gf-multiplayer 1.3.0 uses it on any host that isn't localhost and keeps the WebSocket on this machine (`p2p/README.md`, "Signaling"). It is verified on a local Studio: two Chrome contexts host and join through `/signal/v1` and play a round (`p2p/evidence/http-signaling-2026-10-07/`). Still missing:
   - the deploy;
   - a "Play with friends" link friends can open;
-  - a TURN relay: without one, roughly 10–20% of network pairs can't connect;
+  - a TURN relay: added 2026-10-08 (Cloudflare Realtime TURN, short-lived credentials from `/signal/v1/ice`; `p2p/README.md`, evidence `research/foundations/evidence/multiplayer-turn-relay-2026-10-08.json`);
   - games on kits before 1.3.0 (every game adopted before 2026-10-07) only know the WebSocket, so they need re-adopting to work off this machine.
 - **The host is trusted** and results are each player's own claim (`p2p/README.md`, "Honesty"). Friends only.
 - **`race` does not meet the bar** (the creator, 2026-10-05). It stays in the 56 games that have it until each is converted; nothing may describe those games as multiplayer without saying so.

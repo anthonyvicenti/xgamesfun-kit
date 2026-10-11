@@ -1,0 +1,2887 @@
+{
+ "schema": "gf-three-props/1",
+ "engine": "scenic",
+ "about": "Scenic props (research/gf-three/library/props.json shape): metres, Y up; collider shapes in metres in the prop's own frame (offset = centre). Set pieces sit with their base at y=0, centred on x/z; a prop with `parts` keeps that node (its hinge, axis and opening angle in degrees). Weapons (origin \"grip\") keep KayKit's grip point as their origin, and `grip` is their place on the kit's hand socket (position in metres, quaternion; character.js sockets: +Z along the hand, +Y up at the standard T-pose). Written by research/gf-scenic/tools/art-kaykit.mjs from sources.json.",
+ "props": [
+  {
+   "id": "kaykit-sword",
+   "file": "props/kaykit-sword.glb",
+   "describe": "a one-handed steel sword",
+   "tags": [
+    "weapon",
+    "sword",
+    "melee",
+    "one-handed"
+   ],
+   "kind": "sword",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.378,
+    1.331,
+    0.098
+   ],
+   "min": [
+    -0.189,
+    -0.274,
+    -0.049
+   ],
+   "tris": 300,
+   "bytes": 45588,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     0.0195,
+     -0.0431,
+     0.0785
+    ],
+    "quaternion": [
+     0.5089,
+     0.4909,
+     -0.4909,
+     0.5089
+    ],
+    "from": "Knight 1H_Sword (handslot.r)"
+   },
+   "real": [
+    0.7,
+    1.1
+   ]
+  },
+  {
+   "id": "kaykit-greatsword",
+   "file": "props/kaykit-greatsword.glb",
+   "describe": "a two-handed greatsword",
+   "tags": [
+    "weapon",
+    "sword",
+    "greatsword",
+    "melee",
+    "two-handed",
+    "heavy"
+   ],
+   "kind": "sword",
+   "hands": 2,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.629,
+    1.774,
+    0.186
+   ],
+   "min": [
+    -0.315,
+    -0.301,
+    -0.093
+   ],
+   "tris": 412,
+   "bytes": 48024,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     0.0195,
+     -0.0431,
+     0.0785
+    ],
+    "quaternion": [
+     0.5089,
+     0.4909,
+     -0.4909,
+     0.5089
+    ],
+    "from": "Knight 2H_Sword (handslot.r)"
+   },
+   "real": [
+    1.1,
+    1.7
+   ]
+  },
+  {
+   "id": "kaykit-axe",
+   "file": "props/kaykit-axe.glb",
+   "describe": "a one-handed axe",
+   "tags": [
+    "weapon",
+    "axe",
+    "melee",
+    "one-handed"
+   ],
+   "kind": "axe",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.536,
+    0.933,
+    0.139
+   ],
+   "min": [
+    -0.442,
+    -0.205,
+    -0.069
+   ],
+   "tris": 274,
+   "bytes": 49680,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     0.0195,
+     -0.0431,
+     0.0785
+    ],
+    "quaternion": [
+     0.5089,
+     0.4909,
+     -0.4909,
+     0.5089
+    ],
+    "from": "Barbarian 1H_Axe (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-greataxe",
+   "file": "props/kaykit-greataxe.glb",
+   "describe": "a big two-handed battle axe",
+   "tags": [
+    "weapon",
+    "axe",
+    "melee",
+    "two-handed",
+    "heavy"
+   ],
+   "kind": "axe",
+   "hands": 2,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.93,
+    1.293,
+    0.196
+   ],
+   "min": [
+    -0.465,
+    -0.325,
+    -0.098
+   ],
+   "tris": 508,
+   "bytes": 53596,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     0.0195,
+     -0.0431,
+     0.0785
+    ],
+    "quaternion": [
+     0.5089,
+     0.4909,
+     -0.4909,
+     0.5089
+    ],
+    "from": "Barbarian 2H_Axe (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-dagger",
+   "file": "props/kaykit-dagger.glb",
+   "describe": "a short dagger",
+   "tags": [
+    "weapon",
+    "dagger",
+    "knife",
+    "melee",
+    "one-handed"
+   ],
+   "kind": "dagger",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.194,
+    0.904,
+    0.114
+   ],
+   "min": [
+    -0.09,
+    -0.169,
+    -0.057
+   ],
+   "tris": 172,
+   "bytes": 53736,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     -0.0055,
+     -0.0431,
+     0.0776
+    ],
+    "quaternion": [
+     0.5089,
+     0.4909,
+     -0.4909,
+     0.5089
+    ],
+    "from": "Rogue Knife (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-staff",
+   "file": "props/kaykit-staff.glb",
+   "describe": "a mage's tall wooden staff with a gem",
+   "tags": [
+    "weapon",
+    "staff",
+    "magic",
+    "caster"
+   ],
+   "kind": "staff",
+   "hands": 2,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.432,
+    1.616,
+    0.219
+   ],
+   "min": [
+    -0.184,
+    -0.675,
+    -0.11
+   ],
+   "tris": 440,
+   "bytes": 59448,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     -0.0055,
+     -0.0431,
+     0.0776
+    ],
+    "quaternion": [
+     0.5089,
+     0.4909,
+     -0.4909,
+     0.5089
+    ],
+    "from": "Mage 2H_Staff (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-wand",
+   "file": "props/kaykit-wand.glb",
+   "describe": "a short magic wand",
+   "tags": [
+    "weapon",
+    "wand",
+    "magic",
+    "caster"
+   ],
+   "kind": "wand",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.12,
+    0.725,
+    0.12
+   ],
+   "min": [
+    -0.06,
+    -0.199,
+    -0.06
+   ],
+   "tris": 150,
+   "bytes": 54796,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     -0.0055,
+     -0.0431,
+     0.0776
+    ],
+    "quaternion": [
+     0.5089,
+     0.4909,
+     -0.4909,
+     0.5089
+    ],
+    "from": "Mage 1H_Wand (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-crossbow",
+   "file": "props/kaykit-crossbow.glb",
+   "describe": "a small one-handed crossbow",
+   "tags": [
+    "weapon",
+    "crossbow",
+    "ranged",
+    "one-handed"
+   ],
+   "kind": "crossbow",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.684,
+    0.304,
+    0.916
+   ],
+   "min": [
+    -0.341,
+    -0.128,
+    -0.208
+   ],
+   "tris": 584,
+   "bytes": 60668,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     -0.0104,
+     -0.0431,
+     -0.0011
+    ],
+    "quaternion": [
+     0.0128,
+     -0.0128,
+     -0.707,
+     0.707
+    ],
+    "from": "Rogue 1H_Crossbow (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-heavy-crossbow",
+   "file": "props/kaykit-heavy-crossbow.glb",
+   "describe": "a large two-handed crossbow",
+   "tags": [
+    "weapon",
+    "crossbow",
+    "ranged",
+    "two-handed"
+   ],
+   "kind": "crossbow",
+   "hands": 2,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.917,
+    0.359,
+    1.081
+   ],
+   "min": [
+    -0.459,
+    -0.128,
+    -0.208
+   ],
+   "tris": 792,
+   "bytes": 64384,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     -0.0104,
+     -0.0431,
+     -0.0011
+    ],
+    "quaternion": [
+     0.0128,
+     -0.0128,
+     -0.707,
+     0.707
+    ],
+    "from": "Rogue 2H_Crossbow (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-shield-round",
+   "file": "props/kaykit-shield-round.glb",
+   "describe": "a round wooden shield with a steel rim",
+   "tags": [
+    "shield",
+    "offhand",
+    "block"
+   ],
+   "kind": "shield",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.662,
+    0.662,
+    0.249
+   ],
+   "min": [
+    -0.331,
+    -0.331,
+    -0.109
+   ],
+   "tris": 284,
+   "bytes": 45392,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_l",
+    "position": [
+     -0.0073,
+     0.0738,
+     0.078
+    ],
+    "quaternion": [
+     -0.4909,
+     0.5089,
+     0.5089,
+     0.4909
+    ],
+    "from": "Knight Round_Shield (handslot.l)"
+   }
+  },
+  {
+   "id": "kaykit-shield-square",
+   "file": "props/kaykit-shield-square.glb",
+   "describe": "a tall rectangular knight's shield",
+   "tags": [
+    "shield",
+    "offhand",
+    "block"
+   ],
+   "kind": "shield",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.662,
+    0.895,
+    0.226
+   ],
+   "min": [
+    -0.331,
+    -0.447,
+    -0.109
+   ],
+   "tris": 262,
+   "bytes": 44848,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_l",
+    "position": [
+     -0.0073,
+     0.0738,
+     0.078
+    ],
+    "quaternion": [
+     -0.4909,
+     0.5089,
+     0.5089,
+     0.4909
+    ],
+    "from": "Knight Rectangle_Shield (handslot.l)"
+   }
+  },
+  {
+   "id": "kaykit-shield-spikes",
+   "file": "props/kaykit-shield-spikes.glb",
+   "describe": "a round shield with spikes",
+   "tags": [
+    "shield",
+    "offhand",
+    "block",
+    "spiked"
+   ],
+   "kind": "shield",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.755,
+    0.778,
+    0.345
+   ],
+   "min": [
+    -0.378,
+    -0.417,
+    -0.109
+   ],
+   "tris": 420,
+   "bytes": 49120,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_l",
+    "position": [
+     -0.0073,
+     0.0738,
+     0.078
+    ],
+    "quaternion": [
+     -0.4909,
+     0.5089,
+     0.5089,
+     0.4909
+    ],
+    "from": "Knight Spike_Shield (handslot.l)"
+   }
+  },
+  {
+   "id": "kaykit-shield-badge",
+   "file": "props/kaykit-shield-badge.glb",
+   "describe": "a heater shield with a badge",
+   "tags": [
+    "shield",
+    "offhand",
+    "block",
+    "heater"
+   ],
+   "kind": "shield",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.662,
+    0.766,
+    0.184
+   ],
+   "min": [
+    -0.331,
+    -0.405,
+    -0.109
+   ],
+   "tris": 262,
+   "bytes": 44792,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_l",
+    "position": [
+     -0.0073,
+     0.0738,
+     0.078
+    ],
+    "quaternion": [
+     -0.4909,
+     0.5089,
+     0.5089,
+     0.4909
+    ],
+    "from": "Knight Badge_Shield (handslot.l)"
+   }
+  },
+  {
+   "id": "kaykit-spellbook",
+   "file": "props/kaykit-spellbook.glb",
+   "describe": "an open spellbook",
+   "tags": [
+    "spellbook",
+    "book",
+    "magic",
+    "offhand"
+   ],
+   "kind": "book",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.621,
+    0.427,
+    0.166
+   ],
+   "min": [
+    -0.311,
+    -0.213,
+    -0.066
+   ],
+   "tris": 292,
+   "bytes": 58024,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_l",
+    "position": [
+     -0.1035,
+     -0.0431,
+     0.0815
+    ],
+    "quaternion": [
+     0,
+     -0.6942,
+     0,
+     0.7197
+    ],
+    "from": "Mage Spellbook_open (handslot.l)"
+   }
+  },
+  {
+   "id": "kaykit-arrow",
+   "file": "props/kaykit-arrow.glb",
+   "describe": "a single arrow (a projectile model)",
+   "tags": [
+    "arrow",
+    "ammo",
+    "projectile",
+    "ranged"
+   ],
+   "kind": "ammo",
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.088,
+    0.561,
+    0.076
+   ],
+   "min": [
+    -0.044,
+    -0.287,
+    -0.025
+   ],
+   "tris": 52,
+   "bytes": 51732,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "kaykit-quiver",
+   "file": "props/kaykit-quiver.glb",
+   "describe": "a quiver of arrows (worn on the back socket)",
+   "tags": [
+    "quiver",
+    "arrows",
+    "back"
+   ],
+   "kind": "quiver",
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.229,
+    0.697,
+    0.146
+   ],
+   "min": [
+    -0.115,
+    -0.381,
+    -0.055
+   ],
+   "tris": 255,
+   "bytes": 56428,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "kaykit-skeleton-blade",
+   "file": "props/kaykit-skeleton-blade.glb",
+   "describe": "a skeleton's rusty notched blade",
+   "tags": [
+    "weapon",
+    "sword",
+    "blade",
+    "melee",
+    "one-handed",
+    "skeleton",
+    "rusty"
+   ],
+   "kind": "sword",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.429,
+    1.123,
+    0.167
+   ],
+   "min": [
+    -0.215,
+    -0.247,
+    -0.083
+   ],
+   "tris": 457,
+   "bytes": 60944,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     0.0195,
+     -0.0431,
+     0.0785
+    ],
+    "quaternion": [
+     0.5089,
+     0.4909,
+     -0.4909,
+     0.5089
+    ],
+    "from": "Knight 1H_Sword (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-skeleton-axe",
+   "file": "props/kaykit-skeleton-axe.glb",
+   "describe": "a skeleton's rusty axe",
+   "tags": [
+    "weapon",
+    "axe",
+    "melee",
+    "one-handed",
+    "skeleton",
+    "rusty"
+   ],
+   "kind": "axe",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.741,
+    0.939,
+    0.211
+   ],
+   "min": [
+    -0.371,
+    -0.188,
+    -0.106
+   ],
+   "tris": 534,
+   "bytes": 62580,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     0.0195,
+     -0.0431,
+     0.0785
+    ],
+    "quaternion": [
+     0.5089,
+     0.4909,
+     -0.4909,
+     0.5089
+    ],
+    "from": "Barbarian 1H_Axe (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-skeleton-staff",
+   "file": "props/kaykit-skeleton-staff.glb",
+   "describe": "a skeleton mage's bone staff with a skull",
+   "tags": [
+    "weapon",
+    "staff",
+    "magic",
+    "caster",
+    "skeleton"
+   ],
+   "kind": "staff",
+   "hands": 2,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.448,
+    1.576,
+    0.565
+   ],
+   "min": [
+    -0.343,
+    -0.635,
+    -0.276
+   ],
+   "tris": 1519,
+   "bytes": 81064,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     -0.0055,
+     -0.0431,
+     0.0776
+    ],
+    "quaternion": [
+     0.5089,
+     0.4909,
+     -0.4909,
+     0.5089
+    ],
+    "from": "Mage 2H_Staff (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-skeleton-crossbow",
+   "file": "props/kaykit-skeleton-crossbow.glb",
+   "describe": "a skeleton archer's crossbow",
+   "tags": [
+    "weapon",
+    "crossbow",
+    "ranged",
+    "skeleton"
+   ],
+   "kind": "crossbow",
+   "hands": 2,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.833,
+    0.381,
+    1.064
+   ],
+   "min": [
+    -0.417,
+    -0.128,
+    -0.208
+   ],
+   "tris": 584,
+   "bytes": 64672,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_r",
+    "position": [
+     -0.0104,
+     -0.0431,
+     -0.0011
+    ],
+    "quaternion": [
+     0.0128,
+     -0.0128,
+     -0.707,
+     0.707
+    ],
+    "from": "Rogue 2H_Crossbow (handslot.r)"
+   }
+  },
+  {
+   "id": "kaykit-skeleton-shield",
+   "file": "props/kaykit-skeleton-shield.glb",
+   "describe": "a small battered skeleton shield",
+   "tags": [
+    "shield",
+    "offhand",
+    "block",
+    "skeleton"
+   ],
+   "kind": "shield",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.624,
+    0.624,
+    0.117
+   ],
+   "min": [
+    -0.312,
+    -0.312,
+    -0.034
+   ],
+   "tris": 500,
+   "bytes": 61552,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_l",
+    "position": [
+     -0.0073,
+     0.0738,
+     0.078
+    ],
+    "quaternion": [
+     -0.4909,
+     0.5089,
+     0.5089,
+     0.4909
+    ],
+    "from": "Knight Round_Shield (handslot.l)"
+   }
+  },
+  {
+   "id": "kaykit-skeleton-shield-large",
+   "file": "props/kaykit-skeleton-shield-large.glb",
+   "describe": "a large battered skeleton shield",
+   "tags": [
+    "shield",
+    "offhand",
+    "block",
+    "skeleton"
+   ],
+   "kind": "shield",
+   "hands": 1,
+   "origin": "grip",
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.658,
+    0.851,
+    0.272
+   ],
+   "min": [
+    -0.327,
+    -0.426,
+    -0.127
+   ],
+   "tris": 626,
+   "bytes": 66804,
+   "licence": "CC0-1.0",
+   "grip": {
+    "socket": "hand_l",
+    "position": [
+     -0.0073,
+     0.0738,
+     0.078
+    ],
+    "quaternion": [
+     -0.4909,
+     0.5089,
+     0.5089,
+     0.4909
+    ],
+    "from": "Knight Rectangle_Shield (handslot.l)"
+   }
+  },
+  {
+   "id": "dungeon-wall",
+   "file": "props/dungeon-wall.glb",
+   "describe": "a stone dungeon wall section (one 3 m module)",
+   "tags": [
+    "dungeon",
+    "wall",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    0,
+    -0.375
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     3,
+     0.75
+    ],
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    3,
+    0.75
+   ],
+   "tris": 494,
+   "bytes": 63800,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-wall-half",
+   "file": "props/dungeon-wall-half.glb",
+   "describe": "a half-width stone wall section",
+   "tags": [
+    "dungeon",
+    "wall",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    0,
+    0,
+    -0.375
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.5,
+     3,
+     0.75
+    ],
+    "offset": [
+     0.75,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.5,
+    3,
+    0.75
+   ],
+   "tris": 272,
+   "bytes": 57488,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-wall-corner",
+   "file": "props/dungeon-wall-corner.glb",
+   "describe": "a stone wall corner",
+   "tags": [
+    "dungeon",
+    "wall",
+    "corner",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    0,
+    -0.375
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.875,
+     3,
+     1.875
+    ],
+    "offset": [
+     -0.562,
+     1.5,
+     0.563
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.875,
+    3,
+    1.875
+   ],
+   "tris": 443,
+   "bytes": 62084,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-wall-broken",
+   "file": "props/dungeon-wall-broken.glb",
+   "describe": "a broken, crumbling stone wall section",
+   "tags": [
+    "dungeon",
+    "wall",
+    "ruin",
+    "broken",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    0,
+    -0.375
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     3,
+     0.75
+    ],
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    3,
+    0.75
+   ],
+   "tris": 784,
+   "bytes": 69548,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-wall-cracked",
+   "file": "props/dungeon-wall-cracked.glb",
+   "describe": "a cracked stone wall section",
+   "tags": [
+    "dungeon",
+    "wall",
+    "ruin",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    0,
+    -0.472
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     3,
+     0.945
+    ],
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    3,
+    0.945
+   ],
+   "tris": 2010,
+   "bytes": 91756,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-wall-arched",
+   "file": "props/dungeon-wall-arched.glb",
+   "describe": "a stone wall with a blind arch",
+   "tags": [
+    "dungeon",
+    "wall",
+    "arch",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    0,
+    -0.375
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     3,
+     0.75
+    ],
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    3,
+    0.75
+   ],
+   "tris": 724,
+   "bytes": 70004,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-wall-window",
+   "file": "props/dungeon-wall-window.glb",
+   "describe": "a stone wall with an open window",
+   "tags": [
+    "dungeon",
+    "wall",
+    "window",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    0,
+    -0.375
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     3,
+     0.75
+    ],
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    3,
+    0.75
+   ],
+   "tris": 604,
+   "bytes": 64580,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-wall-gated",
+   "file": "props/dungeon-wall-gated.glb",
+   "describe": "a stone wall with a closed iron gate",
+   "tags": [
+    "dungeon",
+    "wall",
+    "gate",
+    "portcullis",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    0,
+    -0.375
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     3,
+     0.75
+    ],
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    3,
+    0.75
+   ],
+   "tris": 449,
+   "bytes": 59024,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-wall-pillar",
+   "file": "props/dungeon-wall-pillar.glb",
+   "describe": "a stone wall section with a pillar",
+   "tags": [
+    "dungeon",
+    "wall",
+    "pillar",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    0,
+    -0.563
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     3,
+     1.125
+    ],
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    3,
+    1.125
+   ],
+   "tris": 540,
+   "bytes": 63928,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-doorway",
+   "file": "props/dungeon-doorway.glb",
+   "describe": "a stone wall with a wooden door that swings open on its hinge",
+   "tags": [
+    "dungeon",
+    "wall",
+    "door",
+    "doorway",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    0,
+    -0.375
+   ],
+   "collider": {
+    "shape": "compound",
+    "parts": [
+     {
+      "shape": "box",
+      "size": [
+       0.75,
+       3,
+       0.75
+      ],
+      "offset": [
+       -1.125,
+       1.5,
+       0
+      ]
+     },
+     {
+      "shape": "box",
+      "size": [
+       0.75,
+       3,
+       0.75
+      ],
+      "offset": [
+       1.125,
+       1.5,
+       0
+      ]
+     },
+     {
+      "shape": "box",
+      "size": [
+       1.5,
+       0.937,
+       0.75
+      ],
+      "offset": [
+       0,
+       2.532,
+       0
+      ]
+     }
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    3,
+    0.75
+   ],
+   "tris": 1068,
+   "bytes": 71056,
+   "licence": "CC0-1.0",
+   "parts": {
+    "door": {
+     "node": "wall_doorway_door",
+     "hinge": [
+      -0.615,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "open": 100,
+     "size": [
+      1.5,
+      2.063,
+      0.58
+     ]
+    }
+   },
+   "door": {
+    "width": 1.5,
+    "height": 2.063
+   }
+  },
+  {
+   "id": "dungeon-floor",
+   "file": "props/dungeon-floor.glb",
+   "describe": "a large stone floor tile (3 x 3 m)",
+   "tags": [
+    "dungeon",
+    "floor",
+    "tile",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    -0.075,
+    -1.5
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     0.112,
+     3
+    ],
+    "offset": [
+     0,
+     -0.019,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    0.112,
+    3
+   ],
+   "tris": 188,
+   "bytes": 53404,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-floor-small",
+   "file": "props/dungeon-floor-small.glb",
+   "describe": "a small stone floor tile",
+   "tags": [
+    "dungeon",
+    "floor",
+    "tile",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -0.75,
+    -0.075,
+    -0.75
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.5,
+     0.112,
+     1.5
+    ],
+    "offset": [
+     0,
+     -0.019,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.5,
+    0.112,
+    1.5
+   ],
+   "tris": 66,
+   "bytes": 51112,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-floor-rocks",
+   "file": "props/dungeon-floor-rocks.glb",
+   "describe": "a large floor tile strewn with rocks",
+   "tags": [
+    "dungeon",
+    "floor",
+    "tile",
+    "rubble",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    -0.075,
+    -1.5
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     0.477,
+     3
+    ],
+    "offset": [
+     0,
+     0.164,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    0.477,
+    3
+   ],
+   "tris": 338,
+   "bytes": 57820,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-floor-dirt",
+   "file": "props/dungeon-floor-dirt.glb",
+   "describe": "a large packed-dirt floor tile",
+   "tags": [
+    "dungeon",
+    "floor",
+    "dirt",
+    "modular"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    -0.075,
+    -1.5
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     0.156,
+     3
+    ],
+    "offset": [
+     0,
+     0.003,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    0.156,
+    3
+   ],
+   "tris": 104,
+   "bytes": 52992,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-floor-wood",
+   "file": "props/dungeon-floor-wood.glb",
+   "describe": "a large wooden plank floor tile",
+   "tags": [
+    "dungeon",
+    "floor",
+    "wood",
+    "planks",
+    "modular"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    -0.075,
+    -1.5
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     0.112,
+     3
+    ],
+    "offset": [
+     0,
+     -0.019,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    0.112,
+    3
+   ],
+   "tris": 272,
+   "bytes": 55552,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-floor-grate",
+   "file": "props/dungeon-floor-grate.glb",
+   "describe": "a stone floor tile with an iron grate",
+   "tags": [
+    "dungeon",
+    "floor",
+    "grate",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    -0.75,
+    -1.5
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     0.787,
+     3
+    ],
+    "offset": [
+     0,
+     -0.356,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    0.787,
+    3
+   ],
+   "tris": 292,
+   "bytes": 56732,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-floor-spikes",
+   "file": "props/dungeon-floor-spikes.glb",
+   "describe": "a floor tile with a spike trap",
+   "tags": [
+    "dungeon",
+    "floor",
+    "trap",
+    "spikes",
+    "modular"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.5,
+    -0.075,
+    -1.5
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     1.575,
+     3
+    ],
+    "offset": [
+     0,
+     0.712,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    1.575,
+    3
+   ],
+   "tris": 638,
+   "bytes": 64584,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-stairs",
+   "file": "props/dungeon-stairs.glb",
+   "describe": "a flight of stone stairs",
+   "tags": [
+    "dungeon",
+    "stairs",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.875,
+    0,
+    0
+   ],
+   "collider": {
+    "shape": "ramp",
+    "size": [
+     3.75,
+     3.825,
+     3
+    ],
+    "offset": [
+     0,
+     1.912,
+     1.5
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3.75,
+    3.825,
+    3
+   ],
+   "tris": 358,
+   "bytes": 59784,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-stairs-wide",
+   "file": "props/dungeon-stairs-wide.glb",
+   "describe": "a wide flight of stone stairs",
+   "tags": [
+    "dungeon",
+    "stairs",
+    "modular",
+    "stone"
+   ],
+   "origin": "grid",
+   "min": [
+    -2.625,
+    0,
+    0
+   ],
+   "collider": {
+    "shape": "ramp",
+    "size": [
+     5.25,
+     3.825,
+     3
+    ],
+    "offset": [
+     0,
+     1.912,
+     1.5
+    ]
+   },
+   "scale": 1,
+   "size": [
+    5.25,
+    3.825,
+    3
+   ],
+   "tris": 358,
+   "bytes": 59680,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-stairs-wood",
+   "file": "props/dungeon-stairs-wood.glb",
+   "describe": "wooden stairs",
+   "tags": [
+    "dungeon",
+    "stairs",
+    "wood",
+    "modular"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.238,
+    0,
+    0
+   ],
+   "collider": {
+    "shape": "ramp",
+    "size": [
+     2.475,
+     3.038,
+     4.5
+    ],
+    "offset": [
+     0,
+     1.519,
+     2.25
+    ]
+   },
+   "scale": 1,
+   "size": [
+    2.475,
+    3.038,
+    4.5
+   ],
+   "tris": 296,
+   "bytes": 55060,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-pillar",
+   "file": "props/dungeon-pillar.glb",
+   "describe": "a square stone pillar",
+   "tags": [
+    "dungeon",
+    "pillar",
+    "column",
+    "stone",
+    "ruin"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.125,
+     3,
+     1.125
+    ],
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.125,
+    3,
+    1.125
+   ],
+   "tris": 136,
+   "bytes": 52604,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-pillar-decorated",
+   "file": "props/dungeon-pillar-decorated.glb",
+   "describe": "a carved stone pillar",
+   "tags": [
+    "dungeon",
+    "pillar",
+    "column",
+    "stone",
+    "ruin"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.674,
+     3,
+     1.283
+    ],
+    "offset": [
+     0,
+     1.5,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.674,
+    3,
+    1.283
+   ],
+   "tris": 761,
+   "bytes": 66940,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-column",
+   "file": "props/dungeon-column.glb",
+   "describe": "a round stone column",
+   "tags": [
+    "dungeon",
+    "column",
+    "stone",
+    "ruin"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.525,
+     1.05,
+     0.525
+    ],
+    "offset": [
+     0,
+     0.525,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.525,
+    1.05,
+    0.525
+   ],
+   "tris": 44,
+   "bytes": 51008,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-barrier",
+   "file": "props/dungeon-barrier.glb",
+   "describe": "a low wooden barrier",
+   "tags": [
+    "dungeon",
+    "barrier",
+    "fence",
+    "wood"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     0.825,
+     0.375
+    ],
+    "offset": [
+     0,
+     0.413,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    0.825,
+    0.375
+   ],
+   "tris": 90,
+   "bytes": 51856,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-rubble",
+   "file": "props/dungeon-rubble.glb",
+   "describe": "a pile of stone rubble",
+   "tags": [
+    "dungeon",
+    "rubble",
+    "rocks",
+    "ruin"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     6.097,
+     2.622,
+     2.387
+    ],
+    "offset": [
+     0,
+     1.311,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    6.097,
+    2.622,
+    2.387
+   ],
+   "tris": 788,
+   "bytes": 66920,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-rubble-small",
+   "file": "props/dungeon-rubble-small.glb",
+   "describe": "a small heap of rubble",
+   "tags": [
+    "dungeon",
+    "rubble",
+    "rocks",
+    "ruin"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     3,
+     2.625,
+     2.25
+    ],
+    "offset": [
+     0,
+     1.313,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    3,
+    2.625,
+    2.25
+   ],
+   "tris": 390,
+   "bytes": 58668,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-chest",
+   "file": "props/dungeon-chest.glb",
+   "describe": "a wooden treasure chest whose lid opens on its hinge",
+   "tags": [
+    "dungeon",
+    "chest",
+    "loot",
+    "treasure",
+    "container"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.275,
+     0.975,
+     1.084
+    ],
+    "offset": [
+     0,
+     0.488,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.275,
+    0.975,
+    1.084
+   ],
+   "tris": 728,
+   "bytes": 66508,
+   "licence": "CC0-1.0",
+   "parts": {
+    "lid": {
+     "node": "chest_lid",
+     "hinge": [
+      0,
+      0.375,
+      -0.441
+     ],
+     "axis": [
+      1,
+      0,
+      0
+     ],
+     "open": -110,
+     "size": [
+      1.275,
+      0.724,
+      1.084
+     ]
+    }
+   },
+   "real": [
+    0.5,
+    1
+   ]
+  },
+  {
+   "id": "dungeon-chest-gold",
+   "file": "props/dungeon-chest-gold.glb",
+   "describe": "a gold-trimmed treasure chest full of coins whose lid opens",
+   "tags": [
+    "dungeon",
+    "chest",
+    "loot",
+    "treasure",
+    "gold",
+    "rare",
+    "container"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.275,
+     0.975,
+     1.084
+    ],
+    "offset": [
+     0,
+     0.488,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.275,
+    0.975,
+    1.084
+   ],
+   "tris": 1568,
+   "bytes": 83404,
+   "licence": "CC0-1.0",
+   "parts": {
+    "lid": {
+     "node": "chest_gold_lid",
+     "hinge": [
+      0,
+      0.375,
+      -0.441
+     ],
+     "axis": [
+      1,
+      0,
+      0
+     ],
+     "open": -110,
+     "size": [
+      1.275,
+      0.724,
+      1.084
+     ]
+    }
+   },
+   "real": [
+    0.5,
+    1
+   ]
+  },
+  {
+   "id": "dungeon-trunk",
+   "file": "props/dungeon-trunk.glb",
+   "describe": "a large wooden storage trunk",
+   "tags": [
+    "dungeon",
+    "trunk",
+    "chest",
+    "container",
+    "wood"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.125,
+     0.75,
+     0.975
+    ],
+    "offset": [
+     0,
+     0.375,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.125,
+    0.75,
+    0.975
+   ],
+   "tris": 204,
+   "bytes": 54536,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-barrel",
+   "file": "props/dungeon-barrel.glb",
+   "describe": "a large wooden barrel",
+   "tags": [
+    "dungeon",
+    "barrel",
+    "wood",
+    "container",
+    "breakable"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.35,
+     1.5,
+     1.35
+    ],
+    "offset": [
+     0,
+     0.75,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.35,
+    1.5,
+    1.35
+   ],
+   "tris": 561,
+   "bytes": 59220,
+   "licence": "CC0-1.0",
+   "real": [
+    1,
+    1.6
+   ]
+  },
+  {
+   "id": "dungeon-barrel-small",
+   "file": "props/dungeon-barrel-small.glb",
+   "describe": "a small wooden barrel",
+   "tags": [
+    "dungeon",
+    "barrel",
+    "wood",
+    "container",
+    "breakable"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.751,
+     0.763,
+     0.751
+    ],
+    "offset": [
+     0,
+     0.382,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.751,
+    0.763,
+    0.751
+   ],
+   "tris": 207,
+   "bytes": 54772,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-barrels",
+   "file": "props/dungeon-barrels.glb",
+   "describe": "a stack of small barrels",
+   "tags": [
+    "dungeon",
+    "barrel",
+    "stack",
+    "wood"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.388,
+     1.328,
+     0.75
+    ],
+    "offset": [
+     0,
+     0.664,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.388,
+    1.328,
+    0.75
+   ],
+   "tris": 1149,
+   "bytes": 75816,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-keg",
+   "file": "props/dungeon-keg.glb",
+   "describe": "a keg on its side on a stand",
+   "tags": [
+    "dungeon",
+    "keg",
+    "barrel",
+    "wood"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.35,
+     1.538,
+     1.5
+    ],
+    "offset": [
+     0,
+     0.769,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.35,
+    1.538,
+    1.5
+   ],
+   "tris": 807,
+   "bytes": 64632,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-crate",
+   "file": "props/dungeon-crate.glb",
+   "describe": "a large wooden crate",
+   "tags": [
+    "dungeon",
+    "crate",
+    "box",
+    "wood",
+    "container",
+    "breakable"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.125,
+     1.125,
+     1.125
+    ],
+    "offset": [
+     0,
+     0.563,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.125,
+    1.125,
+    1.125
+   ],
+   "tris": 188,
+   "bytes": 54068,
+   "licence": "CC0-1.0",
+   "real": [
+    0.6,
+    1.3
+   ]
+  },
+  {
+   "id": "dungeon-crate-small",
+   "file": "props/dungeon-crate-small.glb",
+   "describe": "a small wooden crate",
+   "tags": [
+    "dungeon",
+    "crate",
+    "box",
+    "wood",
+    "container",
+    "breakable"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.75,
+     0.75,
+     0.75
+    ],
+    "offset": [
+     0,
+     0.375,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.75,
+    0.75,
+    0.75
+   ],
+   "tris": 188,
+   "bytes": 54040,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-crates",
+   "file": "props/dungeon-crates.glb",
+   "describe": "stacked wooden crates",
+   "tags": [
+    "dungeon",
+    "crate",
+    "stack",
+    "wood"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.567,
+     1.607,
+     1.687
+    ],
+    "offset": [
+     0,
+     0.803,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.567,
+    1.607,
+    1.687
+   ],
+   "tris": 1331,
+   "bytes": 80364,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-banner-red",
+   "file": "props/dungeon-banner-red.glb",
+   "describe": "a red patterned banner that hangs on a wall",
+   "tags": [
+    "dungeon",
+    "banner",
+    "red",
+    "wall-decor",
+    "cloth"
+   ],
+   "origin": "grid",
+   "min": [
+    -0.562,
+    0.399,
+    0.283
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    1.125,
+    2.397,
+    0.234
+   ],
+   "tris": 110,
+   "bytes": 52876,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-banner-blue",
+   "file": "props/dungeon-banner-blue.glb",
+   "describe": "a blue patterned banner that hangs on a wall",
+   "tags": [
+    "dungeon",
+    "banner",
+    "blue",
+    "wall-decor",
+    "cloth"
+   ],
+   "origin": "grid",
+   "min": [
+    -0.562,
+    0.399,
+    0.283
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    1.125,
+    2.397,
+    0.234
+   ],
+   "tris": 97,
+   "bytes": 52580,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-banner-green",
+   "file": "props/dungeon-banner-green.glb",
+   "describe": "a green patterned banner that hangs on a wall",
+   "tags": [
+    "dungeon",
+    "banner",
+    "green",
+    "wall-decor",
+    "cloth"
+   ],
+   "origin": "grid",
+   "min": [
+    -0.562,
+    0.399,
+    0.283
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    1.125,
+    2.397,
+    0.234
+   ],
+   "tris": 97,
+   "bytes": 52576,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-banner-shield",
+   "file": "props/dungeon-banner-shield.glb",
+   "describe": "a red banner with a shield crest",
+   "tags": [
+    "dungeon",
+    "banner",
+    "shield",
+    "red",
+    "wall-decor"
+   ],
+   "origin": "grid",
+   "min": [
+    -0.837,
+    0.399,
+    0.237
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    1.674,
+    2.397,
+    0.281
+   ],
+   "tris": 639,
+   "bytes": 64976,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-banner-triple",
+   "file": "props/dungeon-banner-triple.glb",
+   "describe": "three hanging yellow banners",
+   "tags": [
+    "dungeon",
+    "banner",
+    "yellow",
+    "wall-decor",
+    "cloth"
+   ],
+   "origin": "grid",
+   "min": [
+    -1.387,
+    0.399,
+    0.265
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    2.775,
+    2.397,
+    0.272
+   ],
+   "tris": 263,
+   "bytes": 56444,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-torch",
+   "file": "props/dungeon-torch.glb",
+   "describe": "a lit standing torch",
+   "tags": [
+    "dungeon",
+    "torch",
+    "light",
+    "fire"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.413,
+    0.844,
+    0.413
+   ],
+   "tris": 270,
+   "bytes": 54704,
+   "licence": "CC0-1.0",
+   "light": {
+    "at": [
+     0,
+     0.776,
+     0
+    ],
+    "radius": 4,
+    "color": "#ffb259"
+   },
+   "real": [
+    0.4,
+    2.2
+   ]
+  },
+  {
+   "id": "dungeon-torch-wall",
+   "file": "props/dungeon-torch-wall.glb",
+   "describe": "a torch in a wall mount",
+   "tags": [
+    "dungeon",
+    "torch",
+    "light",
+    "fire",
+    "wall-decor"
+   ],
+   "origin": "grid",
+   "min": [
+    -0.206,
+    -0.286,
+    0
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.413,
+    0.797,
+    0.462
+   ],
+   "tris": 278,
+   "bytes": 55816,
+   "licence": "CC0-1.0",
+   "light": {
+    "at": [
+     0,
+     0.448,
+     0.231
+    ],
+    "radius": 4,
+    "color": "#ffb259"
+   }
+  },
+  {
+   "id": "dungeon-candles",
+   "file": "props/dungeon-candles.glb",
+   "describe": "three lit candles",
+   "tags": [
+    "dungeon",
+    "candle",
+    "light"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.376,
+    0.655,
+    0.292
+   ],
+   "tris": 198,
+   "bytes": 53836,
+   "licence": "CC0-1.0",
+   "light": {
+    "at": [
+     0,
+     0.603,
+     0
+    ],
+    "radius": 2,
+    "color": "#ffcc80"
+   }
+  },
+  {
+   "id": "dungeon-table",
+   "file": "props/dungeon-table.glb",
+   "describe": "a long wooden table with plates and bottles",
+   "tags": [
+    "dungeon",
+    "table",
+    "furniture",
+    "wood"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.544,
+     1.414,
+     3
+    ],
+    "offset": [
+     0,
+     0.707,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.544,
+    1.414,
+    3
+   ],
+   "tris": 1961,
+   "bytes": 83384,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-chair",
+   "file": "props/dungeon-chair.glb",
+   "describe": "a wooden chair",
+   "tags": [
+    "dungeon",
+    "chair",
+    "furniture",
+    "wood"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.563,
+     0.92,
+     0.563
+    ],
+    "offset": [
+     0,
+     0.46,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    0.563,
+    0.92,
+    0.563
+   ],
+   "tris": 294,
+   "bytes": 56708,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-shelves",
+   "file": "props/dungeon-shelves.glb",
+   "describe": "wooden shelves",
+   "tags": [
+    "dungeon",
+    "shelves",
+    "furniture",
+    "wood"
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.5,
+     1.462,
+     0.375
+    ],
+    "offset": [
+     0,
+     0.731,
+     0
+    ]
+   },
+   "scale": 1,
+   "size": [
+    1.5,
+    1.462,
+    0.375
+   ],
+   "tris": 152,
+   "bytes": 53328,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-weapon-rack",
+   "file": "props/dungeon-weapon-rack.glb",
+   "describe": "a crossed sword and shield wall trophy",
+   "tags": [
+    "dungeon",
+    "sword",
+    "shield",
+    "wall-decor"
+   ],
+   "origin": "grid",
+   "min": [
+    -0.837,
+    -0.611,
+    -0.063
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    1.674,
+    1.251,
+    0.252
+   ],
+   "tris": 542,
+   "bytes": 62420,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-coin",
+   "file": "props/dungeon-coin.glb",
+   "describe": "a single gold coin",
+   "tags": [
+    "coin",
+    "gold",
+    "loot",
+    "pickup",
+    "currency"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.27,
+    0.094,
+    0.27
+   ],
+   "tris": 80,
+   "bytes": 51748,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-coins",
+   "file": "props/dungeon-coins.glb",
+   "describe": "a pile of gold coins",
+   "tags": [
+    "coin",
+    "gold",
+    "loot",
+    "pickup",
+    "treasure",
+    "pile"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    1.077,
+    0.868,
+    1.244
+   ],
+   "tris": 1776,
+   "bytes": 85368,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-key",
+   "file": "props/dungeon-key.glb",
+   "describe": "a golden key",
+   "tags": [
+    "key",
+    "loot",
+    "pickup",
+    "gold"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.672,
+    0.302,
+    0.106
+   ],
+   "tris": 160,
+   "bytes": 52416,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-bottle",
+   "file": "props/dungeon-bottle.glb",
+   "describe": "a labelled green bottle (a potion)",
+   "tags": [
+    "bottle",
+    "potion",
+    "loot",
+    "pickup",
+    "green"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.276,
+    0.664,
+    0.276
+   ],
+   "tris": 144,
+   "bytes": 53584,
+   "licence": "CC0-1.0"
+  },
+  {
+   "id": "dungeon-bottle-brown",
+   "file": "props/dungeon-bottle-brown.glb",
+   "describe": "a round brown bottle (a potion)",
+   "tags": [
+    "bottle",
+    "potion",
+    "loot",
+    "pickup",
+    "brown"
+   ],
+   "collider": "none",
+   "scale": 1,
+   "size": [
+    0.415,
+    0.664,
+    0.415
+   ],
+   "tris": 144,
+   "bytes": 53324,
+   "licence": "CC0-1.0"
+  }
+ ]
+}

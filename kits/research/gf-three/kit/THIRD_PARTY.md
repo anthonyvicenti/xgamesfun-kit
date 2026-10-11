@@ -18,6 +18,9 @@ each copy. A new dependency needs a permissive licence and a line here (research
 | gf-assets | 1.3.0 (`gf-assets.js` only) | `research/foundations/kits/gf-assets/1.3.0/source/` | `gf/gf-assets.js` | games.fun |
 | gf-audio | 1.5.0 (ZzFX inside: MIT, `LICENSE-zzfx`) | `research/foundations/kits/gf-audio/1.5.0/source/` | `audio/` | games.fun; ZzFX MIT |
 | gf-three (this kit) | 0.1.0-dev | `research/gf-three/kit/` | `gf/three/` (+ `gf/three/kit.js`, the hashes) | games.fun |
+| three.js WebGPU build (scenic games only, CONTRACT §8) | 0.186.0 (`build/three.webgpu.js`, `three.tsl.js`, the same `three.core.js`), byte-identical to the npm tarball | `research/foundations/trials/third-person-adventure/source/vendor/three/` | `vendor/three/build/` | MIT |
+| three.js TSL addons (scenic games only) | 0.186.0 `examples/jsm/tsl/` | `research/gf-scenic/tools/lib/vendor/three/` (copied from the npm 0.186.0 tarball) | `vendor/three/examples/jsm/tsl/` (only what the modules import) | MIT |
+| gf-scenic (the scenic engine, scenic games only) | 0.1.0-dev | `research/gf-scenic/kit/` (folio-2025 by Bruno Simon @ `41046b5`, MIT, ported; `LICENSE-folio-2025` beside it) | `gf/scenic/` (hashed in `gf/three/kit.js`) | games.fun; folio-2025 MIT |
 
 ## Code inside the kit
 
@@ -27,6 +30,8 @@ each copy. A new dependency needs a permissive licence and a line here (research
 | Third-person camera rig | `kit/controller/camera-rig.js` | games.fun's `trials/third-person-adventure/source/src/camera-rig.js` (authored there) | games.fun |
 | Friends drawn from poses, nameplates, `onScreen` | `kit/net/players.js` | patterns from games.fun's `trials/dusk-outbreak/source/src/friends.js` and `research/multiplayer/party/LIVE_HANDBOOK.md` | games.fun |
 | The Node import hook for declarations | `research/gf-three/tools/lib/kit-import.mjs` | Node's `module.registerHooks` | — |
+| Melee combat model (combo chains, swing arcs, queued presses and combo windows, the dash strike, hit-stop) | `kit/mechanics/melee/logic.js` (rewritten as data and a step function; nothing copied line for line) | [octobooth-4/buddy-rollback](https://github.com/octobooth-4/buddy-rollback) @ `db51978d61ed329fcdcfbfc8653b28cfdb007404` (`src/weapons.js`, `src/player.js`); `LICENSE-buddy-rollback` and `NOTICE-buddy-rollback` beside it. No Buddy or VS Code character, name or lore | MIT, Copyright (c) 2026 BUDDY: ROLLBACK contributors |
+| Attack tokens and telegraphed windups for enemies | `kit/mechanics/waves/` | games.fun's Knuckle Row, `trials/brawler/source/src/model.mjs` | games.fun |
 
 ## Stand-in art `create` copies into a game (until tracks L and C have a match)
 

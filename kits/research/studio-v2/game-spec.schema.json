@@ -8,6 +8,8 @@
   "additionalProperties": false,
   "properties": {
     "specVersion": { "const": 0 },
+    "engine": { "enum": ["party", "scenic", "forge"], "default": "party", "description": "Which engine builds it (research/gf-scenic/PLAN.md, research/rust-engine/PLAN.md): party (gf-three: silly party games, its own looks and worlds), scenic (gf-scenic: serious and scenic games, the scenic look and generated islands, ruins and dungeons) or forge (gf-forge: a Rust core on WebGPU for first-person and close-camera action with weight, live co-op for 2-4; camera first, world crypt-room or ruins-arena, look moonlit-ruins, ember-crypt or ash-storm; no mechanics: its play is the `forge` data tables and rules.js; never for a game meant to open inside a post on X until its WebGL2 build). Its world.template and look.preset must be that engine's." },
+    "forge": { "type": "object", "description": "engine forge only: the data tables (player, physics, deal, weapons, enemies, waves, cards), every value a slot. The schema, defaults and checker are research/gf-forge/kit/tables (node research/gf-forge/tools/tables.mjs --schema); create refuses a value the core can't do. Defaults are the measured feel targets (research/rust-engine/feel-targets.md)." },
     "title": { "type": "string", "minLength": 1, "maxLength": 60 },
     "hook": { "type": "string", "maxLength": 200, "description": "One line: why this is funny with friends." },
     "prompt": { "type": "string", "maxLength": 6000, "description": "The creator's original words, verbatim (untrusted)." },
@@ -18,22 +20,25 @@
       "bots": { "type": "boolean", "default": true, "description": "Fill empty seats with bots." },
       "teams": { "type": "integer", "minimum": 0, "maximum": 4, "default": 0, "description": "0 = free for all." },
       "mode": { "enum": ["versus", "coop", "teams"] } } },
-    "round": { "type": "object", "required": ["seconds"], "additionalProperties": false, "properties": {
+    "round": { "type": "object", "additionalProperties": false, "description": "seconds is required unless mode is world (create checks it).", "properties": {
+      "mode": { "enum": ["round", "world"], "default": "round", "description": "world: no rounds (CONTRACT §9; research/worlds/PLAN.md). Players drop in and out of one shared world saved on the play host: no clock, no score to win, no results. With world.template voxel and the build mechanic." },
       "seconds": { "type": "integer", "minimum": 30, "maximum": 900 },
       "winBy": { "type": "string", "maxLength": 200, "description": "Plain words: how a round is won." },
       "loseBy": { "type": "string", "maxLength": 200 },
       "replay": { "type": "boolean", "default": true } } },
-    "camera": { "enum": ["third", "first", "top"] },
+    "camera": { "enum": ["third", "first", "top", "follow", "orbit"], "description": "follow: a three-quarter diorama camera that follows the player; the mouse cursor aims (CONTRACT §8; the scenic engine's usual camera). orbit: third person with the mouse free; a drag turns the camera and a click acts where the cursor points (CONTRACT §9; building games, and posts on X where the pointer lock is refused)" },
     "controls": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 80 }, "description": "Action → plain description, e.g. {\"primary\": \"throw the ball\"}. Keys: primary, secondary, interact, jump." },
     "world": { "type": "object", "required": ["template"], "additionalProperties": false, "properties": {
-      "template": { "enum": ["backyard", "office", "plaza", "arena", "store"] },
+      "template": { "enum": ["backyard", "office", "plaza", "arena", "store", "island", "isles", "ruins", "dungeon", "voxel", "crypt-room", "ruins-arena"], "description": "voxel (party or scenic, CONTRACT §9): a generated block island players change, saved on the play host; with round.mode world and the build mechanic. party: backyard, office, plaza, arena, store. scenic: island (one island in the sea), isles (floating islands over a void, one per level), ruins (a stone arena among trees), dungeon (rooms joined by doors). forge: crypt-room (a torch-lit stone room of KayKit pieces, CONTRACT §8 forge), ruins-arena (a moonlit ruined courtyard with cover, fires and graves enemies rise from, generated from world.seed; gf-forge track A)." },
+      "seed": { "type": "integer", "minimum": 0, "maximum": 2147483647, "description": "forge ruins-arena: the seed it is generated from (the same seed, the same arena)" },
       "size": { "enum": ["small", "medium", "large"], "default": "small" },
       "props": { "type": "array", "maxItems": 40, "items": { "type": "object", "required": ["name", "describe"], "properties": {
         "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$" }, "describe": { "type": "string", "maxLength": 200 },
         "count": { "type": "integer", "minimum": 1, "maximum": 60 }, "from": { "enum": ["library", "generate", "reference"], "default": "library", "description": "generate: made from describe; reference: made from the references[] image named by reference. The worker makes at most 2 per build (tools/meshy-prop.mjs), the thing to defend or win first." }, "reference": { "type": "string", "description": "For reference: the references[] revisionId of the image." }, "role": { "type": "string", "maxLength": 80 } } } },
+      "voxel": { "type": "object", "description": "For template voxel: merged over the kit's default voxel world (kit/world/voxel/default.json): terrain (seed, radius, hills, trees, lake, plaza.signText), hotbar, paint. Block ids only ever grow at the end." },
       "notes": { "type": "string", "maxLength": 600 } } },
-    "mechanics": { "type": "array", "minItems": 1, "maxItems": 6, "items": { "type": "object", "required": ["id"], "properties": {
-      "id": { "enum": ["projectile", "paint", "pickup", "health", "carry", "waves", "station", "race", "tag", "teams"] },
+    "mechanics": { "type": "array", "minItems": 0, "maxItems": 6, "description": "At least one (create checks it), except on the forge engine, whose play is its data tables (`forge`) and rules.js: a forge spec lists none (CONTRACT §8 forge).", "items": { "type": "object", "required": ["id"], "properties": {
+      "id": { "enum": ["projectile", "paint", "pickup", "health", "carry", "waves", "station", "race", "tag", "teams", "melee", "levels", "boss", "loot", "build", "shove"], "description": "build and shove: worlds (CONTRACT §9): place, break and paint blocks, signs and boom blocks in a voxel world; a push that never knocks down. melee, levels, boss and loot: research/gf-scenic/PLAN.md §3 track M (either engine). catalog.json says which are ready." },
       "as": { "type": "string", "maxLength": 80, "description": "What it is in this game, in plain words, e.g. 'dodgeball throw'." },
       "params": { "type": "object", "description": "Validated against the mechanic's own params schema (kit/mechanics/<id>/index.js)." } } } },
     "rules": { "type": "object", "required": ["summary"], "additionalProperties": false, "properties": {
@@ -50,9 +55,9 @@
         "reference": { "type": "string", "description": "For reference: the references[] revisionId of the image." } } },
       "hat": { "type": "string", "maxLength": 80 } } } },
     "look": { "type": "object", "required": ["preset"], "additionalProperties": false, "properties": {
-      "preset": { "enum": ["jelly-pastel", "toon-lowpoly", "soft-stylised"] },
+      "preset": { "enum": ["jelly-pastel", "toon-lowpoly", "soft-stylised", "dusk-isle", "night-ruins", "golden-meadow", "storm-coast", "clear-day", "ember-crypt", "moonlit-ruins", "ash-storm"], "description": "party: jelly-pastel, toon-lowpoly, soft-stylised. scenic: dusk-isle, night-ruins, golden-meadow, storm-coast, clear-day. forge: moonlit-ruins (a cold moon, teal fog, warm fires: the ruins arena's), ember-crypt (red fog and fire light: the crypt room's), ash-storm (a dim sun through falling ash)." },
       "palette": { "type": "array", "maxItems": 8, "items": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } },
-      "time": { "enum": ["day", "golden", "night"], "default": "day" } } },
+      "time": { "enum": ["day", "golden", "dusk", "night"], "default": "day", "description": "dusk: scenic looks only" } } },
     "sounds": { "type": "array", "maxItems": 24, "items": { "type": "object", "required": ["id", "describe"], "properties": {
       "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,39}$" }, "describe": { "type": "string", "maxLength": 120 }, "preset": { "type": "string" } } } },
     "content": { "type": "object", "additionalProperties": false, "properties": {

@@ -1,8 +1,10 @@
-// gf-three net: a live round over gf/mp/net.js (gf-multiplayer 1.2.3), and the same code alone with bots.
+// gf-three net: a live round over gf/mp/net.js (gf-multiplayer 1.4.0), and the same code alone with bots.
+// Friends play friends: a live round has no bots, whatever botCount or ?bots says (creator 2026-10-08: "We really
+// shouldn't have bots in multiplayer modes"); bots are for playing alone.
 //
 // What each copy owns:
 //   every copy   its local player (movement, aim, actions; sends its pose 15 a second through net.pose)
-//   the host     the round (phase, clock, end, winners), scores, `alive`, the bots, and ctx.shared: all in one
+//   the host     the round (phase, clock, end, winners), scores, `alive`, the bots (alone), and ctx.shared: all in one
 //                net.world message (12 a second, under 3.5 KB), which every other copy shows instead of simulating
 // Events (ctx.net.send/on) are edges, never per frame; they travel as one kit message type 'g' {n, d}.
 // Loadouts (CONTRACT §6e, kit/net/looks.js): the pose carries the player's loadout key (`lk`); the loadout itself goes
@@ -10,27 +12,71 @@
 // The genex traps (PLAN §2.6): the frame never pauses (net.loop, also in a background tab); hit-pause or any card
 // never stops the net pump; reactions to remote things fire on edges (changes in the world), not per frame.
 //
-// Round flow: lobby → countdown → playing → results → (replay). Alone the kit draws the lobby and the countdown;
+// World mode (config/game.json round.mode "world", CONTRACT §9; research/worlds/PLAN.md): no rounds. The phase goes
+// lobby → playing and stays there: no clock, no results, no replay. With friends the party page is in world mode
+// (gf-multiplayer 1.5.0): the room is the world's, players drop in and out, and the host can change (a handoff), so
+// players are keyed by their tab's stable `cid` instead of the room's seat id (worldNet below translates both ways) and
+// ctx.host follows net.onHost. Alone, Play enters the world and Quit to menu leaves it as it is.
+//
+// Watch then play (gf-multiplayer 1.6.0, research/watch/PLAN.md, CONTRACT §9b): a viewer's copy is fed the streamer's
+// stream as if it were one more player who sends nothing (net.watching; a world's status 'watch'). It keeps its own
+// local player, hidden and still, draws everyone in the stream, and its camera follows the streamer (core/boot.js).
+// Each key frame carries what the messages alone don't give a viewer catching up (watchBlob below): everyone's looks,
+// each mechanic's watchKey() (build: the world's unsaved edits) and rules.watchKey(ctx); the viewer's copy hands them
+// to looks, each mechanic's watchStart(data) and rules.watchStart(ctx, data). Joining ends watching (watchEnd()).
+//
+// Round flow: lobby → countdown → playing → results → (replay, or back to the lobby: toLobby). Alone the kit draws the
+// home menu (kit/ui/menu.js) and the countdown;
 // in a live round the party page does (it counts everyone in and starts them together through net.onStart), and
 // Play again loads a fresh page, so the in-game replay is for playing alone.
-import { net } from '../../mp/net.js';
+import { net as mpNet } from '../../mp/net.js';
 import { createShared } from './shared.js';
-import { createPlayers } from './players.js';
+// the players module comes from the boot (kit/net/players.js for three.js engines, gf/forge/players.js for forge,
+// CONTRACT §8): the round, the net and the scores here are the same for every engine
 import { createLooks } from './looks.js';
 import { spawnOf } from '../core/util.js';
 
 const r2 = v => Math.round(v * 100) / 100;
 
-export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, botCount, onPhase = () => {} }) {
-  const live = net.active;
+/**
+ * The room's net with every player id turned into the player's `cid` (world mode: a handoff gives everyone a new seat
+ * id, the cid stays), so the kit's players, looks and events keep their ids across it. Live rounds use net as it is.
+ */
+export function worldNet(net) {
+  const cidOf = id => net.players.find(p => p.id === id)?.cid ?? id;
+  const netIdOf = cid => (cid === 'all' || cid === 'host' ? cid : net.players.find(p => (p.cid ?? p.id) === cid)?.id ?? cid);
+  const withCid = p => (p ? { ...p, id: p.cid ?? p.id, netId: p.id } : p);
+  return new Proxy(net, {
+    get(t, k) {
+      if (k === 'players') return t.players.map(withCid);
+      if (k === 'you') return withCid(t.you);
+      if (k === 'peers') return () => t.peers().map(withCid);
+      if (k === 'send') return (type, data, to = 'all') => t.send(type, data, netIdOf(to));
+      if (k === 'on') return (type, fn) => t.on(type, (d, from) => fn(d, cidOf(from)));
+      if (k === 'onPlayers') return fn => t.onPlayers(list => fn(list.map(withCid)));
+      const v = Reflect.get(t, k);
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+  });
+}
+
+// `engineWorld` (the forge engine, CONTRACT §8 forge "Live co-op"): on the host, a function called every frame that
+// returns the engine's own part of the world message ({f: the core's snapshot}) when one is due, else null; the world
+// then goes out only with it, so every snapshot the core takes is sent (its events are taken with it). Three.js
+// engines pass none and send the world every frame as before.
+export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, botCount, onPhase = () => {}, createPlayers, engineWorld = null }) {
   const cfg = ctx.config;
   const R = cfg.round ?? {};
+  const worldMode = R.mode === 'world';
+  const live = mpNet.active;
+  const net = live && worldMode ? worldNet(mpNet) : mpNet;
   const listeners = new Map();
   const round = { phase: 'lobby', number: 1, clock: 0, total: 0, countdown: 0, winners: null, reason: null, rows: null, finishedAt: 0, endedByNet: false };
   let hostTime = 0, lastWorldPhase = null, finishTimer = null;
 
   ctx.host = !live || net.host;
   const localId = live ? net.you.id : 'p1';
+  ctx.worldMode = worldMode;
   const shared = createShared({ isHost: () => ctx.host });
   ctx.shared = shared;
 
@@ -48,6 +94,11 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     send(name, data = {}, to = 'all') { if (live && typeof name === 'string') net.send('g', { n: name, d: data }, to); },
     on(name, fn) { if (typeof fn === 'function') (listeners.get(name) ?? listeners.set(name, []).get(name)).push(fn); },
     blend: net.blend,
+    /** The room (world mode: {key, code, host, max, players}), or null alone. */
+    get room() { return live ? net.room ?? null : null; },
+    /** World mode: 'menu' | 'connecting' | 'in' | 'handoff' | 'full' | 'offline'; 'alone' without friends. */
+    get status() { return live ? net.status ?? 'in' : 'alone'; },
+    worldMode,
   };
   net.on('g', (m, from) => { if (m && typeof m.n === 'string') dispatch(m.n, m.d, from); });
   // the kit's own routed calls: a knock or teleport for a player this copy owns
@@ -64,23 +115,66 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
   const looks = createLooks(ctx, { live, net, localId });
   ctx.looks = looks;
 
+  // ---- watch then play (gf-multiplayer 1.6.0) ----
+  const watchBlob = () => {
+    const mech = {};
+    for (const m of ctx.mechanicsList ?? []) {
+      if (typeof m.watchKey !== 'function') continue;
+      try { const v = m.watchKey(); if (v != null) mech[m.id] = v; } catch (e) { console.error(e); }
+    }
+    let r = null; try { r = rules.watchKey?.(ctx) ?? null; } catch (e) { console.error(e); }
+    return { looks: looks.watchKey(), mech, rules: r };
+  };
+  function watchTake(b) {
+    if (!b || typeof b !== 'object') return;
+    looks.watchTake(b.looks);
+    for (const m of ctx.mechanicsList ?? []) { try { m.watchStart?.(b.mech?.[m.id] ?? null); } catch (e) { console.error(e); } }
+    try { rules.watchStart?.(ctx, b.rules ?? null); } catch (e) { console.error(e); }
+  }
+  let wasWatching = false;
+  function watchEnded() {
+    for (const m of ctx.mechanicsList ?? []) { try { m.watchEnd?.(); } catch (e) { console.error(e); } }
+    try { rules.watchEnd?.(ctx); } catch (e) { console.error(e); }
+  }
+
   // ---- who plays ----
   // seat colours: character.tint.<role> (config/characters.json → palette), else the look's player palette
   const palette = ctx.assets.config('characters').palette ?? ctx.assets.config('look').palette?.players ?? ['#4f7cff', '#ff5ea8', '#3ddc84', '#ffd166'];
   const botNames = cfg.players?.botNames ?? ['Pip', 'Bo', 'Moss', 'Juno', 'Rex', 'Ivy', 'Tam'];
   const colorOf = seat => palette[seat % palette.length];
+  // a world: the room gives each player the colour that follows their tab (gf-multiplayer 1.5.0, from the palette
+  // described below), the one their dot shows on the world card and in the menu; it stays the same through a handoff
+  // (play-test 2026-10-09: a player changed colour on becoming the host, and dots and characters disagreed)
+  const colorFor = h => (worldMode && typeof h?.color === 'string' && /^#[0-9a-f]{6}$/i.test(h.color) ? h.color : colorOf(h?.seat ?? 0));
+  // the party page shows each player in the colour their character wears: the lobby, the rail, the results (kit 1.4.0)
+  net.describe?.({ colors: palette.slice(0, 8).map(String) });
   const max = Math.max(1, cfg.players?.max ?? 4);
   async function syncHumans(list) {
     for (const h of list) {
-      if (!players.get(h.id)) await players.add({ id: h.id, name: h.name, seat: h.seat, color: colorOf(h.seat), local: h.id === localId, owned: h.id === localId });
-      const p = players.get(h.id); if (p) { p.connected = h.connected !== false; p.name = h.name ?? p.name; }
+      // a live round's viewer (gf-multiplayer 1.6.1): its own player is a ghost, hidden and in no list (a world's viewer
+      // keeps a real one, hidden, because Join makes it theirs in place)
+      if (!players.get(h.id)) await players.add({ id: h.id, name: h.name, seat: h.seat, color: colorFor(h), local: h.id === localId, owned: h.id === localId, ghost: h.id === localId && !worldMode && !!net.watching });
+      const p = players.get(h.id); if (!p) continue;
+      p.connected = h.connected !== false;
+      // a world: the seat changes on entering and in a handoff; the colour is the room's (the tab's), so the character,
+      // its ring and its name match its dot on the world card and in the menu
+      if (worldMode && Number.isInteger(h.seat) && h.seat !== p.seat) p.seat = h.seat;
+      if (worldMode && colorFor(h) !== p.color) {
+        p.color = colorFor(h);
+        p.character?.setTint?.(p.color); p.character?.nameplate?.(p.name, p.color);
+        p.character?.object3d.getObjectByName('ring')?.material?.color?.set?.(p.color);
+      }
+      // a friend changed their name in the room (gf-multiplayer 1.4.0): the scoreboard reads p.name; the nameplate is redrawn
+      if (h.name && h.name !== p.name) { p.name = h.name; p.character?.nameplate?.(p.name, p.character.plate?.color ?? p.color); }
     }
-    for (const p of players.humans()) if (!list.some(h => h.id === p.id)) players.remove(p.id);
+    // the local player is never removed by a list (a world's list is empty before entering and changes in a handoff;
+    // re-creating the local player would leave ctx.me on an old body whose pose never moves)
+    for (const p of players.humans()) if (!p.local && !list.some(h => h.id === p.id)) players.remove(p.id);
   }
   async function syncBots() {
     if (!ctx.host) return;
     const humans = players.humans().length;
-    const want = Math.max(0, Math.min(botCount, max - humans));
+    const want = live || worldMode ? 0 : Math.max(0, Math.min(botCount, max - humans));
     const have = players.bots();
     for (let i = have.length; i < want; i++) {
       const seat = humans + i, id = `b${i + 1}`;
@@ -97,11 +191,37 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     ctx.me = players.get(localId);
   }
   /** After rules.setup: the round can start (a late or reloaded copy gets net.onStart at once, so not before). */
+  const hostFns = [];
+  /** World mode: fn(isHost) when this copy becomes or stops being the host (a handoff). */
+  function onHost(fn) { if (typeof fn === 'function') hostFns.push(fn); }
   function arm() {
     if (!live) return;
     looks.start();
+    net.watchKey?.(watchBlob);
+    net.onWatchKey?.(watchTake);
+    // a viewer: the streamer's room changed (gf-multiplayer 1.6.2): a room's own counts start again (build's edit order)
+    net.onWatchRoom?.(code => { for (const m of ctx.mechanicsList ?? []) { try { m.watchRoom?.(code); } catch (e) { console.error(e); } } });
+    wasWatching = !!net.watching;
     net.onPlayers(list => { syncHumans(list).then(syncBots).catch(e => console.error(e)); });
     net.onStart(() => { if (round.phase === 'lobby') beginPlaying(); });
+    if (worldMode) {
+      // the host can change in a world (gf-multiplayer 1.5.0): the new host takes the world over where it stands
+      net.onHost?.(isHost => {
+        const was = ctx.host; ctx.host = !!isHost;
+        if (was === ctx.host) return;
+        for (const fn of hostFns) { try { fn(ctx.host); } catch (e) { console.error(e); } }
+        for (const m of ctx.mechanicsList ?? []) { try { m.hostChanged?.(ctx.host); } catch (e) { console.error(e); } }
+        try { rules.hostChanged?.(ctx, ctx.host); } catch (e) { console.error(e); }
+      });
+      // leaving the world (the pause menu's Leave world, the party page's card): back to the lobby, the world untouched
+      net.onStatus?.(st => {
+        const w = !!net.watching;
+        if (wasWatching && !w) watchEnded();          // a viewer joined (or the stream page stopped watching)
+        wasWatching = w;
+        if (st === 'menu' && round.phase === 'playing') setPhase('lobby'); else if (st === 'in' && round.phase === 'lobby' && net.started) beginPlaying();
+      });
+      return;
+    }
     net.onEnd(() => { round.endedByNet = true; if (round.phase !== 'results') enterResults(null, 'ended'); });
   }
 
@@ -119,8 +239,26 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     setPhase(round.countdown > 0 ? 'countdown' : 'playing');
     if (round.countdown <= 0) beginPlaying();
   }
+  // a world: a player who enters stands on a spawn of their own (their seat's, else the one farthest from everyone they
+  // can see), never on top of someone (play-test 2026-10-09: players after the eighth spawned stacked on one spot).
+  // Friends' poses can arrive just after this copy is in, so the choice is made again 0.7 s later if it has not moved.
+  function enterSpawn(again = false) {
+    const me = ctx.me; if (!me?.owned || !me.controller) return;
+    if (again && me._spawnAt && Math.hypot(me.position.x - me._spawnAt.x, me.position.z - me._spawnAt.z) > 0.3) return;
+    const others = players.list().filter(q => q !== me && q.drawn).map(q => q.position);
+    const room = s => others.reduce((m, o) => Math.min(m, Math.hypot(o.x - s.x, o.z - s.z)), Infinity);
+    const n = Math.max(1, ctx.world.spawns?.length ?? 1);
+    const seat = live && Number.isInteger(net.you?.seat) ? net.you.seat : me.seat ?? 0;
+    let best = spawnOf(ctx.world, seat);
+    if (room(best) < 1.5) for (let i = 0; i < n; i++) { const s = spawnOf(ctx.world, i); if (room(s) > room(best)) best = s; }
+    if (again && me._spawnAt && Math.hypot(best.x - me._spawnAt.x, best.z - me._spawnAt.z) < 0.1) return;
+    me.controller.teleport(best, best.yaw);
+    me._spawnAt = { x: best.x, z: best.z };
+  }
   function beginPlaying() {
     round.clock = 0; round.winners = null; round.reason = null; round.rows = null;
+    // (alone, Quit to menu and Play again carries on where the player stood)
+    if (worldMode && (live || !ctx.me?._spawnAt)) { enterSpawn(); if (live) setTimeout(() => { if (round.phase === 'playing') enterSpawn(true); }, 700); }
     setPhase('playing');
     try { rules.roundStart?.(ctx); } catch (e) { console.error(e); }
   }
@@ -137,11 +275,16 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     // The result goes in the world first; the party's finish a moment later, so a friend sees the reason before "round over".
     if (live && !net.over) {
       clearTimeout(finishTimer);
-      finishTimer = setTimeout(() => { const me = ctx.me; net.finish({ won: round.winners.length ? round.winners.includes(me.id) : null, value: me.score }); }, 450);
+      // values: every player's own score from the host's world (a team round shows each player theirs, kit 1.4.0)
+      finishTimer = setTimeout(() => {
+        const me = ctx.me, values = {};
+        for (const p of players.humans()) values[p.id] = p.score;
+        net.finish({ won: round.winners.length ? round.winners.includes(me.id) : null, value: me.score, values });
+      }, 450);
     }
   }
   /** Host: end the round now ({winners, reason} as check() returns, or a reason string). */
-  function end(reason = 'ended', winners = null) { if (ctx.host && round.phase === 'playing') enterResults(winners, reason); }
+  function end(reason = 'ended', winners = null) { if (ctx.host && round.phase === 'playing' && !worldMode) enterResults(winners, reason); }
   /** Alone: play again in the same page. */
   function replay() {
     if (live || round.phase !== 'results') return false;
@@ -153,12 +296,27 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     return true;
   }
 
+  /** Alone: end the round where it is and go back to the home menu (CONTRACT §6g: Quit to menu, results → Menu). */
+  function toLobby() {
+    if (live || round.phase === 'lobby') return false;
+    // a world is left as it is: nobody is reset or moved, nothing is cleared
+    if (worldMode) { setPhase('lobby'); return true; }
+    round.number++;
+    round.winners = null; round.reason = null; round.rows = null; round.clock = 0; round.countdown = 0;
+    shared.reset();
+    for (const m of ctx.mechanicsList ?? []) { try { m.reset?.(); } catch (e) { console.error(e); } }
+    resetPlayers();
+    setPhase('lobby');
+    return true;
+  }
+
   let checkAcc = 0;
   /** Every frame, before the physics steps: the round clock and, on other copies, the host's world. */
   function tick(dt) {
     hostTime += dt;
     if (ctx.host) {
       if (round.phase === 'countdown') { round.countdown -= dt; if (round.countdown <= 0) beginPlaying(); }
+      else if (round.phase === 'playing' && worldMode) round.clock += dt;    // a world has no end
       else if (round.phase === 'playing') {
         round.clock += dt;
         if ((R.seconds ?? 120) - round.clock <= 0) enterResults(null, 'time');
@@ -178,7 +336,7 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
         round.number = k.n ?? round.number;
         hostTime = Math.max(hostTime, k.T ?? 0);
         syncRemoteBots(ks.b ?? [], dt);
-        if (k.ph !== lastWorldPhase) {
+        if (k.ph !== lastWorldPhase && !worldMode) {
           lastWorldPhase = k.ph;
           if (k.ph === 'playing' && round.phase !== 'playing' && round.phase !== 'results') beginPlaying();
           if (k.ph === 'results' && round.phase !== 'results') enterResults(k.w ?? null, k.why ?? 'time');
@@ -214,15 +372,20 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
   const pendingBots = new Set();
 
   /** Every frame, after everything moved: send this copy's pose and, on the host, the world. */
+  let reported = null;
   function send() {
     if (!live) return;
     const me = ctx.me;
     if (me?.controller) { const pose = me.controller.pose(); if (looks.key) pose.lk = looks.key; net.pose(pose); }   // lk: this player's loadout key (§6e)
+    // this player's live score for the party page (a round the time cap or a leaving host ends still has everyone's number)
+    if (me && round.phase === 'playing' && me.score !== reported && !worldMode) { reported = me.score; net.progress(null, me.score); }
     if (ctx.host) {
       const sc = {}, al = {};
       for (const p of players.list()) { sc[p.id] = p.score; al[p.id] = p.alive ? 1 : 0; }
       const b = players.bots().filter(p => p.controller).map(p => { const q = p.controller.pose(); return { id: p.id, n: p.name, s: p.seat, x: q.x, y: q.y, z: q.z, yaw: q.yaw, a: q.anim, ...(q.aim ? { aim: q.aim } : {}), ...(Number.isFinite(q.ad) ? { ad: q.ad } : {}), ...(q.extra ? { e: q.extra } : {}) }; });
-      net.world({ k: { ph: round.phase, n: round.number, t: r2(round.clock), T: r2(hostTime), sc, al, b, w: round.winners, why: round.reason }, s: shared.outgoing() });
+      const extra = engineWorld ? engineWorld() : null;
+      if (engineWorld && !extra) return;
+      net.world({ k: { ph: round.phase, n: round.number, t: r2(round.clock), T: r2(hostTime), sc, al, b, w: round.winners, why: round.reason }, s: shared.outgoing(), ...(extra ?? {}) });
     }
   }
 
@@ -234,7 +397,7 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     const me = ctx.me;
     const peers = players.humans().filter(p => !p.local).map(p => ({ id: p.id, name: p.name, x: p.drawn ? r2(p.position.x) : null, y: p.drawn ? r2(p.position.y) : null, z: p.drawn ? r2(p.position.z) : null, onScreen: players.visible(p, covered) }));
     return {
-      you: net.you.id, host: net.host, started: net.started,
+      you: net.you.id, host: net.host, started: net.started, watching: !!net.watching,
       me: me ? { x: r2(me.position.x), y: r2(me.position.y), z: r2(me.position.z) } : null,
       peers, over: net.over, clock: r2(hostTime), shared: digest(),
     };
@@ -246,5 +409,5 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     return `${round.phase}|${round.number}|${sc}${extra ? `|${extra}` : ''}`;
   }
 
-  return { live, round, start, arm, ready, tick, send, beginCountdown, end, replay, gateBlock, digest, get hostTime() { return hostTime; }, loop: fn => net.loop(fn), get over() { return net.over; } };
+  return { live, worldMode, net, round, get watching() { return live && !!net.watching; }, get watch() { return live ? net.watch ?? null : null; }, start, arm, ready, tick, send, beginCountdown, end, replay, toLobby, gateBlock, digest, onHost, get hostTime() { return hostTime; }, loop: fn => net.loop(fn), get over() { return net.over; } };
 }

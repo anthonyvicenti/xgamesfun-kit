@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // gf-three verify: is this game good? One command, one verdict (CONTRACT §5).
 //
-//   node research/gf-three/tools/verify.mjs <game> [--quick] [--out <dir>] [--json] [--check 10|13|14|15|16]
+//   node research/gf-three/tools/verify.mjs <game> [--quick] [--out <dir>] [--json] [--check 10|13|14|15|16|20|21|22|23|24|25] [--refs <folder>]
 //
 //   1 assets.json valid (research/asset-manifest/validate.mjs) and multiplayer.json valid
 //   2 kit copies unedited (gf/three, gf/mp, audio, gf/gf-assets.js) and vendor/ the pinned libraries
@@ -49,18 +49,44 @@
 //     doorways you can walk through, a ceiling) with a street or skyline outside rather than trees over the walls, the
 //     view past the walls or edge shows something, and enemies come in through real doors or gates (creator, "Hang Up
 //     On Them": "The open world is small ... we need to make the worlds actually complete and make sense")
+//  18 sounds play (tools/lib/sounds-check.mjs, no browser, runs in --quick): one sound list, every listed file there,
+//     every audio file played, every id the game's code plays listed (creator, Token Call Centre: "I asked audio to be
+//     added to the game but it wasn't added at all")
+//  19 bodies hold their shape (tools/lib/bodies-check.mjs → body-judge.mjs, no browser, runs in --quick): every
+//     character body, posed by the game's own retarget through every clip, keeps its face, body, arms, hands, legs and
+//     feet (creator, Token Call Centre: "the models look good, but the hand is crooked")
+//  20–22 the home menu, the HUD and the wallet in the menu (tools/lib/menu-check.mjs, CONTRACT §6g)
+//  23 looks like the references (tools/lib/likeness-check.mjs): when the locked spec lists style or character reference
+//     images and the job has their files (refs.json beside the game, or --refs <folder>), a vision judge (Claude Opus,
+//     like the model judge's look) compares the game's own screenshots (and the contact sheet's, when 9 ran) with each
+//     picture on camera angle, palette, light and glow, environment shapes, character proportions and style, and vibe;
+//     it fails below the threshold and names what to change; without references it passes as "no references" (creator,
+//     the roguelike miss: "The game also doesn't have the right vibe at all")
+//  24 plays inside a post (tools/lib/embed-check.mjs, CONTRACT §6d C5): framed 480×480 by a page that refuses the
+//     pointer lock (as a post on X does), the camera stays the game's own, the full-screen button works, and in full
+//     screen a drag turns the camera and W moves
+//  25 playing with friends (tools/lib/friends-check.mjs, CONTRACT §6h): through the kit's friends page, two players over
+//     real WebRTC: a name before hosting and joining (never blank, never "Player"), one waiting room (no second copy of
+//     the room), no start alone, a rename in the room reaches the other player and the game, each player's dot is the
+//     colour the game draws them in, no bots in the round, and after real play the results card (the only one) shows
+//     each player the score the game counted for them (creator 2026-10-08: "New users can't name before joining a room
+//     or change name in a room before the game. Final scores seem to always be the same regardless. We really
+//     shouldn't have bots in multiplayer modes")
+//
+// Engines (CONTRACT §8): a scenic game's pages run in WebGPU Chrome (its real renderer), a party game's in WebGL Chrome.
 //
 // --check 10, 13, 14, 15 or 16 runs that check alone (a quick repair loop); --check 17, --check 11 or --check 11,17 runs
 // the static checks alone (no browser, about a second). Evidence: <game>/evidence/verify-N/ (or --out):
 // verdict.json (with `timing`, seconds per step), screenshots, the gate's own record. Append-only. The two-player gate
 // and its loadout leg run in their own browser beside the solo session. Exit 0 when every check REQUIRED in
 // tools/lib/verdict.mjs passes (9 counts when run).
+import { isMain } from './lib/main.mjs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { join, relative, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { REPO, GF3, LIBRARY, STANDIN_ASSETS, KIT_VERSION } from './lib/paths.mjs';
+import { REPO, GF3, LIBRARY, STANDIN_ASSETS, KIT_VERSION, launchForGame, engineOfGame, relPosix } from './lib/paths.mjs';
 import { checkKitCopies } from './lib/kit-check.mjs';
 import { validateGame } from '../../asset-manifest/validate.mjs';
 import { readManifest, validateMultiplayer, startParty } from '../../multiplayer/party/lib.mjs';
@@ -77,11 +103,19 @@ import { gameFingerprint } from './lib/own-verify.mjs';
 import { passes } from './lib/verdict.mjs';
 import { checkLooks } from './lib/looks-check.mjs';
 import { worldCheck } from './lib/world-check.mjs';
+import { checkSounds } from './lib/sounds-check.mjs';
+import { checkBodies } from './lib/bodies-check.mjs';
+import { checkMenu, checkHud, checkWallet } from './lib/menu-check.mjs';
+import { checkEmbed } from './lib/embed-check.mjs';
+import { checkScreens } from './lib/screens-check.mjs';
+import { checkFriends } from './lib/friends-check.mjs';
+import { checkFriendsWatch } from './lib/friends-watch-check.mjs';
+import { checkLikeness, likenessTargets } from './lib/likeness-check.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
 
-export async function verify(gameDir, { quick = false, out = null, log = console.log, only = null } = {}) {
+export async function verify(gameDir, { quick = false, out = null, log = console.log, only = null, refs = null } = {}) {
   const dir = resolve(gameDir);
   const t0 = Date.now();
   const checks = [];
@@ -90,14 +124,26 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   let outDir = out ? resolve(out) : null;
   if (!outDir) { const root = join(dir, 'evidence'); await mkdir(root, { recursive: true }); const taken = new Set(await readdir(root)); let n = 1; while (taken.has(`verify-${n}`)) n++; outDir = join(root, `verify-${n}`); }
   await mkdir(outDir, { recursive: true });
-  const rec = { schema: 'gf-three-verify/1', game: relative(REPO, dir), kit: KIT_VERSION, quick, ...(only ? { only } : {}), started: new Date().toISOString(), checks, notes: [], shots: [], timing: {} };
+  const rec = { schema: 'gf-three-verify/1', game: basename(dir), kit: KIT_VERSION, quick, ...(only ? { only } : {}), started: new Date().toISOString(), checks, notes: [], shots: [], timing: {} };
   const lap = (name, since) => { rec.timing[name] = Math.round((Date.now() - since) / 100) / 10; };   // seconds per step
   rec.gameFiles = await gameFingerprint(dir).catch(() => null);   // the files the agent tunes, as verified (own-verify.mjs)
+  // a world (CONTRACT §9: config/game.json round.mode "world") has its own flow: tools/verify-world.mjs
+  const roundMode = JSON.parse(await readFile(join(dir, 'config/game.json'), 'utf8').catch(() => '{}')).round?.mode;
+  if (roundMode === 'world') return (await import('./verify-world.mjs')).verifyWorld(dir, { rec, outDir, add, log, t0, lap, quick, only,
+    statics: { looks: () => looks(dir, rec, add), check18: () => check18(dir, { rec, add }), check19: () => check19(dir, { rec, add }) } });
+  // a forge game (CONTRACT §8 forge) has its own flow: tools/verify-forge.mjs (the checks that apply through the forge
+  // observation interface; the rest listed "not yet for forge", never passed)
+  if (await engineOfGame(dir) === 'forge') return (await import('./verify-forge.mjs')).verifyForge(dir, { rec, outDir, add, log, t0, lap, quick, only,
+    statics: { looks: () => looks(dir, rec, add), check18: () => check18(dir, { rec, add }), likeness: shots => likeness(dir, { rec, add, shots, refs }) } });
   if (only === 10) return fairOnly(dir, { rec, outDir, add, log, t0 });
   if (only === 13) return controlsOnly(dir, { rec, outDir, add, log, t0 });
   if (only === 14) return looksOnly(dir, { rec, outDir, add, t0 });
   if (only === 15) return aliveOnly(dir, { rec, outDir, add, log, t0, lap });
   if (only === 16) return hitsOnly(dir, { rec, outDir, add, log, t0 });
+  if ([20, 21, 22, 24, 31].includes(only)) return menuOnly(dir, only, { rec, outDir, add, log, t0 });
+  if (only === 23) return likenessOnly(dir, { rec, outDir, add, log, t0, refs });
+  if (only === 25) return friendsOnly(dir, { rec, outDir, add, log, t0 });
+  if (only === 34) return watchOnly(dir, { rec, outDir, add, log, t0 });
   if (only !== null && [].concat(only).every(n => STATIC_ALONE.includes(n))) return staticOnly(dir, [].concat(only), { rec, outDir, add, t0 });
 
   // ---- 1. manifests ----
@@ -126,6 +172,8 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   // ---- 14. looks honoured (static; creator on Hang Up On Them, 2026-10-07: "the final assets look nothing like the reference image") ----
   await looks(dir, rec, add);
   await check17(dir, { rec, add });
+  await check18(dir, { rec, add });
+  await check19(dir, { rec, add });
 
   // ---- 5. the two-player live gate and its loadout leg: their own server and browsers, beside the solo session ----
   // (they share nothing with it; run one after the other they were 80 of verify's 183 s with --quick, 2026-10-07)
@@ -137,7 +185,15 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     // the loadout leg (CONTRACT §6e, tools/lib/loadout-check.mjs): each screen draws the other player in their own look
     const lo = await checkLoadouts({ dir, outDir, shots: rec.shots, log: line => log(`  ${line}`) }).catch(e => ({ ok: false, detail: `loadouts: ${e.message}`, record: null, warnings: [] }));
     lap('loadouts', t2);
-    return { gateRec: g, lo };
+    // 25. playing with friends (tools/lib/friends-check.mjs): the friends page the way a new player meets it
+    const t3 = Date.now();
+    const fr = await checkFriends({ dir, outDir, shots: rec.shots, log: line => log(`  ${line}`) }).catch(e => ({ ok: false, detail: `friends: ${e.message}`, record: null, warnings: [] }));
+    lap('friends', t3);
+    // 34. watch then play (tools/lib/friends-watch-check.mjs, CONTRACT §9b; forge's own 32 and 33 came first): go live in a round, a viewer watches, then joins
+    const t4 = Date.now();
+    const wa = await checkFriendsWatch({ dir, outDir, shots: rec.shots, log: line => log(`  ${line}`) }).catch(e => ({ ok: false, detail: `watch: ${e.message}`, record: null, warnings: [] }));
+    lap('watch', t4);
+    return { gateRec: g, lo, fr, wa };
   })() : null;
 
   // ---- 3, 4, 6 (alone), 7, 8, 10, 12, 13, 15: one solo session with bots, real input ----
@@ -147,9 +203,13 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   // machine without one, e.g. a GPU-less worker container). SwiftShader made a paint-and-stream game run at about 4 fps,
   // so its round never reached results (Studio v2 T1 run 4). GF_VERIFY_SOFTWARE=1 forces software rendering.
   let tStep = Date.now();
-  const browser = await launchChrome(process.env.GF_VERIFY_SOFTWARE ? {} : { gpu: 'webgl' });
+  // a scenic game (CONTRACT §8) runs on WebGPU, its real renderer; a party game on WebGL (paths.mjs launchForGame)
+  const launched = await launchForGame(launchChrome, dir);
+  const browser = launched.browser;
   rec.chrome = browser.version();
-  rec.renderer = process.env.GF_VERIFY_SOFTWARE ? 'software' : 'gpu (webgl) when available';
+  rec.engine = launched.engine;
+  rec.renderer = launched.gpu === 'software' ? 'software' : `gpu (${launched.gpu}) when available`;
+  if (launched.note) rec.notes.push(launched.note);
   const shot = async (page, name) => { const f = `${String(rec.shots.length + 1).padStart(2, '0')}-${name}.jpg`; rec.shots.push(f); await page.screenshot({ path: join(outDir, f), type: 'jpeg', quality: 75 }).catch(() => {}); return f; };   // the name is taken before the await (shots run in parallel)
   // every page records the observation for check 15 (alive-check.mjs RECORDER) and hands it over when it closes
   const recordings = [];
@@ -270,7 +330,7 @@ export async function verify(gameDir, { quick = false, out = null, log = console
       const f1 = await shot(before.T.page, `swap-${slot.id}-before`), f2 = await shot(after.T.page, `swap-${slot.id}-after`);
       const ok = !!(before.st && after.st && after.st.onScreen && after.st.triangles !== before.st.triangles && diff > 0.01) && after.T.errors.length === 0;
       await before.T.ctx.close(); await after.T.ctx.close();
-      return { slot: slot.id, file: relative(REPO, file), ok, before: before.st, after: after.st, pixelsChanged: +diff.toFixed(3), errors: after.T.errors.slice(0, 3), shots: [f1, f2] };
+      return { slot: slot.id, file: relPosix(REPO, file), ok, before: before.st, after: after.st, pixelsChanged: +diff.toFixed(3), errors: after.T.errors.slice(0, 3), shots: [f1, f2] };
     });
     rec.swaps = swaps;
     add(8, 'swap proof', swaps.length === 2 && swaps.every(s => s.ok), swaps.map(s => s.ok ? `${s.slot}: ${s.before.triangles} → ${s.after.triangles} triangles, on screen, ${(s.pixelsChanged * 100).toFixed(1)}% of pixels changed` : `${s.slot}: ${s.why ?? `not shown (${JSON.stringify(s.after)}${s.errors?.length ? `; ${s.errors[0]}` : ''})`}`).join(' · '));
@@ -290,6 +350,28 @@ export async function verify(gameDir, { quick = false, out = null, log = console
       add(16, 'hits read', hc.ok, hc.detail);
     }
     lap('controls', tStep); tStep = Date.now();
+    // ---- 20, 21, 22: the home menu, the HUD and the wallet in the menu (CONTRACT §6g; creator 2026-10-08: "our games are
+    // all missing a home menu and a lot of user HUDs, especially for health ... wallet connect in the home menu") ----
+    {
+      const mc = await checkMenu({ newPage, url: srv.url, game, log, shot });
+      rec.menu = mc.record; if (mc.warnings.length) rec.notes.push(...mc.warnings);
+      add(20, 'the menu works', mc.ok, mc.detail);
+      const [hu, wa] = await Promise.all([checkHud({ newPage, url: srv.url, game, log, shot }), checkWallet({ newPage, url: srv.url, log, shot })]);
+      rec.hud = hu.record; if (hu.warnings.length) rec.notes.push(...hu.warnings);
+      add(21, 'the HUD shows your state', hu.ok, hu.detail);
+      rec.wallet = wa.record; if (wa.warnings.length) rec.notes.push(...wa.warnings);
+      add(22, 'the wallet in the menu', wa.ok, wa.detail);
+      // 24. plays inside a post (CONTRACT §6d; creator 2026-10-08, a post on X: "It doesn't stay in the iframe, you can
+      // easily move your mouse out")
+      const em = await checkEmbed({ newPage, url: srv.url, game, log, shot });
+      rec.embed = em.record; if (em.warnings.length) rec.notes.push(...em.warnings);
+      add(24, 'plays inside a post', em.ok, em.detail);
+      // 31. sharp on every screen (CONTRACT §6i; creator 2026-10-09: "Different screen sizes make the game look bad")
+      const sc = await checkScreens({ browser, url: srv.url, log });
+      rec.screens = sc.record; if (sc.warnings.length) rec.notes.push(...sc.warnings);
+      add(31, 'sharp on every screen', sc.ok, sc.detail);
+    }
+    lap('menu, HUD, wallet, post and screens', tStep); tStep = Date.now();
     // ---- 10. fair play: a scripted human vs 3 bots, for real (no gf-calm); beside it, check 15's undefended page ----
     const W = goalOf(game, world).waves;
     const [fp, und] = await Promise.all([
@@ -326,7 +408,7 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     solo = { ...solo, sr, replayed, audio };
   } catch (e) {
     rec.notes.push(`solo session stopped: ${e.message}`);
-    for (const [n, name] of [[3, 'boots to play with no console errors'], [4, 'slot coverage 100%'], [8, 'swap proof'], [10, 'fair play'], [12, 'something happens'], [13, 'controls work'], [15, 'the loop is alive'], [16, 'hits read']]) if (!checks.some(c => c.n === n)) add(n, name, false, `not reached: ${e.message}${solo?.errors?.length ? `; console: ${solo.errors.slice(0, 2).join(' | ')}` : ''}`);
+    for (const [n, name] of [[3, 'boots to play with no console errors'], [4, 'slot coverage 100%'], [8, 'swap proof'], [10, 'fair play'], [12, 'something happens'], [13, 'controls work'], [15, 'the loop is alive'], [16, 'hits read'], [20, 'the menu works'], [21, 'the HUD shows your state'], [22, 'the wallet in the menu']]) if (!checks.some(c => c.n === n)) add(n, name, false, `not reached: ${e.message}${solo?.errors?.length ? `; console: ${solo.errors.slice(0, 2).join(' | ')}` : ''}`);
   } finally {
     await browser.close().catch(() => {});
     await srv.close().catch(() => {});
@@ -342,7 +424,17 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     rec.loadouts = lo.record ? { ok: lo.ok, steps: lo.record.steps, shots: lo.record.shots } : { ok: false, detail: lo.detail };
     rec.notes.push(...lo.warnings);
     add(5, 'two-player live gate', gateRec.verdict === 'pass' && lo.ok, `${gateRec.verdict} ${gateRec.passed ?? 0}/${gateRec.total ?? 0}${gateRec.run ? ` (${gateRec.run})` : ''}${failed.length ? `; failed: ${failed.slice(0, 3).map(c => c.name).join(', ')}` : ''}; ${lo.detail}`);
-  } else add(5, 'two-player live gate', false, `multiplayer.json mode is ${mpm.manifest?.mode ?? 'missing'}, not live`);
+    const fr = d.fr;
+    rec.friends = fr.record; if (fr.warnings?.length) rec.notes.push(...fr.warnings);
+    add(25, 'playing with friends', fr.ok, fr.detail);
+    const wa = d.wa;
+    rec.watch = wa.record; if (wa.warnings?.length) rec.notes.push(...wa.warnings);
+    add(34, 'watch then play', wa.ok, wa.detail);
+  } else {
+    add(5, 'two-player live gate', false, `multiplayer.json mode is ${mpm.manifest?.mode ?? 'missing'}, not live`);
+    add(25, 'playing with friends', false, `multiplayer.json mode is ${mpm.manifest?.mode ?? 'missing'}, not live`);
+    add(34, 'watch then play', false, `multiplayer.json mode is ${mpm.manifest?.mode ?? 'missing'}, not live`);
+  }
 
   // ---- 6. a round to results and replay: alone and with two players ----
   const g = name => (gateRec?.checks ?? []).find(c => c.name === name)?.ok === true;
@@ -358,7 +450,13 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   // ---- 9. contact sheet and perf (track L's capture tool) ----
   const capture = join(GF3, 'lookdev/capture.mjs');
   if (quick) add(9, 'contact sheet and perf', null, '--quick');
-  else if (!existsSync(capture)) add(9, 'contact sheet and perf', null, 'research/gf-three/lookdev/capture.mjs does not exist yet (track L)');
+  else if (!existsSync(capture)) {
+    // a checkout without the lookdev folder (a packaged copy of the tools): say so in the check and in the notes, so a
+    // reader of the verdict never takes a full verify for one that measured the frame rate
+    const absent = 'not run: the contact-sheet tool (research/gf-three/lookdev/capture.mjs) is not in this checkout, so this full verify made no contact sheet and measured no frame rate';
+    add(9, 'contact sheet and perf', null, absent, { absent: true });
+    rec.notes.push(`check 9 ${absent}`);
+  }
   else {
     const t9 = Date.now();
     const r = await run(process.execPath, [capture, dir, '--out', join(outDir, 'sheet'), '--query', 'bots=3&seed=7&gf-autoplay=1&gf-ui=0'], 600000);
@@ -366,10 +464,20 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     lap('contact sheet', t9);
   }
 
+  // ---- 23. looks like the references: the player's own view (and the contact sheet's wide shots) beside the creator's
+  // pictures (the roguelike miss, 2026-10-08: a flat green yard shipped against three pictures of floating islands) ----
+  {
+    const t23 = Date.now();
+    const own = ['first-look', 'mid-round', 'playing'].map(n => rec.shots.find(f => f.endsWith(`-${n}.jpg`))).filter(Boolean).map(f => join(outDir, f));
+    const sheet = await sheetShots(join(outDir, 'sheet'));
+    await likeness(dir, { rec, add, shots: [...own.slice(0, 2), ...sheet, ...own.slice(2)], refs });
+    lap('likeness', t23);
+  }
+
   checks.sort((a, b) => a.n - b.n);
-  rec.pass = passes(checks);   // the pass rule (tools/lib/verdict.mjs): REQUIRED lists 1–8, 10–14 and 16; 9 counts only when it ran
+  rec.pass = passes(checks);   // the pass rule (tools/lib/verdict.mjs): REQUIRED lists 1–8 and 10–25; 9 counts only when it ran
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
-  rec.outDir = relative(REPO, outDir);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
   return rec;
 }
@@ -384,17 +492,43 @@ async function check17(dir, { rec, add }) {
   } catch (e) { add(17, 'the world is complete', false, `the world check could not run: ${e.message}`); }
 }
 
-/** --check 11 / 17 (or 11,17): the static checks alone, no browser. */
-const STATIC_ALONE = [11, 17];
+// ---- 18. sounds play (static; creator on Token Call Centre, 2026-10-07: "I asked audio to be added to the game but it
+// wasn't added at all"): every listed sound, every audio file and every id the game's code plays meet in one list ----
+async function check18(dir, { rec, add }) {
+  try {
+    const r = await checkSounds(dir);
+    add(18, 'sounds play', r.ok, r.detail);
+    if (r.notes.length) rec.notes.push(`sound notes: ${r.notes.slice(0, 4).join(' | ')}`);
+    rec.sounds = { problems: r.problems, stats: r.stats };
+  } catch (e) { add(18, 'sounds play', false, `the sound check could not run: ${e.message}`); }
+}
+
+// ---- 19. bodies hold their shape (static; creator on Token Call Centre, 2026-10-07: "the models look good, but the hand is
+// crooked"): the model judge's measuring tier on every character body, with the game's own retarget and clips ----
+async function check19(dir, { rec, add }) {
+  try {
+    const t = Date.now();
+    const r = await checkBodies(dir);
+    add(19, 'bodies hold their shape', r.ok, r.detail);
+    if (r.notes.length) rec.notes.push(`body notes: ${r.notes.slice(0, 4).join(' | ')}`);
+    rec.bodies = r.bodies.map(({ role, file, ok, parts, worst, warnings }) => ({ role, file, ok, parts, worst, warnings }));
+    rec.timing.bodies = Math.round((Date.now() - t) / 100) / 10;
+  } catch (e) { add(19, 'bodies hold their shape', false, `the model judge could not run: ${e.message}`); }
+}
+
+/** --check 11 / 17 / 18 / 19 (or 11,17,18,19): the static checks alone, no browser. */
+const STATIC_ALONE = [11, 17, 18, 19];
 async function staticOnly(dir, list, { rec, outDir, add, t0 }) {
   if (list.includes(11)) {
     try { const dr = lintDressing(await loadSubject(dir)); add(11, 'set dressing', dr.errors === 0, dr.errors === 0 ? `clean: 0 errors, ${dr.warnings} warnings` : `${dr.errors} errors: ${dressingLines(dr).filter(l => l.startsWith('ERROR')).slice(0, 6).join(' | ')}`); }
     catch (e) { add(11, 'set dressing', false, `the lint could not run: ${e.message}`); }
   }
   if (list.includes(17)) await check17(dir, { rec, add });
+  if (list.includes(18)) await check18(dir, { rec, add });
+  if (list.includes(19)) await check19(dir, { rec, add });
   rec.pass = rec.checks.every(c => c.ok);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
-  rec.outDir = relative(REPO, outDir);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
   return rec;
 }
@@ -402,7 +536,7 @@ async function staticOnly(dir, list, { rec, outDir, add, t0 }) {
 /** --check 10: fair play alone (its own browser and server), for a repair loop. */
 async function fairOnly(dir, { rec, outDir, add, log, t0 }) {
   const srv = await startParty({ dir, port: 0 });
-  const browser = await launchChrome(process.env.GF_VERIFY_SOFTWARE ? {} : { gpu: 'webgl' });
+  const { browser, gpu: usedGpu } = await launchForGame(launchChrome, dir); rec.renderer = usedGpu;
   rec.chrome = browser.version();
   const newPage = async (label, { overrides = null } = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
@@ -420,7 +554,59 @@ async function fairOnly(dir, { rec, outDir, add, log, t0 }) {
   finally { await browser.close().catch(() => {}); await srv.close().catch(() => {}); }
   rec.pass = rec.checks.every(c => c.ok);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
-  rec.outDir = relative(REPO, outDir);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
+  await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
+  return rec;
+}
+
+/** Check 23 (tools/lib/likeness-check.mjs): the game's shots against the creator's reference pictures. */
+async function likeness(dir, { rec, add, shots, refs }) {
+  try {
+    const r = await checkLikeness(dir, { shots, refs });
+    rec.likeness = r.record; rec.notes.push(...r.notes);
+    add(23, 'looks like the references', r.ok, r.detail);
+  } catch (e) { add(23, 'looks like the references', false, `the check could not run: ${e.message}`); }
+}
+/** The contact sheet's full-size wide and hero frames (lookdev/capture.mjs raw/), when check 9 ran. */
+async function sheetShots(sheetDir) {
+  let names = [];
+  try { names = await readdir(join(sheetDir, 'raw')); } catch { return []; }
+  const pick = shot => names.find(n => n.includes(`--${shot}--1920x1080`));
+  return ['wide', 'hero'].map(pick).filter(Boolean).map(n => join(sheetDir, 'raw', n));
+}
+
+/**
+ * --check 23: looks like the references alone. With no references it answers at once (no browser); else a solo page
+ * with 3 bots, Play, the first look, a walk, mid-round, then the judge (about a minute and one look).
+ */
+async function likenessOnly(dir, { rec, outDir, add, log, t0, refs }) {
+  const t = await likenessTargets(dir, { refs });
+  const shots = [];
+  if (t.targets.length) {
+    const srv = await startParty({ dir, port: 0 });
+    const { browser, gpu: usedGpu, note } = await launchForGame(launchChrome, dir);
+    rec.chrome = browser.version(); rec.renderer = usedGpu; if (note) rec.notes.push(note);
+    try {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+      const page = await ctx.newPage();
+      const snapOf = () => page.evaluate(() => window.__game?.snapshot?.() ?? null);
+      const shot = async name => { const f = `${String(rec.shots.length + 1).padStart(2, '0')}-${name}.jpg`; rec.shots.push(f); await page.screenshot({ path: join(outDir, f), type: 'jpeg', quality: 80 }).catch(() => {}); shots.push(join(outDir, f)); };
+      await page.goto(`${srv.url}?seed=7&bots=3&gf-calm=6`, { waitUntil: 'load' });
+      await until(async () => (await snapOf())?.phase === 'lobby', 90000, 'the lobby');
+      const play = await page.locator('#gf-play').boundingBox();
+      await page.mouse.click(play.x + play.width / 2, play.y + play.height / 2);
+      await until(async () => (await snapOf())?.phase === 'playing', 15000, 'the round to start');
+      await sleep(1500); await shot('first-look');
+      await page.keyboard.down('KeyW'); await sleep(1500); await page.keyboard.up('KeyW');
+      await sleep(3000); await shot('mid-round');
+      await ctx.close();
+    } catch (e) { rec.notes.push(`check 23's page stopped: ${e.message}`); log(`  likeness page: ${e.message}`); }
+    finally { await browser.close().catch(() => {}); await srv.close().catch(() => {}); }
+  }
+  await likeness(dir, { rec, add, shots, refs });
+  rec.pass = rec.checks.every(c => c.ok);
+  rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
   return rec;
 }
@@ -435,7 +621,7 @@ async function looksOnly(dir, { rec, outDir, add, t0 }) {
   await looks(dir, rec, add);
   rec.pass = rec.checks.every(c => c.ok);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
-  rec.outDir = relative(REPO, outDir);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
   return rec;
 }
@@ -453,7 +639,7 @@ function controlsShot(shot, outDir, rec) {
 /** --check 13: controls alone (its own browser and server), for a repair loop. */
 async function controlsOnly(dir, { rec, outDir, add, log, t0 }) {
   const srv = await startParty({ dir, port: 0 });
-  const browser = await launchChrome(process.env.GF_VERIFY_SOFTWARE ? {} : { gpu: 'webgl' });
+  const { browser, gpu: usedGpu } = await launchForGame(launchChrome, dir); rec.renderer = usedGpu;
   rec.chrome = browser.version();
   const newPage = async (label, { overrides = null } = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
@@ -473,7 +659,7 @@ async function controlsOnly(dir, { rec, outDir, add, log, t0 }) {
   finally { await browser.close().catch(() => {}); await srv.close().catch(() => {}); }
   rec.pass = rec.checks.every(c => c.ok);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
-  rec.outDir = relative(REPO, outDir);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
   return rec;
 }
@@ -484,7 +670,7 @@ async function controlsOnly(dir, { rec, outDir, add, log, t0 }) {
  */
 async function aliveOnly(dir, { rec, outDir, add, log, t0, lap }) {
   const srv = await startParty({ dir, port: 0 });
-  const browser = await launchChrome(process.env.GF_VERIFY_SOFTWARE ? {} : { gpu: 'webgl' });
+  const { browser, gpu: usedGpu } = await launchForGame(launchChrome, dir); rec.renderer = usedGpu;
   rec.chrome = browser.version();
   const recordings = [];
   const newPage = async (label, { overrides = null } = {}) => {
@@ -531,7 +717,7 @@ async function aliveOnly(dir, { rec, outDir, add, log, t0, lap }) {
   finally { await browser.close().catch(() => {}); await srv.close().catch(() => {}); }
   rec.pass = rec.checks.every(c => c.ok);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
-  rec.outDir = relative(REPO, outDir);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
   return rec;
 }
@@ -539,7 +725,7 @@ async function aliveOnly(dir, { rec, outDir, add, log, t0, lap }) {
 /** --check 16: hits read alone (its own browser and server), for a repair loop. */
 async function hitsOnly(dir, { rec, outDir, add, log, t0 }) {
   const srv = await startParty({ dir, port: 0 });
-  const browser = await launchChrome(process.env.GF_VERIFY_SOFTWARE ? {} : { gpu: 'webgl' });
+  const { browser, gpu: usedGpu } = await launchForGame(launchChrome, dir); rec.renderer = usedGpu;
   rec.chrome = browser.version();
   const newPage = async (label, { overrides = null } = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
@@ -559,7 +745,63 @@ async function hitsOnly(dir, { rec, outDir, add, log, t0 }) {
   finally { await browser.close().catch(() => {}); await srv.close().catch(() => {}); }
   rec.pass = rec.checks.every(c => c.ok);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
-  rec.outDir = relative(REPO, outDir);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
+  await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
+  return rec;
+}
+
+/** --check 20, 21, 22, 24 or 31: the menu, the HUD, the wallet, the post or the screens alone (its own browser and server), for a repair loop. */
+async function menuOnly(dir, n, { rec, outDir, add, log, t0 }) {
+  const srv = await startParty({ dir, port: 0 });
+  const { browser, gpu: usedGpu } = await launchForGame(launchChrome, dir); rec.renderer = usedGpu;
+  rec.chrome = browser.version();
+  const newPage = async label => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const page = await ctx.newPage(); const errors = [];
+    page.on('pageerror', e => errors.push(`${label}: ${e.message}`));
+    page.on('console', m => { if (m.type() === 'error' && !GPU_TROUBLE.test(m.text())) errors.push(`${label}: ${m.text().slice(0, 300)}`); });
+    return { ctx, page, errors };
+  };
+  const shot = async (page, name) => { const f = `${String(rec.shots.length + 1).padStart(2, '0')}-${name}.jpg`; rec.shots.push(f); await page.screenshot({ path: join(outDir, f), type: 'jpeg', quality: 75 }).catch(() => {}); return f; };
+  const name = { 20: 'the menu works', 21: 'the HUD shows your state', 22: 'the wallet in the menu', 24: 'plays inside a post', 31: 'sharp on every screen' }[n];
+  try {
+    const game = JSON.parse(await readFile(join(dir, 'config/game.json'), 'utf8'));
+    const r = n === 20 ? await checkMenu({ newPage, url: srv.url, game, log, shot }) : n === 21 ? await checkHud({ newPage, url: srv.url, game, log, shot }) : n === 24 ? await checkEmbed({ newPage, url: srv.url, game, log, shot }) : n === 31 ? await checkScreens({ browser, url: srv.url, log }) : await checkWallet({ newPage, url: srv.url, log, shot });
+    rec[{ 20: 'menu', 21: 'hud', 22: 'wallet', 24: 'embed', 31: 'screens' }[n]] = r.record; if (r.warnings.length) rec.notes.push(...r.warnings);
+    add(n, name, r.ok, r.detail);
+  } catch (e) { add(n, name, false, `not reached: ${e.message}`); }
+  finally { await browser.close().catch(() => {}); await srv.close().catch(() => {}); }
+  rec.pass = rec.checks.every(c => c.ok);
+  rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
+  await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
+  return rec;
+}
+
+/** --check 34: watch then play alone (its own browser and server), for a repair loop. */
+async function watchOnly(dir, { rec, outDir, add, log, t0 }) {
+  try {
+    const r = await checkFriendsWatch({ dir, outDir, shots: rec.shots, log });
+    rec.watch = r.record; if (r.warnings.length) rec.notes.push(...r.warnings);
+    add(34, 'watch then play', r.ok, r.detail);
+  } catch (e) { add(34, 'watch then play', false, `not reached: ${e.message}`); }
+  rec.pass = rec.checks.every(c => c.ok);
+  rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
+  await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
+  return rec;
+}
+
+/** --check 25: playing with friends alone (its own browser and server), for a repair loop. */
+async function friendsOnly(dir, { rec, outDir, add, log, t0 }) {
+  try {
+    const r = await checkFriends({ dir, outDir, shots: rec.shots, log });
+    rec.friends = r.record; if (r.warnings.length) rec.notes.push(...r.warnings);
+    add(25, 'playing with friends', r.ok, r.detail);
+  } catch (e) { add(25, 'playing with friends', false, `not reached: ${e.message}`); }
+  rec.pass = rec.checks.every(c => c.ok);
+  rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
   return rec;
 }
@@ -594,19 +836,27 @@ async function pixelDiff(browser, a, b) {
   } finally { await page.close(); }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const opt = (k, d) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : d; };
-  const dir = a.find((x, i) => !x.startsWith('--') && a[i - 1] !== '--out' && a[i - 1] !== '--check');
-  if (!dir) { console.error('usage: verify.mjs <game> [--quick] [--out <dir>] [--json] [--check 10|13|14|15|16|17|11,17]'); process.exit(2); }
+  const dir = a.find((x, i) => !x.startsWith('--') && !['--out', '--check', '--refs'].includes(a[i - 1]));
+  if (!dir) { console.error('usage: verify.mjs <game> [--quick] [--out <dir>] [--json] [--check 10|13|14|15|16|20|21|22|23|24|25|17|18|19|11,17,18,19] [--refs <folder with refs.json>]'); process.exit(2); }
   const json = a.includes('--json');
   const ck = opt('--check', null);
   const only = ck === null ? null : /^\d+(,\d+)+$/.test(ck) ? ck.split(',').map(Number) : Number(ck);
-  if (only !== null && !(Array.isArray(only) ? only.every(n => STATIC_ALONE.includes(n)) : [10, 13, 14, 15, 16, ...STATIC_ALONE].includes(only))) { console.error('--check takes 10 (fair play), 13 (controls work), 14 (looks honoured), 15 (the loop is alive), 16 (hits read), or the static checks 11, 17 (11,17 for both)'); process.exit(2); }
-  const rec = await verify(dir, { quick: a.includes('--quick'), out: opt('--out', null), log: json ? () => {} : console.log, only });
+  // a world (CONTRACT §9) runs any of its checks alone or together: --check 26 or --check 13,26,30
+  const worldGame = JSON.parse(await readFile(join(resolve(dir), 'config/game.json'), 'utf8').catch(() => '{}')).round?.mode === 'world';
+  // a forge game (CONTRACT §8 forge) runs any of its checks alone or together, its own 32 and 33 among them
+  const forgeGame = await engineOfGame(resolve(dir)) === 'forge';
+  if (forgeGame && only !== null && ![].concat(only).every(n => Number.isInteger(n) && n >= 1 && n <= 33)) { console.error('--check takes check numbers 1 to 33 (one, or several: 3,32,33)'); process.exit(2); }
+  if (worldGame && only !== null && ![].concat(only).every(n => Number.isInteger(n) && n >= 1 && n <= 34)) { console.error('--check takes check numbers 1 to 31 and 34 (one, or several: 13,26,30)'); process.exit(2); }
+  if (!worldGame && !forgeGame && only !== null && !(Array.isArray(only) ? only.every(n => STATIC_ALONE.includes(n)) : [10, 13, 14, 15, 16, 20, 21, 22, 23, 24, 25, 31, 34, ...STATIC_ALONE].includes(only))) { console.error('--check takes 10 (fair play), 13 (controls work), 14 (looks honoured), 15 (the loop is alive), 16 (hits read), 20 (the menu works), 21 (the HUD shows your state), 22 (the wallet in the menu), 23 (looks like the references), 24 (plays inside a post), 25 (playing with friends), 31 (sharp on every screen), 34 (watch then play), or the static checks 11, 17, 18, 19 (11,17,18,19 for several)'); process.exit(2); }
+  const rec = await verify(dir, { quick: a.includes('--quick'), out: opt('--out', null), log: json ? () => {} : console.log, only, refs: opt('--refs', null) });
   if (json) process.stdout.write(JSON.stringify(rec, null, 2) + '\n');
   const passed = rec.checks.filter(c => c.ok === true).length, ran = rec.checks.filter(c => c.ok !== null).length;
-  const skipped = rec.checks.filter(c => c.ok === null).map(c => c.n);
-  console.log(`verify ${relative(process.cwd(), resolve(dir)) || '.'}: ${rec.pass ? 'PASS' : 'FAIL'} ${passed}/${ran}${skipped.length ? ` (skipped ${skipped.join(', ')})` : ''}${rec.pass ? '' : ` failed: ${rec.checks.filter(c => c.ok === false).map(c => c.n).join(', ')}`} in ${rec.seconds} s → ${rec.outDir}/verdict.json`);
+  const skipped = rec.checks.filter(c => c.ok === null && !c.notYet).map(c => c.n);
+  const notYet = (rec.notYet ?? []).map(c => c.n);
+  if (notYet.length) console.log(`not yet for forge: ${notYet.join(', ')} (each with its reason in verdict.json → notYet)`);
+  console.log(`verify ${relative(process.cwd(), resolve(dir)) || '.'}: ${rec.pass ? 'PASS' : 'FAIL'} ${passed}/${ran}${skipped.length ? ` (skipped ${skipped.join(', ')})` : ''}${rec.pass ? '' : ` failed: ${rec.checks.filter(c => c.ok === false).map(c => c.n).join(', ')}`} in ${rec.seconds} s → ${relPosix(process.cwd(), resolve(resolve(dir), rec.outDir, 'verdict.json'))}`);
   process.exitCode = rec.pass ? 0 : 1;
 }

@@ -1,10 +1,13 @@
 // gf-three core: quality tiers. `?quality=low|high` picks one; otherwise the kit guesses from the device.
-// The look module (track L) tunes its lighting and post stack per tier; the kit only caps resolution and shadows.
+// The look module (track L) tunes its lighting and post stack per tier; the kit sets the pixel budget and shadows.
+// The pixels drawn are the screen's real ones within pixelBudget (kit/core/resolution.js, since 2026-10-09: a fixed
+// pixelRatio of 1 on this low tier made every phone draw a third of its resolution).
 // Pure: the device facts are passed in, so tests can call it.
+import { PIXEL_BUDGET } from './resolution.js';
 
 export const TIERS = {
-  low: { name: 'low', pixelRatio: 1, antialias: false, shadows: false, shadowMapSize: 1024, post: false, maxBots: 3 },
-  high: { name: 'high', pixelRatio: 2, antialias: true, shadows: true, shadowMapSize: 2048, post: true, maxBots: 7 },
+  low: { name: 'low', pixelBudget: PIXEL_BUDGET.low, antialias: false, shadows: false, shadowMapSize: 1024, post: false, maxBots: 3 },
+  high: { name: 'high', pixelBudget: PIXEL_BUDGET.high, antialias: true, shadows: true, shadowMapSize: 2048, post: true, maxBots: 7 },
 };
 
 /**

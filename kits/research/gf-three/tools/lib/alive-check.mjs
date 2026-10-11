@@ -33,6 +33,18 @@
 //   paint      shared.paint.g: cells changed.         race      shared.race.r: a gate or lap passed.
 //   tag        shared.tag.t: someone is it.           teams     shared.teams.a: players on two teams or more.
 //   health     shared.hp.h: reported (hit points that fell), never failed on its own.
+// The action mechanics (gf-scenic wave 1, track M):
+//   melee      shared.melee.n: swings land (some player's hits); on the undefended page the player walks up to an
+//              enemy with real keys, aims at it and swings (the item "a swing hurts an enemy").
+//   levels     shared.levels: a cleared level opens its portal and the players move on. A staged page of its own
+//              (?gf-demo=levels.clear: the host takes the level's enemies down a moment after they come) where the
+//              scripted player walks into the open portal with real keys; the level must move on.
+//   boss       shared.boss.a: the boss comes and changes phase. A staged page (?gf-demo=boss.phase: the run starts on
+//              the boss level, the boss's hit points just above its first threshold) with 3 bots, the player swinging too.
+//   loot       shared.loot: something dropped and something was taken (coins, an opened chest, an upgrade card).
+// A staged page is read for these signs only (its label starts "demo-"), never for the others.
+import { calibrate, walkToward } from './hits-check.mjs';
+import { normalizeWeapons } from '../../kit/mechanics/melee/logic.js';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const r1 = v => Math.round(v * 10) / 10;
 const r2 = v => Math.round(v * 100) / 100;
@@ -49,8 +61,8 @@ export const ALIVE_LIMITS = {
 };
 /** A config/game.json prop whose role makes it the thing the players defend (the game's goal). */
 export const GOAL_ROLE = /\b(defend(ed)?|protect(ed)?|guard(ed)?|keep (it )?safe|save)\b/i;
-const KNOWN = ['waves', 'pickup', 'projectile', 'carry', 'station', 'paint', 'race', 'tag', 'teams', 'health'];
-const SHARED_KEY = { waves: 'waves', pickup: 'pk', projectile: 'prj', carry: 'carry', station: 'station', paint: 'paint', race: 'race', tag: 'tag', teams: 'teams', health: 'hp' };
+const KNOWN = ['waves', 'pickup', 'projectile', 'carry', 'station', 'paint', 'race', 'tag', 'teams', 'health', 'melee', 'levels', 'boss', 'loot'];
+const SHARED_KEY = { waves: 'waves', pickup: 'pk', projectile: 'prj', carry: 'carry', station: 'station', paint: 'paint', race: 'race', tag: 'tag', teams: 'teams', health: 'hp', melee: 'melee', levels: 'levels', boss: 'boss', loot: 'loot' };
 
 /**
  * In the page (installed with addInitScript): every SAMPLE_MS while a round plays, a compact copy of the observation.
@@ -61,7 +73,9 @@ const SHARED_KEY = { waves: 'waves', pickup: 'pk', projectile: 'prj', carry: 'ca
 export const RECORDER = () => {
   if (window.__gfAlive) return;
   const rec = { samples: [], t0: performance.now() };
-  if (new URLSearchParams(location.search).has('gf-demo')) { window.__gfAlive = () => rec; return; }   // a staged moment is not a round
+  const demoName = new URLSearchParams(location.search).get('gf-demo');
+  // a staged moment is not a round (the action mechanics' own staged pages are read for their signs only)
+  if (demoName && !/^(levels|boss)\./.test(demoName)) { window.__gfAlive = () => rec; return; }
   const R = v => Math.round(v * 100) / 100;
   const hash = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
   const take = () => {
@@ -82,9 +96,13 @@ export const RECORDER = () => {
     if (sh.tag) o.tag = sh.tag.t ?? [];
     if (sh.teams) o.teams = sh.teams.a ?? {};
     if (sh.prj) o.prj = [(sh.prj.l ?? []).length, (sh.prj.st ?? []).length];
+    if (sh.melee) { let sw = 0, hi = 0; for (const v of Object.values(sh.melee.n ?? {})) { sw += v?.[0] ?? 0; hi += v?.[1] ?? 0; } o.melee = [sw, hi]; }
+    if (sh.levels) o.levels = [sh.levels.l ?? 0, sh.levels.ph ?? '', sh.levels.c ?? 0, sh.levels.v ?? 0];
+    if (sh.boss) { const a = sh.boss.a ?? []; o.boss = [a[0] ?? 0, a[3] ?? 0, a[4] ?? 0, a[5] ?? 0, a[6] ?? 0]; }
+    if (sh.loot) o.loot = [(sh.loot.d ?? []).length, Object.values(sh.loot.c ?? {}).reduce((n, v) => n + (v || 0), 0), Object.values(sh.loot.u ?? {}).reduce((n, v) => n + (v?.length ?? 0), 0), (sh.loot.d ?? []).filter(d => d[1] === 4).length];
     rec.samples.push({ w: R((performance.now() - rec.t0) / 1000), t: R(s.time?.round ?? 0), ph: s.phase, rd: s.round ?? 1,
       pl: (s.players ?? []).map(p => [p.id, R(p.x), R(p.z), p.score ?? 0, p.alive === false ? 0 : 1, p.down ? 1 : 0, p.local ? 1 : 0, p.bot ? 1 : 0]),
-      sh: o, mods: (s.modules?.mechanics ?? []).filter(m => m.standin).map(m => m.id) });
+      sh: o, mods: (s.modules?.mechanics ?? []).filter(m => m.standin).map(m => m.id), ...(demoName ? { demo: demoName } : {}) });
   };
   setInterval(take, 250);
   window.__gfAlive = () => rec;
@@ -188,6 +206,30 @@ export function otherSigns(samples) {
   return o;
 }
 
+/** The action mechanics on one page (track M): swings and hits, levels moved on, the boss's phases, loot. */
+export function actionSigns(samples) {
+  const o = { swings: 0, hits: 0, levelMax: 0, levelMin: null, opened: false, cleared: 0, travels: 0, bossActive: false, bossPhase: 0, bossHpMin: null, bossMax: 0, drops: 0, coins: 0, upgrades: 0, chestsOpened: 0 };
+  for (const s of samples) {
+    const sh = s.sh ?? {};
+    if (sh.melee) { o.swings = Math.max(o.swings, sh.melee[0]); o.hits = Math.max(o.hits, sh.melee[1]); }
+    if (sh.levels) { const [l, ph, c, v] = sh.levels; o.levelMax = Math.max(o.levelMax, l); o.levelMin = o.levelMin === null ? l : Math.min(o.levelMin, l); if (ph === 'open' || ph === 'travel') o.opened = true; o.cleared = Math.max(o.cleared, c); o.travels = Math.max(o.travels, v); }
+    if (sh.boss && sh.boss[0]) { o.bossActive = true; o.bossPhase = Math.max(o.bossPhase, sh.boss[3]); o.bossMax = Math.max(o.bossMax, sh.boss[2]); o.bossHpMin = o.bossHpMin === null ? sh.boss[1] : Math.min(o.bossHpMin, sh.boss[1]); }
+    if (sh.loot) { o.drops = Math.max(o.drops, sh.loot[0]); o.coins = Math.max(o.coins, sh.loot[1]); o.upgrades = Math.max(o.upgrades, sh.loot[2]); o.chestsOpened = Math.max(o.chestsOpened, sh.loot[3]); }
+  }
+  o.movedOn = o.travels > 0 || (o.levelMin !== null && o.levelMax > o.levelMin);
+  return o;
+}
+/** Action signs over several pages, merged (the best each page showed). */
+export function mergeAction(list) {
+  const o = actionSigns([]);
+  for (const x of list) {
+    for (const k of ['swings', 'hits', 'levelMax', 'cleared', 'travels', 'bossPhase', 'bossMax', 'drops', 'coins', 'upgrades', 'chestsOpened']) o[k] = Math.max(o[k], x[k]);
+    for (const k of ['opened', 'bossActive', 'movedOn']) o[k] = o[k] || x[k];
+    if (x.bossHpMin !== null) o.bossHpMin = o.bossHpMin === null ? x.bossHpMin : Math.min(o.bossHpMin, x.bossHpMin);
+  }
+  return o;
+}
+
 /** Signs over several pages: each page measured on its own (a change between two pages is not a change), then merged. */
 export function mergeSigns(list) {
   const o = otherSigns([]);
@@ -224,7 +266,11 @@ export function judgeAlive({ game = {}, world = {}, pages = [], firstLook = null
   const L = ALIVE_LIMITS, goal = goalOf(game, world), items = [];
   const add = (mechanic, item, status, reads, saw, fix = '') => items.push({ mechanic, item, status, reads, saw, ...(fix ? { fix } : {}) });
   const used = [...new Set((game.mechanics ?? []).map(m => m.id))];
-  const rounds = pages.map(p => ({ label: p.label, samples: firstRound(p.samples ?? []) })).filter(p => p.samples.length);
+  const allRounds = pages.map(p => ({ label: p.label, samples: firstRound(p.samples ?? []) })).filter(p => p.samples.length);
+  // the action mechanics' staged pages ("demo-…") count for their own signs only
+  const rounds = allRounds.filter(p => !String(p.label).startsWith('demo-'));
+  const action = mergeAction(allRounds.map(p => actionSigns(p.samples)));
+  const demoPage = name => allRounds.find(p => p.label === name) ?? null;
   const alive = rounds.find(p => p.label === 'alive');
   const others = mergeSigns(rounds.map(p => otherSigns(p.samples)));
   const wavesAll = goal.waves ? mergeWaves(rounds.map(p => wavesSigns(p.samples, goal))) : null;
@@ -328,6 +374,35 @@ export function judgeAlive({ game = {}, world = {}, pages = [], firstLook = null
       continue;
     }
     if (id === 'health') { add('health', 'hit points', 'note', 'shared.hp.h', others.hpFell ? `hit points fell (lowest ${others.hpMin})` : 'nobody lost hit points on these pages'); continue; }
+    if (id === 'melee') {
+      const sw = aim?.melee ? aim : null;
+      if (sw?.hit) add('melee', 'a swing hurts an enemy', 'ok', 'shared.waves.e hp and w[1] kills, while the player swung', `the player walked up to an enemy, aimed and swung: ${sw.kill ? 'it died' : `its hit points went ${sw.hpBefore} → ${sw.hpAfter}`}`);
+      if (action.hits > 0) add('melee', 'swings land', 'ok', 'shared.melee.n (swings, hits per player)', `${action.hits} hits from ${action.swings} swings on the busiest page`);
+      else if (!sw?.hit) add('melee', 'swings land', action.swings > 0 || sw?.measured ? 'dead' : 'unmeasured', 'shared.melee.n (swings, hits per player)', `${action.swings} swings and no hit on any page (${names})${sw ? `; the player's own swing: ${sw.why}` : ''}`,
+        'check the melee mechanic\'s reach and arc against the enemies, that waves hittable is on, and that rules.bot (or the kit\'s melee bots) walks up and swings');
+      continue;
+    }
+    if (id === 'levels') {
+      const d = demoPage('demo-levels'), ds = d ? actionSigns(d.samples) : null;
+      if (action.movedOn) add('levels', 'a cleared level opens its portal and everyone moves on', 'ok', 'shared.levels (level, phase, cleared, travels)', `${action.travels} move${action.travels === 1 ? '' : 's'} through a portal, ${action.cleared} level${action.cleared === 1 ? '' : 's'} cleared${ds?.movedOn ? '; on the staged page the player walked into the open portal' : ''}`);
+      else add('levels', 'a cleared level opens its portal and everyone moves on', ds || action.opened ? 'dead' : 'unmeasured', 'shared.levels (level, phase, cleared, travels)',
+        ds ? (ds.opened ? 'the portal opened on the staged page (?gf-demo=levels.clear) but walking into it with real keys did not move the run on' : 'on the staged page (?gf-demo=levels.clear) the level was cleared and its portal never opened') : action.opened ? 'a portal opened but nobody moved on' : `no level was cleared on any page (${names})`,
+        'check config/world.json → levels (each with a portal zone), levels portalZone, and that nothing in rules.js holds the run');
+      continue;
+    }
+    if (id === 'boss') {
+      if (action.bossPhase >= 1) add('boss', 'the boss comes and changes phase', 'ok', 'shared.boss.a (active, hp, max, phase)', `it came and reached phase ${action.bossPhase + 1} (hit points down to ${action.bossHpMin} of ${action.bossMax})`);
+      else add('boss', 'the boss comes and changes phase', action.bossActive ? 'dead' : 'unmeasured', 'shared.boss.a (active, hp, max, phase)', action.bossActive ? `it came but never changed phase (hit points down to ${action.bossHpMin} of ${action.bossMax}) on the staged page (?gf-demo=boss.phase: it starts just above its first threshold) or any other` : 'the boss never came on any page (the staged page starts the run on the boss level)',
+        action.bossActive ? 'check the boss\'s phases (hit-point shares) and that melee and shots reach it (hittable, its radius)' : 'check that the levels mechanic\'s last level is the boss\'s (bossLevel "last") or boss auto, and startDelay');
+      continue;
+    }
+    if (id === 'loot') {
+      const takes = action.coins + action.upgrades + action.chestsOpened;
+      if (action.drops > 0 && takes > 0) add('loot', 'loot drops and is taken', 'ok', 'shared.loot (drops, coins, upgrades, opened chests)', `${action.drops} on the ground at once; ${action.coins} coins taken, ${action.chestsOpened} chest${action.chestsOpened === 1 ? '' : 's'} opened, ${action.upgrades} upgrade${action.upgrades === 1 ? '' : 's'} picked`);
+      else add('loot', 'loot drops and is taken', action.drops > 0 ? 'dead' : 'unmeasured', 'shared.loot (drops, coins, upgrades, opened chests)', action.drops > 0 ? `drops lay on the ground and nobody took one on any page (${names})` : `nothing dropped on any page (${names})`,
+        'check loot touch and magnet, that kills drop coins (waves onKill), and that the kit\'s melee bots walk over loot when no enemy is near');
+      continue;
+    }
     const simple = {
       carry: [others.carried, 'an item is held', 'shared.carry.i[…][4]', 'nobody picked an item up', 'make bots grab items (rules.bot) and check carry grabAction and reach'],
       station: [others.station, 'a station is worked', 'shared.station.s progress, q', 'no station made progress', 'make bots work stations (rules.bot) and check station action and range'],
@@ -363,12 +438,13 @@ function nearestZone(world, p) {
 /** The goal and the HUD at round start, from the local player's view: {sight, meters, phase, at}. */
 export async function firstLook(page, game, world) {
   const goal = goalOf(game, world);
-  return page.evaluate(ids => {
+  // sight() returns a promise on the scenic engine (WebGPU readback is asynchronous; kit/core/sight.js): await it
+  return page.evaluate(async ids => {
     const g = window.__game, ui = document.getElementById('gf-ui');
     const shown = e => { if (!e) return false; const c = getComputedStyle(e); return c.display !== 'none' && c.visibility !== 'hidden' && parseFloat(c.opacity) > 0.05; };
     const meters = ui ? [...ui.querySelectorAll('.gf-meter')].filter(shown).map(m => ({ label: (m.querySelector('b')?.textContent ?? '').trim(), pct: Math.round(parseFloat(m.querySelector('u')?.style.width) || 0) })) : [];
     let sight = null;
-    if (ids.length) { try { sight = typeof g?.sight === 'function' ? g.sight(ids) : null; } catch (e) { sight = { error: String(e?.message ?? e) }; } }
+    if (ids.length) { try { sight = typeof g?.sight === 'function' ? await g.sight(ids) : null; } catch (e) { sight = { error: String(e?.message ?? e) }; } }
     return { phase: g?.phase ?? null, t: g?.snapshot?.()?.time?.round ?? null, meters, sight };
   }, goal.props.map(p => p.slot)).catch(e => ({ error: e.message, meters: [], sight: null }));
 }
@@ -490,8 +566,15 @@ export async function undefended({ newPage, url, game, world, shot = async () =>
     }
     waited = Math.round((Date.now() - t1) / 1000);
     await shot(p, 'alive-undefended');
+    // melee (track M): walk up to an enemy with real keys, aim at it and swing
+    const melee = (game.mechanics ?? []).find(m => m.id === 'melee');
+    if (W.hittable && melee && !(game.mechanics ?? []).some(m => m.id === 'projectile') && (await p.evaluate(() => window.__game?.phase).catch(() => null)) === 'playing') {
+      aim = await walkAndSwing(p, { game, melee }).catch(e => ({ melee: true, measured: false, hit: false, why: `the swing script stopped: ${e.message.split('\n')[0]}` }));
+      await shot(p, 'alive-swung');
+      log(`alive: the player's swing ${aim.hit ? 'hit' : 'did not hit'} (${aim.why})`);
+    }
     // aim and fire (a click takes the mouse first; that click may fire one shot, before anything is measured)
-    if (W.hittable && (game.mechanics ?? []).some(m => m.id === 'projectile') && game.controls?.primary && (await p.evaluate(() => window.__game?.phase).catch(() => null)) === 'playing') {
+    else if (W.hittable && (game.mechanics ?? []).some(m => m.id === 'projectile') && game.controls?.primary && (await p.evaluate(() => window.__game?.phase).catch(() => null)) === 'playing') {
       await p.mouse.click(640, 360); await sleep(400);
       aim = await aimAndFire(p, { height: W.height, avoid: W.zone }).catch(e => ({ measured: false, hit: false, why: `the aim script stopped: ${e.message.split('\n')[0]}` }));
       await shot(p, 'alive-aimed');
@@ -500,5 +583,122 @@ export async function undefended({ newPage, url, game, world, shot = async () =>
   } finally {
     await T.ctx.close().catch(() => {});
   }
-  return { aim, waited, seconds: Math.round((Date.now() - t0) / 1000), errors: T.errors.slice(0, 3) };
+  // the action mechanics' staged pages (track M): a level's portal walked into; the boss's phase changing
+  const has = id => (game.mechanics ?? []).some(m => m.id === id);
+  const staged = {};
+  if (has('levels')) staged.levels = await levelsPage({ newPage, url, game, shot, log }).catch(e => ({ error: e.message }));
+  if (has('boss')) staged.boss = await bossPage({ newPage, url, game, shot, log }).catch(e => ({ error: e.message }));
+  return { aim, waited, staged, seconds: Math.round((Date.now() - t0) / 1000), errors: T.errors.slice(0, 3) };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The action mechanics (gf-scenic wave 1, track M): a swing at an enemy, a portal walked into, the boss's phases
+// ---------------------------------------------------------------------------------------------------------------------
+const MOBS = () => {
+  const g = window.__game, s = g.snapshot(), c = g.controls(), st = id => c.mechanics.find(m => m.id === id)?.stats ?? null;
+  return { phase: s.phase, me: s.players.find(x => x.local), waves: st('waves'), melee: st('melee'), levels: st('levels'), boss: st('boss'), view: { w: innerWidth, h: innerHeight } };
+};
+const reachOf = melee => { const ws = normalizeWeapons(melee?.params?.weapons); return (ws.find(w => w.id === melee?.params?.weapon) ?? ws[0]).combo[0].reach; };
+
+/** Walk up to the nearest enemy (or the boss) with real keys, aim (the cursor with the follow camera, the crosshair
+ *  else) and swing with real clicks; watch its hit points. → {melee: true, measured, hit, kill, hpBefore, hpAfter, why} */
+export async function walkAndSwing(p, { game, melee, seconds = 14, boss = false } = {}) {
+  const t0 = Date.now(), obs = () => p.evaluate(MOBS), mode = game.camera ?? 'third', reach = reachOf(melee);
+  const sens = game.controller?.camera?.[mode]?.sensitivity ?? 0.0026, fov = game.controller?.camera?.[mode]?.fov ?? 60;
+  let F = null, R = null, last = null, swings = 0;
+  const cur = { x: 640, y: 360 };
+  while (Date.now() - t0 < seconds * 1000) {
+    const o = await obs(); if (o.phase !== 'playing') break;
+    const me = o.me; if (!me?.alive) { await sleep(300); continue; }
+    let t = null;
+    if (boss && o.boss?.active && !o.boss.dead && o.boss.screen) t = { id: 'boss', x: o.boss.x, z: o.boss.z, hp: o.boss.hp, sx: o.boss.screen.x, sy: o.boss.screen.y, front: o.boss.screen.front, r: 1 };
+    else for (const e of o.waves?.enemies ?? []) { if (!(e.hp > 0) || !e.body) continue; const d = Math.hypot(e.x - me.x, e.z - me.z); if (!t || d < t.d) t = { id: e.id, x: e.x, z: e.z, hp: e.hp, sx: e.body.x, sy: e.body.y, front: e.body.front, d, r: 0.45 }; }
+    if (!t) { await sleep(300); continue; }
+    const d = Math.hypot(t.x - me.x, t.z - me.z) - t.r;
+    // aim
+    if (mode === 'follow' || mode === 'top') { if (t.front) await p.mouse.move(t.sx, t.sy); }
+    else {
+      const off = [t.sx - o.view.w / 2, t.sy - o.view.h / 2], f = (o.view.h / 2) / Math.tan((fov * Math.PI / 180) / 2);
+      if (!t.front || Math.abs(off[0]) > 12) {
+        // pointer lock: the view turns by the mouse's movement (one move of dx, in steps)
+        const dx = t.front ? Math.atan(off[0] / f) / sens * 0.8 : 500, n = Math.max(1, Math.ceil(Math.abs(dx) / 30));
+        for (let i = 0; i < n; i++) { cur.x += dx / n; await p.mouse.move(cur.x, cur.y); }
+        await sleep(90); continue;
+      }
+    }
+    if (d > reach * 0.75) {
+      if (mode !== 'follow' && mode !== 'top') { await p.keyboard.down('KeyW'); await sleep(Math.min(260, 60 + d * 70)); await p.keyboard.up('KeyW'); continue; }
+      if (!F) { const k = await calibrate(p, obs); if (!k) return { melee: true, measured: false, hit: false, why: 'the player did not move on W or D' }; F = k.F; R = k.R; continue; }
+      await walkToward(p, F, R, t.x - me.x, t.z - me.z, Math.min(260, 60 + d * 70)); continue;
+    }
+    // in reach: swing
+    const hp0 = t.hp; swings++;
+    await p.mouse.down(); await sleep(70); await p.mouse.up();
+    for (const end = Date.now() + 1000; Date.now() < end; ) {
+      await sleep(80);
+      const q = await obs();
+      const now = boss ? (q.boss?.active ? { hp: q.boss.hp } : null) : (q.waves?.enemies ?? []).find(e => e.id === t.id);
+      if (!now || now.hp < hp0) { last = { distance: r1(d + t.r), hpBefore: hp0, hpAfter: now ? now.hp : 0 }; return { melee: true, measured: true, hit: true, kill: !now, ...last, swings, why: 'hit' }; }
+    }
+    last = { distance: r1(d + t.r), hpBefore: hp0, hpAfter: hp0 };
+  }
+  return { melee: true, measured: swings > 0, hit: false, kill: false, ...(last ?? {}), swings, why: swings ? `${swings} swings in reach and no hit point fell` : 'never got within reach of an enemy' };
+}
+
+/** ?gf-demo=levels.clear, no bots: the level's enemies come and are taken down by the host; once the portal opens the
+ *  scripted player walks into it with real keys; the level must move on. → {opened, moved, seconds} */
+async function levelsPage({ newPage, url, game, shot, log }) {
+  const T = await newPage('demo-levels', { overrides: { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: 120 }] } });
+  const p = T.page, t0 = Date.now(), obs = () => p.evaluate(MOBS);
+  let opened = false, moved = false;
+  try {
+    await p.goto(`${url}?seed=7&bots=0&gf-demo=levels.clear`, { waitUntil: 'load' });
+    for (let t = Date.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'lobby'; ) { if (Date.now() - t > 90000) throw new Error('no lobby in 90 s'); await sleep(200); }
+    const play = await p.locator('#gf-play').boundingBox().catch(() => null);
+    if (play) await p.mouse.click(play.x + play.width / 2, play.y + play.height / 2); else await p.keyboard.press('Enter');
+    for (let t = Date.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'playing'; ) { if (Date.now() - t > 20000) throw new Error('the round did not start'); await sleep(120); }
+    let L0 = null;
+    for (let t = Date.now(); Date.now() - t < 25000; await sleep(300)) { const o = await obs(); L0 ??= o.levels?.level ?? 0; if (o.levels?.portal?.open) { opened = true; break; } }
+    if (opened) {
+      await shot(p, 'alive-portal-open');
+      const k = await calibrate(p, obs);
+      for (let t = Date.now(); k && Date.now() - t < 20000; ) {
+        const o = await obs();
+        if ((o.levels?.level ?? 0) > L0) { moved = true; break; }
+        const pt = o.levels?.portal; if (!pt || !o.me) { await sleep(200); continue; }
+        await walkToward(p, k.F, k.R, pt.x - o.me.x, pt.z - o.me.z, 220);
+      }
+      await sleep(900);
+      await shot(p, 'alive-next-level');
+    }
+    log(`alive: levels: the portal ${opened ? 'opened' : 'never opened'}${opened ? `, walking in ${moved ? 'moved the run on' : 'did not move the run on'}` : ''}`);
+  } finally { await T.ctx.close().catch(() => {}); }
+  return { opened, moved, seconds: Math.round((Date.now() - t0) / 1000) };
+}
+
+/** ?gf-demo=boss.phase with 3 bots: the run starts on the boss level, its hit points just above its first threshold;
+ *  the scripted player walks up and swings too (melee). → {came, phase, seconds} */
+async function bossPage({ newPage, url, game, shot, log }) {
+  const T = await newPage('demo-boss', { overrides: { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: 120 }] } });
+  const p = T.page, t0 = Date.now(), obs = () => p.evaluate(MOBS);
+  let came = false, phase = 0;
+  const melee = (game.mechanics ?? []).find(m => m.id === 'melee');
+  try {
+    await p.goto(`${url}?seed=7&bots=3&gf-demo=boss.phase`, { waitUntil: 'load' });
+    for (let t = Date.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'lobby'; ) { if (Date.now() - t > 90000) throw new Error('no lobby in 90 s'); await sleep(200); }
+    const play = await p.locator('#gf-play').boundingBox().catch(() => null);
+    if (play) await p.mouse.click(play.x + play.width / 2, play.y + play.height / 2); else await p.keyboard.press('Enter');
+    for (let t = Date.now(); Date.now() - t < 35000; ) {
+      const o = await obs().catch(() => null);
+      if (o?.boss?.active) came = true;
+      phase = Math.max(phase, o?.boss?.phase ?? 0);
+      if (phase >= 1 || o?.phase === 'results') break;
+      if (came && melee && o?.phase === 'playing') await walkAndSwing(p, { game, melee, seconds: 4, boss: true }).catch(() => null);
+      else await sleep(400);
+    }
+    await sleep(800);                                              // the recorder samples 4 times a second: let it see the phase
+    await shot(p, 'alive-boss');
+    log(`alive: boss: ${came ? `came, phase ${phase + 1}` : 'never came'}`);
+  } finally { await T.ctx.close().catch(() => {}); }
+  return { came, phase, seconds: Math.round((Date.now() - t0) / 1000) };
 }

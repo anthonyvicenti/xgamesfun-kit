@@ -11,6 +11,12 @@
 //   clips     the shared clip file binds, and posing the body with it through the runtime retarget gives a sane
 //             skinned mesh (feet on the ground in idle and walk, hands below the shoulders, nothing flies off)
 //   budget    file size, triangles, textures, joints (RIG.md §7)
+//   judge     the model judge's measuring tier (tools/lib/body-judge.mjs; creator 2026-10-07: "the models look good, but the
+//             hand is crooked"): face, body, arms, hands, legs and feet hold their shape at rest and in every clip. Its
+//             errors are rig-check errors ("model judge, left hand: …"), so a generated or uploaded body that a clip
+//             distorts is refused like a body without bones; { judge: false } skips it. It judges the clips a role plays
+//             (body-judge.mjs clipsFor): { role: 'enemy' } (meshy-character --enemy) what enemies play, else the player's
+import { isMain } from './lib/main.mjs';
 import './lib/char-node.mjs';
 import { readFileSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -38,7 +44,7 @@ async function loadClips(path) {
   return clipCache.get(path);
 }
 
-export async function rigCheck(file, { clips = DEFAULT_CLIPS } = {}) {
+export async function rigCheck(file, { clips = DEFAULT_CLIPS, judge = true, role = null } = {}) {
   const errors = [], warnings = [], metrics = {};
   const err = m => errors.push(m), warn = m => warnings.push(m);
   const bytes = statSync(file).size;
@@ -208,10 +214,23 @@ export async function rigCheck(file, { clips = DEFAULT_CLIPS } = {}) {
   }
   metrics.poses = checks;
   metrics.clips = names.length;
-  return { ok: errors.length === 0, file, errors, warnings, stats, metrics, clipMeta: Object.keys(meta).length };
+
+  // ---- the model judge: every part, every clip
+  let verdict = null;
+  if (judge && !errors.length) {
+    const { judgeBody, PARTS, PART_LABEL } = await import('./lib/body-judge.mjs');
+    const j = await judgeBody(file, { clips, role });
+    verdict = { ok: j.ok, parts: Object.fromEntries(PARTS.map(p => [p, j.parts[p].na ? 'n/a' : j.parts[p].ok ? 'pass' : 'fail'])), stats: j.stats };
+    for (const e of j.errors) err(`model judge: ${e}`);
+    for (const p of PARTS) {
+      for (const e of j.parts[p].errors) err(`model judge, ${PART_LABEL[p]}: ${e}`);
+      if (j.parts[p].warnings.length) warn(`model judge, ${PART_LABEL[p]}: ${j.parts[p].warnings[0]}${j.parts[p].warnings.length > 1 ? ` (+${j.parts[p].warnings.length - 1} more)` : ''}`);
+    }
+  }
+  return { ok: errors.length === 0, file, errors, warnings, stats, metrics, judge: verdict, clipMeta: Object.keys(meta).length };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta)) {
   const args = process.argv.slice(2);
   const files = args.filter(a => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--clips');
   const ci = args.indexOf('--clips');

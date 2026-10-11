@@ -5,6 +5,7 @@
 //   node research/gf-three/tools/serve.mjs <game-dir> [--port 5790] [--host 127.0.0.1]
 //   → http://127.0.0.1:<port>/          the game alone (with bots)
 //     http://127.0.0.1:<port>/gf/mp/    with friends: Host, then open the invite link in another window
+import { isMain } from './lib/main.mjs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startParty, readManifest, validateMultiplayer } from '../../multiplayer/party/lib.mjs';
@@ -16,7 +17,7 @@ export async function serve(dir, { port = 0, host = '127.0.0.1' } = {}) {
   return { ...s, problems };
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const opt = (k, d) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : d; };
   const dir = a.find((x, i) => !x.startsWith('--') && !['--port', '--host'].includes(a[i - 1]));

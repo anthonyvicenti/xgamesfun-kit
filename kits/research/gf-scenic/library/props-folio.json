@@ -1,0 +1,526 @@
+{
+ "schema": "gf-scenic-props/1",
+ "about": "folio-2025 models and textures as scenic props, cut by research/gf-scenic/tools/world-folio.mjs. Metres, Y up, base at y = 0, centred. A prop's collider and light point are in its own frame.",
+ "upstream": {
+  "repo": "https://github.com/brunosimon/folio-2025",
+  "commit": "41046b57eeed8d156d9c3fd7fa259900baef7816",
+  "licenseFile": "license.md"
+ },
+ "license": {
+  "spdx": "MIT",
+  "author": "Bruno Simon",
+  "url": "https://github.com/brunosimon/folio-2025/blob/41046b57eeed8d156d9c3fd7fa259900baef7816/license.md",
+  "file": "folio/LICENSE"
+ },
+ "props": [
+  {
+   "id": "tree-oak",
+   "file": "folio/tree-oak.glb",
+   "describe": "a round leafy oak tree",
+   "tags": [
+    "tree",
+    "nature"
+   ],
+   "size": [
+    3.743,
+    8.313,
+    4.564
+   ],
+   "real": [
+    3,
+    12
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "size": [
+     0.6,
+     4,
+     0.6
+    ],
+    "at": [
+     0,
+     2,
+     0
+    ]
+   },
+   "source": {
+    "file": "static/oakTrees/oakTreesVisual.glb",
+    "node": null
+   },
+   "bytes": 16256,
+   "sha256": "0a0f7036430a731efe4af1625687752a4cb703f95d4331808f400f30d9df4f14"
+  },
+  {
+   "id": "tree-birch",
+   "file": "folio/tree-birch.glb",
+   "describe": "a tall birch tree",
+   "tags": [
+    "tree",
+    "nature"
+   ],
+   "size": [
+    4.254,
+    9.089,
+    4.529
+   ],
+   "real": [
+    3,
+    12
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "size": [
+     0.5,
+     4,
+     0.5
+    ],
+    "at": [
+     0,
+     2,
+     0
+    ]
+   },
+   "source": {
+    "file": "static/birchTrees/birchTreesVisual.glb",
+    "node": null
+   },
+   "bytes": 14060,
+   "sha256": "ecf9401a787ae0901ba2869d41f21874bdbfc08a32475aa6ea5a2fd8ca647aff"
+  },
+  {
+   "id": "tree-cherry",
+   "file": "folio/tree-cherry.glb",
+   "describe": "a wide cherry tree",
+   "tags": [
+    "tree",
+    "nature"
+   ],
+   "size": [
+    6.071,
+    6.657,
+    5.356
+   ],
+   "real": [
+    3,
+    12
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "size": [
+     0.6,
+     4,
+     0.6
+    ],
+    "at": [
+     0,
+     2,
+     0
+    ]
+   },
+   "source": {
+    "file": "static/cherryTrees/cherryTreesVisual.glb",
+    "node": null
+   },
+   "bytes": 13928,
+   "sha256": "75dcc20fd139f001e951594fe746dfc340a52866f2d28ae3873dfbb309a3003d"
+  },
+  {
+   "id": "lantern",
+   "file": "folio/lantern.glb",
+   "describe": "a small stone lantern with a warm glow",
+   "tags": [
+    "lamp",
+    "light"
+   ],
+   "size": [
+    0.897,
+    1.226,
+    0.897
+   ],
+   "real": [
+    0.6,
+    1.2
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     0.897,
+     1.226,
+     0.897
+    ],
+    "at": [
+     0,
+     0.613,
+     0
+    ]
+   },
+   "light": {
+    "at": [
+     0,
+     0.65,
+     0
+    ],
+    "radius": 1,
+    "color": "lantern"
+   },
+   "source": {
+    "file": "static/lanterns/lanterns.glb",
+    "node": "lantern"
+   },
+   "bytes": 21576,
+   "sha256": "3dcab23424f265742d8e49b493f708175f2b2b3f8959e0fe9cfa40803ddd22e5"
+  },
+  {
+   "id": "pole-light",
+   "file": "folio/pole-light.glb",
+   "describe": "a street lamp on a post",
+   "tags": [
+    "lamp",
+    "light"
+   ],
+   "size": [
+    0.741,
+    3.564,
+    0.741
+   ],
+   "real": [
+    2.2,
+    3.5
+   ],
+   "collider": {
+    "shape": "cylinder",
+    "size": [
+     0.36,
+     3.564,
+     0.36
+    ],
+    "at": [
+     0,
+     1.782,
+     0
+    ]
+   },
+   "light": {
+    "at": [
+     -0.001,
+     2.832,
+     -0.001
+    ],
+    "radius": 1.2,
+    "color": "lantern"
+   },
+   "source": {
+    "file": "static/poleLights/poleLights.glb",
+    "node": "poleLight.002"
+   },
+   "bytes": 21720,
+   "sha256": "1f13928ce4e117f4837687e1831f35f6a1a86c26fdb19c0fd1fe8b860d50ea40"
+  },
+  {
+   "id": "bench",
+   "file": "folio/bench.glb",
+   "describe": "a wooden park bench",
+   "tags": [
+    "furniture",
+    "seat"
+   ],
+   "size": [
+    2.57,
+    1.56,
+    1.762
+   ],
+   "real": [
+    0.7,
+    1.1
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2.57,
+     1.56,
+     1.762
+    ],
+    "at": [
+     0,
+     0.78,
+     0
+    ]
+   },
+   "source": {
+    "file": "static/benches/benches.glb",
+    "node": "benchPhysicalDynamic"
+   },
+   "bytes": 10804,
+   "sha256": "848951524f75230de7616adec6fa55922e72c8666c228f78e634ab3e63ebf5cf"
+  },
+  {
+   "id": "fence",
+   "file": "folio/fence.glb",
+   "describe": "a short wooden fence section",
+   "tags": [
+    "fence",
+    "edge"
+   ],
+   "size": [
+    2.142,
+    1.243,
+    0.736
+   ],
+   "real": [
+    0.8,
+    1.4
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     2.142,
+     1.243,
+     0.736
+    ],
+    "at": [
+     0,
+     0.622,
+     0
+    ]
+   },
+   "source": {
+    "file": "static/fences/fences.glb",
+    "node": "fencePhysicalDynamic.001"
+   },
+   "bytes": 5196,
+   "sha256": "840db43941f7d331fcc0c1d5b2ccfd5edb455eaa1ddad775123b2a75cf378a6a"
+  },
+  {
+   "id": "crate",
+   "file": "folio/crate.glb",
+   "describe": "a wooden crate",
+   "tags": [
+    "crate",
+    "container"
+   ],
+   "size": [
+    1.107,
+    1.063,
+    1.107
+   ],
+   "real": [
+    0.6,
+    1.2
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.107,
+     1.063,
+     1.107
+    ],
+    "at": [
+     0,
+     0.532,
+     0
+    ]
+   },
+   "source": {
+    "file": "static/explosiveCrates/explosiveCrates.glb",
+    "node": "explosiveCrates.001"
+   },
+   "bytes": 23244,
+   "sha256": "42b1bee2421b202e2715b6d4ca849ea2bf8a95ee5f83035fbee58fb91a5996a3"
+  },
+  {
+   "id": "brick",
+   "file": "folio/brick.glb",
+   "describe": "a large stone brick",
+   "tags": [
+    "stone",
+    "ruin"
+   ],
+   "size": [
+    1.589,
+    0.753,
+    1.248
+   ],
+   "real": [
+    0.3,
+    1
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     1.589,
+     0.753,
+     1.248
+    ],
+    "at": [
+     0,
+     0.377,
+     0
+    ]
+   },
+   "source": {
+    "file": "static/bricks/bricks.glb",
+    "node": "Cube.042"
+   },
+   "bytes": 4220,
+   "sha256": "93295d4744f5104b6f133ee7ede59962b52dc5f5be9ebc9f168567d5342636c6"
+  },
+  {
+   "id": "rock-1",
+   "file": "folio/rock-1.glb",
+   "describe": "a cluster of basalt rock columns",
+   "tags": [
+    "rock",
+    "nature"
+   ],
+   "size": [
+    5.761,
+    3.032,
+    11.075
+   ],
+   "real": [
+    0.4,
+    4
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     4.321,
+     3.032,
+     8.306
+    ],
+    "at": [
+     0,
+     1.516,
+     0
+    ]
+   },
+   "source": {
+    "file": "static/scenery/scenery.glb",
+    "node": "basaltRocksPhysicalStatic.002"
+   },
+   "bytes": 18240,
+   "sha256": "5096289f604165f2a2b201729dc34dd94232c67c92fe3392d0e951e05fa24407"
+  },
+  {
+   "id": "rock-2",
+   "file": "folio/rock-2.glb",
+   "describe": "a cluster of basalt rock columns",
+   "tags": [
+    "rock",
+    "nature"
+   ],
+   "size": [
+    5.419,
+    4.317,
+    7.46
+   ],
+   "real": [
+    0.4,
+    4
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     4.064,
+     4.317,
+     5.595
+    ],
+    "at": [
+     0,
+     2.159,
+     0
+    ]
+   },
+   "source": {
+    "file": "static/scenery/scenery.glb",
+    "node": "basaltRocksPhysicalStatic.001"
+   },
+   "bytes": 15072,
+   "sha256": "d8885f48283aa89371054c248564c0a9324ded4aa4a24c350aba45a78358453d"
+  },
+  {
+   "id": "rock-3",
+   "file": "folio/rock-3.glb",
+   "describe": "a low basalt rock",
+   "tags": [
+    "rock",
+    "nature"
+   ],
+   "size": [
+    8.965,
+    3.499,
+    5.377
+   ],
+   "real": [
+    0.4,
+    4
+   ],
+   "collider": {
+    "shape": "box",
+    "size": [
+     6.724,
+     3.499,
+     4.033
+    ],
+    "at": [
+     0,
+     1.75,
+     0
+    ]
+   },
+   "source": {
+    "file": "static/scenery/scenery.glb",
+    "node": "basaltRocksPhysicalStatic"
+   },
+   "bytes": 10836,
+   "sha256": "c51a4f66d9945f3ef17638c66be0ed137b3fe2fc215ecb39baf09cddd31862b6"
+  },
+  {
+   "id": "bridge",
+   "file": "folio/bridge.glb",
+   "describe": "a short wooden footbridge",
+   "tags": [
+    "bridge",
+    "wood"
+   ],
+   "size": [
+    11.038,
+    3.246,
+    8.301
+   ],
+   "real": [
+    0.5,
+    3
+   ],
+   "collider": null,
+   "source": {
+    "file": "static/scenery/scenery.glb",
+    "node": "bridgePhysicalFixed"
+   },
+   "bytes": 46432,
+   "sha256": "509aad8738cf946bbfb5191408bcdb3fc282a935f55e8463054fa8c08be6a67d"
+  }
+ ],
+ "textures": [
+  {
+   "id": "foliage-sdf",
+   "file": "folio/foliage-sdf.png",
+   "texture": true,
+   "source": {
+    "file": "static/foliage/foliageSDF.png"
+   },
+   "bytes": 10950,
+   "sha256": "b73a07a219d1ecd284dedbea65d729b4fa68457947555f07fbdf6bfcc85f3fc3"
+  },
+  {
+   "id": "slabs",
+   "file": "folio/slabs.png",
+   "texture": true,
+   "source": {
+    "file": "static/floor/slabs.png"
+   },
+   "bytes": 45637,
+   "sha256": "c337e34268601da1f2a244cabeb00913341b45603b139fc8e2b716711f9d5ca6"
+  }
+ ]
+}

@@ -19,8 +19,22 @@
 //                                                        (deletes) every message up to that sequence number
 //                    {op:'leave', peer, token}           -> {ok:true}   joiner: host <- {t:'peer-left', peer};
 //                                                        host: every joiner <- {t:'host-left'}, the code is closed
-//   errors           {t:'error', code, reason} with a 4xx/5xx status. Codes: no-room, rate, busy, bad, full.
-//   GET /signal/v1/ice -> {v:1, signal:'http', iceServers}  (public STUN, plus TURN when TURN_URLS is set)
+//   errors           {t:'error', code, reason} with a 4xx/5xx status. Codes: no-room, rate, busy, bad, full, taken.
+//
+// World rooms (gf-multiplayer 1.5.0, research/worlds/PLAN.md): one live room per key `world:<slug>`, so everyone who
+// opens a world lands in the same room with no code to type. A room is LIVE while it is open and its host was seen
+// within worldSilentMs (12 s: a host's long-poll asks at least every pollWaitMs).
+//                    {op:'find', key}                    -> {t:'found', code, n, max} | {t:'none'}   (counts as a join
+//                                                        attempt for the per-network limit)
+//                    {op:'host', key, max?}              -> {t:'hosted', code, peer, token} when no live room holds the
+//                                                        key, else 409 {t:'error', code:'taken', reason, room, n, max}.
+//                                                        The claim is atomic (one store call; Postgres: a partial unique
+//                                                        index on the open rooms' key), and a holder silent for 12 s is
+//                                                        closed in the same step (its pending joiners <- host-left)
+//                    {op:'poll', ..., n?, max?}          a keyed room's host reports its seats (find returns them)
+//                    {op:'join', code}                   a keyed room whose host has been silent for 12 s is no-room
+//   GET /signal/v1/ice -> {v:1, signal:'http', iceServers}  (public STUN, plus TURN when TURN_URLS is set; Studio
+//                                                        asks Cloudflare for short-lived TURN when CF_TURN_* is set)
 //
 // `token` is a secret per peer: only its SHA-256 is stored. Addresses are kept only as a keyed hash, for the per-network
 // limits. Rooms whose host stops asking for 2 h are deleted, messages after 60 s, joiners 60 s after joining (a joiner
@@ -33,6 +47,8 @@ export const SIGNAL_LIMITS = Object.freeze({
   ratePerSec: 20, burst: 80,    // per peer (WebSocket: per socket); trickle ICE sends a burst of candidates
   joinsPerSocket: 5,            // WebSocket only: join attempts before the socket is refused
   joinsPerIpPerMin: 30,         // join attempts per network per minute (code guessing)
+  findsPerIpPerMin: 300,        // world lookups per network per minute (the world card asks every 10 s while it shows;
+                                // phones behind one carrier address share this, so it is far above the join limit)
   socketsPerIp: 20,             // WebSocket: open sockets per address; HTTP: live sessions per network
   maxRooms: 2000,
   pendingPerRoom: 16,           // joiners mid-handshake per room
@@ -48,7 +64,17 @@ export const SIGNAL_LIMITS = Object.freeze({
   pollEveryMs: 350,             // how often a waiting poll looks for new messages
   pollBatch: 64,                // messages per answer
   sweepEveryMs: 30_000,         // expiry runs at most this often (per server instance)
+  // World rooms (keyed, gf-multiplayer 1.5.0)
+  worldSilentMs: 12_000,        // a keyed room is live while its host was seen within this
+  worldDropGraceMs: 3_000,      // ...or this long after its host's long-poll connection dropped mid-wait (a crashed tab)
+  worldMaxSeats: 8,             // the most seats a world room may report
 });
+
+// A world room's key: world:<published slug> (lowercase letters, digits, dashes; at most 48 after the colon, like a
+// slug), or world:local-<hex> for a page that is not under /p/<slug>/ (the kit hashes the game's path).
+export const WORLD_KEY = /^world:(?:[a-z0-9][a-z0-9-]{0,47}|local-[0-9a-f]{6,64})$/;
+export const cleanKey = v => (typeof v === 'string' && v.length <= 80 && WORLD_KEY.test(v) ? v : null);
+const seatCount = (v, lo, hi) => (Number.isInteger(v) && v >= lo && v <= hi ? v : null);
 
 export const PUBLIC_STUN = Object.freeze([Object.freeze({ urls: 'stun:stun.l.google.com:19302' })]);
 
@@ -108,13 +134,56 @@ export function iceServersFromEnv(env = {}) {
   return out;
 }
 
+/**
+ * Cloudflare Realtime TURN with short-lived credentials, when CF_TURN_KEY_ID and CF_TURN_API_TOKEN are set (the TURN
+ * key from the Cloudflare dashboard, Realtime → TURN Server; the token never leaves the server). Asks Cloudflare for
+ * ICE servers valid CF_TURN_TTL_S seconds (default 12 h) and hands the same answer to every page for up to an hour,
+ * so each one a page gets has 11 h or more left. Drops the port 53 URLs (browsers block them; Cloudflare's docs).
+ * → iceServers, or null when it isn't configured or Cloudflare doesn't answer within 2.5 s (the caller falls back to
+ * iceServersFromEnv: a page must get its answer well inside the kit's 4 s probe).
+ */
+const CF_TURN_REUSE_MS = 3_600_000, CF_TURN_TIMEOUT_MS = 2_500;
+let cfTurnCache = null;   // {key, until, iceServers}
+export async function cloudflareTurnIce(env = {}, { fetchImpl = globalThis.fetch, now = Date.now() } = {}) {
+  const id = String(env.CF_TURN_KEY_ID ?? '').trim(), token = String(env.CF_TURN_API_TOKEN ?? '').trim();
+  if (!id || !token || typeof fetchImpl !== 'function') return null;
+  const ttl = Math.min(Math.max(Number(env.CF_TURN_TTL_S) || 43_200, 7_200), 172_800);
+  const key = `${id}|${ttl}`;
+  if (cfTurnCache && cfTurnCache.key === key && now < cfTurnCache.until) return cfTurnCache.iceServers;
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), CF_TURN_TIMEOUT_MS);
+  try {
+    const r = await fetchImpl(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(id)}/credentials/generate-ice-servers`,
+      { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ ttl }), signal: ctl.signal });
+    if (!r.ok) throw new Error(`cloudflare turn ${r.status}`);
+    const j = await r.json();
+    const iceServers = (Array.isArray(j?.iceServers) ? j.iceServers : []).map(s => {
+      if (!isObj(s)) return null;
+      const urls = (Array.isArray(s.urls) ? s.urls : [s.urls]).filter(u => typeof u === 'string' && /^(stun|turns?):/i.test(u) && !/:53(\?|$)/.test(u));
+      if (!urls.length) return null;
+      const o = { urls };
+      if (typeof s.username === 'string') o.username = s.username;
+      if (typeof s.credential === 'string') o.credential = s.credential;
+      return o;
+    }).filter(Boolean).slice(0, 8);
+    if (!iceServers.some(s => s.urls.some(u => /^turns?:/i.test(u)) && s.username && s.credential)) throw new Error('cloudflare turn: no relay in the answer');
+    cfTurnCache = { key, until: now + Math.min(CF_TURN_REUSE_MS, ttl * 500), iceServers };
+    return iceServers;
+  } catch (error) {
+    console.error('turn credentials failed', error?.name === 'AbortError' ? 'timeout' : String(error?.message ?? error).slice(0, 120));
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+export const resetCloudflareTurnCache = () => { cfTurnCache = null; };
+
 /** Whether `origin` (an Origin header) is the page origin for `host` (a host[:port], no scheme). */
 export function sameOrigin(origin, host) {
   if (!origin || !host || origin === 'null') return false;
   try { return new URL(origin).host.toLowerCase() === String(host).trim().toLowerCase(); } catch { return false; }
 }
 
-const STATUS = { bad: 400, 'no-room': 404, full: 409, rate: 429, busy: 503 };
+const STATUS = { bad: 400, 'no-room': 404, full: 409, taken: 409, rate: 429, busy: 503 };
 const fail = (code, reason, status = STATUS[code] ?? 400) => ({ status, body: { t: 'error', code, reason } });
 const ok = body => ({ status: 200, body });
 const wait = (ms, signal) => new Promise(res => {
@@ -134,9 +203,9 @@ const wait = (ms, signal) => new Promise(res => {
 export function createSignaling({ store, secret = '', now = () => Date.now(), sleep = wait, limits = SIGNAL_LIMITS, checkOrigin = true } = {}) {
   if (!store) throw new Error('createSignaling needs a store');
   const L = limits;
-  const stats = { requests: 0, rooms: 0, joins: 0, relayed: 0, polls: 0, rejected: 0 };
+  const stats = { requests: 0, rooms: 0, joins: 0, relayed: 0, polls: 0, rejected: 0, worldRooms: 0, finds: 0, rateLimited: 0 };
   let lastSweep = 0;
-  const no = (...a) => { stats.rejected++; return fail(...a); };
+  const no = (...a) => { stats.rejected++; if (a[0] === 'rate') stats.rateLimited++; return fail(...a); };
   const ipKey = ip => (secret ? hmacHex(secret, `signal-ip|${ip ?? ''}`) : sha256Hex(`signal-ip|${ip ?? ''}`)).then(h => h.slice(0, 24));
   const minute = t => Math.floor(t / 60_000);
   const newSession = async () => { const token = base64url(randomBytes(18)); return { peer: base64url(randomBytes(6)), token, tokenHash: await sha256Hex(token) }; };
@@ -150,10 +219,14 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
     } catch { /* expiry is best effort; the next request tries again */ lastSweep = 0; }
   }
 
-  async function openRoom(ip, t) {
+  async function openRoom(ip, t, m = {}) {
+    // A world room: the key is checked before anything is counted, so a malformed key costs nothing.
+    const key = m.key === undefined ? null : cleanKey(m.key);
+    if (m.key !== undefined && !key) return no('bad', 'key must be world:<slug> (lowercase letters, digits and dashes)');
     if ((await store.hit(`host|${ip}`, minute(t))) > L.hostsPerIpPerMin) return no('rate', 'too many rooms opened from this network, try again in a minute');
     if ((await store.ipPeers(ip, t - L.joinerIdleMs)) >= L.socketsPerIp) return no('rate', 'too many signaling sessions from this network');
     if ((await store.openRooms(t - L.roomIdleMs)) >= L.maxRooms) return no('busy', 'signaling is full, try again soon');
+    if (key) return claimKey(key, ip, t, seatCount(m.max, 1, L.worldMaxSeats) ?? L.worldMaxSeats);
     for (let i = 0; i < 8; i++) {
       const code = makeCode(), s = await newSession();
       const made = await store.createRoom({ code, host: s.peer, created: t },
@@ -163,11 +236,39 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
     return no('busy', 'could not find a free room code, try again');
   }
 
+  // Claim a world key in one store call, so two visitors can never both host it. A holder whose host went quiet
+  // (worldSilentMs) is closed in the same call, and its pending joiners hear host-left.
+  async function claimKey(key, ip, t, max) {
+    for (let i = 0; i < 8; i++) {
+      const code = makeCode(), s = await newSession();
+      const r = await store.claimKey({ code, host: s.peer, created: t, key, n: 1, max },
+        { id: s.peer, room: code, role: 'host', token: s.tokenHash, ip, created: t, seen: t, tokens: L.burst, last: t }, t - L.worldSilentMs, t);
+      for (const stale of r.closed ?? []) for (const id of await store.joiners(stale, t - L.joinerIdleMs)) await store.push(id, JSON.stringify({ t: 'host-left' }), t, L.queuePerPeer);
+      if (r.made) { stats.rooms++; stats.worldRooms++; return ok({ t: 'hosted', code, peer: s.peer, token: s.token }); }
+      if (r.holder) {
+        stats.rejected++;
+        return { status: STATUS.taken, body: { t: 'error', code: 'taken', reason: 'someone already hosts this world', room: r.holder.code, n: r.holder.n ?? 1, max: r.holder.max ?? L.worldMaxSeats } };
+      }
+      // neither: a room code or peer id that already existed; try again with new ones
+    }
+    return no('busy', 'could not find a free room code, try again');
+  }
+
+  async function findRoom(m, ip, t) {
+    const key = cleanKey(m.key);
+    if (!key) return no('bad', 'key must be world:<slug> (lowercase letters, digits and dashes)');
+    // a lookup is a read (it opens nothing and can't guess a code): its own, larger budget per network
+    if ((await store.hit(`find|${ip}`, minute(t))) > L.findsPerIpPerMin) return no('rate', 'too many world lookups');
+    stats.finds++;
+    const r = await store.findKey(key, t - L.worldSilentMs);
+    return ok(r ? { t: 'found', code: r.code, n: r.n ?? 1, max: r.max ?? L.worldMaxSeats } : { t: 'none' });
+  }
+
   async function joinRoom(m, ip, t) {
     if ((await store.hit(`join|${ip}`, minute(t))) > L.joinsPerIpPerMin) return no('rate', 'too many join attempts');
     const code = cleanCode(m.code);
     const room = code.length === 6 ? await store.room(code) : null;
-    if (!room || room.closed != null || room.seen < t - L.hostSilentMs) return no('no-room', 'no game with that code (the host may have left)');
+    if (!room || room.closed != null || room.seen < t - (room.key ? L.worldSilentMs : L.hostSilentMs)) return no('no-room', 'no game with that code (the host may have left)');
     if ((await store.ipPeers(ip, t - L.joinerIdleMs)) >= L.socketsPerIp) return no('rate', 'too many signaling sessions from this network');
     if ((await store.joiners(code, t - L.joinerIdleMs)).length >= L.pendingPerRoom) return no('busy', 'too many players joining at once, try again');
     for (let i = 0; i < 4; i++) {
@@ -197,19 +298,34 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
 
   async function poll(me, m, t, signal) {
     stats.polls++;
+    // A world room's host reports its seats on its polls; written only when they changed.
+    if (me.role === 'host' && me.roomKey) {
+      const n = seatCount(m.n, 0, 16), max = seatCount(m.max, 1, L.worldMaxSeats);
+      if (n !== null && max !== null && (n !== me.roomN || max !== me.roomMax)) await store.setSeats(me.room, n, max);
+    }
     const after = Number.isSafeInteger(m.after) && m.after > 0 ? m.after : 0;
     if (after) await store.ack(me.id, after);
     const until = t + L.pollWaitMs;
     for (;;) {
+      // A poll whose client went away answers nothing: its messages stay queued (only the next poll's `after`
+      // acknowledges them, so nothing is lost), and a world host gone mid-wait is noted below.
+      if (signal?.aborted) break;
       const rows = await store.read(me.id, after, now() - L.messageTtlMs, L.pollBatch);
       if (rows.length) {
         const msgs = [];
         for (const r of rows) { try { msgs.push(JSON.parse(r.body)); } catch { /* never written by anything else */ } }
         return ok({ msgs, last: rows[rows.length - 1].seq });
       }
-      if (signal?.aborted || now() + L.pollEveryMs >= until) return ok({ msgs: [], last: after });
+      if (now() + L.pollEveryMs >= until) return ok({ msgs: [], last: after });
       await sleep(L.pollEveryMs, signal);
     }
+    if (me.role === 'host' && me.roomKey) {
+      // A world host's poll was cut off mid-wait: its tab crashed or its network dropped (a live host polls again at
+      // once). The room counts as quiet worldDropGraceMs from now unless the host comes back, so its guests can
+      // re-form sooner than worldSilentMs. Only while this is the host's latest poll: a newer one means it is back.
+      await store.quiet?.(me.room, now() - L.worldSilentMs + L.worldDropGraceMs, me.id, t);
+    }
+    return ok({ msgs: [], last: after });
   }
 
   async function leave(me, t) {
@@ -232,14 +348,15 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
     if (!isObj(m)) return no('bad', 'not an object');
     const t = now();
     await sweep(t);
-    if (m.op === 'host') return openRoom(await ipKey(ip), t);
+    if (m.op === 'host') return openRoom(await ipKey(ip), t, m);
     if (m.op === 'join') return joinRoom(m, await ipKey(ip), t);
+    if (m.op === 'find') return findRoom(m, await ipKey(ip), t);
     if (m.op !== 'signal' && m.op !== 'poll' && m.op !== 'leave') return no('bad', 'unknown op (signaling carries no game traffic)');
     const me = await session(m);
     if (!me) return no('no-room', 'not in a room (the session ended or expired)');
     // Token bucket per peer, as per WebSocket: ratePerSec, burst. Every request counts, polls included.
     const tokens = Math.min(L.burst, me.tokens + ((t - me.last) / 1000) * L.ratePerSec);
-    await store.touch(me.id, { tokens: Math.max(0, tokens - 1), last: t, seen: t }, me.role === 'host' ? me.room : null, t);
+    await store.touch(me.id, { tokens: Math.max(0, tokens - 1), last: t, seen: t, ...(m.op === 'poll' ? { polled: t } : {}) }, me.role === 'host' ? me.room : null, t);
     if (tokens < 1) return no('rate', 'too many messages');
     if (m.op === 'poll') return poll(me, m, t, signal);
     if (m.op === 'leave') return leave(me, t);
@@ -264,8 +381,16 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
 
 /**
  * The store for one Node process (the local signaling server and the tests). Same contract as pgStore():
- *   createRoom(room, hostPeer) → bool       room(code) → {code, host, created, seen, closed} | null
- *   peer(id) → {id, room, role, token, ip, created, seen, tokens, last, roomHost, roomClosed, roomSeen} | null
+ *   createRoom(room, hostPeer) → bool       room(code) → {code, host, created, seen, closed, key} | null
+ *   peer(id) → {id, room, role, token, ip, created, seen, tokens, last, roomHost, roomClosed, roomSeen, roomKey, roomN,
+ *              roomMax} | null
+ *   claimKey(room {code, host, created, key, n, max}, hostPeer, staleBefore, t) → {made, holder: {code, n, max} | null,
+ *              closed: [codes]}   ATOMIC: closes the open rooms with this key whose host was last seen before
+ *              staleBefore, then creates the room only when no open room holds the key (made), else names the holder
+ *   findKey(key, since) → {code, n, max} | null      the open room holding the key whose host was seen since `since`
+ *   setSeats(code, n, max)
+ *   quiet(code, seen, hostId, pollStart)   sets the room's seen back to `seen` unless its host started a poll after
+ *              pollStart (touch records a poll's start as the peer's `polled`)
  *   addPeer(peer) → bool (false when the room is gone or closed)   touch(id, {tokens, last, seen}, hostRoom|null, t)
  *   ipPeers(ip, since) → n live sessions      joiners(code, since) → [peer ids]     openRooms(since) → n
  *   push(id, body, t, max) → seq | null       ack(id, after)       read(id, after, since, max) → [{seq, body}]
@@ -274,17 +399,35 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
 export function memoryStore() {
   const rooms = new Map(), peers = new Map(), queues = new Map(), hits = new Map();
   let seq = 0;
-  const view = p => { const r = rooms.get(p.room); return { ...p, roomHost: r?.host ?? null, roomClosed: r ? r.closed : null, roomSeen: r?.seen ?? 0 }; };
+  const view = p => { const r = rooms.get(p.room); return { ...p, roomHost: r?.host ?? null, roomClosed: r ? r.closed : null, roomSeen: r?.seen ?? 0, roomKey: r?.key ?? null, roomN: r?.n ?? null, roomMax: r?.max ?? null }; };
   const drop = id => { peers.delete(id); queues.delete(id); };
   return {
     kind: 'memory',
     async openRooms(since) { let n = 0; for (const r of rooms.values()) if (r.closed == null && r.seen >= since) n++; return n; },
     async createRoom(room, host) {
       if (rooms.has(room.code) || peers.has(host.id)) return false;
-      rooms.set(room.code, { code: room.code, host: room.host, created: room.created, seen: room.created, closed: null });
+      rooms.set(room.code, { code: room.code, host: room.host, created: room.created, seen: room.created, closed: null, key: null, n: null, max: null });
       peers.set(host.id, { ...host });
       return true;
     },
+    // No await inside: the stale close, the check and the insert happen in one turn of the event loop.
+    async claimKey(room, host, staleBefore, t) {
+      const closed = [];
+      let holder = null;
+      for (const r of rooms.values()) {
+        if (r.key !== room.key || r.closed != null) continue;
+        if (r.seen < staleBefore) { r.closed = t; drop(r.host); closed.push(r.code); }
+        else holder = r;
+      }
+      if (holder) return { made: false, holder: { code: holder.code, n: holder.n, max: holder.max }, closed };
+      if (rooms.has(room.code) || peers.has(host.id)) return { made: false, holder: null, closed };
+      rooms.set(room.code, { code: room.code, host: room.host, created: room.created, seen: room.created, closed: null, key: room.key, n: room.n ?? 1, max: room.max ?? null });
+      peers.set(host.id, { ...host });
+      return { made: true, holder: null, closed };
+    },
+    async findKey(key, since) { for (const r of rooms.values()) if (r.key === key && r.closed == null && r.seen >= since) return { code: r.code, n: r.n, max: r.max }; return null; },
+    async setSeats(code, n, max) { const r = rooms.get(code); if (r) { r.n = n; r.max = max; } },
+    async quiet(code, seen, hostId, pollStart) { const r = rooms.get(code), h = peers.get(hostId); if (r && h && (h.polled ?? 0) <= pollStart && r.seen > seen) r.seen = seen; },
     async room(code) { const r = rooms.get(code); return r ? { ...r } : null; },
     async peer(id) { const p = peers.get(id); return p && rooms.has(p.room) ? view(p) : null; },
     async addPeer(p) { const r = rooms.get(p.room); if (!r || r.closed != null || peers.has(p.id)) return false; peers.set(p.id, { ...p }); return true; },

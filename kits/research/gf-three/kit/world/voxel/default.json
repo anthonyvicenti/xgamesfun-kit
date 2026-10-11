@@ -1,0 +1,340 @@
+{
+ "about": "The kit's default voxel world (CONTRACT \u00a79): create writes it to config/world.json for a spec with world.template 'voxel', with the terrain seeded from the title and the spec's world.voxel merged over it. Block ids are numbered in order and saved worlds keep the numbers: only ever add blocks at the end. Textures come from research/gf-three/library/textures/voxel/.",
+ "size": [
+  128,
+  64,
+  128
+ ],
+ "floor": 1,
+ "signBlock": "sign",
+ "signInk": "#2b1d12",
+ "signPaper": "#f6ecd6",
+ "glow": 1.6,
+ "blocks": [
+  {
+   "id": "grass",
+   "label": "Grass",
+   "tex": {
+    "top": "grass-top",
+    "side": "grass-side",
+    "bottom": "dirt"
+   },
+   "place": true
+  },
+  {
+   "id": "dirt",
+   "label": "Dirt",
+   "tex": "dirt",
+   "place": true
+  },
+  {
+   "id": "stone",
+   "label": "Stone",
+   "tex": "stone",
+   "place": true
+  },
+  {
+   "id": "sand",
+   "label": "Sand",
+   "tex": "sand",
+   "place": true
+  },
+  {
+   "id": "seabed",
+   "label": "Grey sand",
+   "tex": "seabed",
+   "natural": true,
+   "place": true
+  },
+  {
+   "id": "cobble",
+   "label": "Cobbles",
+   "tex": "cobble"
+  },
+  {
+   "id": "stone-brick",
+   "label": "Stone bricks",
+   "tex": "stone-brick"
+  },
+  {
+   "id": "planks",
+   "label": "Planks",
+   "tex": "planks"
+  },
+  {
+   "id": "red-planks",
+   "label": "Red planks",
+   "tex": "red-planks"
+  },
+  {
+   "id": "log",
+   "label": "Log",
+   "tex": {
+    "top": "log-top",
+    "side": "log-side",
+    "bottom": "log-top"
+   }
+  },
+  {
+   "id": "leaves",
+   "label": "Leaves",
+   "kind": "cutout",
+   "tex": "leaves"
+  },
+  {
+   "id": "brick",
+   "label": "Bricks",
+   "tex": "brick"
+  },
+  {
+   "id": "glass",
+   "label": "Glass",
+   "kind": "glass",
+   "tex": "glass"
+  },
+  {
+   "id": "snow",
+   "label": "Snow",
+   "tex": "snow"
+  },
+  {
+   "id": "ice",
+   "label": "Ice",
+   "tex": "ice"
+  },
+  {
+   "id": "cloth-blue",
+   "label": "Blue cloth",
+   "tex": "cloth-blue"
+  },
+  {
+   "id": "cloth-green",
+   "label": "Green cloth",
+   "tex": "cloth-green"
+  },
+  {
+   "id": "cloth-red",
+   "label": "Red cloth",
+   "tex": "cloth-red"
+  },
+  {
+   "id": "cloth-tan",
+   "label": "Tan cloth",
+   "tex": "cloth-tan"
+  },
+  {
+   "id": "lamp",
+   "label": "Lamp",
+   "kind": "glow",
+   "tex": "lamp",
+   "light": true
+  },
+  {
+   "id": "sign",
+   "label": "Sign",
+   "kind": "sign",
+   "tex": "planks"
+  },
+  {
+   "id": "boom",
+   "label": "Boom block",
+   "tex": {
+    "top": "boom-top",
+    "side": "boom-side",
+    "bottom": "boom-side"
+   },
+   "boom": true
+  },
+  {
+   "id": "bedrock",
+   "label": "Bedrock",
+   "tex": "bedrock",
+   "natural": true,
+   "place": false,
+   "break": false
+  },
+  {
+   "id": "tuft-a",
+   "label": "Grass tuft",
+   "kind": "plant",
+   "tex": "tuft-a",
+   "natural": true,
+   "place": true
+  },
+  {
+   "id": "tuft-b",
+   "label": "Leafy tuft",
+   "kind": "plant",
+   "tex": "tuft-b",
+   "natural": true,
+   "place": true
+  },
+  {
+   "id": "tuft-c",
+   "label": "Reeds",
+   "kind": "plant",
+   "tex": "tuft-c",
+   "natural": true,
+   "place": true
+  },
+  {
+   "id": "tuft-d",
+   "label": "Tall grass",
+   "kind": "plant",
+   "tex": "tuft-d",
+   "natural": true,
+   "place": true
+  },
+  {
+   "id": "mushroom-red",
+   "label": "Red mushroom",
+   "kind": "plant",
+   "tex": "mushroom-red",
+   "natural": true,
+   "place": true
+  },
+  {
+   "id": "mushroom-brown",
+   "label": "Brown mushroom",
+   "kind": "plant",
+   "tex": "mushroom-brown",
+   "natural": true,
+   "place": true
+  },
+  {
+   "id": "mushroom-tan",
+   "label": "Pale mushroom",
+   "kind": "plant",
+   "tex": "mushroom-tan",
+   "natural": true,
+   "place": true
+  }
+ ],
+ "textures": {
+  "grass-top": "library:textures/voxel/grass-top.png",
+  "grass-side": "library:textures/voxel/grass-side.png",
+  "dirt": "library:textures/voxel/dirt.png",
+  "stone": "library:textures/voxel/stone.png",
+  "sand": "library:textures/voxel/sand.png",
+  "seabed": "library:textures/voxel/seabed.png",
+  "cobble": "library:textures/voxel/cobble.png",
+  "stone-brick": "library:textures/voxel/stone-brick.png",
+  "planks": "library:textures/voxel/planks.png",
+  "red-planks": "library:textures/voxel/red-planks.png",
+  "log-side": "library:textures/voxel/log-side.png",
+  "log-top": "library:textures/voxel/log-top.png",
+  "leaves": "library:textures/voxel/leaves.png",
+  "brick": "library:textures/voxel/brick.png",
+  "glass": "library:textures/voxel/glass.png",
+  "snow": "library:textures/voxel/snow.png",
+  "ice": "library:textures/voxel/ice.png",
+  "cloth-blue": "library:textures/voxel/cloth-blue.png",
+  "cloth-green": "library:textures/voxel/cloth-green.png",
+  "cloth-red": "library:textures/voxel/cloth-red.png",
+  "cloth-tan": "library:textures/voxel/cloth-tan.png",
+  "tuft-a": "library:textures/voxel/tuft-a.png",
+  "tuft-b": "library:textures/voxel/tuft-b.png",
+  "tuft-c": "library:textures/voxel/tuft-c.png",
+  "tuft-d": "library:textures/voxel/tuft-d.png",
+  "mushroom-red": "library:textures/voxel/mushroom-red.png",
+  "mushroom-brown": "library:textures/voxel/mushroom-brown.png",
+  "mushroom-tan": "library:textures/voxel/mushroom-tan.png",
+  "lamp": "library:textures/voxel/lamp.png",
+  "boom-side": "library:textures/voxel/boom-side.png",
+  "boom-top": "library:textures/voxel/boom-top.png",
+  "bedrock": "library:textures/voxel/bedrock.png"
+ },
+ "paint": [
+  "#e8483f",
+  "#f28c28",
+  "#f5d33f",
+  "#8ad13f",
+  "#2fa84f",
+  "#2bb3a8",
+  "#3fa9f5",
+  "#3d5be0",
+  "#8a4fd6",
+  "#f06aa8",
+  "#f5f3ee",
+  "#b8bcc2",
+  "#555b63",
+  "#2a2b2e",
+  "#8a5a36"
+ ],
+ "terrain": {
+  "generator": 1,
+  "kind": "island",
+  "water": 12,
+  "ground": 15,
+  "radius": 52,
+  "hills": 10,
+  "coast": 0.24,
+  "beach": 2,
+  "lake": {
+   "at": [
+    40,
+    82
+   ],
+   "radius": 7,
+   "depth": 3
+  },
+  "trees": 46,
+  "plants": 420,
+  "plaza": {
+   "at": [
+    64,
+    64
+   ],
+   "half": 6,
+   "floor": "cobble",
+   "edge": "stone-brick",
+   "sign": true,
+   "signText": "Welcome to {title}!\nBuild anything.\nIt all stays."
+  },
+  "blocks": {
+   "grass": "grass",
+   "dirt": "dirt",
+   "stone": "stone",
+   "sand": "sand",
+   "seabed": "seabed",
+   "bedrock": "bedrock",
+   "log": "log",
+   "leaves": "leaves",
+   "plants": [
+    "tuft-a",
+    "tuft-a",
+    "tuft-b",
+    "tuft-d",
+    "tuft-c",
+    "mushroom-red",
+    "mushroom-brown",
+    "mushroom-tan"
+   ]
+  }
+ },
+ "hotbar": [
+  "planks",
+  "brick",
+  "glass",
+  "sign",
+  "boom",
+  "lamp",
+  "stone-brick",
+  "log",
+  "red-planks",
+  "cobble",
+  "stone",
+  "grass",
+  "dirt",
+  "sand",
+  "leaves",
+  "snow",
+  "ice",
+  "cloth-red",
+  "cloth-blue",
+  "cloth-green",
+  "cloth-tan",
+  "mushroom-red",
+  "tuft-d"
+ ]
+}

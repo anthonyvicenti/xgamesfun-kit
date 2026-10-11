@@ -1,13 +1,14 @@
 // gf-three controller (CONTRACT §4.5): a player's body on the Rapier capsule, its character placed on it, and for the
 // local player the camera rig and the aim.
 //
-//   const c = createController(ctx, { player, character, camera: 'third' | 'first' | 'top' | null, speed, jump });
+//   const c = createController(ctx, { player, character, camera: 'third' | 'first' | 'top' | 'follow' | null, speed, jump });
 //   c.update(dt)       every frame: places the character (interpolated between physics steps), animates it, moves the camera
 //   c.pose()           {x, y, z, yaw, anim, aim, extra} for the net
 //   c.teleport(p, yaw) c.knock(impulse, seconds, {budget})  c.push(impulse)  c.enabled = false (input ignored; physics continues)
 //   c.aimAt(point|null) hold the aim on a world point (QA, fixtures, cutscenes); null gives it back to the crosshair
 //   c.setCharacter(ch) drive another character (a player's own body arrived: CONTRACT §6e)
-//   Aim (kit/core/aim.js): the local player with a third or first camera aims at the point under the crosshair:
+//   Aim (kit/core/aim.js): the local player with a third or first camera aims at the point under the crosshair, with
+//   the 'follow' camera (CONTRACT §8) at the point under the mouse cursor (the input's cursor mode: no pointer lock):
 //   player.aim (a unit direction from feet + AIM_HEIGHT) and player.aimDist (the distance to that point; the pose's
 //   `ad`). While primary or secondary is held in a game with an aimed mechanic (ctx.aimed), the body turns to the aim.
 //   A knock with a budget (fair play F1, ctx.fair.split = {total, ragdoll, getup}) is out of control for budget.total
@@ -28,11 +29,16 @@ export function createController(ctx, { player, character = null, camera = null,
   const cfg = capsuleConfig({ move: { ...(speed ? { runSpeed: speed } : {}), ...(sprint ? { sprintSpeed: sprint } : {}) }, jump: jump ? { velocity: jump } : {} });
   const cap = createCapsule(ctx.RAPIER, ctx.physics, cfg, { x: spawn.x, y: spawn.y + 0, z: spawn.z, yaw: spawn.yaw ?? 0 }, { userData: { player: player.id } });
   cap.reset({ x: spawn.x, y: spawn.y + cap.feetOffset, z: spawn.z }, spawn.yaw ?? 0);
-  const rig = camera ? createCameraRig({ camera: ctx.camera, mode: camera, physics: { RAPIER: ctx.RAPIER, world: ctx.physics }, exclude: cap.collider, settings, yaw: spawn.yaw ?? 0 }) : null;
+  const rig = camera ? createCameraRig({ camera: ctx.camera, mode: camera, physics: { RAPIER: ctx.RAPIER, world: ctx.physics }, exclude: cap.collider, settings, yaw: spawn.yaw ?? 0, pointer: () => ctx.input?.pointer, wheel: () => ctx.input?.wheel ?? 0, free: () => !!ctx.input?.aimFree }) : null;
+  if (camera === 'follow' && ctx.input) ctx.input.cursorMode = true;
+  if (camera === 'orbit' && ctx.input) ctx.input.cursorMode = 'drag';
+  // first person in a world (CONTRACT §9): the lock where the page allows it, the 'drag' way where a post refuses it
+  const firstWorld = camera === 'first' && ctx.config?.round?.mode === 'world';
+  if (firstWorld && ctx.input) ctx.input.cursorMode = 'look';
   const prev = new THREE.Vector3(), curr = new THREE.Vector3(), drawn = new THREE.Vector3();
   const snap = () => { const t = cap.body.translation(); prev.set(t.x, t.y, t.z); curr.copy(prev); };
   snap();
-  let jumpPresses = 0, landT = 9, animOverride = null, alpha = 0, forced = null, aimFace = null;
+  let jumpPresses = 0, landT = 9, animOverride = null, alpha = 0, forced = null, aimFace = null, faceHold = null;
   const c = {
     player, character, rig, capsule: cap, body: cap.body, collider: cap.collider, state: cap.state, enabled: true, anim: 'idle',
     feet: new THREE.Vector3(),
@@ -48,7 +54,9 @@ export function createController(ctx, { player, character = null, camera = null,
       }
       // a ragdolled or standing-up character holds its capsule still (track C's character.state)
       const down = !!character?.state && character.state !== 'anim';
-      cap.step({ x, z, sprint: !!inp.sprint || (player.local && ctx.input.sprint), jumpPresses, enabled: c.enabled && player.alive !== false && !down, face: inp.face ?? aimFace ?? undefined, speed: inp.speed });
+      // first person: the body turns with the view, so the others see a player face where they look
+      const view = rig?.state.mode === 'first' && player.local ? rig.yaw : undefined;
+      cap.step({ x, z, sprint: !!inp.sprint || (player.local && ctx.input.sprint), jumpPresses, enabled: c.enabled && player.alive !== false && !down, face: inp.face ?? aimFace ?? view, speed: inp.speed });
       jumpPresses = 0;
     },
     postStep() { prev.copy(curr); const p = cap.post(); curr.set(p.x, p.y, p.z); if (cap.state.landed) landT = 0; },
@@ -80,15 +88,19 @@ export function createController(ctx, { player, character = null, camera = null,
         character.object3d.position.copy(c.feet);
         character.object3d.rotation.y = s.facing;
         driveCharacter(character, word, s.speed, s.onGround, { upSeconds: ctx.fair?.on ? ctx.fair.split.getup : null });
-        if (player.aim) character.setAim?.(Math.max(-1, Math.min(1, player.aim[1] * 1.6)));
+        if (player.aim) character.setAim?.(rig?.state.mode === 'follow' ? 0 : Math.max(-1, Math.min(1, player.aim[1] * 1.6)));
         character.update?.(dt);
       }
       if (rig) {
         if (player.local && c.enabled) rig.look(ctx.input.look.dx, ctx.input.look.dy);
         rig.update(dt, c.feet, { onGround: s.onGround });
+        // a wall pulled the orbit camera right up to the head: hide the player's own body rather than look out of it
+        if (rig.state.mode === 'orbit' && character?.object3d) { const close = rig.state.current < 0.9; if (close !== !!c._camClose) { c._camClose = close; character.object3d.visible = !close; } }
+        // first person: the player's own body is never drawn here (a body that arrives later, a loadout's, included)
+        if (rig.state.mode === 'first' && character?.object3d?.visible) character.object3d.visible = false;
         // the aim: the point under the crosshair (or a held point), from the aim origin (kit/core/aim.js)
         const o = { x: c.feet.x, y: c.feet.y + AIM_HEIGHT, z: c.feet.z }, ray = forced ? null : rig.ray?.();
-        const P = forced ?? (ray ? crosshairPoint(ctx, ray.from, ray.dir, { self: player, selfVisible: rig.state.mode === 'third', exclude: cap.collider }) : null);
+        const P = forced ?? (ray ? crosshairPoint(ctx, ray.from, ray.dir, { self: player, selfVisible: rig.state.mode === 'third' || rig.state.mode === 'orbit', exclude: cap.collider, fromCamera: !!ray.fromCamera }) : null);
         if (P) {
           const a = aimFrom(o, P);
           player.aim = a.aim; player.aimDist = a.dist; player.aimPoint = { x: P.x, y: P.y, z: P.z };
@@ -99,7 +111,7 @@ export function createController(ctx, { player, character = null, camera = null,
         }
         // firing in a game with an aimed mechanic: the body turns to where the shot goes
         const fire = acts?.primary?.down || acts?.secondary?.down;
-        aimFace = player.local && ctx.aimed && fire && rig.state.mode !== 'top' && c.enabled ? Math.atan2(player.aim[0], player.aim[2]) : null;
+        aimFace = faceHold && faceHold.until > ctx.time.now ? faceHold.yaw : player.local && ctx.aimed && fire && rig.state.mode !== 'top' && c.enabled ? Math.atan2(player.aim[0], player.aim[2]) : null;
       } else if (!player.aim || player.isBot) {
         const f = player.input?.face ?? s.facing;
         player.aim = player.input?.aim ?? [Math.sin(f), 0, Math.cos(f)];
@@ -114,6 +126,8 @@ export function createController(ctx, { player, character = null, camera = null,
       if (extra && Object.keys(extra).length) p.extra = extra;
       return p;
     },
+    /** Turn the body to a heading (yaw, radians) for `seconds`: a builder faces the block they place. */
+    faceTo(yaw, seconds = 0.5) { if (Number.isFinite(yaw)) faceHold = { yaw, until: ctx.time.now + seconds }; },
     /** Hold the aim on a world point {x, y, z} (QA, fixtures, a cutscene); null gives it back to the crosshair. */
     aimAt(point) { forced = point && Number.isFinite(point.x) ? { x: point.x, y: point.y ?? 0, z: point.z, hit: 'held', onSelf: false } : null; },
     /** Hold an anim word (a throw, a cheer) for `seconds`: the character plays it here and the pose carries it. */

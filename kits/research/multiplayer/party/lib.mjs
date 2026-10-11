@@ -4,8 +4,12 @@
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { attachSignaling } from '../p2p/signal-server.mjs';
 import { KIT_DIR } from './manifest.mjs';
+
+const WATCH_RELAY = new URL('../../watch/relay/node.mjs', import.meta.url);
 
 export * from './manifest.mjs';
 
@@ -23,12 +27,15 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset
  * the gate uses it to try a game with the kit and a draft manifest before anything is written into the game.
  * `transports` turns either signaling transport off (the kit's fallback tests: a host with no HTTP signaling, or none).
  */
-export async function startParty({ dir, port = 0, host = '127.0.0.1', overlay = null, isolated = false, log = () => {}, transports = ['ws', 'http'] } = {}) {
+export async function startParty({ dir, port = 0, host = '127.0.0.1', overlay = null, isolated = false, log = () => {}, transports = ['ws', 'http'], watch = true } = {}) {
   const base = resolve(dir);
   const requests = [];
   const server = createServer(async (req, res) => {
     if (transports.includes('http') && sig.handleHttp(req, res)) return;      // HTTP signaling: POST /signal/v1, GET /signal/v1/ice
     const url = new URL(req.url, 'http://x');
+    // watch then play (gf-multiplayer 1.6.0, research/watch/PLAN.md): the play host's config answer and the stream relay
+    if (url.pathname === '/watch/v1') { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); return res.end(JSON.stringify({ v: 1, relay: relay ? `ws://${req.headers.host}/watch/v1/` : null, studio: null })); }
+    if (relay?.handleHttp(req, res)) return;
     const send = (code, body, type = 'text/plain; charset=utf-8') => {
       const headers = { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
       if (isolated) { headers['cross-origin-opener-policy'] = 'same-origin'; headers['cross-origin-embedder-policy'] = 'require-corp'; headers['cross-origin-resource-policy'] = 'same-origin'; }
@@ -49,9 +56,19 @@ export async function startParty({ dir, port = 0, host = '127.0.0.1', overlay = 
     } catch { return send(404, 'not found'); }
   });
   const sig = attachSignaling(server, { path: '/signal', log });
+  // the stream relay's WebSockets go with the others: a server without WebSockets has neither (its listener would otherwise
+  // hold other upgrade requests open instead of letting Node close them)
+  // The relay is loaded only here, and only when it is in the checkout (research/watch/relay): a server for a game that
+  // never streams does not need the folder. Without it /watch/v1 answers relay: null, which is what a play host with
+  // no relay answers, and the log says so once.
+  let relay = null;
+  if (watch && transports.includes('ws')) {
+    if (existsSync(fileURLToPath(WATCH_RELAY))) relay = (await import(WATCH_RELAY.href)).attachWatchRelay(server, { path: '/watch/v1/', log });
+    else log('watch: research/watch/relay is not in this checkout, so this server has no stream relay (watch then play is off)');
+  }
   if (!transports.includes('ws')) server.removeAllListeners('upgrade');      // no listener: Node closes upgrade requests
   await new Promise((ok, no) => { server.once('error', no); server.listen(port, host, ok); });
   const at = server.address().port;
-  return { server, sig, port: at, requests, url: `http://${host}:${at}/`, partyUrl: `http://${host}:${at}/${KIT_DIR}/`,
-    close: () => new Promise(r => { sig.close(); server.close(r); server.closeAllConnections?.(); }) };
+  return { server, sig, relay, port: at, requests, url: `http://${host}:${at}/`, partyUrl: `http://${host}:${at}/${KIT_DIR}/`,
+    close: () => new Promise(r => { sig.close(); relay?.close(); server.close(r); server.closeAllConnections?.(); }) };
 }

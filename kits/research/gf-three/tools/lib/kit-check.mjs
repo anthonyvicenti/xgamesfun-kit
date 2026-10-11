@@ -5,7 +5,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { KIT, GF_AUDIO, VENDOR, walk, sha256 } from './paths.mjs';
+import { KIT, SCENIC_KIT, FORGE_KIT, GF_AUDIO, VENDOR, walk, sha256 } from './paths.mjs';
 import { KIT_VERSION as MP_VERSION, checkKitReleased } from '../../../multiplayer/party/manifest.mjs';
 import { addonClosure } from './vendor.mjs';
 
@@ -17,6 +17,7 @@ async function sums(file) {
 
 export async function checkKitCopies(gameDir) {
   const problems = [], notes = [];
+  let forgeEngine = false;
   // gf/three: every file in kit.js, unchanged, and nothing else
   const kitJs = join(gameDir, 'gf/three/kit.js');
   if (!existsSync(kitJs)) problems.push('gf/three/kit.js is missing (re-run create)');
@@ -34,6 +35,31 @@ export async function checkKitCopies(gameDir) {
       let stale = 0;
       for (const [rel, h] of Object.entries(rec.files ?? {})) { const src = await readFile(join(KIT, rel)).catch(() => null); if (!src || sha256(src) !== h) stale++; }
       if (stale) notes.push(`gf/three is kit ${rec.version} as it was when create ran; ${stale} file(s) have changed in research/gf-three/kit since (re-run create to update)`);
+      // gf/scenic (the scenic engine, CONTRACT §8): every file kit.js lists, unchanged, and nothing else
+      const sc = rec.engine === 'scenic' ? rec.scenic?.files ?? null : null;
+      if (rec.engine === 'scenic' && !sc) problems.push('gf/three/kit.js says the engine is scenic but lists no gf/scenic files (re-run create)');
+      const haveSc = await walk(join(gameDir, 'gf/scenic'));
+      for (const [rel, h] of Object.entries(sc ?? {})) {
+        const cur = await readFile(join(gameDir, 'gf/scenic', rel)).catch(() => null);
+        if (!cur) problems.push(`gf/scenic/${rel}: missing`); else if (sha256(cur) !== h) problems.push(`gf/scenic/${rel}: edited (differs from the copy create made)`);
+      }
+      for (const rel of haveSc) if (!(rel in (sc ?? {}))) problems.push(`gf/scenic/${rel}: not a scenic engine file`);
+      let staleSc = 0;
+      for (const [rel, h] of Object.entries(sc ?? {})) { const src = await readFile(join(SCENIC_KIT, rel)).catch(() => null); if (!src || sha256(src) !== h) staleSc++; }
+      if (staleSc) notes.push(`gf/scenic is gf-scenic ${rec.scenic?.version} as it was when create ran; ${staleSc} file(s) have changed in research/gf-scenic/kit since (re-run create to update)`);
+      // gf/forge (the forge engine, CONTRACT §8 forge): every file kit.js lists (the release wasm among them), unchanged
+      forgeEngine = rec.engine === 'forge';
+      const fo = forgeEngine ? rec.forge?.files ?? null : null;
+      if (forgeEngine && !fo) problems.push('gf/three/kit.js says the engine is forge but lists no gf/forge files (re-run create)');
+      for (const [rel, h] of Object.entries(fo ?? {})) {
+        const cur = await readFile(join(gameDir, 'gf/forge', rel)).catch(() => null);
+        if (!cur) problems.push(`gf/forge/${rel}: missing`); else if (sha256(cur) !== h) problems.push(`gf/forge/${rel}: edited (differs from the copy create made)`);
+      }
+      for (const rel of await walk(join(gameDir, 'gf/forge'))) if (!(rel in (fo ?? {}))) problems.push(`gf/forge/${rel}: not a forge engine file`);
+      if (fo && rec.forge?.wasm && fo['wasm/forge_web_bg.wasm'] !== rec.forge.wasm) problems.push(`gf/forge/wasm/forge_web_bg.wasm is not the build kit.js names (${String(rec.forge.wasm).slice(0, 12)})`);
+      let staleFo = 0;
+      for (const [rel, h] of Object.entries(fo ?? {})) { const src = await readFile(join(FORGE_KIT, rel)).catch(() => null); if (!src || sha256(src) !== h) staleFo++; }
+      if (staleFo) notes.push(`gf/forge is gf-forge ${rec.forge?.version} as it was when create ran; ${staleFo} file(s) have changed in research/gf-forge/kit since (re-run create to update)`);
     }
   }
   // gf/mp
@@ -52,7 +78,7 @@ export async function checkKitCopies(gameDir) {
   // vendor/: byte-identical to the pinned sources
   const pinned = rel => {
     if (rel.startsWith('vendor/three/examples/jsm/')) { for (const d of VENDOR.threeAddons) { const p = join(d, rel.slice('vendor/three/'.length)); if (existsSync(p)) return p; } return null; }
-    if (rel.startsWith('vendor/three/')) return join(VENDOR.threeBuild, rel.slice('vendor/three/'.length));
+    if (rel.startsWith('vendor/three/')) { const r = rel.slice('vendor/three/'.length), a = join(VENDOR.threeBuild, r); return existsSync(a) ? a : join(VENDOR.threeWebgpu, r); }
     for (const k of ['rapier', 'postprocessing', 'n8ao']) if (rel.startsWith(`vendor/${k}/`)) return join(VENDOR[k], rel.slice(`vendor/${k}/`.length));
     return null;
   };
@@ -61,9 +87,11 @@ export async function checkKitCopies(gameDir) {
     if (!src || !existsSync(src)) { problems.push(`${rel}: not a pinned library file`); continue; }
     if (sha256(await readFile(join(gameDir, rel))) !== sha256(await readFile(src))) problems.push(`${rel}: differs from the pinned copy`);
   }
+  // a forge game vendors no library: vendor/ must be empty, and nothing of three.js is imported
+  if (forgeEngine) return { ok: problems.length === 0, problems, notes };
   // every three.js addon the kit, the libraries and rules.js import is there
   const texts = [];
-  for (const rel of await walk(join(gameDir, 'gf/three'))) if (/\.m?js$/.test(rel)) texts.push(await readFile(join(gameDir, 'gf/three', rel), 'utf8'));
+  for (const sub of ['gf/three', 'gf/scenic']) for (const rel of await walk(join(gameDir, sub))) if (/\.m?js$/.test(rel)) texts.push(await readFile(join(gameDir, sub, rel), 'utf8'));
   for (const f of ['vendor/n8ao/N8AO.js', 'vendor/postprocessing/postprocessing.module.js', 'rules.js']) texts.push(await readFile(join(gameDir, f), 'utf8').catch(() => ''));
   try { for (const a of await addonClosure(texts)) if (!existsSync(join(gameDir, 'vendor/three/examples/jsm', a))) problems.push(`vendor/three/examples/jsm/${a}: imported but not vendored (re-run create)`); }
   catch (e) { problems.push(e.message); }

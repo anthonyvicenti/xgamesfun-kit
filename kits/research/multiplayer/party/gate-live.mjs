@@ -17,7 +17,7 @@
 // background; a result reaches both; play again; a reload drops back into the round and sees the others; the host
 // ends a round; the host leaving closes the room.
 import { fuzz } from '../../asset-manifest/play-driver.mjs';
-import { checkTransport, inFrame, p2p, sleep, snap, until } from './gate-lib.mjs';
+import { checkTransport, endRound, inFrame, p2p, sleep, snap, until } from './gate-lib.mjs';
 
 const dist = (a, b) => Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0), (a.z ?? 0) - (b.z ?? 0));
 
@@ -119,7 +119,7 @@ export async function gateLive({ manifest, live, assets, dir, srv, player, check
   } else check('a-background-host-does-not-stop-the-world', false, 'not checked: the round had already ended before this step (give check.query a gentler round, or check.seconds more time)', { soft: true });
 
   // ---- a result for the round, the same on both ----
-  if ((await snap(H.page))?.room !== 'results') { await freeMouse(H.page); await H.page.click('#stop', { timeout: 4000 }).catch(() => {}); }
+  if ((await snap(H.page))?.room !== 'results') { await freeMouse(H.page); await endRound(H.page); }
   await until(async () => (await snap(H.page))?.room === 'results' && (await snap(J.page))?.room === 'results', 20000, 'the round to end');
   await until(async () => (await snap(H.page))?.results && (await snap(J.page))?.results, 5000, 'the results').catch(() => {});
   const [h2, j2] = [await snap(H.page), await snap(J.page)];
@@ -142,7 +142,7 @@ export async function gateLive({ manifest, live, assets, dir, srv, player, check
   check('reload-drops-back-into-the-round', !!back && back.s.you === j0.you, back ? `seat ${back.s.you} again, playing, and drawing the host` : 'after a reload the joiner did not get back into the running round (a late or returning player starts from net.onStart at once and takes the world from the host)');
   await shot(J.page, 'joiner-after-reload');
 
-  if ((await snap(H.page))?.room !== 'results') { await freeMouse(H.page); await H.page.click('#stop', { timeout: 4000 }).catch(() => {}); }
+  if ((await snap(H.page))?.room !== 'results') { await freeMouse(H.page); await endRound(H.page); }
   await until(async () => (await snap(H.page))?.room === 'results' && (await snap(J.page))?.room === 'results', 20000, 'End round').then(() => check('host-ends-the-round', true, 'both pages show round 2 results')).catch(e => check('host-ends-the-round', false, e.message));
 
   await H.page.close();

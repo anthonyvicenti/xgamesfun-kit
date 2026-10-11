@@ -11,15 +11,19 @@
 // Trust: results are each player's own claim, relayed by a host who can read and change everything. Fine for friends;
 // nothing here may feed a leaderboard, a prize or a token.
 //
-// Client → room:  {k:'config', metric, direction, maxSeconds, live?, team?}   host only, between rounds
+// Client → room:  {k:'config', metric, direction, maxSeconds, live?, team?, minPlayers?}   host only, between rounds
+//                                                               (minPlayers, kit 1.4.0: connected players a start needs)
+//                 {k:'config', world: true}                     host only, before the first round: a world (kit 1.5.0)
 //                 {k:'start'} · {k:'stop'}                      host only
 //                 {k:'progress', p?: 0..1, v?: number}          a racer's progress share and live value
-//                 {k:'finish', value, won?}                     a racer's result, once per round (team: the host's, for all)
+//                 {k:'finish', value, won?, values?}            a racer's result, once per round (team: the host's, for all;
+//                                                               values {id: number}: each player's own score, kit 1.4.0)
 //                 {k:'ready'}                                   live: this player's game has loaded and can start
 //                 {k:'net', t, to?, d}                          live: a game message for 'all' (default), 'host' or a player id
 // Room → client:  {k:'go', round, seed, startsInMs, cfg, resumed?}
 //                 {k:'begin', startsInMs}                       live: everyone starts playing then
-//                 {k:'net', t, from, d}
+//                 {k:'net', t, from, d, to?}                     to: set on a message for one player (kit 1.6.0), so a
+//                                                               streaming copy forwards only what everyone was sent
 //                 {k:'standings', phase, round, hostId, cfg, elapsedMs, startsInMs, racers: [...]}
 //                 {k:'error', reason}
 //
@@ -28,8 +32,13 @@
 // sends it to everyone. The room only carries those messages: it never looks inside them. A live round waits until
 // every game has loaded ('loading'), then counts down and starts everyone together, and a late joiner drops into
 // the round in progress. cfg.team: one result for everybody, reported by the host's copy.
+//
+// WORLDS (kit 1.5.0): {k:'config', world: true} from the host, before any round, makes the room a world for good:
+// phase 'world', no rounds, ready wait, countdown, time cap or results. Everyone in it, and everyone who joins later,
+// is in at once; game messages ('net') flow as in a live round; a player who leaves is gone (the host engine frees the
+// seat and the name). start, stop, progress and finish do nothing.
 
-const DEFAULTS = { metric: 'score', direction: 'higher', maxSeconds: 300, live: false, team: false };
+const DEFAULTS = { metric: 'score', direction: 'higher', maxSeconds: 300, live: false, team: false, minPlayers: 1 };
 const COUNTDOWN_MS = 3000;
 const LOADING_MS = 25000;       // live: how long a round waits for every game to say it has loaded
 const METRICS = ['score', 'time', 'count'];
@@ -41,6 +50,7 @@ export default {
 
   onJoin(s, player, api) {
     elect(s, api);
+    if (s.phase === 'world') { s.racers[player.id] = fresh(true); return standings(s, api); }   // in at once
     // A late joiner watches the round in progress and races the next one. A rejoining racer keeps their seat.
     const between = s.phase === 'lobby' || s.phase === 'results';
     // Live: a late joiner drops into the shared round. Race: they would only get a head start to nowhere, so they wait.
@@ -57,6 +67,7 @@ export default {
 
   onLeave(s, player, api) {
     elect(s, api);
+    if (s.phase === 'world') { if (!api.players.some(p => p.id === player.id)) delete s.racers[player.id]; return standings(s, api); }
     if (s.phase === 'loading' && allReady(s, api)) return begin(s, api);
     if (s.phase === 'racing' && !s.cfg.team && allDone(s, api)) return finish(s, api);
     standings(s, api);
@@ -69,15 +80,30 @@ export default {
     switch (msg.k) {
       case 'config': {
         if (!isHost || !between) return;
+        if (msg.world === true) {
+          if (s.round !== 0) return;
+          // A world, for good: one endless "round" everyone is in, so game messages flow (kit 1.5.0).
+          s.cfg = { ...s.cfg, live: true, team: false, world: true, minPlayers: 1 };
+          s.phase = 'world'; s.round = 1; s.startAt = api.now;
+          s.seed = String(1 + api.randomInt(2 ** 31 - 2));
+          s.racers = {};
+          for (const p of api.players) if (p.connected) s.racers[p.id] = fresh(true);
+          return standings(s, api);
+        }
         if (METRICS.includes(msg.metric)) s.cfg.metric = msg.metric;
         if (msg.direction === 'higher' || msg.direction === 'lower') s.cfg.direction = msg.direction;
         if (Number.isInteger(msg.maxSeconds) && msg.maxSeconds >= 5 && msg.maxSeconds <= 3600) s.cfg.maxSeconds = msg.maxSeconds;
         if (typeof msg.live === 'boolean') s.cfg.live = msg.live;
         if (typeof msg.team === 'boolean') s.cfg.team = msg.team && s.cfg.live;
+        if (Number.isInteger(msg.minPlayers) && msg.minPlayers >= 1 && msg.minPlayers <= 8) s.cfg.minPlayers = msg.minPlayers;
         return standings(s, api);
       }
       case 'start': {
         if (!isHost || !between) return api.send(player.id, { k: 'error', reason: 'only the host can start, between rounds' });
+        // Friends play friends, never bots (creator 2026-10-08: "We really shouldn't have bots in multiplayer modes"):
+        // a round needs the players the host's page asked for (kit 1.4.0: two), all here.
+        const here = api.players.filter(p => p.connected && !p.bot).length;
+        if (here < (s.cfg.minPlayers ?? 1)) return api.send(player.id, { k: 'error', reason: `a round needs ${s.cfg.minPlayers} players: invite a friend first` });
         s.round++;
         // Live: wait for every game to load, then count down. Race: count down at once (the game starts when it starts).
         if (s.cfg.live) { s.phase = 'loading'; s.startAt = api.now + LOADING_MS; }
@@ -96,12 +122,14 @@ export default {
         return;
       }
       case 'net': {
+        // kit 1.6.1: a stream's LIVE notice reaches everyone in the room in any phase (the waiting room included)
+        if (msg.t === 'gf:live' && s.cfg.live && msg.d && typeof msg.d === 'object') return api.broadcast({ k: 'net', t: msg.t, from: player.id, d: { on: !!msg.d.on, n: Math.max(0, msg.d.n | 0) } }, player.id);
         // A game message. The room carries it and never reads it; the host engine has already capped its size and rate.
         if (!s.cfg.live || !r.racing || s.round === 0 || typeof msg.t !== 'string' || msg.t.length > 24) return;
         const out = { k: 'net', t: msg.t, from: player.id, d: msg.d };
         if (msg.to === undefined || msg.to === 'all') return api.broadcast(out, player.id);
         const to = msg.to === 'host' ? s.hostId : msg.to;
-        if (typeof to === 'string' && to !== player.id && s.racers[to]) api.send(to, out);
+        if (typeof to === 'string' && to !== player.id && s.racers[to]) api.send(to, { ...out, to });
         return;
       }
       case 'stop': {
@@ -120,8 +148,11 @@ export default {
         if (s.cfg.team) {
           // One result for everybody, and only the copy that owns the shared world can say what it was.
           if (!isHost) return;
+          // Kit 1.4.0: the host's copy owns every player's score, so it sends each one (values); before that everyone got
+          // the host's own number (creator 2026-10-08: "Final scores seem to always be the same regardless").
           const won = msg.won === true ? true : msg.won === false ? false : null;
-          for (const x of Object.values(s.racers)) if (x.racing) { x.done = true; x.value = msg.value; x.live = msg.value; x.won = won; x.progress = 1; x.ms = api.now - s.startAt; }
+          const own = msg.values && typeof msg.values === 'object' && !Array.isArray(msg.values) ? msg.values : null;
+          for (const [id, x] of Object.entries(s.racers)) if (x.racing) { const v = own && finite(own[id]) ? own[id] : msg.value; x.done = true; x.value = v; x.live = v; x.won = won; x.progress = 1; x.ms = api.now - s.startAt; }
           return finish(s, api);
         }
         r.done = true; r.value = msg.value; r.live = msg.value;

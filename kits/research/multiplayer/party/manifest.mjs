@@ -13,7 +13,10 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 export const repo = resolve(here, '../../..');
 export const KIT_NAME = 'gf-multiplayer';
-export const KIT_VERSION = '1.3.0';
+export const KIT_VERSION = '1.6.3';   // 1.5.0 worlds (research/worlds/PLAN.md); 1.5.1 names filtered; 1.6.0 watch then play (research/watch/PLAN.md); 1.6.1 live rounds watched; 1.6.2 play-test 1's fixes (2026-10-09); 1.6.3 a viewer's own room or solo (2026-10-10)
+// The version the development sources are, frozen as kits/gf-multiplayer/<DEV_VERSION>/. It runs ahead of KIT_VERSION
+// while a release waits to become the default.
+export const DEV_VERSION = '1.6.3';
 export const KIT_DIR = 'gf/mp';                      // where a game vendors the kit, relative to its served folder
 export const MANIFEST = 'multiplayer.json';          // at the root of the served folder, beside assets.json
 export const FROZEN = join(repo, 'research/foundations/kits', KIT_NAME);
@@ -31,6 +34,7 @@ const DEV_SOURCES = Object.freeze({
   'vendor/gf.js': join(here, '../p2p/kit/gf-p2p.js'),
   'p2p/host-worker.js': join(here, '../p2p/kit/host-worker.js'),
   'p2p/host-engine.js': join(here, '../p2p/kit/host-engine.js'),
+  'p2p/text-filter.js': join(here, '../p2p/kit/text-filter.js'),   // 1.5.1: = creator-studio/lib/world-text.mjs
   'p2p/sandbox-core.js': join(here, '../runtime/src/sandbox/core.js'),
   'p2p/rng.js': join(here, '../runtime/src/rng.js'),
 });
@@ -51,7 +55,7 @@ export async function kitFiles({ version = KIT_VERSION } = {}) {
   for (const [rel, src] of Object.entries(DEV_SOURCES)) files.set(rel, await readFile(src));
   const list = {};
   for (const [rel, buf] of [...files].sort(([a], [b]) => (a < b ? -1 : 1))) list[rel] = sha256(buf);
-  files.set('kit.json', Buffer.from(JSON.stringify({ kit: KIT_NAME, version: version === 'dev' ? KIT_VERSION : version, license: 'MIT',
+  files.set('kit.json', Buffer.from(JSON.stringify({ kit: KIT_NAME, version: version === 'dev' ? DEV_VERSION : version, license: 'MIT',
     note: 'Kit-owned files, byte-identical in every game. Never edit a copy: research/multiplayer/party/adopt.mjs rewrites them.', files: list }, null, 2) + '\n'));
   return files;
 }
@@ -66,11 +70,13 @@ export async function walk(dir, base = dir, out = []) {
 }
 
 // ---------------- multiplayer.json ----------------
-export const MODES = ['room', 'live', 'race', 'solo'];
+export const MODES = ['room', 'live', 'race', 'solo', 'world'];
 // What a player can see of their friends in each mode. "race" shows a number in a rail and nothing of the friend, which
 // the creator ruled out on 2026-10-05 ("No point in multiplayer if you can't see your friends"): it is still a valid
-// manifest, and status.mjs reports it as below the bar.
-export const SEES_FRIENDS = { room: true, live: true, race: false, solo: null };
+// manifest, and status.mjs reports it as below the bar. "world" (kit 1.5.0): a live, persistent room per game.
+export const SEES_FRIENDS = { room: true, live: true, race: false, solo: null, world: true };
+/** The first kit version that has world rooms (mode "world"). */
+export const WORLD_SINCE = '1.5.0';
 const METRICS = ['score', 'time', 'count'];
 const OPS = ['in', 'is', 'gte', 'gt', 'lte', 'lt', 'truthy'];
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -94,8 +100,9 @@ function condProblems(c, where, out, depth = 0) {
 }
 
 /** → {ok, problems: [...], warnings: [...]}. The gate and every tool refuse a manifest with problems. */
-const TOP_KEYS = ['schemaVersion', 'mode', 'title', 'players', 'race', 'live', 'room', 'reason', 'upgrade', 'theme', 'inviteParams', 'check', 'kit', 'note'];
-const LIVE_KEYS = ['entry', 'query', 'seedParam', 'content', 'team', 'metric', 'direction', 'unit', 'maxSeconds', 'sees', 'shares'];
+const TOP_KEYS = ['schemaVersion', 'mode', 'title', 'players', 'race', 'live', 'room', 'world', 'reason', 'upgrade', 'theme', 'inviteParams', 'check', 'kit', 'note'];
+const WORLD_KEYS = ['entry', 'query', 'key', 'tagline', 'sees', 'shares', 'hud'];
+const LIVE_KEYS = ['entry', 'query', 'seedParam', 'content', 'team', 'metric', 'direction', 'unit', 'maxSeconds', 'sees', 'shares', 'backdrop', 'hud'];
 const RACE_KEYS = ['entry', 'query', 'seedParam', 'content', 'metric', 'direction', 'unit', 'maxSeconds', 'adapter', 'observe', 'progress'];
 const OBSERVE_KEYS = ['object', 'call', 'value', 'ended', 'won', 'started', 'progress'];
 const CHECK_KEYS = ['query', 'steps', 'repeat', 'seconds', 'avoidKeys', 'near'];
@@ -139,6 +146,22 @@ export function validateMultiplayer(m) {
   if (!isObj(p) || !Number.isInteger(p.min) || !Number.isInteger(p.max) || p.min < 1 || p.max < p.min || p.max > 16) problems.push('players must be {min, max} with 1 <= min <= max <= 16');
   else if (p.max < 2) problems.push('players.max must be at least 2 for a multiplayer mode');
 
+  // kit 1.5.0: a world. One room per game, found by its key; no rounds, so no metric, cap or result.
+  if (m.mode === 'world') {
+    const w = m.world;
+    if (!isObj(w)) { problems.push('mode "world" needs a "world" block'); return done(); }
+    unknownKeys(w, WORLD_KEYS, 'world.', problems);
+    if (p && p.max > 8) problems.push('players.max is at most 8 in a world (one room per world; the 9th visitor waits for a seat)');
+    if (w.entry !== undefined && !(typeof w.entry === 'string' && w.entry && !/^([a-z]+:)?\/\//i.test(w.entry) && !w.entry.startsWith('/'))) problems.push('world.entry must be a path relative to the game folder');
+    if (w.query !== undefined && !(typeof w.query === 'string' && w.query.length <= 200 && !w.query.startsWith('?'))) problems.push('world.query must be a query string without the "?" (added to the game\'s page after gf-world=1)');
+    if (w.key !== undefined && w.key !== 'auto') problems.push('world.key must be "auto": world:<slug> on a published game (/p/<slug>/), world:local-<hash> anywhere else');
+    if (w.tagline !== undefined && !(typeof w.tagline === 'string' && w.tagline.trim() && w.tagline.length <= 120)) problems.push('world.tagline must be 1 to 120 characters (the line under the title on the world card)');
+    if (!(typeof w.sees === 'string' && w.sees.trim().length >= 20)) problems.push('world.sees must say, in a full sentence, how each player sees the others (e.g. "Each player sees the others as a builder with their name above")');
+    if (!(typeof w.shares === 'string' && w.shares.trim().length >= 10)) problems.push('world.shares must say what is the same for everyone and kept (e.g. "Every block placed, broken, painted or written, saved on the play host")');
+    if (w.hud !== undefined && w.hud !== 'game') problems.push('world.hud must be "game" (the game shows the room in its own menu, so the party page draws nothing over it) or absent (a small "3 here" pill)');
+    return done();
+  }
+
   if (m.mode === 'room') {
     const r = m.room;
     if (!isObj(r)) { problems.push('mode "room" needs a "room" block'); return done(); }
@@ -154,6 +177,10 @@ export function validateMultiplayer(m) {
     if (p && p.max > 8) problems.push('players.max is at most 8 in live mode');
     if (l.entry !== undefined && !(typeof l.entry === 'string' && l.entry && !/^([a-z]+:)?\/\//i.test(l.entry) && !l.entry.startsWith('/'))) problems.push('live.entry must be a path relative to the game folder');
     if (l.query !== undefined && typeof l.query !== 'string') problems.push('live.query must be a query string without the "?"');
+    // kit 1.4.0: the waiting room's backdrop (the game's page with this query: silent, no menu, nothing to click) and who
+    // draws the standings in a round ("game": the game's own HUD and room menu, so the party page shows no rail)
+    if (l.backdrop !== undefined && !(typeof l.backdrop === 'string' && l.backdrop.length <= 200 && !l.backdrop.startsWith('?') && /^[\w.~%-]+=[\w.~%-]*(&[\w.~%-]+=[\w.~%-]*)*$/.test(l.backdrop))) problems.push('live.backdrop must be a query string without the "?" (e.g. "gf-backdrop=1"): the game\'s page behind the waiting room');
+    if (l.hud !== undefined && !['game', 'rail'].includes(l.hud)) problems.push('live.hud must be "game" (the game draws everyone\'s scores and the room in its own HUD and menu) or "rail" (the party page\'s standings rail, the default)');
     if (!(l.seedParam === null || (typeof l.seedParam === 'string' && /^[\w-]+$/.test(l.seedParam)))) problems.push('live.seedParam must be the query name the game reads its seed from, or null when the game takes the seed from net.seed or has none');
     if (typeof l.team !== 'boolean') problems.push('live.team must be true (one result for everybody: co-op) or false (each player has their own result)');
     if (!METRICS.includes(l.metric)) problems.push(`live.metric must be one of ${METRICS.join(', ')}`);

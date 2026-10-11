@@ -21,6 +21,18 @@
 //                                               owner's bar missing from its next call is removed
 //   ui.pop(text, x, y, color?)                  a short word that rises and fades at a screen point ("+1" for a kill)
 //   meter handle .flash()                       the meter pulses once (the local player was hurt)
+//   ui.goal(text | null)                        the goal line under the clock (null: the game's own, text.goal)
+//
+// The kit's own HUD (the player card, health, state, the menu button: ./hud.js) and the home menu (./menu.js) sit on
+// this layer too (CONTRACT §6g). Meters from ui.meter go in the player card.
+//
+// Themes (./theme.js): createUI(ctx, {theme: 'grim'}) gives the layer the theme's class, stylesheet and fonts; no theme
+// (every party and scenic game) is the look below, unchanged. A theme with its own touch layout (`touch: 'own'`) draws
+// its buttons itself with ui.touchButton, so the four default ones are not made. In a theme, ui.banner takes
+//   ui.banner(text, seconds, {sub, tone: 'blood' | 'ember' | 'moon', soft})   a second line, a colour, and `soft`: the
+//                                               kit's own word (a wave starting), which never replaces a banner showing
+import { applyTheme, themeOf } from './theme.js';
+
 const CSS = `
 #gf-ui{position:fixed;inset:0;pointer-events:none;font:600 15px/1.25 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--gf-text,#fff);z-index:5;user-select:none;-webkit-user-select:none}
 #gf-ui .gf-top{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center}
@@ -68,36 +80,63 @@ const CSS = `
 #gf-ui .gf-touch button{position:absolute;pointer-events:auto;width:66px;height:66px;border-radius:50%;border:0;background:#ffffff33;color:#fff;font:700 13px system-ui;touch-action:none}
 #gf-ui .gf-stick{position:absolute;width:120px;height:120px;margin:-60px;border-radius:50%;border:2px solid #fff6;display:none}
 #gf-ui .gf-stick u{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px;border-radius:50%;background:#fff8}
-@media (max-width:640px){#gf-ui .gf-card h1{font-size:24px}#gf-ui .gf-banner{font-size:32px}#gf-ui .gf-help{display:none}#gf-ui .gf-top{left:10px;transform:none}#gf-ui .gf-timer{font-size:17px}#gf-ui .gf-scores{top:8px;right:8px;min-width:0;font-size:12px;padding:4px 8px}#gf-ui .gf-meters{top:52px}#gf-ui .gf-hbar{width:48px;height:8px}#gf-ui .gf-pop{font-size:20px}}
+@media (max-width:640px){#gf-ui .gf-card h1{font-size:24px}#gf-ui .gf-banner{font-size:32px}#gf-ui .gf-help{display:none}#gf-ui .gf-top{left:52px;transform:none}#gf-ui .gf-timer{font-size:17px}#gf-ui .gf-scores{top:8px;right:8px;min-width:0;font-size:12px;padding:4px 8px}#gf-ui .gf-meters{top:52px}#gf-ui .gf-hbar{width:48px;height:8px}#gf-ui .gf-pop{font-size:20px}}
 `;
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 
-export function createUI(ctx, { text = {}, controls = {} } = {}) {
+export function createUI(ctx, { text = {}, controls = {}, theme = null } = {}) {
   const style = el('style'); style.textContent = CSS; document.head.append(style);
   const root = el('div'); root.id = 'gf-ui'; document.body.append(root);
-  const top = el('div', 'gf-top'), timerEl = el('div', 'gf-timer'); top.append(timerEl);
+  const T = themeOf(theme);
+  // the theme's font files only when the game carries them (its font slots: a game made before the theme has none)
+  if (T) applyTheme(T.id, { root, url: ctx.gf?.url, fonts: T.fonts.every(f => { try { return !!ctx.assets?.has?.(f.slot); } catch { return false; } }) });
+  const top = el('div', 'gf-top'), timerEl = el('div', 'gf-timer'); timerEl.style.display = 'none'; top.append(timerEl);
   const scores = el('div', 'gf-scores'), meters = el('div', 'gf-meters'), banner = el('div', 'gf-banner'), toasts = el('div', 'gf-toasts');
   const prompt = el('div', 'gf-prompt'), help = el('div', 'gf-help'), cross = el('div', 'gf-cross'), plates = el('div', 'gf-plates'), barsEl = el('div', 'gf-bars');
   const card = el('div', 'gf-card'); card.id = 'gf-card'; card.hidden = true;
   const touch = el('div', 'gf-touch'), stickEl = el('div', 'gf-stick'); stickEl.append(el('u')); touch.append(stickEl);
   root.append(plates, barsEl, top, scores, meters, banner, toasts, prompt, help, cross, card, touch);
   const meterMap = new Map(), plateMap = new Map(), prompts = new Map(), barMap = new Map();
-  let customRows = null, timerOn = true, bannerT = 0, lastScores = '', lastTimer = '';
+  let customRows = null, timerOn = true, bannerT = 0, lastScores = '', lastTimer = '', goalFn = null;
+  const covers = new Set();       // what covers the game besides the card: the menu (ui.cover)
 
   // touch buttons (shown on the first touch)
   const buttons = [['jump', 'Jump', 'right:22px;bottom:22px'], ['primary', short(controls.primary, 'Action'), 'right:100px;bottom:40px'], ['interact', short(controls.interact, 'Use'), 'right:30px;bottom:104px'], ['secondary', short(controls.secondary, ''), 'right:108px;bottom:118px']];
+  // a world (the orbit camera, or first person in one): a tap is the primary action where it lands, a long press the
+  // secondary, and a tap on the thing to use uses it, so only Jump keeps a button (mechanics add their own with
+  // ui.touchButton)
+  const cam = ctx.config?.camera ?? 'third', taps = cam === 'orbit' || (cam === 'first' && ctx.config?.round?.mode === 'world');
   for (const [action, label, pos] of buttons) {
-    if (!label) continue;
+    if (T?.touch === 'own') break;      // the theme's HUD draws its own buttons (ui.touchButton)
+    if (!label || (taps && action !== 'jump')) continue;
     const b = el('button', null, label); b.style.cssText = pos; b.dataset.action = action;
     const on = e => { e.preventDefault(); ctx.input?.press(action, true); }, off = e => { e.preventDefault(); ctx.input?.press(action, false); };
     b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
     touch.append(b);
   }
-  help.textContent = helpLine(controls);
+  help.textContent = helpLine(controls, ctx.config?.camera, ctx.config?.round?.mode === 'world', !!T);
 
   const api = {
     root,
+    /** The theme this layer wears (./theme.js), or null: the kit's own look. */
+    theme: T?.id ?? null,
+    /** A round touch button of a mechanic's own (shown with the kit's on touch): fn(down: boolean). → the element */
+    touchButton(id, label, pos, fn) {
+      let b = touch.querySelector(`[data-own="${id}"]`);
+      if (!b) { b = el('button', null, label); b.dataset.own = id; touch.append(b); const on = e => { e.preventDefault(); fn(true); }, off = e => { e.preventDefault(); fn(false); }; b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); }
+      b.textContent = label; b.style.cssText = pos;
+      return b;
+    },
+    /** The touch layer (mechanics put their own touch UI in it: a hotbar). */
+    get touchLayer() { return touch; },
+    /** For the kit's HUD and menu only. */
+    parts: { meters, card },
+    /** The kit's menu (or anything else of the kit's) covers the game: the input reads idle under it. */
+    cover(name, on) { if (on) covers.add(name); else covers.delete(name); },
+    goal(t) { goalFn?.(t); },
+    /** The HUD's goal setter (boot wires it). */
+    set goalTo(fn) { goalFn = fn; },
     meter(id, { label = '', value = 0, max = 1, color = null } = {}) {
       let m = meterMap.get(id);
       if (!m) { const box = el('div', 'gf-meter'), b = el('b', null, label), bar = el('span'), fill = el('u'); bar.append(fill); box.append(b, bar); meters.append(box); m = { box, b, fill }; meterMap.set(id, m); }
@@ -107,7 +146,13 @@ export function createUI(ctx, { text = {}, controls = {} } = {}) {
       h.set(value, max); return h;
     },
     score(rows) { customRows = rows; lastScores = ''; },
-    banner(t, seconds = 2) { banner.textContent = t; banner.classList.add('on'); bannerT = seconds; },
+    banner(t, seconds = 2, { sub = null, tone = null, soft = false } = {}) {
+      if (soft && bannerT > 0) return;      // the kit's own word never replaces what the rules are saying
+      if (sub) banner.replaceChildren(String(t), el('small', null, String(sub))); else banner.textContent = t;
+      banner.className = `gf-banner on${tone ? ` tone-${tone}` : ''}`; bannerT = seconds;
+    },
+    /** The banner showing now (or null): QA reads it. */
+    get bannerText() { return bannerT > 0 ? [...banner.childNodes].map(n => n.textContent).join(' · ') : null; },
     toast(t) { const x = el('div', 'gf-toast', t); toasts.append(x); setTimeout(() => { x.style.opacity = '0'; setTimeout(() => x.remove(), 450); }, 1800); while (toasts.children.length > 4) toasts.firstChild.remove(); },
     prompt(t, owner = 'rules') {
       prompts.delete(owner); if (t) prompts.set(owner, String(t));
@@ -141,22 +186,25 @@ export function createUI(ctx, { text = {}, controls = {} } = {}) {
       while (barsEl.querySelectorAll('.gf-pop').length > 6) barsEl.querySelector('.gf-pop').remove();
     },
     get crosshairOn() { return cross.style.display === 'block'; },
-    get covered() { return !card.hidden && !card.classList.contains('count'); },
+    get covered() { return covers.size > 0 || (!card.hidden && !card.classList.contains('count')); },
 
     // ---- the kit's cards ----
     lobby({ title, hook, players = [], onPlay }) {
       card.className = 'gf-card'; card.dataset.view = 'lobby'; card.replaceChildren(el('h1', null, title), el('p', null, hook));
       const ul = el('ul'); for (const p of players) { const li = el('li'); const n = el('span'); const dot = el('i'); dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:${p.color}`; n.append(dot, p.name); li.append(n, el('span', null, p.isBot ? 'bot' : p.local ? 'you' : '')); ul.append(li); }
       const b = el('button', null, text.play ?? 'Play'); b.id = 'gf-play'; b.onclick = () => { onPlay?.(); };
-      card.append(ul, el('p', null, helpLine(controls)), b); card.hidden = false;
+      card.append(ul, el('p', null, helpLine(controls, ctx.config?.camera, ctx.config?.round?.mode === 'world')), b); card.hidden = false;
     },
     waiting() { card.className = 'gf-card'; card.dataset.view = 'waiting'; card.replaceChildren(el('p', null, text.waiting ?? 'Waiting for everyone…')); card.hidden = false; },
     countdown(n) { card.className = 'gf-card count'; card.dataset.view = 'count'; card.replaceChildren(el('p', 'gf-count', String(n))); card.hidden = false; },
-    results({ title, rows = [], winners = [], onAgain = null }) {
+    results({ title, rows = [], winners = [], onAgain = null, onMenu = null }) {
       card.className = 'gf-card'; card.dataset.view = 'results';
       const ul = el('ul'); for (const r of rows) { const li = el('li'); li.append(el('span', null, `${winners.includes(r.id) ? '★ ' : ''}${r.name ?? r.id}`), el('span', null, String(r.value ?? ''))); ul.append(li); }
       card.replaceChildren(el('h1', null, title), ul);
-      if (onAgain) { const b = el('button', null, text.again ?? 'Play again'); b.id = 'gf-again'; b.onclick = () => onAgain(); card.append(b); }
+      const row = el('div'); row.style.cssText = 'display:flex;gap:10px;justify-content:center;flex-wrap:wrap';
+      if (onAgain) { const b = el('button', null, text.again ?? 'Play again'); b.id = 'gf-again'; b.onclick = () => onAgain(); row.append(b); }
+      if (onMenu) { const b = el('button', null, text.toMenu ?? 'Menu'); b.id = 'gf-to-menu'; b.style.background = '#ffffff26'; b.onclick = () => onMenu(); row.append(b); }
+      if (row.childNodes.length) card.append(row);
       card.hidden = false;
     },
     hideCard() { card.hidden = true; card.dataset.view = ''; },
@@ -192,11 +240,31 @@ export function createUI(ctx, { text = {}, controls = {} } = {}) {
 
 function short(s, d) { if (!s) return d; const w = String(s).split(/\s+/)[0]; return w.charAt(0).toUpperCase() + w.slice(1, 9); }
 function fmtTime(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
-function helpLine(c = {}) {
-  const parts = ['WASD move', 'mouse look'];
+function helpLine(c = {}, camera = 'third', world = false, brief = false) {
+  // the 'follow' camera (CONTRACT §8) does not turn with the mouse: the mouse aims and the wheel zooms
+  if (camera === 'orbit' || (camera === 'first' && world)) {
+    const p = camera === 'orbit' ? ['WASD move', 'drag: turn', 'wheel: zoom'] : ['WASD move', 'mouse: look'];
+    if (c.primary) p.push(`click: ${c.primary}`);
+    if (c.secondary) p.push(`right click: ${c.secondary}`);
+    for (const r of Array.isArray(c.more) ? c.more.slice(0, 3) : []) p.push(`${r[0]}: ${r[1]}`);
+    p.push('Esc: menu');
+    return p.join(' · ');
+  }
+  const parts = ['WASD move', camera === 'follow' ? 'mouse aim' : 'mouse look'];
+  if (brief) {
+    // a themed HUD's line: one word a control, nothing for a control the game says does nothing yet
+    const act = (k, v) => (v && !/^nothing/i.test(String(v)) ? `${k}: ${short(v, '').toLowerCase()}` : null);
+    parts.push(...[act('click', c.primary), act('right click', c.secondary), act('E', c.interact), act('Space', c.jump)].filter(Boolean));
+    for (const r of Array.isArray(c.more) ? c.more.slice(0, 4) : []) if (Array.isArray(r) && r[1]) parts.push(`${r[0]}: ${String(r[1]).toLowerCase()}`);
+    parts.push('Esc: menu');
+    return parts.join(' · ');
+  }
   if (c.primary) parts.push(`click / F: ${c.primary}`);
   if (c.secondary) parts.push(`right click / Q: ${c.secondary}`);
   if (c.interact) parts.push(`E: ${c.interact}`);
   if (c.jump) parts.push(`Space: ${c.jump}`);
+  // a game's own keys (controls.more: a forge game's evade, reload, quick melee and weapon keys)
+  for (const r of Array.isArray(c.more) ? c.more.slice(0, 4) : []) if (Array.isArray(r) && r[1]) parts.push(`${r[0]}: ${r[1]}`);
+  parts.push('Esc: menu');
   return parts.join(' · ');
 }

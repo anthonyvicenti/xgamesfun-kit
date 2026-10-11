@@ -64,11 +64,13 @@ world.update(dt), look.update, ui.update, look.render(camera)
 | `mechanics` | `get(id)` → the instance, or `{id, as, params, standin: true}` while K2's module is missing; `list()` |
 | `shared` | `register(key, initialObject)` → proxy; `smooth(key)`; `snapshot()` (below) |
 | `net` | `send(name, data, to='all'\|'host'\|playerId)`, `on(name, fn)`, `active`, `you`, `blend` |
-| `ui` | `meter(id, {label, value, max, color})` → `{set, remove}`, `score(rows\|null)`, `banner(text, secs)`, `toast(text)`, `prompt(text\|null, owner?)` (each owner keeps its own line; the latest shows), `timer(on)`, `crosshair(on)` |
+| `ui` | `meter(id, {label, value, max, color})` → `{set, remove}`, `goal(text|null)` (the HUD's goal line, §6g), `score(rows\|null)`, `banner(text, secs)`, `toast(text)`, `prompt(text\|null, owner?)` (each owner keeps its own line; the latest shows), `timer(on)`, `crosshair(on)` |
 | `aimed` | true when a mechanic aims (projectile; carry with a throw action): the kit shows the crosshair in third and first person and turns the shooter to the aim while firing (`core/aim.js`, CONTRACT §6d) |
 | `audio` | `play(soundId, {at: {x,y,z}, gainDb, pitch, optional})`, `has(id)`, `stop(id)`, `raw` (the gf-audio object) |
 | `round` | `{phase, number, winners, reason, end(reason, winners)}`; `end` acts on the host only |
-| `input` | the local input (`move`, `look`, `actions`, `sprint`, `touch`) |
+| `input` | the local input (`move`, `look`, `actions`, `sprint`, `touch`, `lookScale` and `invertY` from the menu's settings) |
+| `hud` | the kit's HUD (`ui/hud.js`, CONTRACT §6g): `goal(text)`, `goalText`, `observe()` |
+| `menu` | the kit's home and pause menu (`ui/menu.js`, CONTRACT §6g): `view`, `paused`, `observe()` (rules read it; never open or close it) |
 | `look` | the look handle (`render`, `resize`, `fitShadows`, …) |
 | `onFrame` | an array: push `fn(dt)` to run every frame after the rules |
 | `fair` | fair play (`core/fair.js`, CONTRACT §6c): `canHit(p, {from})`, `blocked`, `state(p)`, `isDown`, `isProtected`, `grace`, `protect(p, secs)`, `params`, `split`; on by default from `config/game.json → fair` |
@@ -162,7 +164,7 @@ export function create(ctx, params) { return { setup(ctx) {}, update(dt) {}, hos
 
 ## QA parameters (never used in real play; **CONTRACT-REQUEST**)
 
-`?gf-autoplay=1` skips the lobby when playing alone (the countdown starts at once); `?gf-ui=0` hides the HUD.
+`?gf-autoplay=1` skips the home menu when playing alone (the countdown starts at once); `?gf-ui=0` hides the HUD and the menu.
 `tools/verify.mjs` passes both to the contact-sheet capture, and Studio's `__GF_ASSET_OVERRIDES` patches (for
 example a 25 s round) to its solo round.
 

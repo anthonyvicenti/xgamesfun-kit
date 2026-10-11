@@ -9,11 +9,12 @@
 // happens: 12; controls work: 13). notInV1 items are never promised. Proofs: 'verify:N' or 'play' (a play-tester's own
 // screen, research/studio-v2/prompts/playtest.md). Logic and the promise format: tools/lib/promises.mjs.
 // Exit: 0, or 2 on bad usage or a game with no spec or config.
+import { isMain } from './lib/main.mjs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisesFor } from './lib/promises.mjs';
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const opt = k => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : null; };
   const dir = a.find((x, i) => !x.startsWith('--') && a[i - 1] !== '--spec');

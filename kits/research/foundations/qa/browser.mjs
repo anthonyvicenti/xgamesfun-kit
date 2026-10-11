@@ -4,24 +4,95 @@
 //   const browser = await launchChrome();            // headless by default
 //   const browser = await launchChrome({ gpu: 'webgl' });    // WebGL on the real GPU (ANGLE on OpenGL; never Vulkan here, see below)
 //   const browser = await launchChrome({ gpu: 'webgpu' });   // a WebGPU game (assets.json runtime.gpu), see below
-// Playwright is resolved from research/pipeline/node_modules (`cd research/pipeline && npm ci`); pass `chromium` (a
-// Playwright BrowserType) to use another copy (the Studio worker's container has its own in /opt/deps).
+// Playwright is imported by package name (`playwright`, then `playwright-core`: research/package.json pins it, and a
+// checkout outside games.fun installs it at its own root), then from research/pipeline/node_modules, where this repo
+// has always kept it (`cd research/pipeline && npm ci`). GF_PLAYWRIGHT names another copy (a package name or a file);
+// or pass `chromium` (a Playwright BrowserType; the Studio worker's container has its own in /opt/deps).
 // Override the binary with CHROME_PATH; set HEADED=1 to watch; CHROME_ARGS adds launch flags.
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import path, { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-const candidates = [
-  process.env.CHROME_PATH,
-  '/usr/bin/google-chrome',
-  '/usr/bin/google-chrome-stable',
-  '/usr/bin/chromium',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  'C:/Program Files/Google/Chrome/Application/chrome.exe',
-].filter(Boolean);
+/**
+ * Where Chrome, Chromium and Edge live on each system, most preferred first: [{path, kind}]. Pure: the platform, the
+ * environment and the home folder come in, paths go out (so the Windows and macOS lists are checked from any system).
+ *   Windows  Program Files, Program Files (x86) and the per-user install (%LOCALAPPDATA%): Chrome, Edge, Chromium
+ *   macOS    /Applications and ~/Applications: Chrome, Edge, Chromium
+ *   Linux    the distribution's packages, /opt and the snap: Chrome, Chromium, Edge
+ */
+export function chromeCandidates({ platform = process.platform, env = process.env, home = homedir() } = {}) {
+  const out = [], add = (p, kind) => out.push({ path: p, kind });
+  if (platform === 'win32') {
+    const w = path.win32;
+    const roots = [env.PROGRAMFILES ?? 'C:\\Program Files', env['PROGRAMFILES(X86)'] ?? 'C:\\Program Files (x86)', env.LOCALAPPDATA ?? w.join(home, 'AppData', 'Local')];
+    for (const r of roots) add(w.join(r, 'Google', 'Chrome', 'Application', 'chrome.exe'), 'chrome');
+    for (const r of roots) add(w.join(r, 'Microsoft', 'Edge', 'Application', 'msedge.exe'), 'edge');
+    for (const r of roots) add(w.join(r, 'Chromium', 'Application', 'chrome.exe'), 'chromium');
+  } else if (platform === 'darwin') {
+    for (const base of ['/Applications', path.posix.join(home, 'Applications')]) {
+      add(`${base}/Google Chrome.app/Contents/MacOS/Google Chrome`, 'chrome');
+      add(`${base}/Microsoft Edge.app/Contents/MacOS/Microsoft Edge`, 'edge');
+      add(`${base}/Chromium.app/Contents/MacOS/Chromium`, 'chromium');
+    }
+  } else {
+    for (const p of ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/opt/google/chrome/chrome']) add(p, 'chrome');
+    for (const p of ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/snap/bin/chromium']) add(p, 'chromium');
+    for (const p of ['/usr/bin/microsoft-edge', '/usr/bin/microsoft-edge-stable', '/opt/microsoft/msedge/msedge']) add(p, 'edge');
+  }
+  return out;
+}
+const isFile = p => { try { return statSync(p).isFile(); } catch { return false; } };
 
-export function chromePath() {
-  return candidates.find(path => existsSync(path)); // undefined → Playwright's bundled chromium
+/** The browser to drive: CHROME_PATH when it exists, else the first installed candidate. → {path, kind, source} or null */
+export function findChrome({ platform = process.platform, env = process.env, home = homedir(), exists = isFile } = {}) {
+  if (env.CHROME_PATH && exists(env.CHROME_PATH)) return { path: env.CHROME_PATH, kind: 'chrome', source: 'CHROME_PATH' };
+  for (const c of chromeCandidates({ platform, env, home })) if (exists(c.path)) return { ...c, source: 'installed' };
+  for (const n of PATH_NAMES[platform] ?? PATH_NAMES.linux) { const p = onPath(n, { platform, env, exists }); if (p) return { path: p, kind: /edge/.test(n) ? 'edge' : /chromium/.test(n) ? 'chromium' : 'chrome', source: 'PATH' }; }
+  return null;
+}
+/** Program names looked for on PATH when the usual places are empty (a Nix, Homebrew or portable install). */
+const PATH_NAMES = { win32: ['chrome', 'msedge'], darwin: [], linux: ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge'] };
+/** A program on PATH, found without a shell (PATHEXT on Windows). → its path or null */
+export function onPath(name, { platform = process.platform, env = process.env, exists = isFile } = {}) {
+  const impl = platform === 'win32' ? path.win32 : path.posix;
+  const dirs = (env.PATH ?? env.Path ?? '').split(platform === 'win32' ? ';' : ':').filter(Boolean);
+  const exts = platform === 'win32' ? (env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';').filter(Boolean) : [''];
+  for (const d of dirs) for (const e of exts) for (const p of new Set([impl.join(d, name + e.toLowerCase()), impl.join(d, name + e)])) if (exists(p)) return p;
+  return null;
+}
+
+export function chromePath(opts) {
+  return findChrome(opts)?.path; // undefined → Playwright's bundled chromium
+}
+
+/** Where Playwright is looked for, in order: [{spec, why}]. `here` is this module's URL. */
+export function playwrightCandidates({ env = process.env, here = import.meta.url } = {}) {
+  const out = [], named = env.GF_PLAYWRIGHT;
+  if (named) out.push({ spec: /^\.|^\/|^[A-Za-z]:[\\/]/.test(named) ? pathToFileURL(path.resolve(named)).href : named, why: 'GF_PLAYWRIGHT' });
+  out.push({ spec: 'playwright', why: 'the playwright package' }, { spec: 'playwright-core', why: 'the playwright-core package' });
+  out.push({ spec: new URL('../../pipeline/node_modules/playwright/index.mjs', here).href, why: 'research/pipeline/node_modules (games.fun)' });
+  return out;
+}
+let playwrightChromium = null;
+/** Playwright's `chromium`, from the first candidate that is installed. `load` is import() (tests pass their own). */
+export async function loadChromium({ env = process.env, load = null, here = import.meta.url } = {}) {
+  if (!load && playwrightChromium) return playwrightChromium;
+  const tried = [];
+  for (const c of playwrightCandidates({ env, here })) {
+    let m;
+    try { m = await (load ?? (spec => import(spec)))(c.spec); }
+    catch (e) {
+      // only "not installed" moves on to the next place; a copy that is there and broken is reported as it is
+      if (e?.code !== 'ERR_MODULE_NOT_FOUND' && e?.code !== 'MODULE_NOT_FOUND') throw e;
+      tried.push(c.why); continue;
+    }
+    const chromium = m.chromium ?? m.default?.chromium;
+    if (!chromium) throw new Error(`${c.why} loaded, but it has no \`chromium\` export`);
+    if (!load) playwrightChromium = chromium;
+    return chromium;
+  }
+  throw new Error(`Playwright is not installed (looked for: ${tried.join('; ')}). Run \`npm ci\` in research/ (it pins playwright-core) or in research/pipeline, or set GF_PLAYWRIGHT to a copy.`);
 }
 
 // WebGPU (manifest v1.3 `runtime.gpu: "webgpu"`, creator-studio/docs/asset-manifest.md). Measured 2026-10-01 on the
@@ -50,6 +121,30 @@ export const WEBGL_GPU_ARGS = ['--enable-gpu', '--ignore-gpu-blocklist'];
 export const GPU_TROUBLE = /CONTEXT_LOST_WEBGL|context loss and was blocked|Could not create a WebGL context|Shader Error \d+ - VALIDATE_STATUS false[\s\S]*Program Info Log:\s*$/;
 let warnedVulkan = false;
 const WEBGPU_HEADED_ARGS = ['--enable-features=Vulkan,CDPScreenshotNewSurface'];   // + --use-angle=vulkan breaks WebGL headed here
+/**
+ * The launch flags and the kind of binary for a renderer on a system. Pure, so each system's row is checked anywhere.
+ *   Linux    WebGL: ANGLE on OpenGL (WEBGL_GPU_ARGS). WebGPU: Vulkan, in chrome-headless-shell when headless
+ *            (WEBGPU_ARGS, measured above); headed, the installed Chrome.
+ *   Windows  WebGL: the same two flags (Chrome's own choice there is ANGLE on Direct3D 11). WebGPU: Chrome's default
+ *            backend (Direct3D 12) in the installed Chrome or Edge. The Vulkan flags are never passed: they select a
+ *            backend Chrome does not use on Windows.
+ *   macOS    WebGL: the same two flags (ANGLE on Metal). WebGPU: Chrome's default backend (Metal), installed Chrome.
+ * `measured` is false for Windows and macOS: those rows follow Chrome's documented defaults and have not been run on a
+ * machine yet (research/open-builder, track M1-C runs them). → {args, binary: 'shell' | 'chrome', backend, measured}
+ */
+export function gpuLaunchPlan({ gpu, headless = true, platform = process.platform } = {}) {
+  if (gpu !== 'webgl' && gpu !== 'webgpu') throw new Error(`gpu must be "webgl" or "webgpu" (got ${JSON.stringify(gpu)})`);
+  const linux = platform !== 'win32' && platform !== 'darwin';
+  if (gpu === 'webgl') return { args: [...WEBGL_GPU_ARGS], binary: 'chrome', backend: linux ? 'ANGLE on OpenGL' : platform === 'win32' ? 'ANGLE on Direct3D 11' : 'ANGLE on Metal', measured: linux };
+  if (linux) return { args: [...(headless ? WEBGPU_ARGS : WEBGPU_HEADED_ARGS)], binary: headless ? 'shell' : 'chrome', backend: 'Vulkan', measured: true };
+  return { args: [...WEBGL_GPU_ARGS], binary: 'chrome', backend: platform === 'win32' ? 'Direct3D 12' : 'Metal', measured: false };
+}
+/** What to tell a person whose Chrome found no hardware WebGPU adapter, by system. */
+export function webgpuHelp(platform = process.platform) {
+  if (platform === 'win32') return 'It needs a graphics card with a Direct3D 12 driver and a current Chrome or Edge (chrome://gpu shows "WebGPU: Hardware accelerated"); a remote desktop or a virtual machine without a graphics card has none.';
+  if (platform === 'darwin') return 'It needs a current Chrome (Metal; chrome://gpu shows "WebGPU: Hardware accelerated"); a virtual machine without a graphics card has none.';
+  return 'It needs a GPU with a Vulkan driver (vulkaninfo lists it); in Docker, pass the GPU through (--device nvidia.com/gpu=all).';
+}
 export class NoWebGPUError extends Error { constructor(message) { super(message); this.name = 'NoWebGPUError'; } }
 /** The GPU a game's assets.json asks for: 'webgpu' (runtime.gpu) or null (any renderer, SwiftShader is fine). */
 export const manifestGpu = m => (m?.runtime?.gpu === 'webgpu' ? 'webgpu' : null);
@@ -93,7 +188,7 @@ export async function webgpuAdapter(browser, { timeoutMs = Number(process.env.GF
 
 export async function launchChrome(options = {}) {
   const { gpu = null, chromium: browserType, ...rest } = options;
-  const chromium = browserType ?? (await import('../../pipeline/node_modules/playwright/index.mjs')).chromium;
+  const chromium = browserType ?? await loadChromium();
   // CHROME_ARGS adds flags, e.g. "--enable-gpu --ignore-gpu-blocklist" for WebGL games that fail on software GL.
   const extra = (process.env.CHROME_ARGS ?? '').split(/\s+/).filter(Boolean);
   const headless = rest.headless ?? process.env.HEADED !== '1';
@@ -102,16 +197,17 @@ export async function launchChrome(options = {}) {
     console.warn('launchChrome: --use-angle=vulkan for WebGL crashes Chrome\'s GPU process on some shaders on this host (white or black page); use gpu: "webgl" or CHROME_ARGS="--enable-gpu --ignore-gpu-blocklist" (qa/browser.mjs WEBGL_GPU_ARGS)');
   }
   if (!gpu) return chromium.launch({ executablePath: chromePath(), headless, ...rest, args: [...(rest.args ?? []), ...extra] });
-  if (gpu === 'webgl') return chromium.launch({ executablePath: chromePath(), headless, ...rest, args: [...WEBGL_GPU_ARGS, ...(rest.args ?? []), ...extra] });
-  if (gpu !== 'webgpu') throw new Error(`launchChrome: gpu must be "webgl" or "webgpu" (got ${JSON.stringify(gpu)})`);
-  // Headless: chrome-headless-shell (see above), unless the caller names a binary. Headed: installed Chrome.
-  const executablePath = 'executablePath' in rest ? rest.executablePath : headless ? headlessShellPath() : chromePath();
-  const browser = await chromium.launch({ ...rest, executablePath, headless, args: [...(headless ? WEBGPU_ARGS : WEBGPU_HEADED_ARGS), ...(rest.args ?? []), ...extra] });
+  if (gpu !== 'webgl' && gpu !== 'webgpu') throw new Error(`launchChrome: gpu must be "webgl" or "webgpu" (got ${JSON.stringify(gpu)})`);
+  const plan = gpuLaunchPlan({ gpu, headless });
+  if (gpu === 'webgl') return chromium.launch({ executablePath: chromePath(), headless, ...rest, args: [...plan.args, ...(rest.args ?? []), ...extra] });
+  // Linux headless: chrome-headless-shell (see above). Otherwise the installed Chrome. A binary the caller names wins.
+  const executablePath = 'executablePath' in rest ? rest.executablePath : plan.binary === 'shell' ? headlessShellPath() : chromePath();
+  const browser = await chromium.launch({ ...rest, executablePath, headless, args: [...plan.args, ...(rest.args ?? []), ...extra] });
   // A hardware adapter or nothing: a game that needs WebGPU fails here at once instead of hanging on its error card.
   const adapter = await webgpuAdapter(browser).catch(e => ({ ok: false, why: e.message.split('\n')[0] }));
   if (!adapter.ok) {
     await browser.close().catch(() => {});
-    throw new NoWebGPUError(`needs WebGPU: Chrome found no hardware WebGPU adapter (${adapter.why}). It needs a GPU with a Vulkan driver (vulkaninfo lists it); in Docker, pass the GPU through (--device nvidia.com/gpu=all).`);
+    throw Object.assign(new NoWebGPUError(`needs WebGPU: Chrome found no hardware WebGPU adapter (${adapter.why}). ${webgpuHelp()}`), { why: adapter.why });
   }
   browser.webgpu = { ...adapter, executablePath: executablePath ?? 'playwright default' };   // for reports
   return browser;

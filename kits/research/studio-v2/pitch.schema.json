@@ -19,7 +19,7 @@
   "reply": {
    "type": "string",
    "maxLength": 400,
-   "description": "One or two sentences to the creator in the chat: what changed, or what the agent decided once the question budget ran out."
+   "description": "One or two sentences to the creator in the chat: what changed, or what the agent decided once the question budget ran out. When a core feature of a game the creator named is missing from the kit (research.signature), the reply starts with it."
   },
   "cards": {
    "type": "array",
@@ -146,7 +146,7 @@
        "faithful",
        "variation"
       ],
-      "description": "faithful: a faithful take on the game the creator named (its signature loop mapped onto the kit). variation: a different take. Only when the prompt names an existing game."
+      "description": "faithful: a faithful take on the game the creator named (its signature loop mapped onto the kit; card 1 whenever the prompt names a game, checked). variation: a different take. Only when the prompt names an existing game."
      }
     }
    }
@@ -246,6 +246,92 @@
     "notes": {
      "type": "string",
      "maxLength": 1200
+    },
+    "signature": {
+     "type": "object",
+     "required": [
+      "games",
+      "rows"
+     ],
+     "additionalProperties": false,
+     "description": "When the creator names existing games: their signature loop, researched from real sources (each game's store page plus one gameplay description: a wiki, a guide or a review that says how it plays), as rows the kit supports, approximates or is missing. The checker (studio-worker/tools/check-v2.mjs) holds card 1 to it: card 1 is fit 'faithful', every missing row is in its v1.notYet, and the reply leads with a missing core feature.",
+     "properties": {
+      "games": {
+       "type": "array",
+       "minItems": 1,
+       "maxItems": 4,
+       "items": {
+        "type": "object",
+        "required": [
+         "name",
+         "urls"
+        ],
+        "additionalProperties": false,
+        "properties": {
+         "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+         },
+         "urls": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": {
+           "type": "string",
+           "maxLength": 300,
+           "pattern": "^https?://"
+          },
+          "description": "The store page and at least one gameplay description from another site."
+         },
+         "loop": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "One sentence: what a player does minute to minute, from those sources."
+         }
+        }
+       }
+      },
+      "rows": {
+       "type": "array",
+       "minItems": 3,
+       "maxItems": 12,
+       "items": {
+        "type": "object",
+        "required": [
+         "feature",
+         "support",
+         "how"
+        ],
+        "additionalProperties": false,
+        "properties": {
+         "feature": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "One thing that makes it that game, e.g. 'side-scrolling levels you clear screen by screen'."
+         },
+         "support": {
+          "enum": [
+           "supported",
+           "approximated",
+           "missing"
+          ]
+         },
+         "how": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "description": "supported or approximated: which catalog mechanic, world or look does it, and how close; missing: what the kit lacks."
+         },
+         "core": {
+          "type": "boolean",
+          "description": "true for the 2-4 features without which it is not that game."
+         }
+        }
+       }
+      }
+     }
     }
    }
   },

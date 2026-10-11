@@ -105,6 +105,23 @@ export function createLooks(ctx, { live, net, localId }) {
         net.send('lq', { k: lk }, peer.id);
       }
     },
+    /** Watch then play (gf-multiplayer 1.6.0): everyone's looks this copy holds, for a stream's key frame. */
+    watchKey() {
+      const out = {};
+      for (const p of ctx.players?.humans?.() ?? []) {
+        const r = A.loadout(p.id); if (!r || !r.key) continue;
+        out[p.id] = { k: r.advertised || r.key, l: r.loadout };
+      }
+      return Object.keys(out).length ? out : null;
+    },
+    /** A viewer: put on the looks a stream's key frame carried (asking would go nowhere: a viewer sends nothing). */
+    watchTake(all) {
+      if (!all || typeof all !== 'object') return;
+      for (const [id, x] of Object.entries(all)) {
+        if (id === localId || !x || typeof x !== 'object') continue;
+        try { A.setLoadout(id, x.l ?? null, { key: typeof x.k === 'string' ? x.k : null }); } catch (e) { console.warn(`gf-three loadout: ${id}: ${e.message}`); }
+      }
+    },
     observe: () => ({ key, from: source }),
   };
 }

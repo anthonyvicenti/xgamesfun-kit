@@ -63,7 +63,7 @@ Frozen releases go to `research/foundations/kits/gf-three/<semver>/` and are imm
    - Those cases (`research/studio-v2/evals/cases/`) are the system's final exam. Builders don't read them.
 5. **Kit copies are never edited in a game.** `gf/three/`, `gf/mp/` and `audio/` are vendored by `create` and checked by `verify`.
 6. **Multiplayer is live by default** (`research/multiplayer/STANDARD.md` bar): friends in one game, in sync, each seen as a character. Never pause during a live round.
-7. **Audio through gf-audio** (`research/foundations/kits/gf-audio/1.5.0`); sounds are listed in `assets.json` → `sounds`.
+7. **Audio through gf-audio** (`research/foundations/kits/gf-audio/1.5.0`); sounds are listed in `assets.json` → `sounds` → `sounds` (verify check 18 fails a sound anywhere else).
 8. **Evidence.** QA runs write to `<game>/evidence/<run>/`, and they are append-only.
 
 ## Upgrading a game

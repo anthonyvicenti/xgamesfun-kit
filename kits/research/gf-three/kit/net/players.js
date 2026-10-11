@@ -32,6 +32,7 @@ export function createPlayers(ctx, { spawnCharacter, characterFor, routeToOwner 
     if (map.has(info.id)) return map.get(info.id);
     const p = {
       id: info.id, name: info.name ?? info.id, color: info.color ?? '#ffffff', seat: info.seat ?? 0, isBot: !!info.isBot, local: !!info.local, owned: !!info.owned,
+      ghost: !!info.ghost,            // a live round's viewer (gf-multiplayer 1.6.1): its own player, hidden, in no list or score
       score: 0, alive: true, data: {}, character: null, controller: null, body: null, pose: null, position: new THREE.Vector3(), yaw: 0, anim: 'idle',
       aim: [0, 0, 1], aimDist: null, actions: idleActions(), input: { x: 0, z: 0 }, bot: null, poseExtra: {}, connected: true, drawn: false, onScreen: false,
       _speed: 0, _last: null,
@@ -167,10 +168,10 @@ export function createPlayers(ctx, { spawnCharacter, characterFor, routeToOwner 
 
   const api = {
     add, remove, place, visible, updateLooks, wantLook,
-    list: () => [...map.values()].sort(bySeat),
+    list: () => [...map.values()].filter(p => !p.ghost).sort(bySeat),
     get: id => map.get(id) ?? null,
     others: () => api.list().filter(p => !p.local),
-    owned: () => api.list().filter(p => p.owned),
+    owned: () => [...map.values()].filter(p => p.owned).sort(bySeat),     // a viewer's ghost too: its body still steps
     humans: () => api.list().filter(p => !p.isBot),
     bots: () => api.list().filter(p => p.isBot),
     get size() { return map.size; },

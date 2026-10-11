@@ -39,12 +39,14 @@ Names are the Mixamo-style names Meshy's auto-rig emits, so a Meshy body needs n
 
 - **Parents.** When an optional bone is missing, a bone hangs under its nearest existing canonical ancestor. `rig-check` checks this.
 - **Extra bones** are allowed: tails, ears, hair, accessories. The clips don't move them, so they ride along with their parent.
+- **Fingers.** The standard's finger 1 is the knuckle (the first bone of the finger itself; the thumb's 1 sits at the wrist). Some rigs start each finger with a bone inside the palm: Quaternius bodies have `Index1` 0.028 m from the wrist on a 0.21 m hand, the knuckle at `Index2`, and a fourth bone (`Index4L`) for the last joint. `rig.js` reads that from where the joints sit, not from the names: a finger whose bone 1 is nearer the wrist than 45% of the way to its bone 2 (`PALM_FIRST`) is shifted one bone outward. Its bone 1 rides with the hand, bone 2 takes the clip's 1, bone 3 the clip's 2, and the bone after 3 the clip's 3 (`createRetarget().fingers` lists the shifted fingers, `.driver` the bone each one follows). Mapped by name, the clip's knuckle curl and spread bent the palm, and the real knuckles took the middle joints' curl: the creator's "the hand is crooked" on Token Call Centre, 2026-10-07. `gf_body` extras `gfFingers: "by-name"` turns the shift off for a rig it misreads (the regression example `crooked-hands` uses it to bring the old mapping back).
 - **Other rigs** are renamed by `optimize.mjs --normalize`, which recognises:
   - Mixamo (`mixamorig:` prefix; `Spine`, `Spine1`, `Spine2` become `Spine02`, `Spine01`, `Spine`);
   - Rigify `DEF-*` (Quaternius UAL);
   - Quaternius (`Abdomen`, `Torso`, `Chest`, `UpperArm.L`, `LowerArm.L`, `Wrist.L`, `UpperLeg.L`, …).
   
   It also re-hangs bones in the standard tree and drops unweighted IK helpers. A weighted bone above the hips (Quaternius `Body`) is merged into `Hips`.
+- **KayKit 1.0** (Adventurers, Skeletons; the scenic library) is renamed by `tools/lib/char-kaykit.mjs` (`KAYKIT_NAMES`: `hips`, `spine` → `Spine02`, `chest` → `Spine`, `upperarm.l` → `LeftArm`, `wrist.l` → `LeftHand`, the mitten's knuckle `hand.l` → `LeftHandMiddle1`, `toes.l` → `LeftToeBase`, …), given clavicles (`addShoulders`) and normalised at x0.75 by `research/gf-scenic/tools/art-kaykit.mjs`.
 
 ## 3. Rest pose and bone frames
 
@@ -52,6 +54,8 @@ Names are the Mixamo-style names Meshy's auto-rig emits, so a Meshy body needs n
   - its bind rotation `B`;
   - a swing `R` that lines the upper arm, forearm, thigh and shin up with the standard's T-pose. Hands, fingers, feet and toes inherit their parent's swing; the spine, neck, head and shoulders keep the body's own posture.
   
+  The four fingers (not the thumb) also line each segment up with the clips' finger, on top of the hand's swing. A hand whose fingers rest fanned apart (Quaternius, about 18° at the knuckles) otherwise closes a fist into a loose claw. The thumb keeps the hand's swing: lined up the same way, a two-bone thumb resting at another angle (`quaternius-zombie`) bent further back.
+
   Each frame, `world = D · R · B`, where `D` is the clip's rotation of that bone from the T-pose. The hips move by the clip's hip offset, scaled by the body's hip height. This costs two constant quaternions per bone.
 - **The bind frame is recovered from the hips:** `frame = hipsNodeWorld · IBM(hips)`, per skinned mesh. That covers files exported under a scaled or rotated armature (Quaternius), and per-mesh quantisation, where gltf-transform puts the dequantisation into each skin's IBMs.
 - **Library bodies are normalised** (`optimize.mjs --normalize`). Joints have identity rest rotations, the skinned meshes sit at identity under one root node `gf_body`, and there is one skeleton.
@@ -61,6 +65,26 @@ Names are the Mixamo-style names Meshy's auto-rig emits, so a Meshy body needs n
   - `gfSpineBend` (0–1, default 1) damps the clip's spine and head bend relative to the hips. One-piece bodies fold at the waist otherwise, and their face slides off the body; the beans use 0.4.
   - `gfTint` and `gfTintMix` control tinting (§8).
   - `gfFaces` (optional) lists expressions, each as the material names it shows and hides: the beans carry `{ "hurt": { "show": ["face_hurt", "mouth_hurt"], "hide": ["eye_white", "eye_dark", "mouth"] } }` (eyes squeezed shut as > <, an open mouth). The `show` meshes stay hidden until `character.express(name)`; a knocked-down body shows `hurt` by itself. A body without `gfFaces` keeps one face.
+
+## 3b. The model judge
+
+`tools/model-judge.mjs` is how a body is judged fit to play: its face, body, arms, hands, legs and feet, at rest and in every clip (creator, 2026-10-07: "We need to look at face, body, arms, legs, hands, and feet. We also need to make sure any animation does not distort these").
+
+| Tier | Where | What |
+|---|---|---|
+| measure | `tools/lib/body-judge.mjs`; in `rig-check` (so every library, generated or uploaded body) and verify check 19 (every body a game ships, with the game's own retarget) | the body posed through every clip at 6 times each, beside the clips' own skeleton: the palm stays a palm, each finger joint bends as the clip's finger does, the face moves with the head, the limbs point where the clip's do; at rest every part is there, the hands match left and right, no finger rests bent sideways, the toes point forward. Folded triangles and stretched skin are notes |
+| sheet | `tools/lib/body-sheet.mjs` (real GPU, the character bench on a free port) | a contact sheet: rows are poses (rest, idle, walk, run, aim, interact, a wave and each part's worst measured moment), columns the whole body, the face, each hand and the feet |
+| look | `tools/lib/body-look.mjs`; in `meshy-character` after rig-check (`GF_MODEL_LOOK=0` skips it) | Claude (Opus, about $0.10 and 10 s) reads the sheet with the clips' mannequin in the same pose beside the whole body and each hand, and grades each part none, minor or major. A major fault refuses a generated body, so the worker tries once more |
+
+A body the measuring tier fails stays in `library/bodies.json` with `judge.why`, and the catalog does not offer it: `quaternius-zombie` (its two-bone thumb bends back in `knockdown`).
+
+**Which clips (2026-10-08).** The judge measures the clips a role plays, not every clip in the file (`body-judge.mjs` `clipsFor`). The creator's roguelike lost two generated golems and two bosses to a face that stretched in `swim`, a clip no enemy of that game played:
+- the player (and rig-check, the library lists): every clip but `swim`, `swim_idle`, `sit`, `crouch`, `crouch_walk` and the emotes (`NOT_PLAYED`; the kit plays none of them);
+- any other role (`meshy-character --enemy`, verify check 19 for every role but `player`): what enemies play (`ENEMY_CLIPS`): `idle`, `walk`, `run`, `sprint`, `jump`, `fall`, `land`, `hit`, `hit_head`, `knockdown`, `getup`, `getup_front`, `punch` and the melee clips;
+- check 19 adds, for every role, the clips the game's own code plays (`bodies-check.mjs` `clipsInCode`: `….play('x')`, `act('x')`, `anim:`/`fireAnim:`/`clip:` in rules.js and its siblings, comments and `audio.play` left out);
+- `model-judge.mjs --clips a,b,c` judges exactly those, `--all-clips` every clip, `--role <role>` as that role.
+
+The regression example `swim-only-face` holds both sides: a caller whose face stretches only in clips no enemy plays passes 19, and fails it in a game whose callers swim.
 
 ## 4. Clips (`library/clips/gf-humanoid-1.glb`)
 
@@ -102,7 +126,23 @@ The clip file holds the *standard skeleton*: canonical names, identity rest rota
 | `emote_dance` | Dance_Loop |
 | `emote_talk` | Idle_Talking_Loop |
 
-The file is about 0.5 MB: rotation keys are normalised int16, and it is meshopt-compressed. `tools/retarget.mjs` rebuilds it from the pinned UAL source (`pmndrs/ecctrl@e2cab80`, sha-checked). Licence: CC0 (Quaternius); the authored clips are games.fun's.
+**Melee clips** (2026-10-08, gf-scenic; `rig.js` `MELEE_CLIPS`, which a clip file need not have: an older game's file still loads, and the melee mechanic falls back). From the KayKit Adventurers 1.0 Knight (Kay Lousberg, CC0; `KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0@672074b`, sha-checked), converted by `tools/lib/char-kaykit.mjs`. `impact` (metadata, seconds) is when the weapon hand moves fastest: where a swing lands.
+
+| Clip | From (KayKit) | Layer | Notes |
+|---|---|---|---|
+| `slash_1` | 1H_Melee_Attack_Slice_Diagonal | base | 1.0 s, impact 0.38 s; the 1H combo's first swing |
+| `slash_2` | 1H_Melee_Attack_Slice_Horizontal | base | 1.07 s, impact 0.25 s |
+| `slash_3` | 1H_Melee_Attack_Stab | base | 1.6 s, impact 0.38 s; the finisher |
+| `heavy` | 2H_Melee_Attack_Chop | base | 1.63 s, impact 0.82 s; an overhead slam, both hands grip |
+| `dash` | Dodge_Forward | base | 0.4 s, in place (KayKit's root travel is left out) |
+| `block` | Blocking | upper | loop |
+| `cast` | Spellcast_Shoot | upper | 0.93 s |
+| `death` | Death_A | base | 0.8 s; falls on its back and stays (play with `hold`) |
+| `attack_enemy` | 1H_Melee_Attack_Chop | base | 1.07 s, impact 0.58 s; a generic enemy swing |
+
+KayKit has no bow clip (its ranged clips aim a crossbow), so there is no `bow_shoot`. A base-layer swing replaces locomotion; `play(name, {layer: 'upper'})` swings while the legs keep walking. How a KayKit clip becomes a standard one: the KayKit rig is lined up with the standard's T-pose as a body would be (`D = W·C⁻¹`, so a KayKit body plays it back exactly); the bones KayKit lacks are filled in (Spine01 and the neck halfway, the clavicles turned toward where KayKit moves the arm roots, the fingers from UAL hands: Sword_Idle's grip on a hand that holds a weapon); the hips move by KayKit's hips over its leg reach. What is lost: KayKit moves the thighs' roots a little (up to 0.08 m in `dash`), which a rotation-only standard cannot carry. Every library body passes the model judge on the nine clips.
+
+The file is about 0.62 MB (0.5 MB before the melee clips): rotation keys are normalised int16, and it is meshopt-compressed. `tools/retarget.mjs` rebuilds it from the pinned UAL and KayKit sources (both sha-checked); the 31 earlier clips are bit-identical to the file before the melee clips. Licence: CC0 (Quaternius, Kay Lousberg); the authored clips are games.fun's.
 
 ## 5. Sockets
 

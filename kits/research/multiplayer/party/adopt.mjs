@@ -7,11 +7,13 @@
 //   <game-dir>   the folder the game is served from (the one holding index.html and assets.json: a trial's source/)
 //   --check      change nothing; exit 1 when the kit copy differs from the kit or the manifest has problems
 //
-// A game in mode "solo" or "room" carries the manifest only: the kit folder is for modes "race" and "live".
+// A game in mode "solo" or "room" carries the manifest only: the kit folder is for modes "race", "live" and "world"
+// (a world needs --kit-version 1.5.0 or later while KIT_VERSION is 1.4.0).
+import { isMain } from '../../gf-three/tools/lib/main.mjs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { KIT_DIR, KIT_VERSION, MANIFEST, checkKit, kitFiles, readManifest, validateMultiplayer } from './manifest.mjs';
+import { KIT_DIR, KIT_VERSION, MANIFEST, WORLD_SINCE, checkKit, compareVersions, kitFiles, readManifest, validateMultiplayer } from './manifest.mjs';
 
 export async function adopt(gameDir, { check = false, version = KIT_VERSION, log = console.log } = {}) {
   const dir = resolve(gameDir);
@@ -21,7 +23,12 @@ export async function adopt(gameDir, { check = false, version = KIT_VERSION, log
   const v = validateMultiplayer(manifest);
   out.mode = manifest.mode ?? null; out.warnings = v.warnings;
   if (!v.ok) { out.ok = false; out.problems.push(...v.problems.map(p => `${MANIFEST}: ${p}`)); return out; }
-  if (manifest.mode !== 'race' && manifest.mode !== 'live') return out;   // solo and room games carry the manifest only
+  if (manifest.mode !== 'race' && manifest.mode !== 'live' && manifest.mode !== 'world') return out;   // solo and room games carry the manifest only
+  // A world needs world rooms (kit 1.5.0+): an older kit would show its Host / Join lobby instead.
+  if (manifest.mode === 'world' && version !== 'dev' && compareVersions(version, WORLD_SINCE) < 0) {
+    out.ok = false; out.problems.push(`${MANIFEST}: mode "world" needs gf-multiplayer ${WORLD_SINCE} or later (--kit-version ${WORLD_SINCE}); asked for ${version}`);
+    return out;
+  }
 
   const state = await checkKit(dir, { version });
   if (check) {
@@ -44,7 +51,7 @@ export async function adopt(gameDir, { check = false, version = KIT_VERSION, log
   return out;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const dir = a.find(x => !x.startsWith('--'));
   const vi = a.indexOf('--kit-version');
@@ -54,6 +61,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   for (const p of r.problems) console.log(`problem: ${p}`);
   for (const f of r.wrote) console.log(`wrote ${f}`);
   for (const f of r.removed) console.log(`removed ${f}`);
-  console.log(r.ok ? `ok: ${r.mode}${r.mode === 'race' || r.mode === 'live' ? `, kit in ${KIT_DIR}/ (${r.wrote.length} written)` : ' (manifest only)'}` : 'not ok');
+  console.log(r.ok ? `ok: ${r.mode}${r.mode === 'race' || r.mode === 'live' || r.mode === 'world' ? `, kit in ${KIT_DIR}/ (${r.wrote.length} written)` : ' (manifest only)'}` : 'not ok');
   process.exit(r.ok ? 0 : 1);
 }

@@ -294,7 +294,6 @@
   },
   "quality": {
     "high": {
-      "pixelRatio": 2,
       "shadowMapSize": 2048,
       "ao": true,
       "aoHalfRes": false,
@@ -309,7 +308,6 @@
       "antialiasScale": 1
     },
     "low": {
-      "pixelRatio": 1,
       "shadowMapSize": 1024,
       "ao": false,
       "aoHalfRes": true,

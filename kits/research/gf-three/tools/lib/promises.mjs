@@ -15,6 +15,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fill as fillForgeTables } from '../../../gf-forge/kit/tables/index.js';
 
 export const SCHEMA = 'gf-three-promises/1';
 
@@ -26,13 +27,14 @@ export const CONTROL_KEYS = {
   jump: { keys: 'Space', key: 'Space' },
 };
 
-/** The HUD's help line for a controls map, exactly as kit/ui/ui.js draws it. */
-export function hudLine(controls = {}) {
-  const parts = ['WASD move', 'mouse look'];
+/** The HUD's help line for a controls map, exactly as kit/ui/ui.js draws it (the follow camera's mouse aims). */
+export function hudLine(controls = {}, camera = 'third') {
+  const parts = ['WASD move', camera === 'follow' ? 'mouse aim' : 'mouse look'];
   if (controls.primary) parts.push(`click / F: ${controls.primary}`);
   if (controls.secondary) parts.push(`right click / Q: ${controls.secondary}`);
   if (controls.interact) parts.push(`E: ${controls.interact}`);
   if (controls.jump) parts.push(`Space: ${controls.jump}`);
+  parts.push('Esc: menu');
   return parts.join(' · ');
 }
 
@@ -45,8 +47,69 @@ export const KIT_PROMISES = [
   { id: 'kit.happens', text: 'Something happens in a round: scores move.', proofs: ['verify:12'], check: 'something happens' },
   { id: 'kit.controls', text: 'Every control the HUD lists does something I can see.', proofs: ['verify:13'], check: 'controls work' },
   { id: 'kit.looks', text: 'Every character and prop the creator asked to be made is that model, or the delivery names the placeholder still in its place and why; no enemy wears a player\'s body in another colour.', proofs: ['verify:14'], check: 'looks honoured' },
+  { id: 'kit.sounds', text: 'Every sound the game lists plays at its moment, and every sound or music file the creator gave it is one of them.', proofs: ['verify:18'], check: 'sounds play' },
+  { id: 'kit.bodies', text: 'Every character looks whole when it moves: its face, body, arms, hands, legs and feet keep their shape in every animation (no crooked hand or folded palm, no stretched face).', proofs: ['verify:19'], check: 'bodies hold their shape' },
+  { id: 'kit.menu', text: 'The game opens on a home menu: Play, Play with friends, How to play (every control and the goal), Settings (volume, mouse sensitivity) and Connect wallet; Esc pauses a round, and I can go back to the menu.', proofs: ['verify:20', 'play'], check: 'the menu works' },
+  { id: 'kit.hud', text: 'In a round the HUD shows me my own state: my health when the game has hit points (it drops when I am hurt), when I am knocked down or out, the goal, and each meter the game has (a tank, my paint share, the wave and enemies left, my lap).', proofs: ['verify:21', 'play'], check: 'the HUD shows your state' },
+  { id: 'kit.wallet', text: 'On the games.fun page, the home menu connects my wallet, lists the items I own from this game, and Wear puts one on me where everyone sees it.', proofs: ['verify:22'], check: 'the wallet in the menu' },
+  { id: 'kit.lobby', text: 'Playing with friends, I pick my name before I host or join and can change it in the waiting room; the waiting room shows the room code once and everyone in the colour their character wears; only friends play (no bots); and the results show each of us our own score.', proofs: ['verify:25'], check: 'playing with friends' },
+  { id: 'kit.post', text: 'Inside a post on X (a small frame that cannot lock the mouse) a button makes the game full screen, so the mouse stays on the game, and I can still look around by dragging.', proofs: ['verify:24'], check: 'plays inside a post' },
+  { id: 'kit.screens', text: 'The game looks sharp on my phone, my tablet and my computer, at any window size, and stays sharp when I zoom the browser or turn the phone.', proofs: ['verify:31', 'play'], check: 'sharp on every screen' },
   { id: 'kit.world', text: 'The world is a whole place the size I asked for: a building has walls all round, a ceiling and real doors (enemies come in through them), and past the walls I see a street or skyline, not an empty plain.', proofs: ['verify:17', 'play'], check: 'the world is complete' },
 ];
+
+/** A world's standing promises (CONTRACT §9, round.mode "world"), in place of a round's (results and replay, fair
+ *  knock-downs, moving scores, a walled world and a waiting room do not apply): verify's world checks prove them. */
+export const WORLD_PROMISES = [
+  { id: 'kit.world.friends', text: 'I enter the world from its card with a name I pick (no code, no Start); my friends and I each start on a spot of our own, each in one colour that the card, the menu and our character agree on, and nobody\'s name shows a slur.', proofs: ['verify:5', 'verify:25', 'play'], check: 'friends in one world' },
+  { id: 'kit.world.saved', text: 'What we build in the world is saved: a fresh browser tomorrow finds it all there. The game\'s own page alone is only a practice copy that changes nothing.', proofs: ['verify:26', 'play'], check: 'the world persists' },
+  { id: 'kit.world.host', text: 'When whoever is hosting leaves, the world carries on: someone else hosts within seconds and nothing anyone built is lost.', proofs: ['verify:27'], check: 'the host leaves' },
+  { id: 'kit.world.spawn', text: 'Nobody can dig up, build on, paint or blow up the spawn square.', proofs: ['verify:28', 'play'], check: 'the spawn square holds' },
+  { id: 'kit.world.words', text: 'The words on a sign never show a slur or a strong curse, to anyone.', proofs: ['verify:29', 'play'], check: 'sign words are filtered' },
+  { id: 'kit.world.phones', text: 'On a phone I can walk, look around, build, break and use every tool by touch.', proofs: ['verify:30', 'play'], check: 'phones' },
+];
+/** A world in first person (the creator, 2026-10-09: "Can we make it first person?"). */
+export const WORLD_FIRST_PROMISE = { id: 'kit.world.first', text: 'I see the world through my own eyes: after a first click the mouse looks around and I build where the crosshair is (the wheel picks a block); inside a post I drag to look and click the block I want; on a phone I drag to look and tap.', proofs: ['verify:13', 'verify:24', 'verify:30', 'play'], check: 'first person' };
+/** The round promises a world never makes. */
+const ROUND_ONLY = new Set(['kit.round', 'kit.fair', 'kit.happens', 'kit.lobby', 'kit.world']);
+
+/** The action mechanics (gf-scenic wave 1, track M): what each promises a player, and which checks prove it. */
+export const MECHANIC_PROMISES = {
+  melee: { text: 'I swing my weapon where I aim: a combo with weight (a windup, a hit that stops for an instant, a recovery), a heavy strike and a dodge; every hit shows on the enemy and it takes a few to go down.', proofs: ['verify:13', 'verify:16', 'verify:15', 'play'] },
+  levels: { text: 'When every enemy on a level is down its portal opens; stepping in together takes us all to the next level, and the last level is the boss\'s.', proofs: ['verify:15', 'play'] },
+  boss: { text: 'The boss is its own big character with its name and health across the top of the screen; each attack warns on the ground before it lands, and it fights harder as it weakens.', proofs: ['verify:15', 'play'] },
+  loot: { text: 'Kills drop coins (counted on the HUD) and sometimes a potion; chests open with E; a weapon I pick up changes my weapon; between levels I choose one of three upgrades.', proofs: ['verify:15', 'play'] },
+};
+
+/**
+ * What the forge engine promises a player (CONTRACT §8 forge), from the game's data tables (config/game.json → forge):
+ * the first-person actions the HUD's control line does not list (the evade, reload, the quick melee, the weapon keys),
+ * hits that read, waves, being hurt, and what verify alone proves (every drawn thing a slot; no blank page without
+ * WebGPU; a lost device recovered). The play-tester of a forge game (research/studio-v2/prompts/playtest-forge.md) is
+ * held to the 'play' ones. → promises without `kind` and `core` (derivePromises adds them)
+ */
+export function forgePromises(tables = {}) {
+  // filled first (the kit's own fill: a preset's magazine, an archetype's numbers), so a spec's raw rows
+  // ({id, preset: "pistol"}) promise what the game made from them will have, the same as a game's filled config
+  let forge = tables; try { forge = fillForgeTables(tables ?? {}); } catch {}
+  const out = [], W = forge.weapons ?? [], E = forge.enemies ?? [], waves = forge.waves ?? [];
+  const names = W.map(w => w.name || w.id).filter(Boolean);
+  out.push({ id: 'forge.slots', text: 'Everything the game draws is a piece Studio can show and swap: every model, picture and number is a slot, and nothing I see is built into the engine.', source: 'forge: slot coverage', proofs: ['verify:4'] });
+  out.push({ id: 'forge.browser', text: 'In a browser without WebGPU the game says so and gives me a link to open somewhere it plays, never a blank page; and if the graphics device is lost in a round the game draws again by itself.', source: 'forge: no WebGPU, a lost device', proofs: ['verify:32', 'verify:33'] });
+  out.push({ id: 'forge.evade', text: 'Shift is a quick evade: a short dash the way I am moving, and I cannot do it again at once.', source: 'forge: the player table (evade)', proofs: ['play'] });
+  if (W.length) {
+    if (E.length) out.push({ id: 'kit.hits', text: 'When I shoot or strike an enemy I see each hit land: it flashes white, a number pops from it, and it takes a few hits to go down.', source: 'forge: hits read', proofs: ['verify:16', 'play'] });
+    out.push({ id: 'forge.weapon', text: `My weapon is in my hand on screen${names.length ? ` (${names[0]} first)` : ''}; firing shows at once (a flash, a kick, the round gone from the counter).`, source: 'forge: the weapons table', proofs: ['play'] });   // seen, not heard: a play-tester's script has no ears (sound is checks 7 and 18)
+    if (W.some(w => Number(w.magazine ?? 0) > 0)) out.push({ id: 'forge.reload', text: 'The HUD shows my rounds; R reloads, and an empty weapon reloads by itself.', source: 'forge: the weapons table (magazine, reload)', proofs: ['play'] });
+    out.push({ id: 'forge.melee', text: 'V is a quick melee: a close swing that hits what is right in front of me, whatever weapon I hold.', source: 'forge: the quick melee', proofs: ['play'] });
+    if (W.length > 1) out.push({ id: 'forge.weapons', text: `Keys 1 to 4 and the wheel pick a weapon (${names.join(', ')}); each comes up in my hand and fires its own way.`, source: 'forge: the weapons table (slots)', proofs: ['play'] });
+  }
+  if (E.length && waves.length) {
+    out.push({ id: 'forge.waves', text: `Enemies rise in waves (${waves.length}); I can tell their kinds apart, each warns before it hits, and I can tell which wave I am on and when one is cleared.`, source: 'forge: the enemies and waves tables', proofs: ['play'] });
+    out.push({ id: 'forge.hurt', text: 'When an enemy hits me I see it at once (the screen\'s edge goes red) and my health on the HUD drops; when it runs out I am down and the round ends on the results, which say what killed me.', source: 'forge: hurt, low health, the death recap', proofs: ['verify:21', 'play'] });
+  }
+  return out;
+}
 
 // ---- words (for the notInV1 exclusion) ----
 const STOP = new Set(['the', 'and', 'with', 'your', 'you', 'for', 'that', 'this', 'are', 'its', 'their', 'they', 'them', 'have', 'has', 'can', 'see', 'into', 'from', 'when', 'what', 'who', 'one', 'out', 'off', 'all', 'any', 'more', 'than', 'then', 'not', 'but', 'get', 'got', 'how', 'per', 'each', 'also', 'mode']);
@@ -100,8 +163,10 @@ export function derivePromises({ spec = {}, config = {} } = {}) {
   // 3. each mechanic's "as" (what it is in this game)
   const mechanics = Array.isArray(config.mechanics) && config.mechanics.length ? config.mechanics : (spec.mechanics ?? []);
   mechanics.forEach((m, i) => {
-    const as = clean(m?.as);
-    if (!m?.id || !as) return;
+    const as = clean(m?.as), kit = MECHANIC_PROMISES[m?.id];
+    if (!m?.id || (!as && !kit)) return;
+    // the action mechanics promise what the kit makes them do, beside what they are in this game, proven by checks too
+    if (kit) { add({ id: `mechanic.${m.id}`, kind: 'mechanic', mechanic: m.id, text: `${as ? `${sentence(as.charAt(0).toUpperCase() + as.slice(1))} ` : ''}${kit.text}`, source: `mechanics[${i}] (${m.id}): its "as" and the kit's ${m.id}`, proofs: [...kit.proofs], core: false }); return; }
     add({ id: `mechanic.${m.id}`, kind: 'mechanic', mechanic: m.id, text: `I can see this working when I play: ${sentence(as)}`, source: `mechanics[${i}].as (${m.id})`, proofs: ['play'], core: false });
   });
 
@@ -116,16 +181,26 @@ export function derivePromises({ spec = {}, config = {} } = {}) {
   });
 
   // 6. the kit's standing promises (the winBy words ride on the round promise)
-  for (const k of KIT_PROMISES) {
+  const world = (config.round?.mode ?? spec.round?.mode) === 'world' || (config.round?.mode === undefined && spec.world?.template === 'voxel');
+  const first = world && (config.camera ?? spec.camera ?? 'first') === 'first';
+  for (const k of world ? [...KIT_PROMISES.filter(k => !ROUND_ONLY.has(k.id)), ...WORLD_PROMISES, ...(first ? [WORLD_FIRST_PROMISE] : [])] : KIT_PROMISES) {
     const winBy = clean(config.round?.winBy ?? spec.round?.winBy);
     const text = k.id === 'kit.round' && winBy ? `A round ends on a results screen that says who won (${winBy}), and I can play again.` : k.text;
     add({ id: k.id, kind: 'kit', text, source: `kit: ${k.check}`, proofs: [...k.proofs], core: false });
   }
+  // the creator's reference images (verify check 23, track S; after the roguelike miss: "The game also doesn't have the
+  // right vibe at all"): only when the locked spec lists references used as its style or its characters
+  const refs = (spec.references ?? []).filter(r => r && (r.use === 'style' || r.use === 'character'));
+  if (refs.length) add({ id: 'kit.likeness', kind: 'kit', text: `The game looks like the creator's reference images (${refs.length} picture${refs.length === 1 ? '' : 's'}: ${[...new Set(refs.map(r => r.use))].join(' and ')}): the camera, palette, light, places and characters.`, source: 'spec.references (use style or character)', proofs: ['verify:23'], core: false });
   // 7. a game with enemies: every hit reads (verify check 16; creator, "Hang Up On Them": "The zombies are instant killed")
-  if (mechanics.some(m => m?.id === 'waves')) add({ id: 'kit.hits', kind: 'kit', text: 'When I shoot an enemy I see each hit land: a health bar over it drops, it flashes and flinches, and it takes a few hits to go down.', source: 'kit: hits read', proofs: ['verify:16', 'play'], core: false });
+  if (mechanics.some(m => m?.id === 'waves')) add({ id: 'kit.hits', kind: 'kit', text: `When I ${mechanics.some(m => m?.id === 'melee') ? 'strike' : 'shoot'} an enemy I see each hit land: a health bar over it drops, it flashes and flinches, and it takes a few hits to go down.`, source: 'kit: hits read', proofs: ['verify:16', 'play'], core: false });
+
+  // 8. the forge engine (CONTRACT §8 forge): what its core gives every game, from the data tables
+  const forge = config.forge ?? (spec.engine === 'forge' ? spec.forge ?? {} : null);
+  if (forge) for (const p of forgePromises(forge)) add({ kind: 'kit', core: false, ...p });
 
   const title = clean(config.text?.title ?? config.title ?? spec.title);
-  return { schema: SCHEMA, title, hook, controls: { hud: hudLine(controls), list: out.filter(p => p.kind === 'control').map(p => ({ action: p.action, keys: p.keys, key: p.key, does: controls[p.action] })) },
+  return { schema: SCHEMA, title, hook, ...(forge ? { engine: 'forge' } : {}), controls: { hud: hudLine(controls, config.camera ?? spec.camera), list: out.filter(p => p.kind === 'control').map(p => ({ action: p.action, keys: p.keys, key: p.key, does: controls[p.action] })) },
     promises: out, notPromised: notInV1, excluded };
 }
 

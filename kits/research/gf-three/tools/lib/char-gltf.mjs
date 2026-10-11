@@ -26,10 +26,12 @@ function skinnedPrims(root, skin) {
  *   canonical bone names (rig.js canonicalNames), canonical parents, unweighted helpers dropped, weighted Hips
  *   ancestors merged into Hips, Y up, facing +Z, metres, feet at the origin, every joint's rest rotation identity
  *   (IBMs recomputed, so the mesh is unchanged), one root node `gf_body`, no embedded animations.
- * Options: { height } forces the standing height in metres; { names } a Map(original → canonical) to use instead.
+ * Options: { height } forces the standing height in metres; { scale } multiplies the file's units by a fixed factor
+ * instead (a pack whose characters must keep their sizes relative to each other); { names } a Map(original → canonical)
+ * to use instead.
  * Returns a report { renamed, dropped, merged, kept, fix: {up, yawDeg, scale}, height }.
  */
-export function normalizeBody(doc, { height, names, keepAnimations = false } = {}) {
+export function normalizeBody(doc, { height, scale, names, keepAnimations = false } = {}) {
   silent(doc);
   const root = doc.getRoot();
   const skins = root.listSkins();
@@ -115,7 +117,7 @@ export function normalizeBody(doc, { height, names, keepAnimations = false } = {
     for (let v = 0; v < pos.getCount(); v++) box.expandByPoint(tmp.fromArray(pos.getElement(v, e)).applyMatrix4(M));
   }
   const h0 = box.max.y - box.min.y;
-  const s = height ? height / h0 : h0 > 5 ? 0.01 : 1;
+  const s = scale ?? (height ? height / h0 : h0 > 5 ? 0.01 : 1);
   const S = new Matrix4().makeScale(s, s, s);
   const feet = Pc('LeftFoot').add(Pc('RightFoot')).multiplyScalar(0.5).applyMatrix4(F).multiplyScalar(s);
   const T = new Matrix4().makeTranslation(-feet.x, -box.min.y * s, -feet.z);

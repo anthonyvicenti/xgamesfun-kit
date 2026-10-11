@@ -26,11 +26,22 @@
 //              (paint: some cells change). Without a crosshair (top camera, nothing aimed): a change anywhere in the
 //              central region (≥ CENTRAL_MIN). NEAR_RADIUS (a wider disc) is reported, not judged.
 //
+//   melee      (gf-scenic wave 1, track M) the action the melee mechanic swings on (and its heavy action): with the
+//              follow camera the cursor goes to a point beside the player (it aims), with third or first the crosshair
+//              aims; the button is held 1.4 s (a combo) or clicked (heavy) → a swing starts (the kit's count), it goes the
+//              way the player aims (within SWING_DEG of the direction to the aim point, measured from the page's own aim
+//              ray), the swing's point is in view, and the pixels round it change (the trail and the body) in at least
+//              CORE_FRAMES frames by CORE_MIN beyond the released frames' noise (or one frame by twice that).
+//              A melee game with waves plays this page on the staged moment ?gf-demo=waves.hit (one enemy standing still):
+//              its enemies would otherwise take an idle player down before the last control is tried.
+//   dash       jump bound to melee's dash (dashAction "jump"): Space with D held moves the player DASH_M or more in
+//              0.35 s and the kit counts a dash (a jump would rise; a dash does not).
+//
 // The HUD's control line must never list a control this check finds dead: the detail names the control, what
 // happened, and what to change. Budget: about 25 s on the solo browser.
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const r2 = v => Math.round(v * 100) / 100;
-export const CONTROL_LIMITS = { JUMP_RISE: 0.25, HOLD_MS: 1400, CORE_RADIUS: 0.025, CORE_MIN: 0.12, CORE_FRAMES: 2, NEAR_RADIUS: 0.065, CENTRAL_MIN: 0.01, LAND_PX: 0.1, PIXEL_T: 60, WALK_SECONDS: 14 };
+export const CONTROL_LIMITS = { JUMP_RISE: 0.25, HOLD_MS: 1400, CORE_RADIUS: 0.025, CORE_MIN: 0.12, CORE_FRAMES: 2, NEAR_RADIUS: 0.065, CENTRAL_MIN: 0.01, LAND_PX: 0.1, PIXEL_T: 60, WALK_SECONDS: 14, SWING_DEG: 35, DASH_M: 2.4 };
 const ACTIONS = ['jump', 'interact', 'primary', 'secondary'];
 
 /** In the page: the observation and the local player. */
@@ -122,7 +133,10 @@ export async function checkControls({ newPage, browser, url, game, shot = async 
   const view = { w: vp.width, h: vp.height, clip: { x: Math.floor(vp.width * 0.25), y: Math.floor(vp.height * 0.27), width: Math.round(vp.width * 0.5), height: Math.round(vp.height * 0.55) } };
   const png = (full = false) => p.screenshot(full ? { type: 'png' } : { type: 'png', clip: view.clip });
   try {
-    await p.goto(`${url}?seed=7&bots=0`, { waitUntil: 'load' });
+    // a melee game's enemies close in and fight an idle player (it would be down before its last control is tried): its
+    // page plays the kit's staged moment instead (?gf-demo=waves.hit: one enemy standing still in front, no waves)
+    const calm = (game.mechanics ?? []).some(m => m.id === 'melee') && (game.mechanics ?? []).some(m => m.id === 'waves') ? '&gf-demo=waves.hit' : '';
+    await p.goto(`${url}?seed=7&bots=0${calm}`, { waitUntil: 'load' });
     for (let t = Date.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'lobby'; ) { if (Date.now() - t > 90000) throw new Error('no lobby in 90 s'); await sleep(200); }
     const play = await p.locator('#gf-play').boundingBox().catch(() => null);
     if (play) await p.mouse.click(play.x + play.width / 2, play.y + play.height / 2); else await p.keyboard.press('Enter');
@@ -133,8 +147,12 @@ export async function checkControls({ newPage, browser, url, game, shot = async 
     const hasObs = !!o0.controls;
     const crosshair = hasObs ? !!o0.controls.crosshair : (game.camera ?? 'third') !== 'top';
 
+    const melee = (game.mechanics ?? []).find(m => m.id === 'melee');
+    const meleeAct = a => !!melee && ((melee.params?.action ?? 'primary') === a || (melee.params?.heavyAction ?? 'secondary') === a);
     for (const action of listed) {
       const words = game.controls[action];
+      if (action === 'jump' && melee && (melee.params?.dashAction ?? 'jump') === 'jump') { results.push(await dash({ p, obs, words, L, shot })); await sleep(700); continue; }
+      if ((action === 'primary' || action === 'secondary') && meleeAct(action)) { results.push(await swing({ p, obs, browser, action, words, game, shot, L, heavy: (melee.params?.heavyAction ?? 'secondary') === action })); await sleep(900); continue; }
       if (action === 'jump') {
         const a = await obs(); let top = a.me.y;
         await p.keyboard.down('Space'); await sleep(90); await p.keyboard.up('Space');
@@ -214,7 +232,7 @@ async function interact({ p, obs, game, words, shot, L }) {
     const o2 = await obs();
     await shot(p, 'controls-interact-after');
     const changed = !unchanged(t, o2, game);
-    const what = t.kind === 'pickup' ? 'took the pickup' : t.kind === 'carry' ? 'picked the item up' : 'worked the station';
+    const what = t.kind === 'pickup' ? 'took the pickup' : t.kind === 'carry' ? 'picked the item up' : t.kind === 'loot' ? `${t.what === 'weapon' ? 'took the weapon' : 'opened the chest'}` : 'worked the station';
     if (changed) return { action: 'interact', words, ok: true, kind: t.kind, at, prompt, why: `E ${at} m from a ${t.kind} (touch ${t.touch || 0} m, press ${t.reach} m) ${what}${prompt ? `; the HUD said "${prompt}"` : ''}`, legacy: !!t.legacy };
     return { action: 'interact', words, ok: false, kind: t.kind, at, prompt, legacy: !!t.legacy,
       why: `E ${at} m from a ${t.kind} (the HUD's "E: ${words}") changed nothing${t.touch ? ` (it is only taken by walking into it, within ${t.touch} m)` : ''}${prompt ? '' : '; no prompt showed near it'}. ` +
@@ -276,4 +294,91 @@ async function fire({ p, obs, png, view, browser, action, words, crosshair, hasO
       : `held ${L.HOLD_MS / 1000} s${holding}: ${fails.join('; ')}. The player cannot see their own ${action === 'primary' ? 'main' : 'second'} action. ` +
         'Aimed mechanics (projectile, carry throws) land on the point under the crosshair since kit 2026-10-07 (kit/core/aim.js): upgrade the kit; if this action needs something first (an item in hand), make the HUD say so or let the action work without it',
   };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// melee (gf-scenic wave 1, track M): a swing at the aim; the dash
+// ---------------------------------------------------------------------------------------------------------------------
+const meleeStats = o => o.controls?.mechanics?.find(m => m.id === 'melee')?.stats ?? null;
+const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+
+/** Pixel change in a disc (screen px) between released frames (noise) and held frames, full screenshots. */
+async function analyseDisc(browser, released, held, c, rad, L) {
+  const page = await browser.newPage();
+  try {
+    return await page.evaluate(async ([R, Hs, c, rad, T]) => {
+      const load = async s => { const im = new Image(); im.src = 'data:image/png;base64,' + s; await im.decode(); const cv = new OffscreenCanvas(im.width, im.height); const g = cv.getContext('2d'); g.drawImage(im, 0, 0); return { w: im.width, h: im.height, d: g.getImageData(0, 0, im.width, im.height).data }; };
+      const rs = []; for (const s of R) rs.push(await load(s));
+      const base = rs[rs.length - 1], W = base.w;
+      const x0 = Math.max(0, Math.floor(c.x - rad)), x1 = Math.min(W, Math.ceil(c.x + rad)), y0 = Math.max(0, Math.floor(c.y - rad)), y1 = Math.min(base.h, Math.ceil(c.y + rad));
+      const diff = (a, b, i) => Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
+      const inside = (x, y) => (x - c.x) ** 2 + (y - c.y) ** 2 <= rad * rad;
+      const noise = new Uint8Array(W * base.h); let n = 0, nN = 0;
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { if (!inside(x, y)) continue; const k = y * W + x; n++; for (const r of rs.slice(0, -1)) if (diff(r.d, base.d, k * 4) > T) { noise[k] = 1; nN++; break; } }
+      const frames = [];
+      for (const s of Hs) { const h = await load(s); let cc = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { if (!inside(x, y)) continue; const k = y * W + x; if (!noise[k] && diff(h.d, base.d, k * 4) > T) cc++; } frames.push(Math.round((cc / Math.max(1, n)) * 1000) / 1000); }
+      return { px: n, noise: nN / Math.max(1, n), frames };
+    }, [released.map(b => b.toString('base64')), held.map(b => b.toString('base64')), c, rad, L.PIXEL_T]);
+  } finally { await page.close(); }
+}
+
+/** Hold (or click, heavy) the melee action: a swing goes the way the player aims and shows there on their own screen. */
+async function swing({ p, obs, browser, action, words, game, shot, L, heavy }) {
+  const mode = game.camera ?? 'third', vp = p.viewportSize() ?? { width: 1280, height: 720 };
+  const btn = action === 'primary' ? 'left' : 'right';
+  // aim: the follow camera aims with the cursor (a point beside the player, who stands near the middle); third and
+  // first person aim with the crosshair as it is
+  if (mode === 'follow' || mode === 'top') { await p.mouse.move(Math.round(vp.width / 2 + vp.width * 0.17), Math.round(vp.height / 2 - vp.height * 0.08), { steps: 4 }); await sleep(350); }
+  const png = () => p.screenshot({ type: 'png' });
+  const released = []; for (let i = 0; i < 4; i++) { released.push(await png()); await sleep(150); }
+  const o0 = await obs(), s0 = meleeStats(o0);
+  if (!s0) return { action, words, ok: false, why: 'the game has the melee mechanic in config/game.json but the page reports no melee stats (window.__game.controls()): its kit copy lacks the module; upgrade the game' };
+  const aim0 = o0.controls?.aim?.point ?? null, me0 = o0.me;
+  const held = [];
+  await p.mouse.down({ button: btn });
+  const t1 = Date.now();
+  if (heavy) { await sleep(80); await p.mouse.up({ button: btn }); }
+  let shown = null;
+  while (Date.now() - t1 < (heavy ? 900 : L.HOLD_MS)) { held.push(await png()); if (!shown && Date.now() - t1 > 260) { shown = held[held.length - 1]; } }
+  if (!heavy) await p.mouse.up({ button: btn });
+  await sleep(250);
+  const o1 = await obs(), s1 = meleeStats(o1), ls = s1?.lastSwing ?? null;
+  if (shown) await shot(p, `controls-${action}-swing`, shown);
+  const fails = [];
+  const swings = (s1?.swings ?? 0) - (s0.swings ?? 0);
+  if (swings < 1 || !ls) fails.push(`${heavy ? 'a click' : `${L.HOLD_MS / 1000} s held`} started no swing (the melee mechanic's count stayed ${s0.swings ?? 0}); check melee ${heavy ? 'heavyAction' : 'action'} is "${action}" and nothing holds the player`);
+  let dirOff = null, change = null;
+  if (ls) {
+    // the way it went, against the page's own aim point (the cursor's or the crosshair's ray into the world)
+    const aim = o1.controls?.aim?.point ?? aim0, me = o1.me ?? me0;
+    if (aim && Math.hypot(aim.x - me.x, aim.z - me.z) > 0.4) {
+      dirOff = Math.round(Math.abs(wrap(Math.atan2(aim.x - me.x, aim.z - me.z) - ls.yaw)) * 180 / Math.PI);
+      if (dirOff > L.SWING_DEG) fails.push(`the swing went ${dirOff}° away from where the player aims (limit ${L.SWING_DEG}°)`);
+    }
+    const sc = ls.screen, ps = ls.playerScreen;
+    if (!sc?.front || sc.x < 0 || sc.y < 0 || sc.x > vp.width || sc.y > vp.height) fails.push('the swing is off the player\'s screen');
+    else {
+      const rad = Math.max(vp.height * 0.05, 1.1 * Math.hypot(sc.x - (ps?.x ?? sc.x), sc.y - (ps?.y ?? sc.y)));
+      const a = await analyseDisc(browser, released, held, sc, rad, L);
+      const hits = a.frames.filter(f => f >= L.CORE_MIN).length, best = Math.max(0, ...a.frames);
+      change = { frames: hits, best: Math.round(best * 1000) / 10, noise: Math.round(a.noise * 1000) / 10, radius: Math.round(rad), at: [Math.round(sc.x), Math.round(sc.y)] };
+      if (!(hits >= L.CORE_FRAMES || best >= 2 * L.CORE_MIN)) fails.push(`nothing showed where the swing went: ${hits} frames had ${L.CORE_MIN * 100}% or more of the pixels within ${Math.round(rad)} px of ${Math.round(sc.x)},${Math.round(sc.y)} changed (the most ${change.best}%, noise ${change.noise}%)`);
+    }
+  }
+  const ok = fails.length === 0;
+  return { action, words, ok, melee: true, swings, dirOff, change, lastSwing: ls, trail: s1?.trail ?? null,
+    why: ok ? `${heavy ? 'a click' : `held ${L.HOLD_MS / 1000} s`}: ${swings} swing${swings === 1 ? '' : 's'}, ${dirOff === null ? 'the aim had no point' : `${dirOff}° from the aim`}, ${change ? `${change.frames} frames changed round the swing (up to ${change.best}%, noise ${change.noise}%)` : ''}`
+      : `${fails.join('; ')}. A melee swing must go where the player aims and show there on their own screen (kit/mechanics/melee: the trail, the swing clip)` };
+}
+
+/** jump bound to melee's dash: Space with D held moves the player well beyond a walk, and the kit counts a dash. */
+async function dash({ p, obs, words, L, shot }) {
+  const o0 = await obs(), s0 = meleeStats(o0), a = o0.me;
+  if (!s0) return { action: 'jump', words, ok: false, why: 'melee binds the dash to Space but the page reports no melee stats' };
+  await p.keyboard.down('KeyD'); await sleep(60); await p.keyboard.press('Space'); await sleep(300); await p.keyboard.up('KeyD');
+  await sleep(80);
+  const o1 = await obs(), s1 = meleeStats(o1), b = o1.me;
+  const moved = Math.round(Math.hypot(b.x - a.x, b.z - a.z) * 100) / 100, dashes = (s1?.dashes ?? 0) - (s0.dashes ?? 0);
+  const ok = dashes >= 1 && moved >= L.DASH_M;
+  return { action: 'jump', words, ok, moved, dashes, why: ok ? `Space dashed ${moved} m in 0.35 s (a dash counted)` : `Space (the melee dash): ${dashes} dash${dashes === 1 ? '' : 'es'} counted and the player moved ${moved} m in 0.35 s (needs ${L.DASH_M} m: a walk covers about 1.8); check melee dashAction "jump", dashSpeed and dashCooldown` };
 }

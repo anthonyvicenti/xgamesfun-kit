@@ -18,11 +18,18 @@
 //   {"do":"until", "phase":"results", "timeout":120}  wait until the round reaches a phase
 //   {"do":"again"}                                    press "Play again" on the results card
 //   {"do":"click", "x":640, "y":360}                  click a point on the screen (a button I can see)
+// A phone (the forge play-tester, research/studio-v2/prompts/playtest-forge.md): {"do":"start", "touch":true} opens the
+// game on a touch screen (play.mjs --size 390x844 or 844x390 picks the phone's size); then fingers, not keys:
+//   {"do":"tap", "x":320, "y":700, "seconds":0.1, "shot":"fired"}     one finger down and up (hold it with "seconds")
+//   {"do":"drag", "from":[90,700], "to":[90,620], "seconds":1.5, "with":{"from":[300,400], "to":[240,400]}, "shot":"walking"}
+//                                                     a finger pressed at "from", slid to "to" and held there until
+//                                                     the seconds are up (a stick pushed, a look swiped); "with" is a
+//                                                     second finger at the same time (walk while looking or firing)
 //
 // Keys: Mouse (left button), MouseRight, Space, ShiftLeft, KeyA–KeyZ, Digit0–9, Enter, Escape, Tab, Arrow*; shorthands
 // "E" → KeyE, "click" → Mouse, "right click" → MouseRight, "Shift" → ShiftLeft.
 export const LIMITS = { steps: 200, holdSeconds: 20, waitSeconds: 120, untilSeconds: 300, totalSeconds: 300, look: 3000, bots: 7 };
-export const DOS = ['start', 'hold', 'press', 'move', 'look', 'wait', 'shot', 'snap', 'until', 'again', 'click'];
+export const DOS = ['start', 'hold', 'press', 'move', 'look', 'wait', 'shot', 'snap', 'until', 'again', 'click', 'tap', 'drag'];
 export const PHASES = ['lobby', 'countdown', 'playing', 'results'];
 const DIRS = { forward: ['KeyW'], back: ['KeyS'], backward: ['KeyS'], left: ['KeyA'], right: ['KeyD'], 'forward-left': ['KeyW', 'KeyA'], 'forward-right': ['KeyW', 'KeyD'], 'back-left': ['KeyS', 'KeyA'], 'back-right': ['KeyS', 'KeyD'] };
 const NAMED = new Set(['Mouse', 'MouseRight', 'Space', 'ShiftLeft', 'ShiftRight', 'Enter', 'Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ControlLeft']);
@@ -82,7 +89,26 @@ export function parseScript(input) {
         st.seed = s.seed ?? 1; if (!Number.isInteger(st.seed) || st.seed < 0) bad('"seed" must be a whole number');
         if (s.round !== undefined) { if (!num(s.round, 20, 900)) bad('"round" (seconds) must be from 20 to 900'); else st.round = Math.round(s.round); }
         if (s.quality !== undefined) { if (!['low', 'high'].includes(s.quality)) bad('"quality" must be low or high'); else st.quality = s.quality; }
+        if (s.touch !== undefined) { if (typeof s.touch !== 'boolean') bad('"touch" must be true or false'); else if (s.touch) st.touch = true; }
         break;
+      case 'tap':
+        if (!num(s.x, 0, 4000) || !num(s.y, 0, 4000)) bad('"tap" needs "x" and "y" (screen pixels)'); else { st.x = s.x; st.y = s.y; }
+        seconds(0.03, LIMITS.holdSeconds, 0.08);
+        shotName();
+        break;
+      case 'drag': {
+        const point = (v, what) => { if (!Array.isArray(v) || v.length !== 2 || !num(v[0], 0, 4000) || !num(v[1], 0, 4000)) { bad(`${what} must be [x, y] in screen pixels`); return null; } return [v[0], v[1]]; };
+        const from = point(s.from, '"from"'), to = s.to === undefined ? from : point(s.to, '"to"');
+        if (from && to) { st.from = from; st.to = to; }
+        if (s.with !== undefined) {
+          const w = s.with && typeof s.with === 'object' ? s.with : null;
+          const wf = w ? point(w.from, '"with.from"') : (bad('"with" must be {"from": [x, y], "to": [x, y]}'), null), wt = w && wf ? (w.to === undefined ? wf : point(w.to, '"with.to"')) : null;
+          if (wf && wt) st.with = { from: wf, to: wt };
+        }
+        seconds(0.05, LIMITS.holdSeconds, 0.6);
+        shotName();
+        break;
+      }
       case 'hold': {
         const list = s.keys !== undefined ? s.keys : s.key !== undefined ? [s.key] : null;
         if (!Array.isArray(list) || !list.length) { bad('"hold" needs "key" (e.g. "Mouse", "KeyE") or "keys" (a list)'); break; }
@@ -125,7 +151,7 @@ export function parseScript(input) {
         st.button = s.button === 'right' ? 'right' : 'left';
         break;
     }
-    const unknown = Object.keys(s).filter(k => !['do', 'note', ...Object.keys(st), 'key', 'keys', 'dir', 'sprint', 'name', 'look', 'button'].includes(k));
+    const unknown = Object.keys(s).filter(k => !['do', 'note', ...Object.keys(st), 'key', 'keys', 'dir', 'sprint', 'name', 'look', 'button', 'touch', 'to', 'with'].includes(k));
     if (unknown.length) notes.push(`${at}: ignored ${unknown.map(k => `"${k}"`).join(', ')}`);
     if (typeof s.note === 'string') st.note = s.note.slice(0, 200);
     steps.push(st);

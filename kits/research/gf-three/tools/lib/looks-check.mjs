@@ -13,6 +13,7 @@
 //      or to the placeholder create put in that slot (gf-three.json bodies/props), or its GLB says it is a bean (gfBody
 //      extras); or the file is missing;
 //   2. two roles the spec describes differently (the player and an enemy) share one body file, so they differ only by tint.
+// Library files are both engines' (research/gf-three/library and research/gf-scenic/library, 2026-10-08).
 // The only excuse is a recorded generation failure: the worker's game/generated.json lists the item with a state that
 // is not 'placed' and a reason, and its `delivery` line (what the worker adds to the delivery summary) names the role or
 // prop and the file. An item still 'running' (the build agent's own verify while the worker generates) is pending, not a
@@ -26,7 +27,17 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { LIBRARY, STANDIN_ASSETS, sha256 } from './paths.mjs';
+import { LIBRARY, SCENIC, STANDIN_ASSETS, sha256 } from './paths.mjs';
+
+// Both engines' libraries (CONTRACT §8; tools/lib/char-library.mjs): gf-three's (beans, Quaternius, Meshy) and the scenic
+// engine's (KayKit bodies, weapons and dungeon props), gf-three's first. A scenic library body is a real body, never a
+// stand-in, and a game may wear one on either engine.
+const LIBS = [LIBRARY, join(SCENIC, 'library')];
+async function libraryEntries(kind) {
+  const out = [], seen = new Set();
+  for (const root of LIBS) for (const e of (await readJson(join(root, `${kind}.json`)))?.[kind] ?? []) if (e?.id && !seen.has(e.id)) { seen.add(e.id); out.push({ ...e, root }); }
+  return out;
+}
 
 export const GENERATED_FILE = 'generated.json';
 export const GENERATED_SCHEMA = 'gf-three-generated/1';
@@ -51,16 +62,16 @@ let libCache = null;
 async function libraryIndex() {
   if (libCache) return libCache;
   const bySha = new Map();
-  const bodies = (await readJson(join(LIBRARY, 'bodies.json')))?.bodies ?? [];
+  const bodies = await libraryEntries('bodies');
   for (const b of bodies) {
-    const f = join(LIBRARY, b.file ?? `bodies/${b.id}.glb`);
+    const f = join(b.root, b.file ?? `bodies/${b.id}.glb`);
     if (!existsSync(f)) continue;
     const bean = b.kind === 'bean' || b.from === 'bean' || (b.tags ?? []).includes('bean');
     bySha.set(sha256(await readFile(f)), { what: bean ? `the library bean ${b.id}` : `the library body ${b.id}`, standin: bean, id: b.id });
   }
-  const props = (await readJson(join(LIBRARY, 'props.json')))?.props ?? [];
+  const props = await libraryEntries('props');
   for (const p of props) {
-    const f = join(LIBRARY, p.file ?? '');
+    const f = join(p.root, p.file ?? '');
     if (!p.file || !existsSync(f)) continue;
     const h = sha256(await readFile(f));
     if (!bySha.has(h)) bySha.set(h, { what: `the library prop ${p.id}`, standin: false, id: p.id, prop: true });
@@ -76,10 +87,10 @@ async function placeholderSha(from) {
   const m = /^(library|standin):(.+)$/.exec(String(from ?? ''));
   if (!m) return null;
   if (m[1] === 'standin') { const f = join(STANDIN_ASSETS, `${m[2]}.glb`); return existsSync(f) ? sha256(await readFile(f)) : null; }
-  const bodies = (await readJson(join(LIBRARY, 'bodies.json')))?.bodies ?? [];
-  const props = (await readJson(join(LIBRARY, 'props.json')))?.props ?? [];
+  const bodies = await libraryEntries('bodies');
+  const props = await libraryEntries('props');
   const e = bodies.find(b => b.id === m[2]) ?? props.find(p => p.id === m[2]);
-  const f = e?.file ? join(LIBRARY, e.file) : null;
+  const f = e?.file ? join(e.root, e.file) : null;
   return f && existsSync(f) ? sha256(await readFile(f)) : null;
 }
 

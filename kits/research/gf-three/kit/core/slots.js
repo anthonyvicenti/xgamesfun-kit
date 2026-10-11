@@ -28,7 +28,8 @@ function numberRange(v) {
 export function slotsFor(cfg) {
   const g = cfg.game ?? {}, out = [];
   const G = 'config/game.json';
-  out.push({ id: 'round.seconds', group: 'rules', label: 'Round length', type: 'integer', source: { file: G, pointer: '/round/seconds' }, constraints: { min: 30, max: 900, unit: 's' }, tier: 'main', facet: 'gameplay', rank: 88, description: 'How long a round lasts, in seconds' });
+  // a world (CONTRACT §9) has no rounds: no length to tune
+  if (g.round?.mode !== 'world') out.push({ id: 'round.seconds', group: 'rules', label: 'Round length', type: 'integer', source: { file: G, pointer: '/round/seconds' }, constraints: { min: 30, max: 900, unit: 's' }, tier: 'main', facet: 'gameplay', rank: 88, description: 'How long a round lasts, in seconds' });
   out.push({ id: 'round.countdown', group: 'rules', label: 'Countdown before a round', type: 'integer', source: { file: G, pointer: '/round/countdown' }, constraints: { min: 0, max: 10, unit: 's' }, tier: 'advanced', facet: 'gameplay', rank: 20 });
   out.push({ id: 'players.max', group: 'rules', label: 'Players in a round', type: 'integer', source: { file: G, pointer: '/players/max' }, constraints: { min: 1, max: 8 }, tier: 'main', facet: 'gameplay', rank: 80, description: 'Seats in a round; bots fill the empty ones' });
   out.push({ id: 'players.bots', group: 'rules', label: 'Fill empty seats with bots', type: 'boolean', source: { file: G, pointer: '/players/bots' }, tier: 'advanced', facet: 'gameplay', rank: 30 });

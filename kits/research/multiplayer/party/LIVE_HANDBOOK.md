@@ -146,7 +146,7 @@ It checks: both games say `ready`; they start within 1.5 s of each other; each c
 }
 ```
 
-`team: true` is one result for everybody (co-op), reported by the host's copy with `net.finish`. `team: false`: each copy reports its own (a race you can see each other in). `sees` and `shares` are sentences a person reads to check the claim.
+`team: true` is one result for everybody (co-op), reported by the host's copy with `net.finish`; since kit 1.4.0 the host also sends every player's own score (`net.finish({won, value, values: {p1: 40, p2: 12}})`), so the results show each player theirs instead of the host's number for all (creator, 2026-10-08: "Final scores seem to always be the same regardless"). No bots with friends: a live round holds the players in the room and nobody else (kit 1.4.0). `team: false`: each copy reports its own (a race you can see each other in). `sees` and `shares` are sentences a person reads to check the claim.
 
 ## Steps
 

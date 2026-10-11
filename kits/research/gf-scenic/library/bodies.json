@@ -1,0 +1,674 @@
+{
+  "version": 1,
+  "rig": "gf-humanoid-1",
+  "engine": "scenic",
+  "standard": "research/gf-three/kit/character/RIG.md",
+  "about": "Scenic bodies on gf-humanoid-1 (research/gf-three/library/bodies.json shape; files relative to this folder). create resolves these ids too (research/gf-three/tools/lib/char-library.mjs). Written by research/gf-scenic/tools/art-kaykit.mjs from sources.json.",
+  "clips": {
+    "file": "../../gf-three/library/clips/gf-humanoid-1.glb",
+    "names": [
+      "idle",
+      "walk",
+      "run",
+      "jump",
+      "fall",
+      "land",
+      "hit",
+      "knockdown",
+      "getup",
+      "aim",
+      "carry",
+      "interact",
+      "emote_wave",
+      "emote_cheer",
+      "slash_1",
+      "slash_2",
+      "slash_3",
+      "heavy",
+      "dash",
+      "block",
+      "cast",
+      "death",
+      "attack_enemy"
+    ]
+  },
+  "default": "kaykit-knight",
+  "bodies": [
+    {
+      "id": "kaykit-knight",
+      "label": "Knight",
+      "file": "bodies/kaykit-knight.glb",
+      "from": "library",
+      "kind": "cc0",
+      "engine": "scenic",
+      "tags": [
+        "knight",
+        "fantasy",
+        "player",
+        "hero",
+        "armour",
+        "kaykit"
+      ],
+      "describe": "a stocky stylised knight in plate armour with a horned helmet and a red cape",
+      "license": {
+        "spdx": "CC0-1.0",
+        "author": "Kay Lousberg (www.kaylousberg.com)",
+        "url": "https://kaylousberg.itch.io/kaykit-adventurers",
+        "source": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0/blob/672074b73ba276876a19e8816ecdc5241817ab47/addons/kaykit_character_pack_adventures/Characters/gltf/Knight.glb (sha256 60428e3a…5168, retrieved 2026-10-08)",
+        "note": "made by research/gf-scenic/tools/art-kaykit.mjs: held items taken off (1H_Sword_Offhand, Badge_Shield, Rectangle_Shield, Round_Shield, Spike_Shield, 1H_Sword, 2H_Sword: they are props on the hand sockets); clavicles added (l, r); bones renamed to gf-humanoid-1 (hips→Hips, spine→Spine02, chest→Spine, head→Head, shoulder.l→LeftShoulder, shoulder.r→RightShoulder, upperarm.l→LeftArm, lowerarm.l→LeftForeArm, wrist.l→LeftHand, hand.l→LeftHandMiddle1, upperleg.l→LeftUpLeg, lowerleg.l→LeftLeg, foot.l→LeftFoot, toes.l→LeftToeBase, upperarm.r→RightArm, lowerarm.r→RightForeArm, wrist.r→RightHand, hand.r→RightHandMiddle1, upperleg.r→RightUpLeg, lowerleg.r→RightLeg, foot.r→RightFoot, toes.r→RightToeBase); normalised by tools/lib/char-gltf.mjs at x0.75 (KayKit units to metres); helpers dropped (21); its own clips dropped"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.736,
+      "bytes": 113820,
+      "mb": 0.114,
+      "sha256": "3d48bd87efbe67abb2dd5a2bf8665ec331ef543b8b462ca8f629934fc814ccd4",
+      "triangles": 4712,
+      "joints": 22,
+      "materials": 1,
+      "textures": [
+        "1024x1024"
+      ],
+      "tint": [],
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left hand: interact at 0.4 s: 6.0% of its triangles fold inside out (limit 4%)",
+          "model judge, right hand: punch at 0.35 s: 6.0% of its triangles fold inside out (limit 4%)"
+        ],
+        "legScale": 0.333,
+        "swingDeg": {
+          "LeftArm": 2.3,
+          "LeftForeArm": 2.1,
+          "LeftUpLeg": 2.4,
+          "LeftLeg": 5.6,
+          "RightArm": 2.3,
+          "RightForeArm": 2.1,
+          "RightUpLeg": 2.4,
+          "RightLeg": 5.6
+        }
+      },
+      "judge": {
+        "ok": true,
+        "clips": 31,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "kaykit-barbarian",
+      "label": "Barbarian",
+      "file": "bodies/kaykit-barbarian.glb",
+      "from": "library",
+      "kind": "cc0",
+      "engine": "scenic",
+      "tags": [
+        "barbarian",
+        "fantasy",
+        "player",
+        "hero",
+        "kaykit"
+      ],
+      "describe": "a stocky stylised barbarian with a horned hat and a fur cape",
+      "license": {
+        "spdx": "CC0-1.0",
+        "author": "Kay Lousberg (www.kaylousberg.com)",
+        "url": "https://kaylousberg.itch.io/kaykit-adventurers",
+        "source": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0/blob/672074b73ba276876a19e8816ecdc5241817ab47/addons/kaykit_character_pack_adventures/Characters/gltf/Barbarian.glb (sha256 cefc311a…9cc6, retrieved 2026-10-08)",
+        "note": "made by research/gf-scenic/tools/art-kaykit.mjs: held items taken off (1H_Axe_Offhand, Barbarian_Round_Shield, 1H_Axe, 2H_Axe, Mug: they are props on the hand sockets); clavicles added (l, r); bones renamed to gf-humanoid-1 (hips→Hips, spine→Spine02, chest→Spine, head→Head, shoulder.l→LeftShoulder, shoulder.r→RightShoulder, upperarm.l→LeftArm, lowerarm.l→LeftForeArm, wrist.l→LeftHand, hand.l→LeftHandMiddle1, upperleg.l→LeftUpLeg, lowerleg.l→LeftLeg, foot.l→LeftFoot, toes.l→LeftToeBase, upperarm.r→RightArm, lowerarm.r→RightForeArm, wrist.r→RightHand, hand.r→RightHandMiddle1, upperleg.r→RightUpLeg, lowerleg.r→RightLeg, foot.r→RightFoot, toes.r→RightToeBase); normalised by tools/lib/char-gltf.mjs at x0.75 (KayKit units to metres); helpers dropped (21); its own clips dropped"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.64,
+      "bytes": 108920,
+      "mb": 0.109,
+      "sha256": "9cb8072e60039a47b20f3afef5760a90a9cb376bbf5b976ee0dd418c742cfd9d",
+      "triangles": 4777,
+      "joints": 22,
+      "materials": 1,
+      "textures": [
+        "1024x1024"
+      ],
+      "tint": [],
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left leg: dash at 0.08 s: its edges stretch or crush ×4.1 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 0.333,
+        "swingDeg": {
+          "LeftArm": 2.3,
+          "LeftForeArm": 2.1,
+          "LeftUpLeg": 2.4,
+          "LeftLeg": 5.6,
+          "RightArm": 2.3,
+          "RightForeArm": 2.1,
+          "RightUpLeg": 2.4,
+          "RightLeg": 5.6
+        }
+      },
+      "judge": {
+        "ok": true,
+        "clips": 31,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "kaykit-mage",
+      "label": "Mage",
+      "file": "bodies/kaykit-mage.glb",
+      "from": "library",
+      "kind": "cc0",
+      "engine": "scenic",
+      "tags": [
+        "mage",
+        "wizard",
+        "fantasy",
+        "player",
+        "hero",
+        "kaykit"
+      ],
+      "describe": "a stylised mage in a pointed hat and robes",
+      "license": {
+        "spdx": "CC0-1.0",
+        "author": "Kay Lousberg (www.kaylousberg.com)",
+        "url": "https://kaylousberg.itch.io/kaykit-adventurers",
+        "source": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0/blob/672074b73ba276876a19e8816ecdc5241817ab47/addons/kaykit_character_pack_adventures/Characters/gltf/Mage.glb (sha256 cf898585…507d, retrieved 2026-10-08)",
+        "note": "made by research/gf-scenic/tools/art-kaykit.mjs: held items taken off (Spellbook, Spellbook_open, 1H_Wand, 2H_Staff: they are props on the hand sockets); clavicles added (l, r); bones renamed to gf-humanoid-1 (hips→Hips, spine→Spine02, chest→Spine, head→Head, shoulder.l→LeftShoulder, shoulder.r→RightShoulder, upperarm.l→LeftArm, lowerarm.l→LeftForeArm, wrist.l→LeftHand, hand.l→LeftHandMiddle1, upperleg.l→LeftUpLeg, lowerleg.l→LeftLeg, foot.l→LeftFoot, toes.l→LeftToeBase, upperarm.r→RightArm, lowerarm.r→RightForeArm, wrist.r→RightHand, hand.r→RightHandMiddle1, upperleg.r→RightUpLeg, lowerleg.r→RightLeg, foot.r→RightFoot, toes.r→RightToeBase); normalised by tools/lib/char-gltf.mjs at x0.75 (KayKit units to metres); helpers dropped (21); its own clips dropped"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.652,
+      "bytes": 106156,
+      "mb": 0.106,
+      "sha256": "270be1f3961695633a9d812eee29ff780f28af85681810f18a0b8408af2d6ee6",
+      "triangles": 4509,
+      "joints": 22,
+      "materials": 1,
+      "textures": [
+        "1024x1024"
+      ],
+      "tint": [],
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "legScale": 0.333,
+        "swingDeg": {
+          "LeftArm": 2.3,
+          "LeftForeArm": 2.1,
+          "LeftUpLeg": 2.4,
+          "LeftLeg": 5.6,
+          "RightArm": 2.3,
+          "RightForeArm": 2.1,
+          "RightUpLeg": 2.4,
+          "RightLeg": 5.6
+        }
+      },
+      "judge": {
+        "ok": true,
+        "clips": 31,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "kaykit-rogue",
+      "label": "Rogue",
+      "file": "bodies/kaykit-rogue.glb",
+      "from": "library",
+      "kind": "cc0",
+      "engine": "scenic",
+      "tags": [
+        "rogue",
+        "fantasy",
+        "player",
+        "hero",
+        "kaykit"
+      ],
+      "describe": "a stylised rogue in leather with a short cape",
+      "license": {
+        "spdx": "CC0-1.0",
+        "author": "Kay Lousberg (www.kaylousberg.com)",
+        "url": "https://kaylousberg.itch.io/kaykit-adventurers",
+        "source": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0/blob/672074b73ba276876a19e8816ecdc5241817ab47/addons/kaykit_character_pack_adventures/Characters/gltf/Rogue.glb (sha256 e825437c…bb7d, retrieved 2026-10-08)",
+        "note": "made by research/gf-scenic/tools/art-kaykit.mjs: held items taken off (Knife_Offhand, 1H_Crossbow, 2H_Crossbow, Knife, Throwable: they are props on the hand sockets); clavicles added (l, r); bones renamed to gf-humanoid-1 (hips→Hips, spine→Spine02, chest→Spine, head→Head, shoulder.l→LeftShoulder, shoulder.r→RightShoulder, upperarm.l→LeftArm, lowerarm.l→LeftForeArm, wrist.l→LeftHand, hand.l→LeftHandMiddle1, upperleg.l→LeftUpLeg, lowerleg.l→LeftLeg, foot.l→LeftFoot, toes.l→LeftToeBase, upperarm.r→RightArm, lowerarm.r→RightForeArm, wrist.r→RightHand, hand.r→RightHandMiddle1, upperleg.r→RightUpLeg, lowerleg.r→RightLeg, foot.r→RightFoot, toes.r→RightToeBase); normalised by tools/lib/char-gltf.mjs at x0.75 (KayKit units to metres); helpers dropped (21); its own clips dropped"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.64,
+      "bytes": 100664,
+      "mb": 0.101,
+      "sha256": "28624765e9fe4c93cb281d6d1527e82c5b251c263b4d9bf29e0aee3d95c3dc69",
+      "triangles": 4347,
+      "joints": 22,
+      "materials": 1,
+      "textures": [
+        "1024x1024"
+      ],
+      "tint": [],
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left hand: idle at 0 s: 5.3% of its triangles fold inside out (limit 4%)",
+          "model judge, right hand: idle at 0 s: 6.0% of its triangles fold inside out (limit 4%)",
+          "model judge, right foot: push at 1.07 s: its edges stretch or crush ×4.4 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 0.333,
+        "swingDeg": {
+          "LeftArm": 2.3,
+          "LeftForeArm": 2.1,
+          "LeftUpLeg": 2.4,
+          "LeftLeg": 5.6,
+          "RightArm": 2.3,
+          "RightForeArm": 2.1,
+          "RightUpLeg": 2.4,
+          "RightLeg": 5.6
+        }
+      },
+      "judge": {
+        "ok": true,
+        "clips": 31,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "kaykit-rogue-hooded",
+      "label": "Hooded rogue",
+      "file": "bodies/kaykit-rogue-hooded.glb",
+      "from": "library",
+      "kind": "cc0",
+      "engine": "scenic",
+      "tags": [
+        "rogue",
+        "hood",
+        "fantasy",
+        "player",
+        "hero",
+        "kaykit"
+      ],
+      "describe": "a stylised rogue with a hood up",
+      "license": {
+        "spdx": "CC0-1.0",
+        "author": "Kay Lousberg (www.kaylousberg.com)",
+        "url": "https://kaylousberg.itch.io/kaykit-adventurers",
+        "source": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0/blob/672074b73ba276876a19e8816ecdc5241817ab47/addons/kaykit_character_pack_adventures/Characters/gltf/Rogue_Hooded.glb (sha256 93e6e252…1545, retrieved 2026-10-08)",
+        "note": "made by research/gf-scenic/tools/art-kaykit.mjs: held items taken off (Knife_Offhand, 1H_Crossbow, 2H_Crossbow, Knife, Throwable: they are props on the hand sockets); clavicles added (l, r); bones renamed to gf-humanoid-1 (hips→Hips, spine→Spine02, chest→Spine, head→Head, shoulder.l→LeftShoulder, shoulder.r→RightShoulder, upperarm.l→LeftArm, lowerarm.l→LeftForeArm, wrist.l→LeftHand, hand.l→LeftHandMiddle1, upperleg.l→LeftUpLeg, lowerleg.l→LeftLeg, foot.l→LeftFoot, toes.l→LeftToeBase, upperarm.r→RightArm, lowerarm.r→RightForeArm, wrist.r→RightHand, hand.r→RightHandMiddle1, upperleg.r→RightUpLeg, lowerleg.r→RightLeg, foot.r→RightFoot, toes.r→RightToeBase); normalised by tools/lib/char-gltf.mjs at x0.75 (KayKit units to metres); helpers dropped (21); its own clips dropped"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.688,
+      "bytes": 95896,
+      "mb": 0.096,
+      "sha256": "5b9bd26b568a15dfc291fa872c902a366a7184fe1b25eb23fd0b87103dbed8f9",
+      "triangles": 4005,
+      "joints": 22,
+      "materials": 1,
+      "textures": [
+        "1024x1024"
+      ],
+      "tint": [],
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left hand: idle at 0 s: 5.3% of its triangles fold inside out (limit 4%)",
+          "model judge, right hand: idle at 0 s: 6.0% of its triangles fold inside out (limit 4%)",
+          "model judge, right foot: push at 1.07 s: its edges stretch or crush ×4.4 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 0.333,
+        "swingDeg": {
+          "LeftArm": 2.3,
+          "LeftForeArm": 2.1,
+          "LeftUpLeg": 2.4,
+          "LeftLeg": 5.6,
+          "RightArm": 2.3,
+          "RightForeArm": 2.1,
+          "RightUpLeg": 2.4,
+          "RightLeg": 5.6
+        }
+      },
+      "judge": {
+        "ok": true,
+        "clips": 31,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "kaykit-skeleton-warrior",
+      "label": "Skeleton warrior",
+      "file": "bodies/kaykit-skeleton-warrior.glb",
+      "from": "library",
+      "kind": "cc0",
+      "engine": "scenic",
+      "tags": [
+        "skeleton",
+        "undead",
+        "enemy",
+        "monster",
+        "warrior",
+        "fantasy",
+        "kaykit"
+      ],
+      "describe": "a skeleton warrior in a dented helmet and a torn cloak, glowing eyes",
+      "license": {
+        "spdx": "CC0-1.0",
+        "author": "Kay Lousberg (www.kaylousberg.com)",
+        "url": "https://kaylousberg.itch.io/kaykit-skeletons",
+        "source": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0/blob/15b62b9bad122f72926c10fb14d622c73819fa54/addons/kaykit_character_pack_skeletons/Characters/gltf/Skeleton_Warrior.glb (sha256 178b6fda…8bbe, retrieved 2026-10-08)",
+        "note": "made by research/gf-scenic/tools/art-kaykit.mjs: held items taken off (none: they are props on the hand sockets); clavicles added (l, r); bones renamed to gf-humanoid-1 (hips→Hips, spine→Spine02, chest→Spine, head→Head, shoulder.l→LeftShoulder, shoulder.r→RightShoulder, upperarm.l→LeftArm, lowerarm.l→LeftForeArm, wrist.l→LeftHand, hand.l→LeftHandMiddle1, upperleg.l→LeftUpLeg, lowerleg.l→LeftLeg, foot.l→LeftFoot, toes.l→LeftToeBase, upperarm.r→RightArm, lowerarm.r→RightForeArm, wrist.r→RightHand, hand.r→RightHandMiddle1, upperleg.r→RightUpLeg, lowerleg.r→RightLeg, foot.r→RightFoot, toes.r→RightToeBase); normalised by tools/lib/char-gltf.mjs at x0.75 (KayKit units to metres); helpers dropped (21); its own clips dropped"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.625,
+      "bytes": 149680,
+      "mb": 0.15,
+      "sha256": "b0f81c356749006a8ef2ce04f4025fd336cd8553e5e896ec122b294bb195f87a",
+      "triangles": 5934,
+      "joints": 22,
+      "materials": 2,
+      "textures": [
+        "1024x1024"
+      ],
+      "tint": [],
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "legScale": 0.333,
+        "swingDeg": {
+          "LeftArm": 2.3,
+          "LeftForeArm": 2.1,
+          "LeftUpLeg": 2.4,
+          "LeftLeg": 5.6,
+          "RightArm": 2.3,
+          "RightForeArm": 2.1,
+          "RightUpLeg": 2.4,
+          "RightLeg": 5.6
+        }
+      },
+      "judge": {
+        "ok": true,
+        "clips": 31,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "kaykit-skeleton-mage",
+      "label": "Skeleton mage",
+      "file": "bodies/kaykit-skeleton-mage.glb",
+      "from": "library",
+      "kind": "cc0",
+      "engine": "scenic",
+      "tags": [
+        "skeleton",
+        "undead",
+        "enemy",
+        "monster",
+        "mage",
+        "caster",
+        "fantasy",
+        "kaykit"
+      ],
+      "describe": "a skeleton mage in a pointed hat, glowing eyes",
+      "license": {
+        "spdx": "CC0-1.0",
+        "author": "Kay Lousberg (www.kaylousberg.com)",
+        "url": "https://kaylousberg.itch.io/kaykit-skeletons",
+        "source": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0/blob/15b62b9bad122f72926c10fb14d622c73819fa54/addons/kaykit_character_pack_skeletons/Characters/gltf/Skeleton_Mage.glb (sha256 e05b0f5c…1075, retrieved 2026-10-08)",
+        "note": "made by research/gf-scenic/tools/art-kaykit.mjs: held items taken off (none: they are props on the hand sockets); clavicles added (l, r); bones renamed to gf-humanoid-1 (hips→Hips, spine→Spine02, chest→Spine, head→Head, shoulder.l→LeftShoulder, shoulder.r→RightShoulder, upperarm.l→LeftArm, lowerarm.l→LeftForeArm, wrist.l→LeftHand, hand.l→LeftHandMiddle1, upperleg.l→LeftUpLeg, lowerleg.l→LeftLeg, foot.l→LeftFoot, toes.l→LeftToeBase, upperarm.r→RightArm, lowerarm.r→RightForeArm, wrist.r→RightHand, hand.r→RightHandMiddle1, upperleg.r→RightUpLeg, lowerleg.r→RightLeg, foot.r→RightFoot, toes.r→RightToeBase); normalised by tools/lib/char-gltf.mjs at x0.75 (KayKit units to metres); helpers dropped (21); its own clips dropped"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.625,
+      "bytes": 113296,
+      "mb": 0.113,
+      "sha256": "18a660bd1b8180f17afeb8b708bf455b5ba04f23531219a1f2d28dc1cf78ab36",
+      "triangles": 4588,
+      "joints": 22,
+      "materials": 2,
+      "textures": [
+        "1024x1024"
+      ],
+      "tint": [],
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left leg: roll at 0.59 s: its edges stretch or crush ×8.1 (99th percentile; limit ×4.1)",
+          "model judge, right leg: getup_front at 1.2 s: its edges stretch or crush ×7.3 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 0.333,
+        "swingDeg": {
+          "LeftArm": 2.3,
+          "LeftForeArm": 2.1,
+          "LeftUpLeg": 2.4,
+          "LeftLeg": 5.6,
+          "RightArm": 2.3,
+          "RightForeArm": 2.1,
+          "RightUpLeg": 2.4,
+          "RightLeg": 5.6
+        }
+      },
+      "judge": {
+        "ok": true,
+        "clips": 31,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "kaykit-skeleton-rogue",
+      "label": "Skeleton rogue (archer)",
+      "file": "bodies/kaykit-skeleton-rogue.glb",
+      "from": "library",
+      "kind": "cc0",
+      "engine": "scenic",
+      "tags": [
+        "skeleton",
+        "undead",
+        "enemy",
+        "monster",
+        "rogue",
+        "archer",
+        "ranged",
+        "fantasy",
+        "kaykit"
+      ],
+      "describe": "a hooded skeleton rogue with a cape, glowing eyes (the pack's crossbow archer)",
+      "license": {
+        "spdx": "CC0-1.0",
+        "author": "Kay Lousberg (www.kaylousberg.com)",
+        "url": "https://kaylousberg.itch.io/kaykit-skeletons",
+        "source": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0/blob/15b62b9bad122f72926c10fb14d622c73819fa54/addons/kaykit_character_pack_skeletons/Characters/gltf/Skeleton_Rogue.glb (sha256 4003f2b7…cae3, retrieved 2026-10-08)",
+        "note": "made by research/gf-scenic/tools/art-kaykit.mjs: held items taken off (none: they are props on the hand sockets); clavicles added (l, r); bones renamed to gf-humanoid-1 (hips→Hips, spine→Spine02, chest→Spine, head→Head, shoulder.l→LeftShoulder, shoulder.r→RightShoulder, upperarm.l→LeftArm, lowerarm.l→LeftForeArm, wrist.l→LeftHand, hand.l→LeftHandMiddle1, upperleg.l→LeftUpLeg, lowerleg.l→LeftLeg, foot.l→LeftFoot, toes.l→LeftToeBase, upperarm.r→RightArm, lowerarm.r→RightForeArm, wrist.r→RightHand, hand.r→RightHandMiddle1, upperleg.r→RightUpLeg, lowerleg.r→RightLeg, foot.r→RightFoot, toes.r→RightToeBase); normalised by tools/lib/char-gltf.mjs at x0.75 (KayKit units to metres); helpers dropped (21); its own clips dropped"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.625,
+      "bytes": 136176,
+      "mb": 0.136,
+      "sha256": "317f4c94ef13bab1c8a607b65340a6fbf01ace261f92d7dd2c9fd37d527115db",
+      "triangles": 5278,
+      "joints": 22,
+      "materials": 2,
+      "textures": [
+        "1024x1024"
+      ],
+      "tint": [],
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "legScale": 0.333,
+        "swingDeg": {
+          "LeftArm": 2.3,
+          "LeftForeArm": 2.1,
+          "LeftUpLeg": 2.4,
+          "LeftLeg": 5.6,
+          "RightArm": 2.3,
+          "RightForeArm": 2.1,
+          "RightUpLeg": 2.4,
+          "RightLeg": 5.6
+        }
+      },
+      "judge": {
+        "ok": true,
+        "clips": 31,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "kaykit-skeleton-minion",
+      "label": "Skeleton minion",
+      "file": "bodies/kaykit-skeleton-minion.glb",
+      "from": "library",
+      "kind": "cc0",
+      "engine": "scenic",
+      "tags": [
+        "skeleton",
+        "undead",
+        "enemy",
+        "monster",
+        "minion",
+        "fantasy",
+        "kaykit"
+      ],
+      "describe": "a bare skeleton minion in a ragged cloak, glowing eyes",
+      "license": {
+        "spdx": "CC0-1.0",
+        "author": "Kay Lousberg (www.kaylousberg.com)",
+        "url": "https://kaylousberg.itch.io/kaykit-skeletons",
+        "source": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0/blob/15b62b9bad122f72926c10fb14d622c73819fa54/addons/kaykit_character_pack_skeletons/Characters/gltf/Skeleton_Minion.glb (sha256 6ffc003f…5968, retrieved 2026-10-08)",
+        "note": "made by research/gf-scenic/tools/art-kaykit.mjs: held items taken off (none: they are props on the hand sockets); clavicles added (l, r); bones renamed to gf-humanoid-1 (hips→Hips, spine→Spine02, chest→Spine, head→Head, shoulder.l→LeftShoulder, shoulder.r→RightShoulder, upperarm.l→LeftArm, lowerarm.l→LeftForeArm, wrist.l→LeftHand, hand.l→LeftHandMiddle1, upperleg.l→LeftUpLeg, lowerleg.l→LeftLeg, foot.l→LeftFoot, toes.l→LeftToeBase, upperarm.r→RightArm, lowerarm.r→RightForeArm, wrist.r→RightHand, hand.r→RightHandMiddle1, upperleg.r→RightUpLeg, lowerleg.r→RightLeg, foot.r→RightFoot, toes.r→RightToeBase); normalised by tools/lib/char-gltf.mjs at x0.75 (KayKit units to metres); helpers dropped (20); its own clips dropped"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.625,
+      "bytes": 128356,
+      "mb": 0.128,
+      "sha256": "f25ef2b6e61247cece33d7b25353b34ff2fee8da74d48419990dcc83d740877a",
+      "triangles": 5288,
+      "joints": 22,
+      "materials": 2,
+      "textures": [
+        "1024x1024"
+      ],
+      "tint": [],
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left leg: getup_front at 1.2 s: its edges stretch or crush ×7.3 (99th percentile; limit ×4.1)",
+          "model judge, right leg: getup_front at 1.2 s: its edges stretch or crush ×7.3 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 0.333,
+        "swingDeg": {
+          "LeftArm": 2.3,
+          "LeftForeArm": 2.1,
+          "LeftUpLeg": 2.4,
+          "LeftLeg": 5.6,
+          "RightArm": 2.3,
+          "RightForeArm": 2.1,
+          "RightUpLeg": 2.4,
+          "RightLeg": 5.6
+        }
+      },
+      "judge": {
+        "ok": true,
+        "clips": 31,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    }
+  ]
+}
