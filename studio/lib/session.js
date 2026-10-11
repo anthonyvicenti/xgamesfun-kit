@@ -64,6 +64,8 @@ export function readQueue(raw, hide = new Set()) {
   return { requests, permissions, sessions: Array.isArray(q.sessions) ? q.sessions : [], loop: q.loop ?? null, transport: q.transport ?? null };
 }
 
+/** No session has reached the studio. What gets one here is the same whether the session is new or already running. */
+export const NONE_HINT = 'In your agent\'s terminal run "node bin/gamesfun.mjs connect" in the kit folder once, then in Claude Code type /reload-plugins and say anything: your session appears here with its next message.';
 export const IDLE_HINT = 'Press Enter in the terminal once to reconnect.';
 
 /**
@@ -74,7 +76,7 @@ export const IDLE_HINT = 'Press Enter in the terminal once to reconnect.';
 export function connection(queue) {
   const live = (queue?.sessions ?? []).filter(s => s.state !== 'ended');
   const s = live.find(x => x.primary) ?? live[0];
-  if (!s) return { state: 'none', hint: 'Start your agent in this folder (with the gamesfun plugin loaded); it appears here.', mode: null, guard: null };
+  if (!s) return { state: 'none', hint: NONE_HINT, mode: null, guard: null };
   const mode = s.permissionMode && s.permissionMode !== 'default' ? s.permissionMode : null;
   const base = { mode, guard: s.guard ?? null, agent: s.agent ?? null };
   if (s.connected) return { ...base, state: 'listening', hint: 'Requests reach it at once.' };
