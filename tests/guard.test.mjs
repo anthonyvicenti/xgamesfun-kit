@@ -83,6 +83,26 @@ test('a game the person just rolled back: an edit is refused until gamesfun_next
   assert.equal(decide(call('Write', { file_path: path.join(root, 'games', 'b', 'rules.js') })), null, 'another game is not held');
 });
 
+test('the game\'s own spec.json is refused while its run is building with the spec locked (seen live: the hook let that edit through)', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'gf-guard-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const game = path.join(root, 'games', 'a'), spec = path.join(game, 'spec.json'), state = path.join(game, '.gf-loop', 'state.json');
+  await mkdir(path.dirname(state), { recursive: true });
+  assert.equal(decide(call('Edit', { file_path: spec })), null, 'no run: the game is the person\'s');
+  await writeFile(state, JSON.stringify({ schema: 'gf-loop/1', kind: 'build', status: 'building', step: 'playtest', lock: { spec: { sha: 'x' } } }));
+  assert.match(decide(call('Edit', { file_path: spec })), /spec is locked.*gamesfun_ask/s);
+  assert.match(decide(call('Write', { file_path: spec })), /spec is locked/);
+  assert.equal(decide(call('Edit', { file_path: path.join(game, 'config', 'spec.json') })), null, 'only the game\'s own spec');
+  assert.equal(decide(call('Edit', { file_path: path.join(game, 'rules.js') })), null);
+  // a change run before its round is over has no lock yet: the plan may change there; a delivered game is the person's again
+  await writeFile(state, JSON.stringify({ schema: 'gf-loop/1', kind: 'change', status: 'building', step: 'agent', lock: null }));
+  assert.equal(decide(call('Edit', { file_path: spec })), null);
+  await writeFile(state, JSON.stringify({ schema: 'gf-loop/1', kind: 'build', status: 'delivered', step: 'done', lock: { spec: { sha: 'x' } } }));
+  assert.equal(decide(call('Edit', { file_path: spec })), null);
+  // not stopped: a shell command on that file (the loop's lock puts it back)
+  assert.equal(decide(call('Bash', { command: `sed -i s/interact// ${spec}` })), null);
+});
+
 test('as the process Claude Code starts: a deny is JSON in the PreToolUse form on stdout, exit 0; no decision is silence', async () => {
   let r = await run(call('Write', { file_path: 'games/a/.gf-loop/job/spec.json', content: '{}' }));
   assert.equal(r.code, 0);

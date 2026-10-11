@@ -251,7 +251,9 @@ session with `GAMESFUN_BRIDGE_TOKEN` set and a fixed port may point HTTP hooks s
 **The write guard** (`plugin/scripts/guard.mjs`, a second `PreToolUse` hook, not async, needs no studio): denies
 `Edit`, `Write`, `MultiEdit` and `NotebookEdit` on a path under a `.gf-loop/` folder, and `Bash` or `PowerShell` when
 the command names such a path at all (the `Read` tool reads it). The reason names `gamesfun_ask`. The play-tester
-subagent (`agent_type` `playtester`) may write only `job/playtest/out/` and `job/playtest/runs/`. It also refuses an
+subagent (`agent_type` `playtester`) may write only `job/playtest/out/` and `job/playtest/runs/`. It refuses `Edit` and
+`Write` on a game's own `spec.json` while that game's run is building with its spec locked (not through a shell
+command). It also refuses an
 edit inside a game the person has just rolled back, until `gamesfun_next` has been called. The answer is
 `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":…}}`
 with exit 0 (hooks documentation read 2026-10-11). It cannot stop a command that builds the path when it runs (a

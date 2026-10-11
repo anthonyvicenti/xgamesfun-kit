@@ -9,18 +9,21 @@
 //   - Edit, Write, MultiEdit, NotebookEdit on a path under a `.gf-loop` folder. The play-tester subagent alone may
 //     write its own `job/playtest/out/` and `job/playtest/runs/`.
 //   - Bash (and PowerShell) when the command names a `.gf-loop` path at all, also to read it: the Read tool reads it.
+//   - Edit and Write on a game's own spec.json (the copy verify reads) while that game's run is building and its
+//     spec is locked (the loop's state says so). A change run may still alter the plan in its change round: no lock yet.
 //   - Edit and Write inside a game the person has just rolled back from the studio page, until the session has
 //     called gamesfun_next (the mark <game>/.gf-loop/cancel.json; lib/cancel.mjs).
 //
 // What this cannot stop, plainly: a command that builds the path when it runs (a variable, a glob such as `.gf-l*`,
-// `cd` into the folder by another name, a script file that holds the path), a tool of another MCP server that writes
-// files, and anything done outside the session. For those the loop's own checks stand (the library's lock, held in
+// `cd` into the folder by another name, a script file that holds the path), a shell command that rewrites the game's
+// own spec.json (a command that names spec.json is too often a read to refuse), a tool of another MCP server that
+// writes files, and anything done outside the session. For those the loop's own checks stand (the library's lock, held in
 // the MCP server's memory). A hook that fails (no node, a crash) decides nothing, by Claude Code's rule.
 //
 // Output form (https://code.claude.com/docs/en/hooks.md, read 2026-10-11): exit 0 with
 //   {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"…"}}
 // and exit 0 with no output for "no decision". A subagent's tool calls run the same hook with `agent_type` set.
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,6 +36,7 @@ const isPlaytester = type => /(^|:)playtester$/.test(String(type ?? ''));
 
 const WHY_FILE = 'The folder .gf-loop/ is the build loop\'s own (its state, the locked spec, the promises, the verdicts, the play-tester\'s brief and report): only the loop\'s tools write it, and the game is checked against the spec as it was locked. Change the game instead (rules.js, config, slots). If a part of the plan cannot be built, ask the person with the gamesfun_ask tool; gamesfun_next says what comes next.';
 const WHY_SHELL = `A shell command may not name a path under .gf-loop/ (the build loop's own folder). Read a file there with the Read tool; nothing in it is yours to write. If a part of the plan cannot be built, ask the person with the gamesfun_ask tool; gamesfun_next says what comes next.`;
+const WHY_SPEC = 'This game\'s spec is locked: it is the plan the person agreed to, and the game is verified and play-tested against it as locked. An edit passes no check and drops no promise (the loop puts the file back). Make the game do what the spec says (rules.js, config, slots). If a part of the plan cannot be built, or the person wants the plan changed, ask with the gamesfun_ask tool; a change to a delivered game starts with gamesfun_change.';
 const WHY_ROLLED_BACK = 'The person has just rolled this game back from the studio page, and the run that was under way is cancelled. Call the gamesfun_next tool first (it ends the run and says what the person did); do not put the undone changes back.';
 
 /** The path after the last `.gf-loop` segment, with forward slashes, or null when the path is not under one. */
@@ -56,6 +60,12 @@ export function rolledBackGame(file, exists = existsSync) {
   return null;
 }
 
+/** Is this file the spec of a game whose run is building with its spec locked? (the loop's state file says) */
+export function lockedSpec(file, read = f => readFileSync(f, 'utf8')) {
+  if (path.basename(file) !== 'spec.json') return false;
+  try { const s = JSON.parse(read(path.join(path.dirname(file), LOOP_DIR, 'state.json'))); return s?.status === 'building' && !!s.lock; } catch { return false; }
+}
+
 /** → the reason to deny this tool call, or null (no decision: the session's own permission flow goes on). */
 export function decide(input, { exists = existsSync } = {}) {
   const tool = input?.tool_name, ti = input?.tool_input ?? {};
@@ -69,6 +79,7 @@ export function decide(input, { exists = existsSync } = {}) {
     if (isPlaytester(input.agent_type) && PLAYTESTER_MAY.some(dir => rel.startsWith(dir)) && !rel.split('/').includes('..')) return null;
     return WHY_FILE;
   }
+  if (lockedSpec(file)) return WHY_SPEC;
   return rolledBackGame(file, exists) ? WHY_ROLLED_BACK : null;
 }
 
