@@ -324,7 +324,7 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
       // The play-tester subagent has the round. An agent may run it in the background and end its turn to wait: its
       // report wakes the session, so that stop is right. One refusal makes sure the subagent was started; after it
       // the stop is let through, and the person is not told the session waits for them (the Build tab says who plays).
-      const withTester = loop.step === 'playtest' && loop.handed === 'playtest';
+      const withTester = loop.step === 'playtest' && loop.handed === 'playtest' && !loop.reported;   // once it has reported, reading the report is the session's step
       if (withTester) {
         if (s.guard.refusals < 1) {
           s.guard.refusals++;

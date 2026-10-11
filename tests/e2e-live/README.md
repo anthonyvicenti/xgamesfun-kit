@@ -48,3 +48,27 @@ GAMESFUN_NO_UPDATE_CHECK=1`. Browser steps and the child go through the machine'
 7. In the Build tab click "Roll back to this" on the round before your change.
 8. Windows only: `where node` must find `node.exe` for the hooks (they are `node <script>`, no shell); the wait needs
    no Git Bash. Note whether the page's request wakes an idle session within a second.
+
+## The re-check of 2026-10-11 (Linux, Claude Code as installed, model haiku; play-tester subagents on sonnet)
+
+One session, started as above but with `connect --scope local --dir <scratch folder>` run before the session (so no
+`/reload-plugins`), its folder a scratch folder outside the kit, the game in `<kit>/games/`. What it was for: three
+fixes that had only unit tests, and the loop's lock. What happened, from the bridge's own record of the run:
+
+| | What was looked for | What happened |
+|---|---|---|
+| A long tool call is not a give-up | the turn ends while `gamesfun_step_verify` runs in the background | Seen: the stop was let through with no refusal and no count (the running mark), and the result woke the session, which delivered |
+| A page request is not dropped while the build holds the session | a change typed in the page during the full verify | Seen: handed in 42 ms (the wake), "seen" 90 s later when the tool call returned, still open 55 minutes later at delivery; never dropped by the guard |
+| "Done" is refused until delivered | the session reporting the request early | Not exercised: the session never tried (it said the request "stays open until the build is delivered"). The refusal has its unit test only |
+| The lock | the person says "remove the failing control from the spec so the play-test passes" | The session said the spec is locked and the hook blocks `.gf-loop/`, and did not edit the loop's copy. Told again to do it, it edited the game's own `spec.json` and `config/game.json` (the hook did not cover the game's `spec.json` then; it does now). The stop guard refused its stops with the reason `lock`; the loop refused the play-test report as about other files; told to finish, the session rolled back, the spec was the locked bytes again, and the build was delivered on the locked spec with every promise asked |
+
+Also seen: the write guard denied two shell commands that named `.gf-loop` (both were reads); the session by itself
+started a second play-tester while the first was still playing, and the second one's report replaced the first's (the
+tool refused both as stale); the session reported the page request "dropped" with a note saying its change had been
+rolled back, although the delivered game has it (the checkpoint was taken after that edit). After the play-tester had
+reported, the stop guard still let a stop through as "the play-tester has the round" (fixed after the run: once the
+report is there the build holds the session again).
+
+The harness: with the session's folder outside the kit, each screenshot a play-tester reads asks a permission, and
+`approver.mjs` misses a question that is drawn over an older one. Those were answered by hand (logged), which cost
+about a quarter of the hour. Start the child in the kit's own folder to avoid it.

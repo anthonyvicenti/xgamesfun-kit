@@ -1,7 +1,7 @@
 // The one place the bridge reads the build loop's state. The file is written only by the loop library, through the
 // loop tools (kits/research/gf-three/loop/README.md, "The state file"); the bridge never writes it. If its place or
 // shape changes, this function is all that follows.
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { lockFiles, lockProblems } from '../kits/research/gf-three/loop/lock.mjs';
 
@@ -22,7 +22,14 @@ export async function readLoopState(gameDir) {
   if (!s || typeof s !== 'object' || !LOOP_STATUSES.includes(s.status)) return null;
   const mark = s.status === 'building' ? await readCancel(gameDir) : null;
   if (mark) return { status: 'cancelled', step: 'done', why: mark.reason, round: s.round ?? null, updated: mark.at ?? null, session: typeof s.session === 'string' ? s.session : null, handed: null, cancel: { at: mark.at ?? null, label: mark.label ?? null } };
+  // the play-tester has reported for the round that is handed over: the round is the session's again (it reads the report)
+  let reported = false;
+  if (s.step === 'playtest' && s.handed?.step === 'playtest') {
+    const at = await stat(path.join(gameDir, '.gf-loop', 'job', 'playtest', 'out', 'playtest.json')).then(x => x.mtimeMs, () => null);
+    reported = at != null && at + 1000 >= (Date.parse(s.handed.at) || 0);
+  }
   return {
+    ...(reported ? { reported } : {}),
     status: s.status,
     step: typeof s.step === 'string' ? s.step : null,
     why: typeof s.why === 'string' ? s.why : null,

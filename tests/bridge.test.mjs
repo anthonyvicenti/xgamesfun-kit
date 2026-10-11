@@ -357,6 +357,22 @@ test('a wake does not read as "idle: press Enter": the session is waking up unti
   assert.equal(s.waking, false); assert.equal(connection({ sessions: [s] }).hint, IDLE_HINT);
 });
 
+test('stop guard: once the play-tester has reported, the round is the session\'s again and the build holds it (seen live: it was let go)', async () => {
+  const t = await tempDir();
+  try {
+    const out = path.join(t.dir, '.gf-loop', 'job', 'playtest', 'out');
+    await mkdir(out, { recursive: true });
+    await writeFile(path.join(t.dir, '.gf-loop', 'state.json'), JSON.stringify({ schema: 'gf-loop/1', status: 'building', step: 'playtest', why: 'w', updated: 'u', handed: { step: 'playtest', n: 1, at: new Date(Date.now() - 5000).toISOString() } }));
+    const b = createBridge({ gameDir: t.dir, readBusy: async () => [] });
+    start(b, 'P', t.dir);
+    assert.match((await b.stop({ session: 'P' })).refuse, /play-tester subagent has the round/);
+    assert.equal((await b.stop({ session: 'P' })).refuse, null, 'it is playing: the session may wait');
+    await writeFile(path.join(out, 'playtest.json'), '{}');
+    assert.equal((await readLoopState(t.dir)).reported, true);
+    assert.match((await b.stop({ session: 'P' })).refuse, /next step is "playtest"/, 'the report is there: reading it is the session\'s step');
+  } finally { await t.cleanup(); }
+});
+
 test('readLoopState: the merged shape, and null for anything else', async () => {
   const t = await tempDir();
   try {

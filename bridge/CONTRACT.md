@@ -297,7 +297,8 @@ instruction) in two cases, both bounded:
    **While the play-tester subagent has the round** (the state's `step` is `playtest` and `handed.step` is `playtest`):
    one refusal, which tells the session to wait for the report if the subagent is playing and to start it if it is
    not; later stops for the same state are let through with no notice to the person, because an agent may run the
-   subagent in the background and end its turn to wait, and the report wakes it.
+   subagent in the background and end its turn to wait, and the report wakes it. Once the report is there (`out/playtest.json`,
+   written after the hand-over) the round is the session's again and the build holds it as usual.
    **While one of our own tools is running on the game** (the MCP server marks each call in
    `<game>/.gf-loop/running/`; `bridge/loop-state.mjs` `readRunning`): the turn end is a wait for that tool's result,
    which wakes the session. Nothing is refused and nothing is counted, for the build or for a request.
