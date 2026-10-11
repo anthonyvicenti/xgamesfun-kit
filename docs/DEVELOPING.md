@@ -12,7 +12,13 @@ first use).
 npm test                         # the fast suites, about 5 s, no browser
 GAMESFUN_SMOKE=1 npm test        # plus the smoke test: create, quick verify, two pages that see each other (~3 min)
 node tests/two-players.mjs http://127.0.0.1:5180/ --shots <dir>    # the two-page check against a running dev server
+node tests/two-hosts.mjs [--case soak-squad|dev-dodgeball] [--out <dir>]   # one case through both hosts of the loop, no model (~9 min, real browser)
 ```
+
+`tests/two-hosts.mjs` drives the build loop twice on one locked spec and one fixed `rules.js`, with the real create, fix
+and verify: once the way Studio's worker calls the library (the job folder, the state beside it, runners) and once
+through this kit's MCP tools called by a scripted session. It prints the game folders compared byte for byte, the two
+full verdicts check by check, and exits 1 when a check differs or a file difference is not one a host makes on purpose.
 
 PowerShell: `$env:GAMESFUN_SMOKE = "1"; npm test`.
 
@@ -107,7 +113,9 @@ has an `assets.json` and adds its ignore entry at once. It reads the same JSON f
 
 ## Tool faults worked around here (requests to games.fun)
 
-Checked against the kits synced from games.fun bce56abc5 (2026-10-11). Fixed upstream and removed from this table: the forge
+Checked against the kits synced from games.fun 58040ce0b (2026-10-11). Deleted here because the loop library now covers them: the reminder
+round's words after a restart, the promises writer bound by hand, the rewriting of the loop's messages and of the play-tester's brief for this kit's
+folders and tools (`paths`, `toolNames`, `playWords`), stopping a running verify with its host (`host.signal`), and the roll-back work-around (`loop.cancel`). Fixed upstream and removed from this table: the forge
 HUD and forge-spec refusals now load by `importPart` (`spec-config.mjs`, `create.mjs`); `verify.mjs` imports the body judge
 only when check 19 runs (the CLI still installs the 3D packages first, so check 19 can run); the scenic `follow` camera
 failing checks 24 and 34 (the example passes both); melee under `third` and `orbit` cameras (a scenic spec with either
@@ -116,6 +124,10 @@ camera passed 27 of 27 with `--quick --release`).
 | Fault | Where | Work-around here | Fix asked for |
 |---|---|---|---|
 | `lookdev/capture.mjs` (check 9's contact sheet) is left out | `tools/verify.mjs` | none needed: `--quick` skips it and a full verify says it is absent | none |
+| The loop's messages name `game/config/game.json` as a path (`rescueRepair`, `playRepair`) whatever `paths.GAME` is | `loop/messages.mjs` | none: the words stay understandable | use `paths.GAME` there too |
+| The play-tester's brief has no placeholder for how the report is written ("Write `{{DIR}}/out/playtest.json`") | `prompts/playtest.md` | the play-tester agent (`plugin/agents/playtester.md`) says to report with `gamesfun_playtest_report` | a `REPORT_HOW` word like `PLAY_HOW` |
+| A refusal that `step()` returns is not marked told, so the next round's message says it a second time | `loop/build-loop.mjs` | none: said twice | mark it told when `step()` returns its `message` |
+| The state has no host field (a session id), and `ignoreStateDir` is skipped whenever a host passes a store, also one whose file is in the game's folder (`heldStore`) | `loop/build-loop.mjs` | the bridge notes which session drives a game from its tool calls; the tools call `ignoreStateDir` themselves | `host.session` → `state.session`; decide by the store's file |
 
 ## Examples
 
