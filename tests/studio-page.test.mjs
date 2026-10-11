@@ -1,11 +1,11 @@
 // The studio page's modules (no browser), the build route, and the page's calls against the session stub.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { startDevServer } from '../server/index.mjs';
 import { tempGame } from './helpers.mjs';
-import { attachSessionStub } from './stubs/session-stub.mjs';
+import { sessionDriver } from './stubs/session-driver.mjs';
 import { IDLE_HINT, TERMINAL_NOTE, connection, describeEvent, inputLine, modeNote, normalizeEvent, readQueue, requestWords } from '../studio/lib/session.js';
 import { loopView, playtestNotes } from '../studio/lib/loop-state.js';
 import { pendingChanges, sliderRange, tunables } from '../studio/lib/tune.js';
@@ -102,11 +102,11 @@ test('tune: only safe value slots, staged edits, all "reload"', () => {
   assert.deepEqual(pendingChanges(slots, { a: '5', e: '4', zz: 1 }), [{ id: 'e', value: '4' }], 'unchanged and unknown are dropped');
 });
 
-let game, srv, stub, base;
+let game, srv, base;
+const until = async (fn, ms = 4000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await fn()) return; await new Promise(r => setTimeout(r, 25)); } throw new Error('timed out waiting'); };
 before(async () => {
   game = await tempGame();
   srv = await startDevServer({ gameDir: game.dir, port: 0, log: () => {}, watch: false });
-  stub = attachSessionStub(srv);
   base = `http://127.0.0.1:${srv.port}`;
 });
 after(async () => { await srv?.close(); await game?.cleanup(); });
@@ -126,9 +126,10 @@ test('build route: no state, then the state file and the newest verdict', async 
   assert.equal(r.status, 501, 'no checkpoint library yet: said plainly');
   r = await call('/api/build/rollback', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
   assert.equal(r.status, 400);
+  await rm(path.join(game.dir, '.gf-loop'), { recursive: true, force: true });   // a building game would hold every stop in the bridge tests below
 });
 
-test('against the session stub (contract v1): token, send, edit, remove, permission; wrong origins refused', async () => {
+test('against the REAL bridge routes, driven by the plugin\'s hook posts: token, send, edit, remove, permission; wrong origins refused', async () => {
   const same = { 'sec-fetch-site': 'same-origin' };
   const tok = (await call('/api/session/token', { headers: same })).body.token;
   assert.equal((await call('/api/session/token')).status, 403, 'the token needs a same-origin fetch');
@@ -141,14 +142,118 @@ test('against the session stub (contract v1): token, send, edit, remove, permiss
   assert.equal(r.body.text, 'much faster enemies');
   assert.equal((await call(`/api/session/request/${id}`, j('DELETE'))).body.state, 'dropped');
   assert.equal((await call(`/api/session/request/${id}`, j('PATCH', { text: 'x' }))).status, 409);
-  const p = stub.ask('Bash', { command: 'npm test' });
-  const q = readQueue((await call('/api/session/queue', { headers: { 'x-gamesfun-token': tok } })).body);
-  assert.deepEqual(q.permissions.map(x => x.id), [p.id]);
-  assert.equal((await call(`/api/session/permission/${p.id}`, j('POST', { decision: 'maybe' }))).status, 400);
-  assert.equal((await call(`/api/session/permission/${p.id}`, j('POST', { decision: 'allow' }))).body.state, 'allow');
-  assert.equal((await call(`/api/session/permission/${p.id}`, j('POST', { decision: 'deny' }))).status, 409);
+  assert.equal((await call(`/api/session/request/${id}`, j('DELETE'))).status, 409, 'a dropped request cannot be removed again: the page only hides it');
   const evil = await fetch(base + '/api/session/request', j('POST', { text: 'x' }, { origin: 'http://evil.example' }));
   assert.equal(evil.status, 403, 'another site cannot post requests');
+});
+
+test('a request travels waiting → handed → seen → done, and the page lib says so (real routes, hook posts, tool routes)', async () => {
+  const s = await sessionDriver(base, { id: 'flow-1', cwd: game.dir });
+  try {
+    await s.start();
+    let q = readQueue(await s.queue());
+    assert.equal(connection(q).state, 'idle', 'just started, waiting for a first prompt');
+    await s.prompt('hello');
+    assert.equal(connection(readQueue(await s.queue())).state, 'working', 'mid-turn with no wait open is normal');
+    await s.stop();                                 // the turn ended: the session is idle, no wait open
+    const sent = (await s.call('POST', 'request', { text: 'make the enemies faster', selection: { id: 'waves.speed' } })).body;
+    assert.equal(sent.state, 'waiting', 'idle with no wait open: it waits');
+    assert.equal(sent.session, 'flow-1', 'no session named: the primary one');
+    assert.equal(readQueue(await s.queue()).requests.at(-1).words.editable, true);
+    q = readQueue(await s.queue());
+    const sess = q.sessions.find(x => x.id === 'flow-1');
+    assert.equal(sess.state, 'idle');
+    assert.equal(sess.connected, false);
+    assert.equal(connection(q).state, 'idle');
+    assert.match(connection(q).hint, new RegExp(IDLE_HINT.slice(0, 20)));
+    const w = await s.wait();                       // the plugin's wait opens: the waiting request is handed at once
+    await until(() => w.lines.length);
+    assert.equal(w.lines[0].type, 'requests');
+    assert.match(w.lines[0].text, /GF_REQUEST/);
+    q = readQueue(await s.queue());
+    const mine = q.requests.find(x => x.id === sent.id);
+    assert.equal(mine.state, 'handed');
+    assert.equal(mine.via, 'wake');
+    assert.match(mine.words.label, /Handed over/);
+    await s.prompt(w.lines[0].text);                // the wake becomes a prompt: seen
+    assert.equal(readQueue(await s.queue()).requests.find(x => x.id === sent.id).state, 'seen');
+    const got = (await s.collect()).body;
+    assert.equal(got.requests[0].id, sent.id);
+    const rep = (await s.done(sent.id, 'speed 4 to 6')).body;
+    assert.equal(rep.state, 'done');
+    q = readQueue(await s.queue());
+    assert.equal(q.requests.find(x => x.id === sent.id).words.label, 'Done');
+    assert.equal(q.requests.find(x => x.id === sent.id).note, 'speed 4 to 6');
+  } finally { s.closeAll(); await s.end(); }
+});
+
+test('permissions: a held PermissionRequest hook is answered by the page\'s click, allow and deny', async () => {
+  const s = await sessionDriver(base, { id: 'perm-1', cwd: game.dir });
+  try {
+    await s.start();
+    const held = s.ask('Bash', { command: 'npm test' });
+    await until(async () => readQueue(await s.queue()).permissions.length);
+    const q = readQueue(await s.queue());
+    assert.equal(q.permissions.length, 1);
+    assert.equal(q.permissions[0].tool, 'Bash');
+    assert.equal(q.permissions[0].line, 'npm test');
+    const pid = q.permissions[0].id;
+    assert.equal((await s.call('POST', `permission/${pid}`, { decision: 'maybe' })).status, 400);
+    assert.equal((await s.call('POST', `permission/${pid}`, { decision: 'allow' })).body.state, 'allow');
+    const out = await held;
+    assert.equal(out.status, 200);
+    assert.deepEqual(out.body, { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } });
+    assert.equal((await s.call('POST', `permission/${pid}`, { decision: 'deny' })).status, 409);
+    assert.equal(readQueue(await s.queue()).permissions.length, 0, 'answered: no card');
+    const held2 = s.ask('Edit', { file_path: 'rules.js' });
+    await until(async () => readQueue(await s.queue()).permissions.length);
+    const pid2 = readQueue(await s.queue()).permissions[0].id;
+    await s.call('POST', `permission/${pid2}`, { decision: 'deny', message: 'not that file' });
+    assert.deepEqual((await held2).body.hookSpecificOutput.decision, { behavior: 'deny', message: 'not that file' });
+    // the person answers in the terminal instead: the next event for that session retires the card
+    const held3 = s.ask('Bash', { command: 'ls' });
+    await until(async () => readQueue(await s.queue()).permissions.length);
+    await s.tool('Bash', { command: 'ls' });
+    await until(async () => !readQueue(await s.queue()).permissions.length);
+    await s.stop();
+    assert.equal((await held3).text, '', 'retired: an empty 200, the terminal decides');
+  } finally { s.closeAll(); await s.end(); }
+});
+
+test('the stop guard: a building game refuses the stop three times, then the session is marked waiting for the person', async () => {
+  const s = await sessionDriver(base, { id: 'guard-1', cwd: game.dir });
+  const stateFile = path.join(game.dir, '.gf-loop', 'state.json');
+  try {
+    await mkdir(path.dirname(stateFile), { recursive: true });
+    await writeFile(stateFile, JSON.stringify({ ...draft, status: 'building', step: 'verify', why: 'checking the build' }));
+    await s.start();
+    for (let i = 0; i < 3; i++) {
+      const r = await s.stop();
+      assert.equal(r.body.decision, 'block', `refusal ${i + 1}`);
+      assert.match(r.body.reason, /verify/);
+    }
+    const last = await s.stop();
+    assert.match(last.body.systemMessage, /./, 'the guard gives up and says so in the terminal');
+    const sess = (await s.queue()).sessions.find(x => x.id === 'guard-1');
+    assert.equal(sess.guard.status, 'waiting-on-question');
+    assert.match(connection(readQueue(await s.queue())).guard.status, /waiting-on-question/);
+  } finally { await rm(path.join(game.dir, '.gf-loop'), { recursive: true, force: true }); s.closeAll(); await s.end(); }
+});
+
+test('a request the session ends two turns without reporting is dropped, and the page offers to send it again', async () => {
+  const s = await sessionDriver(base, { id: 'drop-1', cwd: game.dir });
+  try {
+    await s.start();
+    const w = await s.wait();
+    const r = (await s.call('POST', 'request', { text: 'add a boss' })).body;
+    await until(() => w.lines.length);
+    await new Promise(res => setTimeout(res, 3200));   // the rule: a request handed less than 3 s ago is not refused at the stop
+    for (let i = 0; i < 2; i++) assert.equal((await s.stop()).body.decision, 'block');
+    await s.stop();
+    const mine = readQueue(await s.queue()).requests.find(x => x.id === r.id);
+    assert.equal(mine.state, 'dropped');
+    assert.equal(mine.words.again, true);
+  } finally { s.closeAll(); await s.end(); }
 });
 
 test('the studio page and its tabs are served, and every tab imports its modules', async () => {
