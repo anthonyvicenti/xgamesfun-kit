@@ -2,6 +2,7 @@
   "name": "gamesfun-kit",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "games.fun kit: build multiplayer three.js browser games with Solana items, loot boxes and tokens, using the AI coding agent you already have.",
   "type": "module",
   "bin": {
