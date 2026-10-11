@@ -113,6 +113,8 @@ has an `assets.json` and adds its ignore entry at once. It reads the same JSON f
 | A forge HUD module loaded with a bare `import('../../../gf-forge/hud/create.mjs')` | `research/gf-three/tools/lib/spec-config.mjs:343` | none needed (it runs only for a forge spec); the sync records it as a part not taken | use `importPart`, so a checkout without the engine gets the plain "not in this checkout" error |
 | A forge spec without the engine is refused with a module-resolution error for `gf-forge/kit/look.js`, not the plain error | `research/gf-three/tools/create.mjs` (`decideModules`) | none (the refusal is correct and nothing is written; a test holds that) | check the engine folder once, first, with the `importPart` wording |
 | `verify.mjs` cannot load without the 3D tools' packages, even for a static check | `tools/lib/bodies-check.mjs` → `body-judge.mjs` → `char-node.mjs` | `gamesfun verify` installs them first (`ensureCharDeps`) | import the body judge when check 19 runs |
+| A scenic game on its own `follow` camera fails check 24 (the check waits for a refused pointer lock; `follow` never asks for one) and check 34 (a viewer's camera is about 45 m and 84° from the streamer's) | `tools/lib/embed-check.mjs` (`free` is true only for `orbit`), the kit's viewer camera | the scenic example records them in `example.json` → `knownFailing`; the smoke test fails when the list and the verdict differ | treat `follow` as a camera that needs no lock in check 24; make the viewer use the streamer's `follow` rig |
+| The same scenic spec with `"camera": "third"` fails 13, 16 and 34 (a melee swing goes 95° from the aim; viewer 1.10 m off, limit 1 m), with `"orbit"` 13 and 16 | `kit/mechanics/melee` under those cameras | none: the example keeps `follow` | melee follows the aim under every camera the schema allows a scenic game |
 | `lookdev/capture.mjs` (check 9's contact sheet) is left out | `tools/verify.mjs` | none needed: `--quick` skips it and a full verify says it is absent | none |
 
 ## Examples
@@ -120,7 +122,7 @@ has an `assets.json` and adds its ignore entry at once. It reads the same JSON f
 An example is `templates/examples/<id>/` with `spec.json` (a locked spec), `rules.js`, `README.md` (what it shows,
 provenance) and `example.json` (`title`, `summary`, `verified: { result, kits, date }`). Optional `files/` is laid over
 the created game (then `assets.json` is regenerated). An example ships only after `npx gamesfun verify --quick` passes
-on a fresh `create --from` with the current kits; record the result in `example.json`. There is one per engine:
+on a fresh `create --from` with the current kits; record the result in `example.json`. An example that a kit fault fails lists the failing checks in `example.json` → `knownFailing` and says why in its README; the smoke test then requires exactly those to fail. There is one per engine:
 `soak-squad` (party, WebGL) and the scenic one (WebGPU, with WebGL2 inside WebGPURenderer where Chrome has no adapter).
 
 ## Skills
