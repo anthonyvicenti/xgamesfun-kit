@@ -250,7 +250,16 @@ session with `GAMESFUN_BRIDGE_TOKEN` set and a fixed port may point HTTP hooks s
 
 **The write guard** (`plugin/scripts/guard.mjs`, a second `PreToolUse` hook, not async, needs no studio): denies
 `Edit`, `Write`, `MultiEdit` and `NotebookEdit` on a path under a `.gf-loop/` folder, and `Bash` or `PowerShell` when
-the command names such a path at all (the `Read` tool reads it). The reason names `gamesfun_ask`. The play-tester
+the command names such a path and is not plainly a read. A read is let through (decided 2026-10-11, question 28) only
+when the guard can show it is one (`readOnlyShell`): every program in the command is on a short list of programs that
+only read (`cat`, `head`, `tail`, `ls`, `grep`, `rg`, `find`, `wc`, `jq`, `sort`, `diff`, `stat`, `cd`, `echo`, `test`;
+`Get-Content`, `Get-ChildItem`, `Select-String`, `Test-Path`, `ConvertFrom-Json`, `Select-Object` and a few more),
+joined only by `|`, `&&`, `||`, `;` or a new line, with no redirect except to `/dev/null` or `2>&1`, no variable, no
+command substitution, no bracket or brace outside quotes, no escaped quote, and none of the flags that make a reader
+write or run something (`find -exec`/`-delete`/`-fprint`, `sort -o` or any long option, `rg --pre`, `uniq` with two
+files). `sed`, `awk`, `tee`, `xargs`, `node`, `python`, `git`, `less` and PowerShell's `ForEach-Object` and
+`Where-Object` are not on the list. Everything else that names the folder is refused with the reason it was not
+plainly a read. The reason names `gamesfun_ask` and the `Read` tool. The play-tester
 subagent (`agent_type` `playtester`) may write only `job/playtest/out/` and `job/playtest/runs/`. It refuses `Edit` and
 `Write` on a game's own `spec.json` while that game's run is building with its spec locked (not through a shell
 command). It also refuses an

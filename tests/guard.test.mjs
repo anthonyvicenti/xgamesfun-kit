@@ -9,7 +9,7 @@ import path from 'node:path';
 import { CANCEL_FILE } from '../lib/cancel.mjs';
 import { CANCEL_FILE as BRIDGE_CANCEL_FILE } from '../bridge/loop-state.mjs';
 import { KIT_ROOT } from '../lib/paths.mjs';
-import { decide, namesLoopDir, underLoopDir } from '../plugin/scripts/guard.mjs';
+import { decide, namesLoopDir, readOnlyShell, READ_PROGRAMS, underLoopDir } from '../plugin/scripts/guard.mjs';
 
 const SCRIPT = path.join(KIT_ROOT, 'plugin', 'scripts', 'guard.mjs');
 const cwd = path.join(os.tmpdir(), 'kit');
@@ -39,14 +39,43 @@ test('let through: the game\'s own files, a name that only looks alike, and tool
   assert.equal(decide(call('Write', {})), null);
 });
 
-test('denied: a shell command that names a .gf-loop path, whatever it does with it', () => {
+test('denied: a shell command that names a .gf-loop path and is not plainly a read', () => {
   for (const command of [
-    'echo "{}" > games/a/.gf-loop/state.json', 'sed -i s/KeyE// games/a/.gf-loop/job/spec.json', 'rm -rf games/a/.gf-loop', 'cat games/a/.gf-loop/state.json',
+    'echo "{}" > games/a/.gf-loop/state.json', 'sed -i s/KeyE// games/a/.gf-loop/job/spec.json', 'rm -rf games/a/.gf-loop',
     'cd games/a/.gf-loop && echo x > state.json', 'node -e "require(\'fs\').writeFileSync(\'games/a/.gf-loop/job/spec.json\',\'{}\')"', 'cp /tmp/s.json "games/a/.gf-loop/job/spec.json"', 'python3 -c "open(\'.gf-loop/state.json\',\'w\')"',
     'Set-Content games\\a\\.gf-loop\\state.json "{}"',
+    // a reader in front of a writer, and a reader made to write or run something
+    'cat games/a/.gf-loop/state.json | tee games/a/.gf-loop/state.json', 'cat games/a/.gf-loop/state.json >> games/a/.gf-loop/job/spec.json', 'cat /tmp/s.json >games/a/.gf-loop/job/spec.json',
+    'find games/a/.gf-loop -name "*.json" -delete', 'find games/a/.gf-loop -type f -exec rm {} +', 'sort -o games/a/.gf-loop/state.json /tmp/x', 'sort --output=games/a/.gf-loop/state.json /tmp/x', 'sort --compress-program=/tmp/x games/a/.gf-loop/state.json',
+    'uniq /tmp/x games/a/.gf-loop/state.json', 'rg --pre /tmp/x.sh lock games/a/.gf-loop', 'cd games/a/.gf-loop; mv job/spec.json /tmp/', 'cd games/a/.gf-loop\nrm state.json', 'ls games/a/.gf-loop && rm games/a/rules.js',
+    // what the guard cannot follow is refused, never guessed
+    'cat $(echo games/a/.gf-loop/state.json)', 'cat `echo games/a/.gf-loop/state.json`', 'cat "$HOME/games/a/.gf-loop/state.json"', 'X=1 cat games/a/.gf-loop/state.json', 'cat games/a/.gf-loop/{state,x}.json', '(cat games/a/.gf-loop/state.json)',
+    'cat games/a/.gf-loop/state.json &', 'cat \\"a > games/a/.gf-loop/state.json \\"', './cat games/a/.gf-loop/state.json', '/tmp/cat games/a/.gf-loop/state.json', 'env cat games/a/.gf-loop/state.json', 'cat "games/a/.gf-loop/state.json',
+    'cat games/a/.gf-loop/state.json 2>games/a/.gf-loop/job/spec.json', 'cat games/a/.gf-loop/state.json 2>/dev/nullx', 'cat < games/a/.gf-loop/state.json', 'less games/a/.gf-loop/state.json', 'awk 1 games/a/.gf-loop/state.json', 'xargs cat games/a/.gf-loop/state.json',
+    'Get-Content games\\a\\.gf-loop\\state.json | Set-Content games\\a\\.gf-loop\\state.json', 'Get-Content games\\a\\.gf-loop\\state.json | Out-File x.json', 'Get-ChildItem games\\a\\.gf-loop | ForEach-Object { Remove-Item $_ }', '(Get-Content games\\a\\.gf-loop\\state.json).Length',
+    '[IO.File]::WriteAllText("games/a/.gf-loop/state.json", "{}")', 'Remove-Item -Recurse games\\a\\.gf-loop',
   ]) for (const tool of ['Bash', 'PowerShell']) assert.match(decide(call(tool, { command })) ?? '', /gamesfun_ask/, command);
   for (const command of ['npm test', 'ls games/a', 'node bin/gamesfun.mjs verify games/a --quick', 'git status', 'echo .gf-loopy', 'rm -rf games/a']) assert.equal(decide(call('Bash', { command })), null, command);
   assert.equal(namesLoopDir(undefined), false);
+  // the refusal says why, so the session can see it was the form and not the read
+  assert.match(decide(call('Bash', { command: 'cat games/a/.gf-loop/state.json > /tmp/x' })), /redirects to or from a file/);
+  assert.match(decide(call('Bash', { command: 'sed -n 1p games/a/.gf-loop/state.json' })), /"sed" is not on the list of programs that only read/);
+});
+
+test('let through: a shell command that only reads under .gf-loop (question 28, decided 2026-10-11)', () => {
+  for (const command of [
+    'cat games/a/.gf-loop/state.json', 'head -n 20 games/a/.gf-loop/job/spec.json', 'tail -5 "games/a/.gf-loop/job/rounds/round-1.md"', 'ls -la games/a/.gf-loop', 'ls games/a/.gf-loop/job/out/verify-1/',
+    'wc -l games/a/.gf-loop/job/promises.json', 'grep -n "KeyE" games/a/.gf-loop/job/spec.json', 'grep -rn \'"ok": false\' games/a/.gf-loop/job/out', 'rg lock games/a/.gf-loop', 'find games/a/.gf-loop -name "verdict.json"', 'find games/a/.gf-loop -type f -newer games/a/rules.js -print',
+    'jq .status games/a/.gf-loop/state.json', 'jq \'{step, status, why: .why}\' games/a/.gf-loop/state.json', 'jq -r \'.checks[] | select(.ok == false) | "\\(.n) \\(.name)"\' games/a/.gf-loop/job/out/verify-1/verdict.json',
+    'cat games/a/.gf-loop/state.json | jq .step', 'cat games/a/.gf-loop/state.json 2>/dev/null', 'ls games/a/.gf-loop 2>&1 | head -3', 'cat games/a/.gf-loop/state.json > /dev/null', 'grep -c ok games/a/.gf-loop/job/out/verify-1/verdict.json || echo none',
+    'cd games/a/.gf-loop && ls && cat state.json', 'cd games/a/.gf-loop; cat state.json', 'ls games/a/.gf-loop/checkpoints | sort -r | uniq -c | head', 'diff games/a/.gf-loop/job/spec.json games/a/spec.json', 'stat games/a/.gf-loop/state.json', 'sha256sum games/a/.gf-loop/job/spec.json',
+    'test -f games/a/.gf-loop/cancel.json && echo yes', '[ -d games/a/.gf-loop ] && echo there', 'du -sh games/a/.gf-loop', 'cat games/a/.gf-loop/state.json\nls games/a',
+    'Get-Content games\\a\\.gf-loop\\state.json', 'gc games\\a\\.gf-loop\\state.json | ConvertFrom-Json | Select-Object -Property step, status', 'Get-ChildItem -Recurse games\\a\\.gf-loop | Select-Object -First 5', 'Select-String -Path games\\a\\.gf-loop\\job\\spec.json -Pattern KeyE',
+    'Test-Path games\\a\\.gf-loop\\cancel.json', 'Get-FileHash games\\a\\.gf-loop\\job\\spec.json', 'type games\\a\\.gf-loop\\state.json', 'dir games\\a\\.gf-loop',
+  ]) for (const tool of ['Bash', 'PowerShell']) assert.equal(decide(call(tool, { command })), null, command);
+  assert.equal(readOnlyShell('cat a | jq .'), null);
+  assert.match(readOnlyShell('cat a | tee b'), /"tee" is not on the list/);
+  for (const p of ['sed', 'awk', 'tee', 'xargs', 'node', 'python3', 'git', 'less', 'more', 'cp', 'mv', 'rm', 'touch', 'foreach-object', 'where-object', 'set-content', 'out-file']) assert.equal(READ_PROGRAMS.has(p), false, p);
 });
 
 test('what it cannot stop: a command that builds the path when it runs (said plainly; the loop\'s own lock stands for these)', () => {
