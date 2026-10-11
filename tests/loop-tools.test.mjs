@@ -80,9 +80,11 @@ test('the order is held: each tool is refused until its step, and names the righ
   await writeFile(b.G.spec, JSON.stringify({ ...spec, mechanics: [{ id: 'no-such-mechanic' }] }));
   r = await call('gamesfun_step_spec');
   assert.equal(r.valid, false); assert.match(r.round.brief, /not valid yet/); assert.match(r.round.brief, /mechanics/);
-  await copyFile(DEV_SPEC, b.G.spec);
-  r = await call('gamesfun_step_spec');
+  r = await call('gamesfun_step_spec', { spec, pitch: {} });
+  assert.equal(r.refused, 'two-answers');
+  r = await call('gamesfun_step_spec', { spec });          // the answer may be passed to the tool, which writes the file
   assert.equal(r.outcome, 'locked'); assert.equal(r.next.tool, 'gamesfun_step_create');
+  assert.deepEqual(JSON.parse(await readFile(b.G.spec, 'utf8')), spec);
   assert.equal(existsSync(path.join(b.game, 'index.html')), false, 'nothing is built before create');
 
   r = await call('gamesfun_step_verify');
