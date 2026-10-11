@@ -54,12 +54,6 @@ export async function webrtcProbe(browser, ms = 8000) {
   } catch (e) { return { connected: false, error: String(e?.message ?? e).split('\n')[0].slice(0, 200) }; }
   finally { await page.close().catch(() => {}); }
 }
-/** Launch flags the probe is tried with after a join failed, to say what this machine's WebRTC needs. */
-export const WEBRTC_VARIANTS = [
-  ['real addresses in place of mDNS names', ['--disable-features=WebRtcHideLocalIpsWithMdns']],
-  ['loopback candidates allowed', ['--allow-loopback-in-peer-connection']],
-];
-
 /**
  * The WebRTC connection states of a join, as the kit's own observation gives them (window.__p2p: the host's peers, the
  * joiner's connection and channel). `watch()` is called on each turn of a wait and keeps the changes, so a join that

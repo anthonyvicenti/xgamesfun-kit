@@ -3,8 +3,8 @@
  "about": "A sparse mirror of the games.fun repository at one commit: the kits games are built on and the tools that create and verify them. Written by scripts/sync-kits.mjs; never edited by hand (fix the kit in games.fun and sync again). tests/kits.test.mjs checks kits/ against this file.",
  "source": {
   "repo": "games.fun",
-  "commit": "b2255688c6c00c8e70b5f7b06be60125869cd46d",
-  "date": "2026-10-11T09:18:58-07:00"
+  "commit": "5cfa0ea954e6fa24ff806b0ce6589d0465c78b44",
+  "date": "2026-10-11T09:28:34-07:00"
  },
  "kits": {
   "gf-three": {
@@ -75,7 +75,7 @@
  },
  "totals": {
   "files": 1075,
-  "bytes": 36034716,
+  "bytes": 36037579,
   "excluded": 152,
   "excludedBy": {
    "Meshy-generated (licence tier unconfirmed)": 3,
@@ -195,7 +195,7 @@
  ],
  "closure": {
   "files": 119,
-  "bytes": 1976350,
+  "bytes": 1979213,
   "modules": [
    "creator-studio/lib/asset-kinds.mjs",
    "creator-studio/lib/code-literals.mjs",
@@ -578,7 +578,7 @@
   "research/foundations/kits/gf-multiplayer/1.6.3/source/party.js": "a76225baeb230dc9271e94cff929a9020decf6caed23c0210ba97154f3b70919",
   "research/foundations/kits/gf-multiplayer/1.6.3/source/room.js": "32a3f4fcecc63dfe2cabf50abb737dd22df1b9f94e55540d4c7ffef5f86aef01",
   "research/foundations/kits/gf-multiplayer/1.6.3/source/vendor/gf.js": "adf158ef4219a6ce2af730a7c9a70010d22ef881668a9f99754cece327d6707b",
-  "research/foundations/qa/browser.mjs": "e51a25cf708c09ccd651d83e10250007d53e8b51c606dd0e772a55a8cf1519ca",
+  "research/foundations/qa/browser.mjs": "d3d4c02f24b994ba11dcbc6a2b3a559f50d3b2ba0b2241d84db7b2a9a623aa02",
   "research/foundations/trials/fps-arena/source/vendor/n8ao/LICENSE": "6d489af6292662d9e36d34ce49423784984a5f6e41d7b58f49b01264df59fa03",
   "research/foundations/trials/fps-arena/source/vendor/n8ao/N8AO.js": "efac50cc8eaa9d9c5d5e844fb3694cf19a20595ada09d32ab333d320b16854df",
   "research/foundations/trials/fps-arena/source/vendor/postprocessing/LICENSE.md": "b7650918449bd5fb011ce30ce0e5bcda27aa9639db1fb3aef8c67c32945237f2",
@@ -1289,7 +1289,7 @@
   "research/gf-three/tools/lib/main.mjs": "ffa7e7bbad9eef04e65e286012dc3c60dc1efff4832097cc50b9d4c84ac31607",
   "research/gf-three/tools/lib/menu-check.mjs": "fe16b0f21cdc17eda6041805376f3dc8034749c3c93338e3a965d867094e48e9",
   "research/gf-three/tools/lib/own-verify.mjs": "d09cc69646ac74f7bda8f789bf2e63f60eea34fbc6b10049543e8e5fc7955dc4",
-  "research/gf-three/tools/lib/paths.mjs": "0667cf12a89d7ba67a5a3fc2be165eff345527ec6935a6270ea2e3f48bc4f280",
+  "research/gf-three/tools/lib/paths.mjs": "6bfe5b03a8b1b04d0e912e7294f0d4c89927893e87185dc64c7e5f1882bbd238",
   "research/gf-three/tools/lib/play-script.mjs": "c7177e05f6956a35b651aa2f58af99759651465cef3cb362e5782d4edd18cb94",
   "research/gf-three/tools/lib/promises.mjs": "627f2f64b245da71b1084254b73f87e7e46e6d376cb156422cfb4a15d7e94ff1",
   "research/gf-three/tools/lib/schema.mjs": "5e9646686c45c08c58cb25f4b64db8090e139b47cbf177cfce0a9457076d87f4",
@@ -1565,9 +1565,9 @@
   "research/multiplayer/p2p/vendor/ws/wrapper.mjs": "fe154662301fd558f935f9c217fccbe7a7dac02ff39e648a000589403ff27c7f",
   "research/multiplayer/party/LIVE_HANDBOOK.md": "03f634dd5197d4dcc0b457b87232eeabebfdb0a49db8c56b56a2f8b79160cbd7",
   "research/multiplayer/party/adopt.mjs": "b3cb3e0172932f2d6bd00e5692f29af88b022b8a024048eb5aeea5bcf4bae371",
-  "research/multiplayer/party/gate-lib.mjs": "f758d5e43ecac8237088f1f0b99e5dfd22765c91c6a3b6cf536aa06ec381e7be",
+  "research/multiplayer/party/gate-lib.mjs": "e71f6b3fecfc9b805c51e7b827465ee89fa7ca092e651a76634960b2663b73be",
   "research/multiplayer/party/gate-live.mjs": "1e17f8975d7b4c7dd4b4586915aed14290ee67dc7faba5763da5879fda3cc3fc",
-  "research/multiplayer/party/gate.mjs": "18ffa8e1ef8a99225b93733d6b4de17a885ec289290d9c2ec12f599ac3f4dc78",
+  "research/multiplayer/party/gate.mjs": "cc69401b685c8f60cc20eec861cbe8ceb0e2b63533c3d574b31b87f5ec1a68fb",
   "research/multiplayer/party/kit/bot.js": "882495b3814773423d12d02e7fc3ac4fef463ec838d63cf816182f5c94c5b043",
   "research/multiplayer/party/kit/index.html": "b53a4c6947668ce6f6ebf8e999d65102dcc6a4df9dead80af96455a20e201817",
   "research/multiplayer/party/kit/net.js": "fc92719992cbcf88d2b8d3c9f7ff58a18dd2d04efc4fa96c47980b518787033d",

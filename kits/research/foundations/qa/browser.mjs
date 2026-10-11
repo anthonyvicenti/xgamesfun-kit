@@ -204,8 +204,46 @@ function withoutWebgpu(browser) {
   return browser;
 }
 
+/**
+ * Two pages of one browser reach each other over WebRTC by a host candidate, and Chrome hides a machine's addresses
+ * in those behind mDNS names (<uuid>.local) that the other side has to look up by multicast. Where that lookup does
+ * not work, two players on one machine never connect: on GitHub's macOS runner (2026-10-11) the connection stayed
+ * "new" until the kit gave up after 20 s, with every signaling message delivered, and the same two connections were
+ * up in 0.1 s with real addresses. Every QA browser that plays two players on one machine launches with this feature
+ * off (`launchChrome({ disableFeatures: LOCAL_WEBRTC_OFF })`). It changes nothing a page can see.
+ */
+export const LOCAL_WEBRTC_OFF = ['WebRtcHideLocalIpsWithMdns'];
+/** The value of the last --disable-features of a command line (Chrome keeps only the last), as a list. Pure. */
+export const disabledFeaturesIn = args => (args ?? []).filter(a => typeof a === 'string' && a.startsWith('--disable-features=')).at(-1)?.slice('--disable-features='.length).split(',').filter(Boolean) ?? [];
+/** One --disable-features switch holding Playwright's features and ours, each once. Pure. */
+export const disableFeaturesArg = (theirs, ours) => `--disable-features=${[...new Set([...(theirs ?? []), ...(ours ?? [])])].join(',')}`;
+let playwrightDisabled = null;
+/**
+ * The features Playwright itself switches off in the Chrome it launches, read from a browser it launched (the list is
+ * not part of its API and changes between versions). Chrome keeps only the LAST --disable-features switch, so a flag
+ * of ours has to repeat Playwright's or it would switch them all back on (as with --enable-features, see WEBGPU_ARGS).
+ * Asked once per process, from a plain launch that is closed again; [] when the browser will not say.
+ */
+async function playwrightDisabledFeatures(chromium, launch) {
+  if (playwrightDisabled) return playwrightDisabled;
+  let browser = null;
+  try {
+    browser = await chromium.launch(launch);
+    const session = await browser.newBrowserCDPSession();
+    playwrightDisabled = disabledFeaturesIn((await session.send('Browser.getBrowserCommandLine')).arguments);
+  } catch { playwrightDisabled = []; }
+  finally { await browser?.close().catch(() => {}); }
+  return playwrightDisabled;
+}
+
 export async function launchChrome(options = {}) {
-  const { gpu: asked = null, chromium: browserType, ...rest } = options;
+  const { disableFeatures = null, ...opts } = options;
+  if (disableFeatures?.length) {
+    const chromium = opts.chromium ?? await loadChromium();
+    const theirs = await playwrightDisabledFeatures(chromium, { executablePath: 'executablePath' in opts ? opts.executablePath : chromePath(), headless: true });
+    return launchChrome({ ...opts, args: [...(opts.args ?? []), disableFeaturesArg(theirs, disableFeatures)] });
+  }
+  const { gpu: asked = null, chromium: browserType, ...rest } = opts;
   const gpu = asked === 'webgpu' && forgeWebgl2() ? 'webgl' : asked;
   // (the same binary the WebGPU kind uses, chrome-headless-shell, so a run differs by the backend alone: installed
   // Chrome's headless mode asks for a favicon, which is a console error on a page without one, and slows hidden pages)

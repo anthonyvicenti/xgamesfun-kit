@@ -80,7 +80,10 @@ export async function engineOfGame(dir) {
  * inside WebGPURenderer) and `note` says so. Pass qa/browser.mjs's launchChrome (this module stays free of Playwright).
  * → {browser, gpu: 'webgpu' | 'webgl' | 'software', engine, note}
  */
-export async function launchForGame(launchChrome, dir, { software = !!process.env.GF_VERIFY_SOFTWARE, engine = null, ...rest } = {}) {
+export async function launchForGame(launchChrome, dir, { software = !!process.env.GF_VERIFY_SOFTWARE, engine = null, ...given } = {}) {
+  // a check may play two players on this one machine: real addresses in their WebRTC candidates (qa/browser.mjs
+  // LOCAL_WEBRTC_OFF; where mDNS names cannot be looked up, as on a macOS CI runner, the two never connect)
+  const rest = { disableFeatures: ['WebRtcHideLocalIpsWithMdns'], ...given };
   const eng = engine ?? await engineOfGame(dir);
   const plan = rendererFor(eng, { software });
   if (plan.gpu === 'software') return { browser: await launchChrome({ ...rest }), gpu: 'software', engine: eng, note: null };
