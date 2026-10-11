@@ -36,5 +36,5 @@
   "stakes": [
     { "key": "backers", "name": "Back the house", "stakes": "arena", "rewards": "backers", "lock": "1d" }
   ],
-  "scenario": { "days": 30, "perDay": { "box:flip": 1000, "lottery:weekly": 100 }, "staked": { "backers": 1000000 } }
+  "scenario": { "days": 30, "perDay": { "box:flip": 1000, "lottery:weekly": 100, "stake:backers": 10 }, "staked": { "backers": 1000000 } }
 }
