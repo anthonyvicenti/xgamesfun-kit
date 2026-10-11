@@ -88,7 +88,9 @@ export function request(port, { method = 'GET', path: p = '/api/web3/state', hea
         resolve({ status: res.statusCode, headers: res.headers, text, json, bytes: Buffer.concat(parts) });
       });
     });
-    req.on('error', (e) => (e.code === 'ECONNRESET' || e.code === 'EPIPE' ? resolve({ status: 413, headers: {}, text: '', json: null }) : reject(e)));
+    // the server answers 413 and closes while the body is still being written: the write then fails with ECONNRESET or
+    // EPIPE on Linux and macOS, and with ECANCELED or ECONNABORTED on Windows (first Windows run, 2026-10-11)
+    req.on('error', (e) => (['ECONNRESET', 'EPIPE', 'ECANCELED', 'ECONNABORTED'].includes(e.code) ? resolve({ status: 413, headers: {}, text: '', json: null }) : reject(e)));
     if (chunks) {
       (async () => {
         for (const c of chunks) {

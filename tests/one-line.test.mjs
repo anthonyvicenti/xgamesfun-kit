@@ -339,6 +339,8 @@ async function twoClones() {
   git(t.dir, 'clone', '-q', remote, a);
   await writeFile(path.join(a, 'package.json'), '{"name":"x","version":"1.0.0","lockfileVersion":3}\n');
   await writeFile(path.join(a, 'package-lock.json'), JSON.stringify({ name: 'x', version: '1.0.0', lockfileVersion: 3, requires: true, packages: { '': { name: 'x', version: '1.0.0' } } }));
+  // the kit's own .gitattributes line: without it Git for Windows (core.autocrlf=true) checks one.txt out as '1\r\n'
+  await writeFile(path.join(a, '.gitattributes'), '* text=auto eol=lf\n');
   await writeFile(path.join(a, 'one.txt'), '1\n');
   git(a, 'add', '.'); git(a, 'commit', '-qm', 'one'); git(a, 'push', '-q', '-u', 'origin', 'main');
   git(t.dir, 'clone', '-q', remote, b);
