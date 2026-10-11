@@ -113,7 +113,7 @@ has an `assets.json` and adds its ignore entry at once. It reads the same JSON f
 
 ## Tool faults worked around here (requests to games.fun)
 
-Checked against the kits synced from games.fun 58040ce0b (2026-10-11). Deleted here because the loop library now covers them: the reminder
+Checked against the kits synced from games.fun e11b74df9 (2026-10-11). Deleted here because the loop library now covers them: `paths.GAME` for the rescue and play-repair messages, `playWords.REPORT_HOW` for the play-test brief's report line (`gamesfun_playtest_report`), a refusal that `step()` returns being marked told, `.gf-loop/**` in the game's ignore list decided by where the state file is (`ignoreStateDir`), `host.session` kept as `state.session` (the stop guard holds that session only); the reminder
 round's words after a restart, the promises writer bound by hand, the rewriting of the loop's messages and of the play-tester's brief for this kit's
 folders and tools (`paths`, `toolNames`, `playWords`), stopping a running verify with its host (`host.signal`), and the roll-back work-around (`loop.cancel`). Fixed upstream and removed from this table: the forge
 HUD and forge-spec refusals now load by `importPart` (`spec-config.mjs`, `create.mjs`); `verify.mjs` imports the body judge
@@ -124,10 +124,6 @@ camera passed 27 of 27 with `--quick --release`).
 | Fault | Where | Work-around here | Fix asked for |
 |---|---|---|---|
 | `lookdev/capture.mjs` (check 9's contact sheet) is left out | `tools/verify.mjs` | none needed: `--quick` skips it and a full verify says it is absent | none |
-| The loop's messages name `game/config/game.json` as a path (`rescueRepair`, `playRepair`) whatever `paths.GAME` is | `loop/messages.mjs` | none: the words stay understandable | use `paths.GAME` there too |
-| The play-tester's brief has no placeholder for how the report is written ("Write `{{DIR}}/out/playtest.json`") | `prompts/playtest.md` | the play-tester agent (`plugin/agents/playtester.md`) says to report with `gamesfun_playtest_report` | a `REPORT_HOW` word like `PLAY_HOW` |
-| A refusal that `step()` returns is not marked told, so the next round's message says it a second time | `loop/build-loop.mjs` | none: said twice | mark it told when `step()` returns its `message` |
-| The state has no host field (a session id), and `ignoreStateDir` is skipped whenever a host passes a store, also one whose file is in the game's folder (`heldStore`) | `loop/build-loop.mjs` | the bridge notes which session drives a game from its tool calls; the tools call `ignoreStateDir` themselves | `host.session` → `state.session`; decide by the store's file |
 
 ## Examples
 
