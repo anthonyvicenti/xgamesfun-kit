@@ -232,7 +232,8 @@ which of the two showed the question, and what happened when you clicked.
 **Do:**
 
 1. In the studio page, click the tab **Play with a friend**.
-2. Click **1. Host a room in the preview**. In the game on the left, type a name (or keep the one it offers) and click **Host a game**.
+2. Click **1. Host a room in the preview**. In the game on the left, type a name (or keep the one it offers) and click
+   **Host a game**.
 3. Click **2. Open a second tab as your friend**. In the new tab, type another name and click **Join**.
 4. Go back to the first tab and click **Start the game**.
 
@@ -297,7 +298,7 @@ node bin/gamesfun.mjs dev games/board
 
 **You should see:** a town square with a blue board lying on the ground. Click **Play**. Under the clock the screen
 says whose turn it is. When it says "Your turn", walk onto a column of the board and press E. Your disc slides in. Then
-the bots take their turns, one at a time. If you press E when it is not your turn, the game says "Not your turn". Four
+the other players take their turns, one at a time (alone you play one bot; the picture below has three). If you press E when it is not your turn, the game says "Not your turn". Four
 discs in a row win. The clock at the top counts your turn down from 25 seconds. If it runs out, the game plays a disc
 for you.
 

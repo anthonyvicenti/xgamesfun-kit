@@ -221,6 +221,25 @@ system's separator on Windows (`verify games\ci`); the verdict file uses forward
 After the fixes every job is green on every system: run 38155626989, then three consecutive runs on the commit that
 took `continue-on-error` off the verify steps (`gh run list --workflow check.yml --branch ci/three-systems`).
 
+### The runs of branch `ci/release-try` (2026-10-11, kits at games.fun de2ea9313, the board example added)
+
+| Run | Asked for | Result |
+|---|---|---|
+| 38164013581 | `system=linux-windows`, `job=party` | green: party on Linux and Windows, the party game and the board game under the profile |
+| 38164928678 | every job on every system | five of six green (party on Windows and macOS, scenic on all three). **party on Linux failed**: the party game's lobby legs, 6 of 7, `run-completed`, "timed out waiting for both players in the room" after 43 s; the board game's steps were then skipped |
+| 38165389785 | `system=linux`, `job=party`, the same commit | green, the board game included |
+
+**Fault 7, open (not fixed here: it is in the kits).** In run 38164928678 the two pages were connected and nothing
+moved after that. The gate's record: the host's page in its room with 1 player, the host's kit "Opening a room…" with
+its peer "connected open"; the friend's page still on the home card with "Connected. Waiting for the host…", channel
+open, connection connected; both connected 0.1 s after the join; WebRTC itself fine in the gate's own probe. So the
+connection was made and the host never answered the friend's first message. It is not fault 4 (no backdrop is drawn on
+that runner) and not fault 6 (the connection opened). Seen once in four Linux runs of the party game's lobby legs on
+these kits, never in the eighteen jobs of the three green runs on the kits before, and once on the maintainer's
+machine as check 25 of a full verify of the same example with twenty-eight processes waiting (it passed when run
+again, and ten runs of the profile passed in a row there). Asked of games.fun; until it is found, a red `party` job
+with exactly this line is run again before anything else is suspected.
+
 ## 8. What a person on a real Windows machine or a Mac still has to try by hand
 
 A runner is a virtual machine without a real graphics card, and it ran the profile only. None of this has been done on
