@@ -19,7 +19,8 @@ detailed steps (mirrored for your agent in `.claude/skills/` and `.agents/skills
 
 Commands: `catalog`, `examples`, `create`, `dev`, `verify`, `slots`, `play`, `promises`, `upgrade`, `rig-check`,
 `doctor` (is this machine ready; the fix for each problem), `connect` (add the MCP tools to Claude Code or Codex),
-`update` (fetch the newest kit), `meshy` (optional), plus whatever else `npx gamesfun help` lists. Use Node 24.
+`update` (fetch the newest kit), `art` (pictures and models from whichever maker the person has; `docs/ART.md`),
+`meshy` (optional), plus whatever else `npx gamesfun help` lists. Use Node 24.
 
 ## The loop
 
@@ -153,7 +154,10 @@ Keep what they didn't ask about as it is. Then verify again.
 Every game is `live`: friends are in one game, in sync, and each sees the others as a character. One player hosts in
 their own browser; the others join with a code or link; game traffic is peer to peer (WebRTC). The kit does the
 networking: you keep shared decisions on the host (skill `multiplayer`). `npx gamesfun dev` is the local signaling
-server, so two tabs on one machine join one game.
+server, so two tabs on one machine join one game. A game whose multiplayer kit knows online play (1.6.4 or newer) opens
+its rooms through games.fun's play host when `dev` serves it, so a friend on another machine can join with the room
+code; `npx gamesfun doctor` says which it is for this kit, `GAMESFUN_ONLINE=off` keeps a game on this machine, and
+`docs/ONLINE.md` has the limits and how to run your own.
 
 ## Models: library first, Meshy optional
 

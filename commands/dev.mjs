@@ -3,12 +3,15 @@ import { resolveGame, shown } from '../lib/games.mjs';
 import { openUrl } from '../lib/open.mjs';
 import { forgetDevServer, recordDevServer } from '../lib/state.mjs';
 import { startDevServer } from '../server/index.mjs';
+import { onlineWords } from '../server/online.mjs';
 
 const usage = `Usage: gamesfun dev [dir] [--port <n>] [--no-open]
 
 Serve one game on this machine (127.0.0.1 only) and open the studio: the game, its slots, verify, and any tabs in
 studio/tabs/. Files reload as you (or your agent) save them. Two tabs on /game/gf/mp/ play together through the local
-signaling server. Stop with Ctrl+C.
+signaling server. A game on multiplayer kit 1.6.4 or newer opens its rooms online, so a friend on another machine can
+join (docs/ONLINE.md); GAMESFUN_ONLINE=off keeps rooms on this machine, GAMESFUN_ONLINE=<https://…/signal/v1> uses a
+signaling server of your own. Stop with Ctrl+C.
   --port <n>   that port exactly (default: the first free of 5180–5189, else any free port)
   --no-open    don't open a browser
 The environment variables GAMESFUN_DEV_PORT=<n> and GAMESFUN_NO_OPEN=1 do the same when the options are not given
@@ -38,6 +41,7 @@ export default {
     console.log(`  studio   ${srv.url}studio/`);
     console.log(`  play     ${srv.url}game/                 (alone, with bots)`);
     console.log(`  friends  ${srv.url}game/gf/mp/           (Host here, open the invite link in another tab)`);
+    console.log(`  online   ${onlineWords(await srv.online())}   (docs/ONLINE.md)`);
     console.log(`  api      ${srv.router.areas().filter(a => a.ok).map(a => `/api/${a.area}`).join(', ')}`);
     for (const f of failed) console.log(`  routes   ${f.file} did not load: ${f.error}`);
     console.log('Live reload is on. Ctrl+C stops the server.');

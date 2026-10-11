@@ -256,9 +256,56 @@ never joins, this question is the first thing to check (System Settings, Privacy
 
 ### 6. Play with a friend on another machine
 
-**Not yet.** This comes in the next update. Today a game you make here can only be joined from the same computer: the
-studio serves the game to your own machine and to nobody else. When the update lands, a friend will be able to join
-from their own computer with a link, and this page will say how to try it. There is nothing to test here today.
+**Today: not yet for a game you make here.** Two things have to be true before a friend on another computer can join,
+and today one of them is not.
+
+1. **The game must carry the newer multiplayer part (version 1.6.4).** A game the kit makes today carries 1.6.3, which
+   only knows how to connect players on one computer. games.fun has not yet made 1.6.4 the version new games get. Until
+   it does, there is nothing to switch on.
+2. **Our server must accept games that people run themselves.** It introduces the two browsers to each other (a room
+   code, then they connect directly). That part is being switched on now.
+
+**What you see today.** Run `node bin/gamesfun.mjs doctor`. The line **Online play** says:
+
+```
+ok   Online play   this machine only for a new game: create vendors multiplayer kit 1.6.3, and online play needs 1.6.4 ...
+```
+
+When you start the studio (`node bin/gamesfun.mjs dev games/<your-game>`), the terminal says the same in its `online`
+line: `this machine only (this game's multiplayer kit is 1.6.3; online play needs 1.6.4 or newer)`. Thing 5 (a second
+tab) works exactly as before. There is nothing more to test here today.
+
+**What you will see once both are true** (after an update of the kit; `doctor` then says
+`online through games-fun-play.vercel.app`):
+
+1. The studio's terminal says `online through games-fun-play.vercel.app: friends on other machines can join`.
+2. Your friend needs the same game on their computer: the kit, and a copy of your game's folder in its `games` folder.
+   They start it the same way (`node bin/gamesfun.mjs dev games/<your-game>`). A link that starts with
+   `http://127.0.0.1` only works on the computer that made it, so do not send them yours.
+3. You open **Play with a friend** and host a room, as in thing 5. You get a six-letter room code.
+4. Your friend opens the friends page of their own copy, chooses to join, and types your code. Both of you are then in
+   the same round, each seeing the other as a character.
+
+**If our server says no.** A small dark box at the top of the game says why, in words like these, and the game carries
+on with this computer only (a second tab still joins, as in thing 5):
+
+- "Online play is not available from this page: Online play for games run from other sites is off for now. ..." Our
+  switch is off. It is not a fault in your game.
+- "Online play could not be reached (games-fun-play.vercel.app did not answer this page)." No network, or our server
+  did not answer.
+- "The online host refused: Too many rooms from this network: try again in 12 minutes." A limit. Wait, or click
+  **Play on this machine instead** in the box.
+
+![The box at the top when our server says no; the room below it is on this computer](try-it/online-refused.jpg)
+
+[docs/ONLINE.md](ONLINE.md) says what the limits are and how to run this small server yourself. In this kit its file
+is `kits/research/multiplayer/p2p/serve-signal.mjs`. Starting the studio with `GAMESFUN_ONLINE=off` keeps a game on
+this computer only; `GAMESFUN_ONLINE=https://YOUR-HOST/signal/v1` uses your own server.
+
+**If it goes wrong, send us:** a screenshot of the game with the box at the top (if there is one), the whole address
+from the address bar of both computers' game tabs (it shows which server was used, for example `?signal=`), the text
+of the browser's console (in Chrome: View, Developer, JavaScript Console; above all the lines that start with
+`gamesfun dev:`), the `online` line from the studio's terminal on both computers, and `doctor.json` from both.
 
 ### 7. Roll a round back
 
@@ -382,3 +429,7 @@ because the picture from thing 2 was still in place). The three pictures of the 
 tabs (a request, a permission question, the roll-back list) are from a real Claude Code session that built a game that
 day (`tests/e2e-live/README.md`). In those three, the row of tabs also shows "Token" and "Shop", and the corner says
 "devnet". You will not see those: they are switched off now.
+
+The picture in thing 6 is from `tests/online-e2e.mjs` (case B) on the same day: the example game on multiplayer part
+1.6.4, with a stand-in for our server on this machine that says no in our server's own words. No picture on this page
+is from our real server.

@@ -1,6 +1,7 @@
 // Two real Chrome pages on a dev server's friends lobby: one hosts, the other joins by the invite link, the host starts,
 // and each page must draw the other player where that player really is. Used by tests/smoke.test.mjs and by anyone
-// checking a game by hand (node tests/two-players.mjs <dev server url> [--shots <dir>]).
+// checking a game by hand (node tests/two-players.mjs <dev server url> [--shots <dir>]). With `joinerBase` the friend's
+// page is the same game served from another origin (tests/online-e2e.mjs).
 import path from 'node:path';
 import { isMain } from '../lib/main.mjs';
 import { ensureBrowser } from '../lib/chrome.mjs';
@@ -16,7 +17,7 @@ const net = page => gameFrame(page)?.evaluate(() => window.__game?.snapshot()?.n
 const dist = (a, b) => Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.z ?? 0) - (b.z ?? 0));
 
 /** → { ok, host, joiner, samples, details } */
-export async function twoPlayers(baseUrl, { shots = null, seconds = 10, log = () => {} } = {}) {
+export async function twoPlayers(baseUrl, { shots = null, seconds = 10, log = () => {}, joinerBase = null, onPages = null } = {}) {
   const b = await ensureBrowser({ log });
   const { chromium } = await import('playwright-core');
   const browser = await chromium.launch({ executablePath: b.path, headless: process.env.HEADED !== '1', args: ['--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', ...(process.env.CHROME_ARGS ?? '').split(/\s+/).filter(Boolean)] });
@@ -37,7 +38,10 @@ export async function twoPlayers(baseUrl, { shots = null, seconds = 10, log = ()
     await until(async () => { const s = await party(H); return s?.phase === 'room' && s.code ? s : null; }, 20000, 'the host to open a room');
     const invite = await H.inputValue('#mp-invite');
     log(`invite ${invite}`);
-    await J.goto(invite, { waitUntil: 'load' });
+    // joinerBase: the friend opens the same game served from another origin (their own machine's copy), with the invite's room
+    const friendUrl = joinerBase ? (() => { const u = new URL(invite), v = new URL('game/gf/mp/', joinerBase); v.search = u.search; return v.href; })() : invite;
+    await onPages?.({ host: H, joiner: J, invite, friendUrl });
+    await J.goto(friendUrl, { waitUntil: 'load' });
     await until(async () => (await party(J))?.phase === 'home', 20000, 'the joiner lobby');
     await J.fill('#gfp-name', 'Joan');
     await J.click('#gfp-join');
@@ -71,7 +75,7 @@ export async function twoPlayers(baseUrl, { shots = null, seconds = 10, log = ()
     const onScreen = { host: samples.filter(s => s.hostDrawsJoiner?.onScreen).length, joiner: samples.filter(s => s.joinerDrawsHost?.onScreen).length };
     const ok = samples.length > 0 && good.length >= Math.ceil(samples.length * 0.8) && errors.length === 0;
     return {
-      ok, browser: b, samples: samples.length, inPlace: good.length, onScreen, screenshots: shot, errors,
+      ok, invite, friendUrl, browser: b, samples: samples.length, inPlace: good.length, onScreen, screenshots: shot, errors,
       host: { you: h?.you, host: h?.host, peers: h?.peers?.map(p => p.name) }, joiner: { you: j?.you, host: j?.host, peers: j?.peers?.map(p => p.name) },
       last: samples.at(-1) ?? null,
     };

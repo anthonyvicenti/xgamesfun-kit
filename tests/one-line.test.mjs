@@ -424,7 +424,7 @@ test('docs/TRY-IT.md carries the same one line, every picture it shows is in the
   assert.ok((text.match(/\*\*If it goes wrong, send us:\*\*/g) ?? []).length >= 7, 'each thing that can be tried says what to send');
   const seven = text.slice(text.indexOf('## Seven more checks'), text.indexOf('## What to send'));
   assert.equal((seven.match(/^\d\. \*\*/gm) ?? []).length, 7, 'the seven by-hand items of docs/CI.md section 8');
-  for (const must of ['## Windows: what to install', '## Mac: what to install', '/reload-plugins', 'giant-four', 'comes in the next update']) assert.ok(text.includes(must), must);
+  for (const must of ['## Windows: what to install', '## Mac: what to install', '/reload-plugins', 'giant-four', '**Today: not yet for a game you make here.**', '(ONLINE.md)', 'GAMESFUN_ONLINE=off']) assert.ok(text.includes(must), must);
 });
 
 test('dev: the port and the browser can be set from the environment, and an option wins', async () => {

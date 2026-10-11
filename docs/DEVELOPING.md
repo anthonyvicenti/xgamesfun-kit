@@ -13,6 +13,7 @@ npm test                         # the fast suites, about 5 s, no browser
 GAMESFUN_SMOKE=1 npm test        # plus the smoke test: create, quick verify, two pages that see each other (~3 min)
 node tests/two-players.mjs http://127.0.0.1:5180/ --shots <dir>    # the two-page check against a running dev server
 node tests/two-hosts.mjs [--case soak-squad|dev-dodgeball] [--out <dir>]   # one case through both hosts of the loop, no model (~9 min, real browser)
+node tests/online-e2e.mjs [--out <dir>] [--ports a,b,c]            # online play: two pages on two origins through a signaling server on a third; a host that refuses (~1 min, real browser, nothing on the internet)
 ```
 
 `tests/two-hosts.mjs` drives the build loop twice on one locked spec and one fixed `rules.js`, with the real create, fix

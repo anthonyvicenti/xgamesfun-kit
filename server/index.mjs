@@ -3,9 +3,11 @@
 //
 //   /                      → /studio/
 //   /studio/…              the studio page (studio/index.html, studio.js, tabs/*.js)
-//   /game/…                the game folder (its index.html gets the live-reload script); /game/gf/mp/ plays with friends
+//   /game/…                the game folder (its pages get the live-reload script and, when the game's multiplayer kit
+//                          knows online play and GAMESFUN_ONLINE is not off, the online-play line); /game/gf/mp/ plays with friends
 //   /signal, /signal/v1    gf-multiplayer signaling: the WebSocket the kit uses on 127.0.0.1, and HTTP (kits' signal server)
 //   /api/<area>/…          routes from server/routes/<area>.mjs
+//   /__gamesfun/online.js  online play's readable side, for a game page that got the online line (server/online.mjs)
 //   /__gamesfun/events     live reload (Server-Sent Events): `game` when the game's files change, `studio` for the studio's
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -14,6 +16,7 @@ import { pathToFileURL } from 'node:url';
 import { readJson } from '../lib/games.mjs';
 import { KIT_ROOT, SIGNAL_SERVER, STUDIO } from '../lib/paths.mjs';
 import { sendJson, sendText } from './http.mjs';
+import { injectOnline, ONLINE_CLIENT, ONLINE_CLIENT_PATH, onlineFor } from './online.mjs';
 import { createEvents, injectReload, RELOAD_CLIENT, watchTree } from './reload.mjs';
 import { createRouter } from './router.mjs';
 import { BASE_HEADERS, refuse } from './security.mjs';
@@ -36,7 +39,7 @@ function listen(server, port) {
  * Start serving one game. port: a number (exactly that one), or null (the first free of PREFERRED_PORTS, else any free
  * port). → { url, port, close(), router, events }
  */
-export async function startDevServer({ gameDir, port = null, log = console.log, watch = true, routesDir = path.join(KIT_ROOT, 'server', 'routes') } = {}) {
+export async function startDevServer({ gameDir, port = null, log = console.log, watch = true, routesDir = path.join(KIT_ROOT, 'server', 'routes'), env = process.env } = {}) {
   const gamesfun = await readJson(path.join(gameDir, 'gamesfun.json'), null);
   const network = process.env.GAMESFUN_NETWORK || gamesfun?.network || 'devnet';
   const events = createEvents();
@@ -60,12 +63,14 @@ export async function startDevServer({ gameDir, port = null, log = console.log, 
       if (url.pathname === '/favicon.ico') { res.writeHead(204, BASE_HEADERS); return res.end(); }
       if (url.pathname === '/__gamesfun/events') return events.attach(req, res);
       if (url.pathname === '/__gamesfun/reload.js') return sendText(res, 200, RELOAD_CLIENT, 'text/javascript; charset=utf-8');
+      if (url.pathname === ONLINE_CLIENT_PATH) return sendText(res, 200, ONLINE_CLIENT, 'text/javascript; charset=utf-8');
       if (url.pathname === '/studio' || url.pathname === '/game') { res.writeHead(301, { ...BASE_HEADERS, location: `${url.pathname}/${url.search}` }); return res.end(); }
       if (url.pathname.startsWith('/studio/')) return await serveStatic(req, res, { base: STUDIO, rest: url.pathname.slice('/studio'.length), mount: '/studio', search: url.search });
       if (url.pathname.startsWith('/game/')) {
         return await serveStatic(req, res, {
           base: gameDir, rest: url.pathname.slice('/game'.length), mount: '/game', search: url.search,
-          transform: (file, buf, type) => (type.startsWith('text/html') ? injectReload(buf) : buf),
+          // the game's kit and the person's switch are read as each page is served: an upgrade or a new setting needs no restart of the game
+          transform: async (file, buf, type) => (type.startsWith('text/html') ? injectOnline(injectReload(buf), await onlineFor(gameDir, env)) : buf),
         });
       }
       return sendText(res, 404, 'not found');
@@ -105,6 +110,8 @@ export async function startDevServer({ gameDir, port = null, log = console.log, 
   }
   return {
     url, port: actualPort, router, events, ctx, signaling: sig,
+    /** Where this game's friends join from: { use: 'online' | 'this-machine', host, own, kit, why } */
+    online: () => onlineFor(gameDir, env),
     close: () => new Promise(resolve => {
       for (const u of unwatch) u();
       events.close(); sig.close();

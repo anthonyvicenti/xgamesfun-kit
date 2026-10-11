@@ -16,8 +16,8 @@ export const TYPES = {
 
 /**
  * Serve `rest` (the URL path after the mount point, starting with "/") from `base`. A folder answers with its
- * index.html, after a redirect that adds the trailing slash. `transform(file, buf)` may rewrite a response body (the
- * live-reload snippet). → true when answered (including 403/404).
+ * index.html, after a redirect that adds the trailing slash. `transform(file, buf, type)` may rewrite a response body (the
+ * live-reload snippet, the online-play line); it may be async. → true when answered (including 403/404).
  */
 export async function serveStatic(req, res, { base, rest, mount, search = '', transform = null }) {
   const send = (code, body, type = 'text/plain; charset=utf-8') => {
@@ -38,7 +38,7 @@ export async function serveStatic(req, res, { base, rest, mount, search = '', tr
     if (!st.isFile()) return send(404, 'not found');
     let buf = await readFile(file);
     const type = TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
-    if (transform) buf = transform(file, buf, type) ?? buf;
+    if (transform) buf = await transform(file, buf, type) ?? buf;
     return send(200, buf, type);
   } catch {
     return send(404, 'not found');

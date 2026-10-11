@@ -20,7 +20,7 @@ Node 24 and Chrome. No desktop app, no build step, and no bash.
 | `commands/` | `create`, `dev`, `verify`, `slots`, `catalog`, `examples`, `play`, `promises`, `upgrade`, `rig-check`, `meshy` (one module per subcommand) | core; `web3.mjs` is web3's |
 | `lib/` | Shared code: paths and path safety, the kit hooks and tool runner, Chrome discovery, games, slots, examples, local state | core |
 | `mcp/server.mjs` | MCP server (stdio) exposing the CLI's operations as agent tools; loads `mcp/tools/*.mjs` | core; `mcp/tools/web3.mjs` is web3's |
-| `server/` | The local dev server behind `gamesfun dev`: serves a game, the studio page, live reload, local multiplayer signaling, and API routes from `server/routes/*.mjs` | core; `server/routes/web3.mjs` is web3's |
+| `server/` | The local dev server behind `gamesfun dev`: serves a game, the studio page, live reload, local multiplayer signaling, and API routes from `server/routes/*.mjs`; `server/online.mjs` gives a game's pages the online-play line when the game's multiplayer kit knows it (`docs/ONLINE.md`, `GAMESFUN_ONLINE`) | core; `server/routes/web3.mjs` is web3's |
 | `studio/` | The local studio page (plain ES modules, no build): game preview plus tabs loaded from `studio/tabs/*.js` | core; `studio/tabs/{token,shop}.js` etc. are web3's |
 | `web3/` | Solana layer: transaction builders, Irys uploads, network config, and the in-game kit `gf-web3` | web3 |
 | `kits/` | A snapshot of games.fun's kits and tools (`gf-three`, `gf-audio`, `gf-multiplayer`, `gf-assets`) at a pinned games.fun commit (`kits/KITS.json`), laid out as a sparse mirror of the games.fun repository so its tools run unedited; never edited here | core (via `scripts/sync-kits.mjs`) |
