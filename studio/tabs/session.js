@@ -1,6 +1,7 @@
 // Session: what your own coding-agent session is doing, and a box to ask it for changes. The page never talks to a model:
 // requests wait in a queue the session collects (gamesfun_requests), and permission cards answer the session's own prompt.
-import { IDLE_HINT, EVENT_TYPES, connection, describeEvent, normalizeEvent, normalizeQueue, pendingPermissions } from '../lib/session.js';
+import { TERMINAL_NOTE, connection, describeEvent, modeNote, readQueue } from '../lib/session.js';
+import { openEvents, sessionApi } from '../lib/session-client.js';
 
 const el = (tag, attrs = {}, ...kids) => {
   const e = document.createElement(tag);
@@ -9,14 +10,15 @@ const el = (tag, attrs = {}, ...kids) => {
   return e;
 };
 const clock = at => { const d = at ? new Date(at) : null; return d && !isNaN(d) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''; };
+const call = sessionApi;
 
 export default {
   id: 'session',
   label: 'Session',
   order: 1,
   async mount(root, ctx) {
-    const events = [], answered = new Set();
-    let queueRaw = null, timer = null, es = null;
+    const events = [], answered = new Set(), removed = new Set();
+    let queueRaw = null, timer = null, closeEvents = null;
 
     const banner = el('div', { className: 'conn', role: 'status' });
     const perms = el('div', { className: 'perms' });
@@ -47,7 +49,7 @@ export default {
 
     // ---- sending, editing, removing ----
     async function submit(text, selection) {
-      const r = await ctx.api('session/request', { text, ...(selection ? { selection } : {}) });
+      const r = await call('request', { text, ...(selection ? { selection } : {}) });
       return r;
     }
     async function onSend() {
@@ -62,7 +64,7 @@ export default {
     box.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); onSend(); } });
 
     function paintQueue() {
-      const list = normalizeQueue(queueRaw);
+      const list = readQueue(queueRaw, removed).requests;
       queue.replaceChildren();
       if (!list.length) { queue.append(el('p', { className: 'muted' }, 'Nothing asked yet.')); return; }
       for (const r of list) {
@@ -76,7 +78,7 @@ export default {
           edit.addEventListener('click', () => {
             const ta = el('textarea', { className: 'ask', rows: 2, value: r.text, 'aria-label': 'Edit your request' });
             const save = el('button', { type: 'button' }, 'Save'), cancel = el('button', { type: 'button', className: 'ghost' }, 'Cancel');
-            save.addEventListener('click', async () => { try { await ctx.api(`session/request/${encodeURIComponent(r.id)}`, { text: ta.value.trim() }, 'PATCH'); await refreshQueue(); } catch (e) { ctx.toast(e.message, 'error'); } });
+            save.addEventListener('click', async () => { try { await call(`request/${encodeURIComponent(r.id)}`, { text: ta.value.trim() }, 'PATCH'); await refreshQueue(); } catch (e) { ctx.toast(e.message, 'error'); } });
             cancel.addEventListener('click', paintQueue);
             text.replaceWith(ta); acts.replaceChildren(save, cancel); ta.focus();
           });
@@ -84,12 +86,12 @@ export default {
         }
         if (r.words.editable || r.words.again) {
           const rm = el('button', { type: 'button', className: 'ghost' }, r.words.again ? 'Remove' : 'Remove');
-          rm.addEventListener('click', async () => { try { await ctx.api(`session/request/${encodeURIComponent(r.id)}`, undefined, 'DELETE'); await refreshQueue(); } catch (e) { ctx.toast(e.message, 'error'); } });
+          rm.addEventListener('click', async () => { try { removed.add(r.id); await call(`request/${encodeURIComponent(r.id)}`, undefined, 'DELETE'); await refreshQueue(); } catch (e) { removed.delete(r.id); ctx.toast(e.message, 'error'); } });
           acts.append(rm);
         }
         if (r.words.again) {
           const again = el('button', { type: 'button' }, 'Send again');
-          again.addEventListener('click', async () => { try { await submit(r.text, r.selection); await ctx.api(`session/request/${encodeURIComponent(r.id)}`, undefined, 'DELETE'); await refreshQueue(); } catch (e) { ctx.toast(e.message, 'error'); } });
+          again.addEventListener('click', async () => { try { await submit(r.text, r.selection); removed.add(r.id); await refreshQueue(); } catch (e) { ctx.toast(e.message, 'error'); } });
           acts.prepend(again);
         }
         row.append(acts);
@@ -99,60 +101,56 @@ export default {
 
     function paintPerms() {
       perms.replaceChildren();
-      for (const p of pendingPermissions(events, answered)) {
+      for (const p of readQueue(queueRaw).permissions.filter(x => !answered.has(x.id))) {
         const decide = async decision => {
           answered.add(p.id);
-          try { await ctx.api(`session/permission/${encodeURIComponent(p.id)}`, { decision }); ctx.toast(decision === 'allow' ? 'Allowed' : 'Denied', 'ok'); }
+          try { await call(`permission/${encodeURIComponent(p.id)}`, { decision }); ctx.toast(decision === 'allow' ? 'Allowed' : 'Denied', 'ok'); }
           catch (e) { answered.delete(p.id); ctx.toast(e.message, 'error'); }
-          paintPerms();
+          await refreshQueue();
         };
         const allow = el('button', { type: 'button' }, 'Allow'), deny = el('button', { type: 'button', className: 'ghost' }, 'Deny');
         allow.addEventListener('click', () => decide('allow')); deny.addEventListener('click', () => decide('deny'));
         perms.append(el('div', { className: 'perm', role: 'group', 'aria-label': 'Permission request' },
-          el('strong', {}, 'Your session asks to ' + (p.tool ? `use ${p.tool}` : 'do something')),
-          p.text ? el('pre', { className: 'log' }, p.text) : null,
+          el('strong', {}, `Your session asks to use ${p.tool ?? 'a tool'}`),
+          p.line ? el('pre', { className: 'log' }, p.line) : null,
           el('div', { className: 'toolbar' }, allow, deny),
-          el('p', { className: 'muted small' }, 'The same question is also live in your terminal: answer it in either place.')));
+          el('p', { className: 'muted small' }, TERMINAL_NOTE)));
       }
     }
 
     function paintBanner() {
-      const c = connection(events, queueRaw);
-      const words = { listening: 'Your session is listening', working: 'Your session is working', idle: 'Your session is idle', none: 'No session connected yet' }[c];
-      banner.dataset.state = c;
-      banner.replaceChildren(el('span', { className: `dot ${c === 'idle' ? 'warn' : c === 'none' ? 'wait' : 'ok'}` }), el('strong', {}, words),
-        ...[c === 'idle' ? el('div', { className: 'small' }, IDLE_HINT) : c === 'none' ? el('div', { className: 'small muted' }, 'Start your coding agent in this folder; its events appear here.') : null].filter(Boolean));
+      const c = connection(readQueue(queueRaw));
+      const words = { listening: 'Your session is listening', working: 'Your session is working', idle: 'Your session is idle', none: 'No session connected yet' }[c.state];
+      banner.dataset.state = c.state;
+      banner.replaceChildren(el('span', { className: `dot ${c.state === 'idle' ? 'warn' : c.state === 'none' ? 'wait' : 'ok'}` }), el('strong', {}, words),
+        el('div', { className: `small${c.state === 'idle' ? '' : ' muted'}` }, c.hint),
+        ...(c.mode ? [el('div', { className: 'small muted' }, modeNote(c.mode))] : []),
+        ...(c.guard ? [el('div', { className: 'small' }, `The build is waiting for you${c.guard.why ? `: ${c.guard.why}` : ''}`)] : []));
     }
 
     function paintLine() {
-      line.replaceChildren(...events.filter(e => e.type !== 'permission-resolved').slice(-40).reverse()
-        .map(e => el('li', { 'data-type': e.type }, el('span', { className: 'time mono' }, clock(e.at)), ' ', describeEvent(e))));
+      line.replaceChildren(...events.map(e => [e, describeEvent(e)]).filter(([, w]) => w).slice(-40).reverse()
+        .map(([e, w]) => el('li', { 'data-type': e.kind }, el('span', { className: 'time mono' }, clock(e.at)), ' ', w)));
       if (!line.children.length) line.append(el('li', { className: 'muted' }, 'Nothing yet.'));
     }
     const paintAll = () => { paintBanner(); paintPerms(); paintLine(); };
 
     async function refreshQueue() {
-      try { queueRaw = await ctx.api('session/queue'); } catch (e) { queueRaw = null; }
-      paintQueue(); paintBanner();
+      try { queueRaw = await call('queue'); } catch (e) { queueRaw = null; }
+      paintQueue(); paintBanner(); paintPerms();
     }
 
     // ---- the event stream ----
-    function take(raw, type) {
-      const e = normalizeEvent(raw?.data ?? raw, type);
-      if (!e) return;
-      if (e.id && events.some(x => x.id === e.id && x.type === e.type)) return;
+    function take(e) {
+      if (e.seq != null && events.some(x => x.seq === e.seq)) return;
       events.push(e); if (events.length > 300) events.splice(0, events.length - 300);
-      paintAll();
-      if (['prompt', 'stop', 'session-start', 'session-end'].includes(e.type)) refreshQueue();
+      paintLine();
+      if (e.kind !== 'tool-start' && e.kind !== 'tool-end') refreshQueue();
     }
-    try {
-      es = new EventSource('/api/session/events');
-      es.onmessage = m => take(m);
-      for (const t of EVENT_TYPES) es.addEventListener(t, m => take(m, t));
-    } catch {}
+    closeEvents = openEvents(take);
     paintAll(); paintQueue();
     await refreshQueue();
     timer = setInterval(refreshQueue, 3000);
-    return () => { es?.close(); clearInterval(timer); offSel(); };
+    return () => { closeEvents?.(); clearInterval(timer); offSel(); };
   },
 };

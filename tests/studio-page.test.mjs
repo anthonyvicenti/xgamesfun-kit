@@ -6,7 +6,7 @@ import path from 'node:path';
 import { startDevServer } from '../server/index.mjs';
 import { tempGame } from './helpers.mjs';
 import { attachSessionStub } from './stubs/session-stub.mjs';
-import { IDLE_HINT, connection, describeEvent, normalizeEvent, normalizeQueue, pendingPermissions, requestWords } from '../studio/lib/session.js';
+import { IDLE_HINT, TERMINAL_NOTE, connection, describeEvent, inputLine, modeNote, normalizeEvent, readQueue, requestWords } from '../studio/lib/session.js';
 import { loopView, playtestNotes } from '../studio/lib/loop-state.js';
 import { pendingChanges, sliderRange, tunables } from '../studio/lib/tune.js';
 
@@ -21,37 +21,45 @@ test('request states are in words a person understands', () => {
   assert.equal(requestWords('dropped').again, true);
 });
 
-test('events: normalised, described, permissions pair up', () => {
-  const p = normalizeEvent('{"id":"p1","type":"permission","tool":"Bash","text":"npm test"}');
-  assert.equal(p.tool, 'Bash');
+test('events (contract kinds): normalised and described; the rest is left to the queue', () => {
+  const e = normalizeEvent('{"seq":4,"t":1,"kind":"tool-start","session":"s","tool":"Edit","input":{"file_path":"config/world.json"}}');
+  assert.match(describeEvent(e), /Using Edit: config\/world.json/);
   assert.equal(normalizeEvent('not json'), null);
-  assert.equal(normalizeEvent(null), null);
-  assert.equal(normalizeEvent({ text: 'x' }, 'prompt').type, 'prompt');
-  assert.match(describeEvent(p), /use Bash: npm test/);
-  const evs = [p, normalizeEvent({ id: 'p2', type: 'permission', tool: 'Write' })];
-  assert.deepEqual(pendingPermissions(evs).map(e => e.id), ['p1', 'p2']);
-  assert.deepEqual(pendingPermissions(evs, new Set(['p1'])).map(e => e.id), ['p2'], 'answered here');
-  evs.push(normalizeEvent({ type: 'permission-resolved', request: 'p2' }));
-  assert.deepEqual(pendingPermissions(evs).map(e => e.id), ['p1'], 'answered in the terminal');
+  assert.equal(normalizeEvent({ type: 'old shape' }), null, 'no kind, no event');
+  assert.equal(describeEvent(normalizeEvent({ kind: 'tool-end', ok: true })), null);
+  assert.match(describeEvent(normalizeEvent({ kind: 'tool-end', tool: 'Bash', ok: false })), /failed/);
+  assert.match(describeEvent(normalizeEvent({ kind: 'tool-end', tool: 'Bash', denied: true })), /denied/);
+  assert.match(describeEvent(normalizeEvent({ kind: 'stop', allowed: false, reasons: ['build'] })), /build is not finished/);
+  assert.equal(describeEvent(normalizeEvent({ kind: 'stop', allowed: true })), 'Your session finished its turn');
+  assert.equal(describeEvent(normalizeEvent({ kind: 'hello' })), null);
+  assert.equal(describeEvent(normalizeEvent({ kind: 'request', request: {} })), null);
+  assert.equal(inputLine({ command: 'npm test' }), 'npm test');
 });
 
-test('connection: idle says to press Enter, an open wait says listening', () => {
-  const ev = t => normalizeEvent({ type: t });
-  assert.equal(connection([], null), 'none');
-  assert.equal(connection([ev('session-start'), ev('prompt')], { requests: [] }), 'working');
-  assert.equal(connection([ev('session-start'), ev('stop')], { requests: [] }), 'idle');
-  assert.equal(connection([ev('stop')], { requests: [], wait: { open: true } }), 'listening');
-  assert.equal(connection([ev('session-end')], null), 'none');
-  assert.match(IDLE_HINT, /Press Enter in the terminal/);
+test('queue: requests get words, removed ones are hidden, only waiting permissions are cards', () => {
+  const q = readQueue({ requests: [{ id: 'a', text: 'faster', state: 'dropped' }, { id: 'b', text: 'x' }, { text: 'no id' }],
+    permissions: [{ id: 'p1', tool: 'Bash', input: { command: 'npm test' }, state: 'waiting' }, { id: 'p2', tool: 'Edit', state: 'retired' }, { id: 'p3', tool: 'Edit', state: 'allow' }] }, new Set(['b']));
+  assert.deepEqual(q.requests.map(r => r.id), ['a']);
+  assert.equal(q.requests[0].words.again, true);
+  assert.deepEqual(q.permissions.map(p => [p.id, p.line]), [['p1', 'npm test']]);
+  assert.deepEqual(readQueue(null).requests, []);
+  assert.match(TERMINAL_NOTE, /terminal can answer this too/);
 });
 
-test('queue: a bare list or {requests}; each request gets its words', () => {
-  assert.equal(normalizeQueue(null).length, 0);
-  const q = normalizeQueue({ requests: [{ id: 1, text: 'faster', state: 'dropped' }, { id: 2, text: 'x' }, { text: 'no id' }] });
-  assert.equal(q.length, 2);
-  assert.equal(q[0].words.again, true);
-  assert.equal(q[1].state, 'waiting');
-  assert.equal(normalizeQueue([{ id: 'a', text: 't', state: 'done' }])[0].words.tone, 'ok');
+test('connection: what the contract says for each session state', () => {
+  const s = o => ({ sessions: [{ id: 'a', state: 'working', connected: false, primary: true, permissionMode: 'default', ...o }] });
+  assert.equal(connection(readQueue(null)).state, 'none');
+  assert.equal(connection(readQueue({ sessions: [{ state: 'ended' }] })).state, 'none');
+  assert.equal(connection(readQueue(s({}))).state, 'working');
+  const idle = connection(readQueue(s({ state: 'idle' })));
+  assert.equal(idle.state, 'idle');
+  assert.match(idle.hint, /Press Enter in the terminal/);
+  assert.match(IDLE_HINT, /reconnect/);
+  assert.equal(connection(readQueue(s({ state: 'idle', connected: true }))).state, 'listening', 'an open wait reaches an idle session');
+  const m = connection(readQueue(s({ permissionMode: 'acceptEdits' })));
+  assert.equal(m.mode, 'acceptEdits');
+  assert.match(modeNote(m.mode), /acceptEdits\) answers before this page does/);
+  assert.equal(connection(readQueue(s({ guard: { status: 'waiting-on-question', why: 'x' } }))).guard.why, 'x');
 });
 
 const draft = {
@@ -120,26 +128,31 @@ test('build route: no state, then the state file and the newest verdict', async 
   assert.equal(r.status, 400);
 });
 
-test('against the session stub: send, edit, remove, permission; wrong origins refused', async () => {
-  const json = (method, body) => ({ method, body: body === undefined ? undefined : JSON.stringify(body), headers: { 'content-type': 'application/json' } });
-  let r = await call('/api/session/request', json('POST', { text: 'faster enemies', selection: { id: 'waves.speed', label: 'Enemy speed' } }));
-  assert.equal(r.body.id, 'r1');
-  r = await call('/api/session/request/r1', json('PATCH', { text: 'much faster enemies' }));
+test('against the session stub (contract v1): token, send, edit, remove, permission; wrong origins refused', async () => {
+  const same = { 'sec-fetch-site': 'same-origin' };
+  const tok = (await call('/api/session/token', { headers: same })).body.token;
+  assert.equal((await call('/api/session/token')).status, 403, 'the token needs a same-origin fetch');
+  const j = (method, body, extra = {}) => ({ method, body: body === undefined ? undefined : JSON.stringify(body), headers: { 'content-type': 'application/json', 'x-gamesfun-token': tok, ...extra } });
+  assert.equal((await call('/api/session/queue')).status, 401);
+  let r = await call('/api/session/request', j('POST', { text: 'faster enemies', selection: { id: 'waves.speed', label: 'Enemy speed' } }));
+  const id = r.body.id;
+  assert.equal(r.body.state, 'waiting');
+  r = await call(`/api/session/request/${id}`, j('PATCH', { text: 'much faster enemies' }));
   assert.equal(r.body.text, 'much faster enemies');
-  stub.setState('r1', 'handed');
-  assert.equal((await call('/api/session/request/r1', json('PATCH', { text: 'x' }))).status, 409);
-  stub.setState('r1', 'waiting');
-  assert.equal((await call('/api/session/request/r1', json('DELETE'))).body.removed, 'r1');
-  assert.equal((await call('/api/session/queue')).body.requests.length, 0);
-  assert.equal((await call('/api/session/permission/p1', json('POST', { decision: 'maybe' }))).status, 400);
-  assert.equal((await call('/api/session/permission/p1', json('POST', { decision: 'allow' }))).status, 200);
-  assert.deepEqual(stub.decisions, [{ id: 'p1', decision: 'allow' }]);
-  const evil = await fetch(base + '/api/session/request', { ...json('POST', { text: 'x' }), headers: { 'content-type': 'application/json', origin: 'http://evil.example' } });
+  assert.equal((await call(`/api/session/request/${id}`, j('DELETE'))).body.state, 'dropped');
+  assert.equal((await call(`/api/session/request/${id}`, j('PATCH', { text: 'x' }))).status, 409);
+  const p = stub.ask('Bash', { command: 'npm test' });
+  const q = readQueue((await call('/api/session/queue', { headers: { 'x-gamesfun-token': tok } })).body);
+  assert.deepEqual(q.permissions.map(x => x.id), [p.id]);
+  assert.equal((await call(`/api/session/permission/${p.id}`, j('POST', { decision: 'maybe' }))).status, 400);
+  assert.equal((await call(`/api/session/permission/${p.id}`, j('POST', { decision: 'allow' }))).body.state, 'allow');
+  assert.equal((await call(`/api/session/permission/${p.id}`, j('POST', { decision: 'deny' }))).status, 409);
+  const evil = await fetch(base + '/api/session/request', j('POST', { text: 'x' }, { origin: 'http://evil.example' }));
   assert.equal(evil.status, 403, 'another site cannot post requests');
 });
 
 test('the studio page and its tabs are served, and every tab imports its modules', async () => {
   const tabs = (await call('/api/studio/tabs')).body.map(t => t.file);
   for (const f of ['session.js', 'build.js', 'tune.js', 'friends.js', 'assets.js']) assert.ok(tabs.includes(f), f);
-  for (const f of ['session.js', 'loop-state.js', 'tune.js']) assert.equal((await fetch(`${base}/studio/lib/${f}`)).status, 200, f);
+  for (const f of ['session.js', 'session-client.js', 'loop-state.js', 'tune.js']) assert.equal((await fetch(`${base}/studio/lib/${f}`)).status, 200, f);
 });

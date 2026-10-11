@@ -45,14 +45,15 @@ try {
   const pastDesktop = [];
 
   for (const [label, w, h] of [['desktop', 1280, 800], ['phone', 390, 844]]) {
-    stub.events.length = 0; stub.requests.length = 0; stub.decisions.length = 0; stub.next = 1;
+    stub.events.length = 0; stub.requests.length = 0; stub.permissions.length = 0; stub.decisions.length = 0; stub.n = 1; stub.session.state = 'idle'; stub.session.connected = false;
     const p = await page(w, h, party.url);
     await sleep(1200);
     // idle: the session started, did a turn, stopped; no wait open
-    stub.emit({ type: 'session-start' });
-    stub.emit({ type: 'prompt', text: 'Make the arena bigger' });
-    stub.emit({ type: 'tool', tool: 'Edit', text: 'config/world.json' });
-    stub.emit({ type: 'stop' });
+    stub.emit('session-start', { cwd: '/stub', source: 'startup' });
+    stub.emit('prompt', { text: 'Make the arena bigger' });
+    stub.emit('tool-start', { tool: 'Edit', input: { file_path: 'config/world.json' } });
+    stub.emit('tool-end', { tool: 'Edit', ok: true });
+    stub.emit('stop', { allowed: true, reasons: [], lastMessage: 'Done' });
     await tab(p, 'session');
     await shot(p, `${label}-1-session-idle`, 'Session tab, idle with no wait open: press Enter in the terminal; timeline of what the session did');
     // a request waiting, with a selection chip
@@ -65,16 +66,16 @@ try {
     await sleep(600);
     await shot(p, `${label}-3-request-waiting`, 'Request waiting for the session, with Edit and Remove; chip shown on the request');
     // handed, then done, and one dropped
-    stub.requests.push({ id: 'r8', text: 'Swap the ground for sand', selection: null, state: 'done', at: new Date().toISOString() });
-    stub.requests.push({ id: 'r9', text: 'Add a boss', selection: null, state: 'dropped', at: new Date().toISOString() });
-    stub.setState('r1', 'handed');
-    stub.setWait(true);
+    const mk = (id, text, state) => ({ id, text, selection: null, session: 's1', state, via: null, created: Date.now(), handed: null, seen: null, done: null, note: null, refusals: 0 });
+    stub.requests.push(mk('r_x_8', 'Swap the ground for sand', 'done'), mk('r_x_9', 'Add a boss', 'dropped'));
+    stub.requests[0].state = 'handed';
+    stub.session.connected = true; stub.session.state = 'idle'; stub.session.permissionMode = 'acceptEdits';
     await sleep(3400);
     await shot(p, `${label}-4-request-done`, 'Requests: handed over, done, and not done (Send again); session is listening');
     // permission
-    stub.emit({ type: 'permission', id: 'perm1', tool: 'Bash', text: 'npx gamesfun verify --quick games/soak-squad' });
+    stub.ask('Bash', { command: 'npx gamesfun verify --quick games/soak-squad' });
     await sleep(500);
-    await shot(p, `${label}-5-permission`, 'Permission card with Allow and Deny and the note that the terminal prompt is also live');
+    await shot(p, `${label}-5-permission`, 'Permission card with Allow and Deny and the note that the terminal prompt is also live; the own permission mode of the session is noted');
     await p.click('.perm >> text=Allow'); await sleep(500);
     if (stub.decisions[0]?.decision !== 'allow') console.log('PERMISSION NOT POSTED');
     // build: verdict with a failure
