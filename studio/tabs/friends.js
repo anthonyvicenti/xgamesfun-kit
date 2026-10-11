@@ -1,25 +1,56 @@
-// Play with friends: how a live game's players find each other on this machine (and later through games.fun).
-const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, attrs); e.append(...kids.filter(k => k != null)); return e; };
+// Play with a friend: a second tab joined to the same room on this machine. (Online play is not offered here yet.)
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) (k in e && k !== 'list') ? (e[k] = v) : e.setAttribute(k, v);
+  e.append(...kids.filter(k => k != null));
+  return e;
+};
+
+/** The room code and who is in, read from the game's own page in the preview (same origin; read only). */
+function readRoom(frame) {
+  try {
+    const w = frame.contentWindow, d = frame.contentDocument;
+    const code = (d?.getElementById('mp-code') ?? d?.getElementById('gf-room-code'))?.textContent?.trim() || null;
+    let players = null;
+    try { players = (w.__game?.snapshot?.().players ?? []).length || null; } catch {}
+    return { code: code && /^[A-Za-z0-9-]{3,16}$/.test(code) ? code : null, players };
+  } catch { return { code: null, players: null }; }
+}
 
 export default {
   id: 'friends',
-  label: 'Play with friends',
+  label: 'Play with a friend',
   order: 30,
   async mount(root, ctx) {
-    const here = el('button', { type: 'button' }, 'Friends lobby in the preview');
-    here.addEventListener('click', () => ctx.preview.show('/game/gf/mp/'));
-    const tab = el('a', { href: '/game/gf/mp/', target: '_blank', rel: 'noopener' }, 'Open the lobby in a new tab ↗');
-    const g = ctx.game;
+    const lobby = el('button', { type: 'button' }, '1. Host a room in the preview');
+    const second = el('a', { className: 'button', target: '_blank', rel: 'noopener', 'aria-disabled': 'true' }, '2. Open a second tab as your friend ↗');
+    const code = el('div', { className: 'roomcode', 'aria-live': 'polite' });
+    const status = el('p', { className: 'muted' });
+    lobby.addEventListener('click', () => ctx.preview.show('/game/gf/mp/'));
+    second.addEventListener('click', e => { if (second.getAttribute('aria-disabled') === 'true') { e.preventDefault(); ctx.toast('Host a room first (step 1)', 'error'); } });
     root.append(
-      el('p', {}, `Multiplayer: ${g.multiplayer ?? 'unknown'}. Friends play in one game, in sync, and each sees the others as a character.`),
-      el('div', { className: 'toolbar' }, here, tab),
-      el('h3', {}, 'Two players on this machine'),
-      el('ol', {},
-        el('li', {}, 'Open the lobby (above), type a name and press Host.'),
-        el('li', {}, 'Copy the invite link and open it in another tab or browser window: Join.'),
-        el('li', {}, 'The host presses Start. Each screen shows the other player where they really are.')),
-      el('p', { className: 'muted' }, 'The dev server is the signaling server (WebSocket /signal and HTTP /signal/v1) and only answers this machine. Game traffic goes peer to peer over WebRTC. Playing with friends elsewhere needs the game published on games.fun.'),
+      el('p', {}, `Multiplayer: ${ctx.game.multiplayer ?? 'unknown'}. Friends play in one game, in sync, and each sees the others as a character.`),
+      el('div', { className: 'toolbar' }, lobby, second), code, status,
+      el('p', { className: 'muted small' }, 'This works on this machine only: both tabs talk to the local dev server and play peer to peer. The host\'s tab runs the game, so keep it open.'),
       el('h3', {}, 'Controls'),
-      el('p', {}, Object.entries(g.controls ?? {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'Move with WASD, look with the mouse.'));
+      el('p', {}, Object.entries(ctx.game.controls ?? {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'Move with WASD, look with the mouse.'));
+
+    function paint() {
+      const r = readRoom(ctx.preview.frame);
+      code.replaceChildren();
+      if (r.code) {
+        code.append(el('span', { className: 'muted small' }, 'Room code'), el('b', {}, r.code));
+        second.href = `/game/gf/mp/?join=${encodeURIComponent(r.code)}`;
+        second.setAttribute('aria-disabled', 'false');
+        status.textContent = r.players && r.players > 1 ? `${r.players} players are in the room.` : 'Waiting for your friend to join. Open the second tab, type a name and press Join.';
+      } else {
+        second.removeAttribute('href');
+        second.setAttribute('aria-disabled', 'true');
+        status.textContent = 'No room yet. Press step 1, type a name and press Host.';
+      }
+    }
+    paint();
+    const t = setInterval(paint, 1000);
+    return () => clearInterval(t);
   },
 };

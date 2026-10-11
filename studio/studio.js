@@ -2,21 +2,24 @@
 // A tab is studio/tabs/<id>.js exporting `default { id, label, order, mount(el, ctx) }` (docs/ARCHITECTURE.md). mount
 // may return a function, called when the studio page goes away. ctx holds:
 //   game                 /api/game/info: title, hook, mechanics, controls, network, gamesfun (gamesfun.json), latestVerify
-//   api(path, body?)     the dev server's API: GET without a body, POST with one (JSON, or raw for a Blob/ArrayBuffer);
+//   api(path, body?, method?)  the dev server's API: GET without a body, POST with one (JSON, or raw for a Blob/ArrayBuffer);
+//                        a third argument sets the method (PATCH with a JSON body, DELETE with none);
 //                        path "game/slots" or "/api/game/slots"; resolves to the parsed JSON, rejects with the error text
 //   wallet               the Wallet Standard connection the studio owns (studio/wallet.js): list(), connect(name?),
 //                        disconnect(), account, address, feature(name), onChange(fn)
 //   toast(msg, kind?)    a short message; kind 'ok' | 'error'
-//   preview              { reload(), show(path) } the game frame on the left ("/game/?gf-show=prop.ball")
+//   preview              { reload(), show(path), frame } the game frame on the left ("/game/?gf-show=prop.ball")
+//   selection            { get(), set(sel|null), onChange(fn) } what the person picked (a slot or object, {id, label}); it travels
+//                        with their next change request. A game frame may post { gf: 'select', id, label } to pick one.
 //   on(event, fn)        dev-server events: 'game' (the game's files changed: { files }), 'verify' (a run finished)
 import { createWallet } from './wallet.js';
 
 const $ = sel => document.querySelector(sel);
 
-async function api(path, body) {
+async function api(path, body, method) {
   const url = path.startsWith('/api/') ? path : `/api/${String(path).replace(/^\/+/, '')}`;
   const raw = body instanceof Blob || body instanceof ArrayBuffer || ArrayBuffer.isView(body);
-  const init = body === undefined ? {} : raw
+  const init = body === undefined ? (method ? { method } : {}) : method ? { method, body: JSON.stringify(body), headers: { 'content-type': 'application/json' } } : raw
     ? { method: 'POST', body, headers: { 'content-type': 'application/octet-stream' } }
     : { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } };
   const res = await fetch(url, { cache: 'no-store', ...init });
@@ -43,12 +46,27 @@ const store = {
 // ---- the preview ----
 const frame = $('#preview');
 const preview = {
+  frame,                      // the iframe element (same origin: a tab may read the game's page, never write it)
   path: store.get('preview') || '/game/',
   show(path) { this.path = path; frame.src = path; const opt = [...$('#preview-mode').options].find(o => o.value === path); $('#preview-mode').value = opt ? path : $('#preview-mode').value; },
   reload() { try { frame.contentWindow.location.reload(); } catch { frame.src = this.path; } },
 };
 $('#preview-mode').addEventListener('change', e => { store.set('preview', e.target.value); preview.show(e.target.value); });
 $('#preview-reload').addEventListener('click', () => preview.reload());
+
+// ---- the selection chip ----
+let selected = null;
+const selListeners = new Set();
+const selection = {
+  get: () => selected,
+  set(sel) { selected = sel && sel.id ? { id: String(sel.id), label: String(sel.label ?? sel.id) } : null; for (const fn of selListeners) { try { fn(selected); } catch (e) { console.error(e); } } },
+  onChange(fn) { selListeners.add(fn); return () => selListeners.delete(fn); },
+};
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || e.source !== frame.contentWindow) return;      // only the game frame, on this origin
+  const d = e.data;
+  if (d && d.gf === 'select' && typeof d.id === 'string') selection.set({ id: d.id.slice(0, 120), label: String(d.label ?? d.id).slice(0, 120) });
+});
 
 // ---- events from the dev server (live reload) ----
 const handlers = new Map();
@@ -135,7 +153,7 @@ async function main() {
   $('#game-title').title = game.hook || '';
   $('#network').textContent = game.network || 'devnet';
   preview.show(preview.path);
-  const ctx = { game, api, wallet, toast, preview, on };
+  const ctx = { game, api, wallet, toast, preview, on, selection };
   window.__gamesfunStudioTabs = await loadTabs(ctx);
 }
 main();

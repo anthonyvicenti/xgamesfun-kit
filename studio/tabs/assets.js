@@ -106,7 +106,10 @@ export default {
         let cur;
         for (const s of r.slots) {
           if (s.group !== cur) { cur = s.group; body.append(el('h3', {}, groups.get(cur) ?? cur ?? 'Other')); }
-          const name = el('div', { className: 'name' }, s.label ?? s.id, el('small', {}, `${s.id} · ${s.type}${s.scope === 'player' ? ' · per player' : ''}`));
+          const name = el('div', { className: 'name pick', tabIndex: 0, role: 'button', title: 'Pick this to ask your session about it', 'aria-pressed': String(ctx.selection.get()?.id === s.id) }, s.label ?? s.id, el('small', {}, `${s.id} · ${s.type}${s.scope === 'player' ? ' · per player' : ''}`));
+          const pickIt = () => { const on = ctx.selection.get()?.id === s.id; ctx.selection.set(on ? null : { id: s.id, label: s.label ?? s.id }); };
+          name.addEventListener('click', pickIt);
+          name.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickIt(); } });
           const show = showOf.get(s.id);
           const kids = editor(s);
           if (show) { const b = el('button', { type: 'button', className: 'ghost', title: 'Show it in the preview' }, 'Show'); b.addEventListener('click', () => ctx.preview.show(`/game/${show}`)); kids.unshift(b); }
@@ -117,9 +120,11 @@ export default {
     }
     await render();
     let t = null;
-    return ctx.on('game', ({ files = [] }) => {
+    const offSel = ctx.selection.onChange(sel => { for (const n of body.querySelectorAll('.pick')) n.setAttribute('aria-pressed', String(n.querySelector('small')?.textContent.split(' · ')[0] === sel?.id)); });
+    const offGame = ctx.on('game', ({ files = [] }) => {
       if (files.length && files.every(f => f.startsWith('evidence/'))) return;
       clearTimeout(t); t = setTimeout(render, 200);
     });
+    return () => { offSel(); offGame(); };
   },
 };
