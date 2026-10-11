@@ -1,5 +1,7 @@
 // /api/build/…: the build loop as the studio shows it (read-only), and the roll-back button.
-//   GET  /state      → { loop, verdict, checkpoints, rollback, elsewhere }  elsewhere = the game a session is building when it is not this studio's
+//   GET  /state      → { loop, verdict, checkpoints, rollback, elsewhere, said }  said = the delivery's outcome in words and its first words
+//                      (.gf-loop/job/out/outcome.json, written by gamesfun_step_deliver; null when none or about another outcome)
+//                      also → { loop, verdict, checkpoints, rollback, elsewhere }  elsewhere = the game a session is building when it is not this studio's
 //                      (each of)  loop = the loop state file as written (null when none),
 //                      verdict = the newest verify run summarised, checkpoints = what lib/checkpoint.mjs lists (M2-G)
 //   POST /rollback   { id } → restores that checkpoint through lib/checkpoint.mjs; a run under way is cancelled (lib/cancel.mjs)
@@ -47,7 +49,15 @@ export default function register(router, ctx) {
       const other = bridgeFor(ctx.url)?.bridge.sessions().find(x => x.state !== 'ended' && x.game && path.resolve(x.game) !== path.resolve(gameDir));
       if (other) elsewhere = { game: other.game, name: path.relative(KIT_ROOT, other.game).split(path.sep).join('/'), loop: await readLoopFile(other.game).then(l => (l ? { status: l.status, step: l.step } : null)) };
     } catch { /* no bridge on this server */ }
-    return { elsewhere, loop, verdict: await latestVerdict(gameDir), checkpoints, rollback: !!lib?.restoreCheckpoint };
+    // how the delivery was named, in words (the deliver tool's record): only for the outcome the state holds now
+    let said = null;
+    if (loop?.status === 'delivered') {
+      try {
+        const o = JSON.parse(await readFile(path.join(gameDir, '.gf-loop', 'job', 'out', 'outcome.json'), 'utf8'));
+        if (o && o.outcome === loop.outcome) said = { outcome: String(o.outcome), words: typeof o.words === 'string' ? o.words : null, firstWords: typeof o.firstWords === 'string' ? o.firstWords.slice(0, 1200) : null };
+      } catch { /* none written */ }
+    }
+    return { elsewhere, loop, said, verdict: await latestVerdict(gameDir), checkpoints, rollback: !!lib?.restoreCheckpoint };
   });
 
   router.post('/rollback', async req => {

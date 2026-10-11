@@ -15,7 +15,9 @@
 //   - An agent round is the session's own work: the tool hands back the brief (composed from the loop's prompt
 //     source for this game's parts) and returns. The session calls gamesfun_step_fix when the round is over.
 //   - Before each agent round the game folder is checkpointed (lib/checkpoint.mjs); gamesfun_rollback restores one.
-//   - No tool starts an agent, calls a model, signs anyone in or holds a credential.
+//   - No tool starts an agent, calls a model, signs anyone in or holds a credential. The pitch's second reader is a
+//     tool round like the play-test: gamesfun_step_spec hands the session one small question per claim, the session
+//     puts each to a subagent of its own and returns the answers.
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -24,7 +26,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   openBuildLoop, openTalkLoop, kitTools, heldStore, specLock, stateFileOf, filesHash, proofOf, composeBrief, loadParts, partsWords,
-  readPlaytestReport, checkPlay, PITCH_PLAY_STEP,
+  readPlaytestReport, checkPlay, PITCH_PLAY_STEP, secondRead, rulesClaims, secondReadPrompt,
 } from '../../kits/research/gf-three/loop/index.mjs';
 import { check as schemaProblems } from '../../kits/research/gf-three/tools/lib/schema.mjs';
 import { clearCancel, readCancel } from '../../lib/cancel.mjs';
@@ -98,7 +100,7 @@ function refuse(code, why, next = null, extra = {}) {
 /** The tool for each step of the two loops, in order. The skill and the server's instructions are generated from this. */
 export const ORDER = [
   { step: 'pitch', tool: 'gamesfun_step_pitch', does: 'hands you the pitch round: offer the person 2–3 concepts, or write the locked spec when they have already chosen' },
-  { step: 'spec', tool: 'gamesfun_step_spec', does: 'checks the pitch or the spec you wrote (one repair round when it is not valid) and locks the spec' },
+  { step: 'spec', tool: 'gamesfun_step_spec', does: 'checks the pitch or the spec you wrote (one repair round when it is not valid) and locks the spec; for concepts that say the game\'s own rules do something, it first hands you one small question per claim for a second reader (a subagent of yours), and takes the answers on the next call' },
   { step: 'create', tool: 'gamesfun_step_create', does: 'makes the game folder from the locked spec, checkpoints it and hands you the build round with the brief for this game\'s parts' },
   { step: 'agent', tool: 'gamesfun_step_fix', does: 'the build round is yours: write rules.js and tune config, run gamesfun_verify until it passes, then call this tool with your summary and controls' },
   { step: 'fix', tool: 'gamesfun_step_fix', does: 'ends your round and runs the mechanical repairs (each one is listed in the answer)' },
@@ -211,7 +213,7 @@ async function specProblems(specFile) {
  * the loop the idea needs is named, "none fits" is said, and how friends play and what a player is are the person's
  * own words or a question. `kind` and `idea` are the round's (a refine is held to its cards' loops and words only).
  */
-async function readAnswer(G, { kind = 'pitch', idea = null } = {}) {
+async function readAnswer(G, { kind = 'pitch', idea = null, reads = undefined } = {}) {
   const [st, pt] = await Promise.all([mtime(G.spec), mtime(G.pitch)]);
   if (st == null && pt == null) return { errors: [`no answer yet: write ${p(G.pitch)} (concepts) or ${p(G.spec)} (the locked spec)`], file: null };
   if (st != null && (pt == null || st >= pt)) {
@@ -234,15 +236,72 @@ async function readAnswer(G, { kind = 'pitch', idea = null } = {}) {
   if (!errors.length) {
     const cat = seams.catalog ? await seams.catalog() : await kitCatalog().catch(() => null);
     errors.push(...checkPlay(pitch, { request: { kind, prompt: idea ?? '' }, catalog: cat, kind }).map(e => `pitch ${e}`));
+    // the second reader, on a fresh pitch that passed every other rule (no question is asked about a pitch refused anyway)
+    if (!errors.length && kind === 'pitch' && rulesClaims(pitch).length) {
+      const second = await secondReading(G, pitch, { catalog: cat, idea, reads });
+      if (second.questions) return { hold: second.questions, file: 'pitch.json' };
+      errors.push(...second.result.errors.map(e => `pitch ${e}`));
+      return errors.length ? { errors, file: 'pitch.json', secondRead: second.result } : { file: 'pitch.json', value: pitch, secondRead: second.result };
+    }
   }
   return errors.length ? { errors, file: 'pitch.json' } : { file: 'pitch.json', value: pitch };
 }
 
-function talkHost(G, { kind, idea = null, resume }) {
+// ---------------------------------------------------------------- the pitch's second reader (a tool round)
+// The library's second reader (second-reader.mjs) builds the question and reads the answer; the model call is the
+// host's. Here the host is a person's own session, so the call is a subagent of that session: gamesfun_step_spec hands
+// back one question per claim (`secondReader.questions`), the session starts a subagent for each with the question's
+// prompt as its whole task, and calls the tool again with the replies (`reads`). Nothing here calls a model, and the
+// person's words go nowhere but to their own session. With no reply the claims stand and the tool says they were not
+// second-read. What was asked and read is kept in the loop's own folder (one reading per claim, also across a restart).
+const secondFile = G => path.join(G.job, 'second-read.json');
+const claimKey = c => `${c.feature}\u0000${c.how}`;
+export const claimId = c => `claim-${createHash('sha256').update(claimKey(c)).digest('hex').slice(0, 8)}`;
+/** What a session is told to do with the questions. */
+export const SECOND_READER_DO = 'Start one subagent per question, all together, each with that question\'s `prompt` as its whole task: no tools, nothing of this conversation, a small model if you have one. Never answer one yourself: you wrote the pitch. Then call gamesfun_step_spec again with `reads`: [{"id", "answer": the subagent\'s reply, whole}]. If you cannot start a subagent, call it again with `reads`: [] and the tool says plainly that these claims were not second-read.';
+const notReadWords = (n, features) => `No second reader checked ${n === 1 ? 'the one claim' : `the ${n} claims`} that the game's own rules do it (${features.slice(0, 6).map(f => `"${f}"`).join(', ')}${features.length > 6 ? ` and ${features.length - 6} more` : ''}): only the checker read ${n === 1 ? 'it' : 'them'}. Say so to the person when you show the concepts.`;
+
+/**
+ * → { questions: [{id, feature, prompt}] } the first time a claim is met with no reply (the round is the session's),
+ *   else { result } : the library's secondRead on the replies given now and the readings kept from earlier calls.
+ * `reads`: undefined (the call gave none), or [{id, answer}] (an empty list: the session has no subagent to ask).
+ */
+async function secondReading(G, pitch, { catalog = null, idea = null, reads = undefined } = {}) {
+  const claims = rulesClaims(pitch), request = { kind: 'pitch', prompt: idea ?? '' };
+  const kept = await readJson(secondFile(G), null) ?? {};
+  const cache = new Map(Array.isArray(kept.cache) ? kept.cache : []), asked = new Set(Array.isArray(kept.asked) ? kept.asked : []);
+  const answers = new Map((Array.isArray(reads) ? reads : []).filter(r => r && typeof r.id === 'string' && r.answer != null).map(r => [r.id, typeof r.answer === 'string' ? r.answer : JSON.stringify(r.answer)]));
+  const pending = claims.filter(c => !cache.has(claimKey(c)));
+  const save = async () => { await mkdir(G.job, { recursive: true }); await writeFile(secondFile(G), JSON.stringify({ asked: [...asked], cache: [...cache] }, null, 2) + '\n'); };
+  // a claim nobody was asked about yet, and a call that brought no replies: the round goes to the session
+  if (reads === undefined && pending.some(c => !asked.has(claimId(c)))) {
+    for (const c of pending) asked.add(claimId(c));
+    await save();
+    return { questions: pending.map(c => ({ id: claimId(c), feature: c.feature, prompt: secondReadPrompt(c, { request, catalog }) })) };
+  }
+  // no reply at all and nothing kept: there is no reader, and the library says so (`skipped`)
+  const some = answers.size > 0 || claims.some(c => cache.has(claimKey(c)));
+  const runner = some ? async (prompt, claim) => { const a = answers.get(claimId(claim)); if (a == null) throw new Error('no answer came back for this claim'); return a; } : null;
+  const result = await secondRead(pitch, { runner, catalog, request, cache });
+  if (some) await save();
+  return { result };
+}
+/** The second reading as a tool's answer carries it: what was read, and in plain words what was not. */
+function secondSaid(r, pitch) {
+  if (!r) return null;
+  const features = rulesClaims(pitch).map(c => c.feature);
+  const out = { claims: r.claims, reads: r.reads.map(({ feature, verdict, why, part }) => ({ feature, verdict, why, ...(part ? { part } : {}) })), unread: r.unread };
+  if (r.skipped) return { ...out, read: false, notSecondRead: features, said: notReadWords(features.length, features) };
+  if (r.unread.length) return { ...out, read: 'partly', notSecondRead: r.unread.map(u => u.feature), said: notReadWords(r.unread.length, r.unread.map(u => u.feature)) };
+  return { ...out, read: true };
+}
+
+function talkHost(G, { kind, idea = null, resume, answer = null }) {
   return {
     kind, resume, store: heldOf(G).store,
     firstMessage: pitchMessage(G, { kind, idea }),
-    check: () => readAnswer(G, { kind, idea }),
+    // `answer`: the answer as gamesfun_step_spec has just read it (one reading per call, second reader and all)
+    check: () => answer ?? readAnswer(G, { kind, idea }),
     repairMessage: errors => `Your answer is not valid yet:\n${errors.slice(0, 20).map(e => `- ${e}`).join('\n')}\n\nFix the answer (use only catalog values: \`gamesfun_catalog\`), then call \`gamesfun_step_spec\` {"game": "${p(G.game)}"} again (with the corrected \`spec\` or \`pitch\` when you passed it to the tool). This is the one repair round.`,
   };
 }
@@ -378,6 +437,18 @@ const withCancel = t => ({
     return r && typeof r === 'object' && !Array.isArray(r) ? { rolledBack: told, ...r } : r;
   },
 });
+
+// ---------------------------------------------------------------- how a delivery is named
+/** Beside the delivery in the loop's own folder: {outcome, words, firstWords, at}. The studio's Build tab reads it. */
+export const OUTCOME_FILE = 'outcome.json';
+/** Each delivered outcome of the library's outcomeOf, as a person reads it. */
+export const OUTCOME_WORDS = {
+  delivered: 'Delivered: every check ran on these files, and nothing the game itself promises went unchecked.',
+  'delivered-with-issues': 'Delivered with issues: something the game itself promises was not checked by anything, or the play-tester could not see it work or was blocked.',
+  'delivered-stale-proof': 'Delivered, but the files changed after the last checks: the proof is about an older version.',
+  'delivered-unverified': 'Delivered without a passing verify: this is the best version there is, and what fails is named.',
+  'delivered-starter': 'Delivered the kit\'s starting game: no built version was playable.',
+};
 
 // ---------------------------------------------------------------- keeping the person's edits (question 29, 2026-10-11)
 export const KEEP_EDITS = 'gamesfun_keep_edits';
@@ -523,25 +594,34 @@ const TOOLS = [
   },
   {
     name: 'gamesfun_step_spec',
-    description: 'Step 2: checks the answer of your pitch round. A spec is held to the game-spec schema and to what the kit can build (create\'s own check); concepts to the pitch schema. Not valid: you get the problems and one repair round. Valid concepts: the build waits on the person\'s choice. A valid spec: it is locked, and gamesfun_step_create is next.',
+    description: 'Step 2: checks the answer of your pitch round. A spec is held to the game-spec schema and to what the kit can build (create\'s own check); concepts to the pitch schema. Not valid: you get the problems and one repair round. Valid concepts: the build waits on the person\'s choice. A valid spec: it is locked, and gamesfun_step_create is next. Concepts that say the game\'s own rules do something (a play.needs row whose only "by" is rules) get a second reader first: the tool answers with `secondReader.questions`, you put each to a subagent of your own (its prompt is the whole task) and call the tool again with `reads`. A claim the reader calls a missing system is refused like any other problem. With no reply the answer says plainly that the claims were not second-read.',
     inputSchema: schema({
+      reads: { type: 'array', description: 'The second reader\'s replies, one per question the tool handed you: [{"id": "claim-…", "answer": "<the subagent\'s reply, whole>"}]. An empty list when you cannot start a subagent.' },
       spec: { type: 'object', description: 'The locked game spec, as an object: the tool writes it to the loop\'s folder for you (instead of writing the file yourself).' },
       pitch: { type: 'object', description: 'The concepts (pitch.schema.json), as an object: written for you likewise.' },
     }),
-    handler: ({ game, spec, pitch }) => { const G = places(game); return serial(G.game, async () => {
+    handler: ({ game, spec, pitch, reads }) => { const G = places(game); return serial(G.game, async () => {
       const s = await readState(G);
       if (!isTalk(s) || s.step === 'done' || (s.step === 'pitch' && !s.handed)) return outOfOrder('gamesfun_step_spec', s, G);
       if (spec && pitch) return refuse('two-answers', 'Give one answer: concepts (pitch) or the locked spec (spec).', { tool: 'gamesfun_step_spec', args: { game: p(G.game) } });
       if (spec || pitch) { await mkdir(G.job, { recursive: true }); await writeFile(spec ? G.spec : G.pitch, JSON.stringify(spec ?? pitch, null, 2) + '\n'); }
+      const idea = await readFile(G.idea, 'utf8').catch(() => null);
+      // The answer is read once, before the loop steps: a pitch whose claims no second reader has seen yet is not
+      // checked further in this call. The round goes to the session (nothing of the loop's state moves).
+      const read = await readAnswer(G, { kind: s.kind, idea, reads: Array.isArray(reads) ? reads : undefined });
+      if (read.hold) {
+        const again = { tool: 'gamesfun_step_spec', args: { game: p(G.game), reads: read.hold.map(q => ({ id: q.id, answer: '<the subagent\'s reply, whole>' })) } };
+        return { game: p(G.game), ran: [], valid: null, status: s.status, step: s.step, why: 'a second reader is asked about what the pitch says the game\'s own rules do', secondReader: { claims: read.hold.length, questions: read.hold, do: SECOND_READER_DO }, round: { kind: 'second-read', brief: SECOND_READER_DO }, next: { ...again, do: SECOND_READER_DO } };
+      }
       const touched = heldOf(G).store.takeChanged();
-      const L = await openTalkLoop(talkHost(G, { kind: s.kind, idea: await readFile(G.idea, 'utf8').catch(() => null), resume: true }));
+      const L = await openTalkLoop(talkHost(G, { kind: s.kind, idea, resume: true, answer: read }));
       const ran = [];
       if (L.state.step === 'pitch') { await L.step(); ran.push('pitch'); }
       if (L.state.step === 'spec') {
         const r = await L.step(); ran.push('spec');
-        if (r.waiting) return { game: p(G.game), ran, valid: false, status: L.state.status, step: 'spec', round: { kind: 'repair', brief: r.message }, next: nextOf(L.state, G) };
+        if (r.waiting) return { game: p(G.game), ran, valid: false, status: L.state.status, step: 'spec', ...(read.secondRead ? { secondReader: secondSaid(read.secondRead, await readJson(G.pitch)) } : {}), round: { kind: 'repair', brief: r.message }, next: nextOf(L.state, G) };
       }
-      const answer = L.mem.answer ?? await readAnswer(G, { kind: s.kind, idea: await readFile(G.idea, 'utf8').catch(() => null) });
+      const answer = L.mem.answer ?? read;
       if (L.state.step === 'deliver') { await L.step(); ran.push('deliver'); }
       // Locked: the spec's text is held in this process from here on. It is the checked answer's; a file that is no
       // longer that answer (written between the check and now) is written again from it.
@@ -556,6 +636,8 @@ const TOOLS = [
       if (answer.errors) out.problems = answer.errors.slice(0, 30);
       else if (answer.file === 'spec.json') out.spec = { file: p(G.spec), title: answer.value?.title ?? null, engine: answer.value?.engine ?? 'party', mechanics: (answer.value?.mechanics ?? []).map(m => m.id) };
       else out.concepts = (answer.value?.cards ?? []).map(c => ({ id: c.id, title: c.title, hook: c.hook, howItPlays: c.howItPlays }));
+      // what the second reader read, and in plain words what nobody read: the person is not told a pitch was fully checked
+      if (answer.secondRead) out.secondReader = secondSaid(answer.secondRead, answer.value ?? await readJson(G.pitch));
       return out;
     }); },
   },
@@ -754,14 +836,19 @@ const TOOLS = [
       const delivery = await readJson(path.join(G.out, 'delivery.json'));
       const pt = L.mem.pt;
       ctx?.log?.(`loop: ${p(G.game)} ${o.outcome}`);
+      // The outcome in words, and the delivery's first words when the version is not yet the game that was asked for
+      // (the library's `notYet`: own promises nothing checked). Kept beside the delivery for the studio's Build tab,
+      // because the state file holds the outcome's name only.
+      const words = OUTCOME_WORDS[o.outcome] ?? null, firstWords = o.notYet || null;
+      if (/^delivered/.test(String(o.outcome))) { await mkdir(G.out, { recursive: true }); await writeFile(path.join(G.out, OUTCOME_FILE), JSON.stringify({ outcome: o.outcome, words, firstWords, at: new Date().toISOString() }, null, 2) + '\n'); }
       return report(L, host, G, {
-        ...said, delivered: /^delivered/.test(String(o.outcome)), outcome: o.outcome,
+        ...said, delivered: /^delivered/.test(String(o.outcome)), outcome: o.outcome, ...(words ? { outcomeMeans: words } : {}), ...(firstWords ? { firstWords } : {}),
         ...(o.failed ? { failed: o.failed } : {}), ...(L.state.fallback ? { fallback: L.state.fallback } : {}),
         ...(delivery ? { delivery } : {}),
         ...(pt && !pt.skipped ? { playtest: { verdict: pt.verdict, failed: pt.failedIds ?? [], blockers: (pt.feel ?? []).filter(f => f.severity === 'blocker').map(f => f.issue), summary: pt.summary ?? '' } } : {}),
         // a play-test that could not run proved nothing: said by name, whatever the outcome is called
         ...(L.state.playtest?.verdict === 'error' ? { playtestDidNotRun: L.state.playtest.error ?? 'the play-test could not run' } : {}),
-        tellThePerson: `Say what they will see, what you left out and why, and anything that still fails.${L.state.playtest?.verdict === 'error' ? ' Say plainly that no play-tester played this version (playtestDidNotRun says why).' : ''} A green verify is the kit's bar, not their verdict. To play it: gamesfun_dev_start.`,
+        tellThePerson: `${firstWords ? `Start with these words, as they are: "${firstWords}" Then say` : o.outcome === 'delivered-with-issues' ? 'Start with what the play-tester could not see work or was blocked by (playtest.failed, playtest.blockers). Then say' : 'Say'} what they will see, what you left out and why, and anything that still fails.${L.state.playtest?.verdict === 'error' ? ' Say plainly that no play-tester played this version (playtestDidNotRun says why).' : ''} A green verify is the kit's bar, not their verdict. To play it: gamesfun_dev_start.`,
       });
     }); },
   },

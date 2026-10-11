@@ -8,9 +8,22 @@ const STEP_WORDS = {
 };
 const STATUS_WORDS = { building: 'Building', 'waiting-on-question': 'Waiting for your answer', delivered: 'Delivered', failed: 'Stopped: it did not work out', cancelled: 'Cancelled: you rolled back' };
 
-/** Raw state (or null) + the newest verify run (summarizeVerdict shape, or null) → what the Build tab draws. */
-export function loopView(raw, verdict = null) {
+/** A delivered outcome that is not a plain "delivered", as the status line names it (the loop library's outcomeOf). */
+const OUTCOME_WORDS = {
+  'delivered-with-issues': 'Delivered with issues', 'delivered-stale-proof': 'Delivered, with out-of-date proof',
+  'delivered-unverified': 'Delivered without a passing verify', 'delivered-starter': 'Delivered the starting game',
+};
+const ISSUES_WORDS = 'Something the game itself promises was not checked by anything, or the play-tester could not see it work. Your session\'s summary says which.';
+
+/**
+ * Raw state (or null) + the newest verify run (summarizeVerdict shape, or null) + what the deliver tool said of the
+ * outcome ({outcome, words, firstWords} or null) → what the Build tab draws.
+ */
+export function loopView(raw, verdict = null, said = null) {
   if (!raw || typeof raw !== 'object') return { present: false };
+  const outcome = raw.outcome == null ? null : typeof raw.outcome === 'object' ? raw.outcome.outcome ?? JSON.stringify(raw.outcome) : String(raw.outcome);
+  const mine = said && said.outcome === outcome ? said : null;
+  const issues = raw.status === 'delivered' && outcome === 'delivered-with-issues';
   const failedN = new Set((Array.isArray(raw.verify?.failed) ? raw.verify.failed : []).map(f => String(typeof f === 'object' ? f.n ?? f.check : f)));
   const checks = (verdict?.failed ?? []).filter(c => !failedN.size || failedN.has(String(c.n)));
   // each failed check with its rule and fix as verify printed them (detail); state-held objects {n, rule, fix} win
@@ -23,7 +36,7 @@ export function loopView(raw, verdict = null) {
   return {
     present: true,
     status: raw.status ?? 'building',
-    statusWords: STATUS_WORDS[raw.status] ?? String(raw.status ?? ''),
+    statusWords: (raw.status === 'delivered' && OUTCOME_WORDS[outcome]) || (STATUS_WORDS[raw.status] ?? String(raw.status ?? '')),
     step: raw.step ?? null,
     stepWords: STEP_WORDS[raw.step] ?? String(raw.step ?? ''),
     why: raw.why ?? '',
@@ -35,7 +48,10 @@ export function loopView(raw, verdict = null) {
     waitingOn: raw.handed ? raw.handed.kind ?? raw.handed.step ?? 'your session' : null,
     fixes: (raw.fixes ?? []).slice(-8).map(f => ({ round: f.round, fix: f.fix, file: f.file, line: f.line ?? '' })),
     history: (raw.history ?? []).slice(-12).map(h => ({ step: h.step, next: h.next, why: h.why ?? '', at: h.at ?? null })),
-    outcome: raw.outcome == null ? null : typeof raw.outcome === 'object' ? raw.outcome.outcome ?? JSON.stringify(raw.outcome) : String(raw.outcome),
+    outcome,
+    // delivered-with-issues: the first words of the delivery (the library's "Not yet the game you asked for: …"), else the rule in plain words
+    issues,
+    issuesWords: issues ? mine?.firstWords || ISSUES_WORDS : null,
     staleProof: /stale/.test(String(raw.outcome?.outcome ?? raw.outcome ?? '')),
     updated: raw.updated ?? null,
   };

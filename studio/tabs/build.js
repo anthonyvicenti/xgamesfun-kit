@@ -25,17 +25,18 @@ export default {
     }
 
     function paint(data) {
-      const v = loopView(data.loop, data.verdict);
+      const v = loopView(data.loop, data.verdict, data.said);
       body.replaceChildren();
       if (data.elsewhere) body.append(el('p', { className: 'error-box' }, `Your session is working on another game: ${data.elsewhere.name}${data.elsewhere.loop ? ` (${data.elsewhere.loop.status}, step ${data.elsewhere.loop.step})` : ''}. This studio shows ${ctx.game?.title ?? 'this game'}. To follow that build here, start the studio on it: node bin/gamesfun.mjs dev ${data.elsewhere.name}`));
       if (!v.present) {
         body.append(el('p', { className: 'muted' }, 'No build is running. When your session builds or changes this game with the gamesfun tools, its steps appear here.'));
       } else {
-        const tone = v.status === 'failed' ? 'bad' : v.status === 'delivered' ? 'ok' : v.status === 'waiting-on-question' || v.status === 'cancelled' ? 'warn' : 'go';
+        const tone = v.status === 'failed' ? 'bad' : v.status === 'delivered' ? (v.issues || v.staleProof ? 'warn' : 'ok') : v.status === 'waiting-on-question' || v.status === 'cancelled' ? 'warn' : 'go';
         body.append(
           el('div', { className: 'conn', 'data-tone': tone, role: 'status' }, el('span', { className: `dot ${tone}` }), el('strong', {}, `${v.statusWords}: ${v.stepWords}`),
             v.why ? el('div', { className: 'small muted' }, v.why) : null,
             el('div', { className: 'small muted' }, `Round ${v.round} · ${v.counts.verifies} verify · ${v.counts.repairs} repair · ${v.counts.playtests} play-test${v.counts.playtests === 1 ? '' : 's'}${v.counts.rescues ? ` · ${v.counts.rescues} rescue` : ''}`)),
+          ...(v.issues ? [el('p', { className: 'error-box', 'data-outcome': 'delivered-with-issues' }, v.issuesWords)] : []),
           ...(v.staleProof ? [el('p', { className: 'error-box' }, 'Delivered, but the files changed after the last play-test: the proof is out of date.')] : []));
 
         body.append(el('h3', {}, 'Verdict'));

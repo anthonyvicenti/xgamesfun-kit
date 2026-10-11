@@ -25,7 +25,7 @@ const ctx = { log: () => {}, progress: () => {}, runCli: async () => ({ code: 0,
 const parse = r => (r?.content ? JSON.parse(r.content[0].text) : r);
 
 /** A scratch game folder and a caller for one copy of the tools. `verdicts`: what each full verify answers, in order. */
-async function bench(t, { verdicts = [], own = { ok: true, why: 'stand-in' } } = {}) {
+async function bench(t, { verdicts = [], own = { ok: true, why: 'stand-in' }, friends = true } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'gf-loop-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const game = path.join(root, 'my-game'), G = loop.places(game);
@@ -33,7 +33,7 @@ async function bench(t, { verdicts = [], own = { ok: true, why: 'stand-in' } } =
     ownVerify: async () => own,
     verify: async (g, out) => {
       const ok = verdicts.length ? verdicts.shift() : true;
-      const v = { pass: ok, checks: [{ n: 3, name: 'boots to play', ok: true }, { n: 6, name: 'a round ends', ok: true }, { n: 13, name: 'every control works', ok, detail: ok ? '' : 'KeyE does nothing you can see', rule: 'List only controls that work.', fix: 'Make E do its part or take it out of controls.' }] };
+      const v = { pass: ok, checks: [{ n: 3, name: 'boots to play', ok: true }, ...(friends ? [{ n: 5, name: 'friends visible', ok: true }] : []), { n: 6, name: 'a round ends', ok: true }, { n: 13, name: 'every control works', ok, detail: ok ? '' : 'KeyE does nothing you can see', rule: 'List only controls that work.', fix: 'Make E do its part or take it out of controls.' }] };
       await mkdir(out, { recursive: true });
       await writeFile(path.join(out, 'verdict.json'), JSON.stringify(v));
       return { ...normalizeVerdict(v), outDir: out };
@@ -177,6 +177,140 @@ test('the pitch step\'s own rules are held at gamesfun_step_spec: concepts say h
   t.diagnostic(`concepts with no play: ${(r.round?.brief ?? JSON.stringify(r.problems)).split('\n').slice(0, 4).join(' | ').slice(0, 400)}`);
   assert.equal(r.valid, false);
   if (!/pitch \$\.play: say how the idea is played/.test(r.round.brief)) assert.fail(`the schema refused the stand-in pitch before the play step could: ${r.round.brief}`);
+});
+
+// A pitch that passes the schema and the pitch step's rules, with rows that say the game's own rules do something.
+const pitchWith = async needs => {
+  const spec = { ...JSON.parse(await readFile(DEV_SPEC, 'utf8')), loop: 'round' };
+  const card = { id: 'a', title: 'Dodge', hook: 'Throw balls at your friends.', howItPlays: 'Everyone throws at once for ninety seconds.', players: '2-4', whyFunny: 'Friends get bonked.', similar: [], v1: { has: ['one arena'], notYet: [] }, conceptPrompt: 'a playground at noon', spec };
+  return {
+    pitchVersion: 0, reply: 'Here is one take.', cards: [card], questions: [], research: { bank: [], web: [], notes: 'none' }, policy: { ok: true },
+    play: { loop: { wants: 'round', why: 'everyone plays at once until the clock ends' }, together: { how: 'versus', from: 'dodgeball with friends, everyone against everyone' }, body: { what: 'character' }, needs },
+  };
+};
+const RULES_NEEDS = [
+  { feature: 'throwing balls at friends', support: 'supported', by: ['projectile'], how: 'the projectile part', core: true },
+  { feature: 'a point for every hit', support: 'supported', by: ['rules'], how: 'rules count each hit that lands', core: false },
+  { feature: 'a car each player drives', support: 'approximated', by: ['rules'], how: 'rules move the player faster and call it a car', core: false },
+];
+const IDEA = 'dodgeball with friends, everyone against everyone, a point for every hit, and a car each player drives';
+
+test('the second reader is a tool round: one question per "rules" claim goes to the session, and a claim its reader calls a missing system is refused', async t => {
+  const b = await bench(t);
+  await b.call('gamesfun_step_pitch', { idea: IDEA });
+  const pitch = await pitchWith(RULES_NEEDS);
+  let r = await b.call('gamesfun_step_spec', { pitch });
+  if (r.valid === false) assert.fail(`the stand-in pitch was refused before the second reader: ${r.round?.brief ?? JSON.stringify(r.problems)}`);
+  // call 1: nothing of the loop moved; the questions are the library's own, one per claim, and name no verdict
+  assert.equal(r.valid, null); assert.deepEqual(r.ran, []); assert.equal(r.step, 'pitch');
+  assert.equal(r.secondReader.claims, 2);
+  assert.deepEqual(r.secondReader.questions.map(q => q.feature), ['a point for every hit', 'a car each player drives']);
+  for (const q of r.secondReader.questions) { assert.match(q.id, /^claim-[0-9a-f]{8}$/); assert.match(q.prompt, /You are a second reader/); assert.match(q.prompt, /Do not design the game and do not use any tool/); assert.ok(q.prompt.includes(q.feature)); }
+  assert.match(r.secondReader.questions[0].prompt, /a car each player drives|dodgeball with friends/, 'the person\'s own words are in the question');
+  assert.match(r.secondReader.do, /one subagent per question/); assert.match(r.secondReader.do, /Never answer one yourself/);
+  assert.equal(r.next.tool, 'gamesfun_step_spec'); assert.deepEqual(r.next.args.reads.map(x => x.id), r.secondReader.questions.map(q => q.id));
+  assert.equal((await state(b)).step, 'pitch', 'the talk loop did not step');
+  const [score, car] = r.secondReader.questions;
+
+  // call 2: the subagents' replies, whole. "system" is refused with the row named; the one repair round is the loop's
+  r = await b.call('gamesfun_step_spec', { reads: [
+    { id: score.id, answer: 'Here is my answer.\n{"verdict": "rules", "why": "a score is a counter the rules keep"}' },
+    { id: car.id, answer: '{"verdict": "system", "why": "a car needs vehicle physics and controls the kit does not have"}' },
+  ] });
+  assert.equal(r.valid, false); assert.equal(r.round.kind, 'repair');
+  assert.match(r.round.brief, /\$\.play\.needs\[2\]: a second reader, asked only whether "a car each player drives" is something rules\.js can do, says it is a system the kit lacks/);
+  assert.match(r.round.brief, /mark it "missing"/);
+  assert.equal(r.secondReader.read, true);
+  assert.deepEqual(r.secondReader.reads.map(x => x.verdict), ['rules', 'system']);
+
+  // the repair: the car is marked missing and said first. The reading of the score claim is kept: nothing is asked again
+  const fixed = await pitchWith([RULES_NEEDS[0], RULES_NEEDS[1], { feature: 'a car each player drives', support: 'missing', by: [], how: 'the kit has no vehicles', core: false }]);
+  fixed.cards[0].v1.notYet = ['a car each player drives'];
+  r = await b.call('gamesfun_step_spec', { pitch: fixed });
+  assert.equal(r.valid, true, JSON.stringify(r.problems ?? r.round)); assert.equal(r.outcome, 'pitched');
+  assert.equal(r.secondReader.read, true); assert.equal(r.secondReader.claims, 1);
+  assert.deepEqual(r.secondReader.reads, [{ feature: 'a point for every hit', verdict: 'rules', why: 'a score is a counter the rules keep' }]);
+  assert.equal(r.secondReader.said, undefined);
+  const kept = JSON.parse(await readFile(path.join(b.G.job, 'second-read.json'), 'utf8'));
+  assert.equal(kept.asked.length, 2); assert.equal(kept.cache.length, 2, 'one reading per claim, kept in the loop\'s own folder');
+});
+
+test('no second reader: with no reply the tool says plainly that the claims were not second-read, and the pitch goes on', async t => {
+  const b = await bench(t);
+  await b.call('gamesfun_step_pitch', { idea: IDEA });
+  const pitch = await pitchWith(RULES_NEEDS.slice(0, 2));
+  let r = await b.call('gamesfun_step_spec', { pitch });
+  assert.equal(r.secondReader.claims, 1); assert.equal(r.valid, null);
+  // a session with no subagent says so with an empty list (calling again with nothing is read the same way)
+  r = await b.call('gamesfun_step_spec', { reads: [] });
+  assert.equal(r.valid, true, JSON.stringify(r.problems ?? r.round)); assert.equal(r.outcome, 'pitched');
+  assert.equal(r.secondReader.read, false);
+  assert.deepEqual(r.secondReader.notSecondRead, ['a point for every hit']);
+  assert.match(r.secondReader.said, /^No second reader checked the one claim that the game's own rules do it \("a point for every hit"\): only the checker read it\. Say so to the person/);
+
+  // an answer that is not a verdict is not a reading: the claim stands and is named as not second-read
+  const c = await bench(t);
+  await c.call('gamesfun_step_pitch', { idea: IDEA });
+  r = await c.call('gamesfun_step_spec', { pitch: await pitchWith(RULES_NEEDS) });
+  const [score, car] = r.secondReader.questions;
+  r = await c.call('gamesfun_step_spec', { reads: [{ id: score.id, answer: '{"verdict": "rules", "why": "a counter"}' }, { id: car.id, answer: 'I think it is probably fine.' }] });
+  assert.equal(r.valid, true); assert.equal(r.secondReader.read, 'partly');
+  assert.deepEqual(r.secondReader.notSecondRead, ['a car each player drives']);
+  assert.match(r.secondReader.said, /"a car each player drives"/);
+
+  // a call with no reads after the questions were handed over: no answer, said the same way
+  const d = await bench(t);
+  await d.call('gamesfun_step_pitch', { idea: IDEA });
+  await d.call('gamesfun_step_spec', { pitch: await pitchWith(RULES_NEEDS.slice(0, 2)) });
+  r = await d.call('gamesfun_step_spec');
+  assert.equal(r.valid, true); assert.equal(r.secondReader.read, false); assert.match(r.secondReader.said, /No second reader checked/);
+});
+
+test('a pitch with no "rules" claim, a refine and a locked spec ask no second reader', async t => {
+  const b = await bench(t);
+  await b.call('gamesfun_step_pitch', { idea: IDEA });
+  let r = await b.call('gamesfun_step_spec', { pitch: await pitchWith([RULES_NEEDS[0], { feature: 'friends in one game', support: 'supported', by: ['players'], how: 'the kit draws every friend', core: false }]) });
+  assert.equal(r.valid, true, JSON.stringify(r.problems ?? r.round)); assert.equal(r.secondReader, undefined);
+  assert.equal(existsSync(path.join(b.G.job, 'second-read.json')), false);
+  const c = await bench(t);
+  r = await lockSpec(c);
+  assert.equal(r.outcome, 'locked'); assert.equal(r.secondReader, undefined);
+});
+
+test('delivered-with-issues: a promise of the game that nothing checked is the delivery\'s first words, in the tool\'s answer and for the Build tab', async t => {
+  // this verify has no check 5 (friends visible), the proof of the spec's first accept line; the play-tester is not asked about it
+  const b = await bench(t, { friends: false });
+  await lockSpec(b);
+  await b.call('gamesfun_step_create');
+  await b.call('gamesfun_step_fix', DONE);
+  await b.call('gamesfun_step_verify');
+  await b.call('gamesfun_step_playtest');
+  await answerAll(b);
+  await b.call('gamesfun_step_playtest');
+  const r = await b.call('gamesfun_step_deliver');
+  assert.equal(r.delivered, true); assert.equal(r.status, 'delivered');
+  assert.equal(r.outcome, 'delivered-with-issues');
+  assert.match(r.outcomeMeans, /^Delivered with issues: something the game itself promises was not checked by anything/);
+  assert.match(r.firstWords, /^Not yet the game you asked for: one promise of the game was not checked by anything, neither a check, the game’s own test nor the play-tester: /);
+  assert.ok(r.tellThePerson.startsWith(`Start with these words, as they are: "${r.firstWords}"`));
+  assert.match(r.next.do, /Delivered \(delivered-with-issues\)/);
+  const kept = JSON.parse(await readFile(path.join(b.G.out, loop.OUTCOME_FILE), 'utf8'));
+  assert.equal(kept.outcome, 'delivered-with-issues'); assert.equal(kept.firstWords, r.firstWords);
+  // the studio's Build tab: the route hands the words over, the view names the outcome and leads with them
+  const { default: register } = await import('../server/routes/build.mjs');
+  const routes = new Map();
+  register({ get: (pth, fn) => routes.set(`GET ${pth}`, fn), post: (pth, fn) => routes.set(`POST ${pth}`, fn) }, { gameDir: b.game, log: () => {}, url: 'http://127.0.0.1:1/' });
+  const data = await routes.get('GET /state')();
+  assert.deepEqual(data.said, { outcome: 'delivered-with-issues', words: kept.words, firstWords: r.firstWords });
+  const { loopView } = await import('../studio/lib/loop-state.js');
+  const v = loopView(data.loop, data.verdict, data.said);
+  assert.equal(v.statusWords, 'Delivered with issues'); assert.equal(v.issues, true); assert.equal(v.issuesWords, r.firstWords);
+  // with no record of the words (an older delivery), the tab still says what the outcome means
+  const bare = loopView(data.loop, data.verdict, null);
+  assert.equal(bare.statusWords, 'Delivered with issues'); assert.match(bare.issuesWords, /was not checked by anything/);
+  // a plain delivery is named as before
+  const plain = loopView({ ...data.loop, outcome: 'delivered' }, null, data.said);
+  assert.equal(plain.statusWords, 'Delivered'); assert.equal(plain.issues, false); assert.equal(plain.issuesWords, null);
 });
 
 test('stale proof is refused at delivery: a file changed after verify sends the loop back to verify', async t => {
