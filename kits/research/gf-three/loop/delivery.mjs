@@ -2,6 +2,7 @@
 // not yet the game asked for, and the outcome's name (lifted from the Studio worker's lib/v2.mjs, open builder M2-F).
 import {readFile,writeFile,readdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
+import {REFUSALS} from './state.mjs';
 
 /** out/delivery.json when it has a summary and controls, else null. */
 export async function usableDelivery(file){
@@ -60,5 +61,39 @@ export function settlePromises(lib,list,verdict,pt){
 export function issuesOf(pt,settled){
   const coreFailed=(settled??[]).filter(p=>p.core&&p.status==='failed');
   const blockers=pt&&!pt.skipped&&!pt.error?(pt.feel??[]).filter(f=>f.severity==='blocker'):[];
-  return {issues:!!(pt&&!pt.skipped&&!pt.stub&&!pt.error&&(coreFailed.length||blockers.length)),coreFailed,blockers};
+  const judged=!!(pt&&!pt.skipped&&!pt.stub);
+  const ownUntested=judged?(settled??[]).filter(p=>isOwn(p)&&p.status==='untested'):[];
+  return {issues:!!(judged&&((!pt.error&&(coreFailed.length||blockers.length))||ownUntested.length)),coreFailed,blockers,ownUntested};
+}
+
+/** The kinds of promise that are the game's own words (spec.hook, spec.accept, the loop, the score, a mechanic's "as"), not the kit's. */
+export const OWN_KINDS=['hook','accept','loop','score','mechanic'];
+export const isOwn=p=>OWN_KINDS.includes(p?.kind);
+const ownWords=p=>p.kind==='hook'?'what the title card promises':p.kind==='loop'?'the core loop (what you do in your first minute)':p.kind==='score'?'your score changing the way the rules say'
+  :String(p.text??p.id).replace(/^I can see this working when I play: /,'').replace(/^What the title card says happens in a round: /,'').replace(/\.$/,'');
+const listOwn=(ps,max=5)=>`${ps.slice(0,max).map(ownWords).join('; ')}${ps.length>max?` and ${ps.length-max} more`:''}`;
+
+/**
+ * The parts of the delivery's first words that this file knows (the play-tester's failure is playtest.mjs's): own
+ * promises that nothing checked (question 15), and proof older than the last change (question 23).
+ * → plain-words parts for truthFirst(); [] when neither.  ownUntested: from issuesOf   stale: proofOf()'s codes
+ */
+export function proofLead({ownUntested=[],stale=[]}={}){
+  const parts=[];
+  if(ownUntested.length)parts.push(`${ownUntested.length===1?'one promise of the game was':`${ownUntested.length} promises of the game were`} not checked by anything, neither a check, the game’s own test nor the play-tester: ${listOwn(ownUntested)}`);
+  const v=stale.includes(REFUSALS.STALE_VERIFY),t=stale.includes(REFUSALS.STALE_PLAYTEST);
+  if(v||t)parts.push(`the game’s files changed after ${v&&t?'its last checks and play-test':v?'its last checks':'the play-tester last played it'}, so ${v&&t?'those are':'that is'} about an older version`);
+  return parts;
+}
+
+/**
+ * Question 17 (check 35's missing tests): not a failure yet. `noTestOf` lists the own promises no test of the game
+ * checks; `noTestNote` says so in the delivery summary, but only for a game that has some tests (a game with none
+ * would carry the line on every delivery, and the Studio worker's words for it stay as they were): ''.
+ */
+export const noTestOf=settled=>(settled??[]).filter(p=>isOwn(p)&&!(p.proofs??[]).includes('verify:35'));
+export function noTestNote(settled){
+  const bare=noTestOf(settled),own=(settled??[]).filter(isOwn);
+  if(!bare.length||!(settled??[]).some(p=>(p.proofs??[]).includes('verify:35')))return '';
+  return `No test of the game checks ${bare.length} of its ${own.length} own promises: ${listOwn(bare,4)}.`;
 }

@@ -14,7 +14,7 @@ import {STATE_SCHEMA,REFUSALS,stateFileOf,fileStore,proofOf,ignoreStateDir,insid
 import {createRepairLedger} from './repair-ledger.mjs';
 import {beginPlaytest,finishPlaytest,packPlaytest,unpackPlaytest,briefHash,PLAYTEST_TIMEOUT_MIN} from './playtest.mjs';
 import {lockFiles,takeLock,lockProblems,restoreLock,sameLock,holdPromises} from './lock.mjs';
-import {usableDelivery,ensureDelivery,outcomeOf,issuesOf,settlePromises} from './delivery.mjs';
+import {usableDelivery,ensureDelivery,outcomeOf,issuesOf,settlePromises,proofLead,truthFirst} from './delivery.mjs';
 import * as words from './messages.mjs';
 import {kitTools} from './tools.mjs';
 import {PROMPTS_DIR} from './brief.mjs';
@@ -399,8 +399,9 @@ export async function openBuildLoop(host){
       if(p.playtest==='stale'&&M.verdict.ok){S.phase='late';M.pt=null;return {...go('playtest',`the game's files changed after play-test round ${S.playtest.round} (stale proof): play-test again`),refused:REFUSALS.STALE_PLAYTEST};}
       if(!M.verdict.ok&&!flags.advisory&&!M.fallback)return end({outcome:'verify-failed',failed:M.verdict.failed.slice(0,12)},`verify ${S.verify.n} failed and no earlier version can stand in`);
       const lib=await T().promisesLib?.().catch(()=>null)??null,list=M.pt?.list??await promisesNow();
-      const {issues}=issuesOf(M.pt,settlePromises(lib,list,M.verdict,M.pt));
-      return end({outcome:outcomeOf({verdictOk:M.verdict.ok,fallback:M.fallback,issues,stale:p.stale})},'verify ran on the files as they are, and no proof on record is stale');
+      const {issues,ownUntested}=issuesOf(M.pt,settlePromises(lib,list,M.verdict,M.pt));
+      const notYet=truthFirst(proofLead({ownUntested}));   // own promises nothing checked: the session says so first (question 15)
+      return end({outcome:outcomeOf({verdictOk:M.verdict.ok,fallback:M.fallback,issues,stale:p.stale}),...(notYet?{notYet}:{})},'verify ran on the files as they are, and no proof on record is stale');
     },
   };
 

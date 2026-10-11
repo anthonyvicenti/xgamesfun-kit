@@ -56,6 +56,7 @@ export const SIGNAL_LIMITS = Object.freeze({
   heartbeatMs: 30_000,          // WebSocket only
   // HTTP only (/signal/v1)
   hostsPerIpPerMin: 10,         // rooms opened per network per minute
+  hostsPerIpPerHour: 60,        // ...and per hour, every kind of page (a script that claims our own origin gets only this)
   roomIdleMs: 2 * 60 * 60_000,  // a room whose host has not asked for anything in 2 h is deleted
   hostSilentMs: 45_000,         // ...and refuses joiners after 45 s (a host polls at least every pollWaitMs)
   messageTtlMs: 60_000,         // an undelivered message is dropped after a minute
@@ -143,13 +144,18 @@ export function iceServersFromEnv(env = {}) {
  * iceServersFromEnv: a page must get its answer well inside the kit's 4 s probe).
  */
 const CF_TURN_REUSE_MS = 3_600_000, CF_TURN_TIMEOUT_MS = 2_500;
-let cfTurnCache = null;   // {key, until, iceServers}
-export async function cloudflareTurnIce(env = {}, { fetchImpl = globalThis.fetch, now = Date.now() } = {}) {
-  const id = String(env.CF_TURN_KEY_ID ?? '').trim(), token = String(env.CF_TURN_API_TOKEN ?? '').trim();
+const cfTurnCache = new Map();   // key (id|ttl) -> {until, iceServers}: published games and outside games hold their own
+/** `ttlS` overrides CF_TURN_TTL_S (outside games ask for a shorter life); `outside` uses CF_TURN_KEY_ID_OUTSIDE and
+ *  CF_TURN_API_TOKEN_OUTSIDE when both are set, a separate Cloudflare TURN key whose spend is its own and which can be
+ *  deleted to cut outside games' relay off at once, else the same key as published games. */
+export async function cloudflareTurnIce(env = {}, { fetchImpl = globalThis.fetch, now = Date.now(), ttlS = null, outside = false } = {}) {
+  const own = outside && String(env.CF_TURN_KEY_ID_OUTSIDE ?? '').trim() && String(env.CF_TURN_API_TOKEN_OUTSIDE ?? '').trim();
+  const id = String(own ? env.CF_TURN_KEY_ID_OUTSIDE : env.CF_TURN_KEY_ID ?? '').trim(), token = String(own ? env.CF_TURN_API_TOKEN_OUTSIDE : env.CF_TURN_API_TOKEN ?? '').trim();
   if (!id || !token || typeof fetchImpl !== 'function') return null;
-  const ttl = Math.min(Math.max(Number(env.CF_TURN_TTL_S) || 43_200, 7_200), 172_800);
+  const ttl = Math.min(Math.max(Number(ttlS) || Number(env.CF_TURN_TTL_S) || 43_200, 7_200), 172_800);
   const key = `${id}|${ttl}`;
-  if (cfTurnCache && cfTurnCache.key === key && now < cfTurnCache.until) return cfTurnCache.iceServers;
+  const hit = cfTurnCache.get(key);
+  if (hit && now < hit.until) return hit.iceServers;
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), CF_TURN_TIMEOUT_MS);
   try {
     const r = await fetchImpl(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(id)}/credentials/generate-ice-servers`,
@@ -166,7 +172,7 @@ export async function cloudflareTurnIce(env = {}, { fetchImpl = globalThis.fetch
       return o;
     }).filter(Boolean).slice(0, 8);
     if (!iceServers.some(s => s.urls.some(u => /^turns?:/i.test(u)) && s.username && s.credential)) throw new Error('cloudflare turn: no relay in the answer');
-    cfTurnCache = { key, until: now + Math.min(CF_TURN_REUSE_MS, ttl * 500), iceServers };
+    cfTurnCache.set(key, { until: now + Math.min(CF_TURN_REUSE_MS, ttl * 500), iceServers });
     return iceServers;
   } catch (error) {
     console.error('turn credentials failed', error?.name === 'AbortError' ? 'timeout' : String(error?.message ?? error).slice(0, 120));
@@ -175,7 +181,7 @@ export async function cloudflareTurnIce(env = {}, { fetchImpl = globalThis.fetch
     clearTimeout(timer);
   }
 }
-export const resetCloudflareTurnCache = () => { cfTurnCache = null; };
+export const resetCloudflareTurnCache = () => { cfTurnCache.clear(); };
 
 /** Whether `origin` (an Origin header) is the page origin for `host` (a host[:port], no scheme). */
 export function sameOrigin(origin, host) {
@@ -183,8 +189,68 @@ export function sameOrigin(origin, host) {
   try { return new URL(origin).host.toLowerCase() === String(host).trim().toLowerCase(); } catch { return false; }
 }
 
-const STATUS = { bad: 400, 'no-room': 404, full: 409, taken: 409, rate: 429, busy: 503 };
-const fail = (code, reason, status = STATUS[code] ?? 400) => ({ status, body: { t: 'error', code, reason } });
+// ---- Games served from somewhere else (a person's own machine, their own site) -------------------------------------
+// A page whose Origin is not this host is an "outside" game. It is answered only when the play host's switch
+// (PLAY_OUTSIDE=on) is on, and under budgets of its own: per address and per origin by the hour and the minute, and
+// totals per day for the whole host. An Origin is set by the browser and can't be forged by a page, but a script can
+// send any header, so nothing here trusts it: a script claiming OUR origin gets the per-address limits every request has
+// (hostsPerIpPerMin, hostsPerIpPerHour, socketsPerIp), and one claiming nothing is refused (POST) or gets STUN (GET).
+// Counters are the same signal_hits rows as the per-minute ones: `win` is the minute the window ends, so the existing
+// expiry sweep deletes them with no migration.
+export const OUTSIDE_DEFAULTS = Object.freeze({
+  roomsPerIpHour: 12,           // rooms one network opens for outside games per hour
+  roomsPerOriginHour: 120,      // ...and one outside origin (a site or a localhost port) in all
+  joinsPerOriginMin: 90,        // join attempts per outside origin per minute
+  findsPerOriginMin: 1200,      // world lookups per outside origin per minute
+  roomsPerDay: 1500,            // all outside games together
+  liveRooms: 150,               // outside rooms open at once (a host seen in the last hostSilentMs)
+  relayPerIpDay: 40,            // relay credentials handed to one network per day (a 4-player session asks 4 times)
+  relayPerOriginDay: 400,
+  relayPerDay: 600,             // ...to all outside games together; past it a page gets STUN only
+  relayTtlS: 7_200,             // outside relay credentials live 2 h (Cloudflare's minimum clamp here; published games get 12 h)
+});
+const clampInt = (v, lo, hi, d) => { const n = Math.floor(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+const hostList = v => new Set(String(v ?? '').split(',').map(x => x.trim().toLowerCase()).filter(x => /^[a-z0-9.\-:[\]]{1,100}$/.test(x)));
+/** The play host's settings for outside games, from its environment: PLAY_OUTSIDE (on | off; unset is off), the numbers
+ *  PLAY_OUTSIDE_ROOMS_PER_IP_HOUR, _ROOMS_PER_ORIGIN_HOUR, _JOINS_PER_ORIGIN_MIN, _FINDS_PER_ORIGIN_MIN, _ROOMS_PER_DAY,
+ *  _LIVE_ROOMS, _RELAY_PER_IP_DAY, _RELAY_PER_ORIGIN_DAY, _RELAY_PER_DAY, _RELAY_TTL_S, PLAY_OUTSIDE_BLOCK (hosts to
+ *  refuse), PLAY_OUTSIDE_ALLOW (only these hosts) and PLAY_OUTSIDE_HELP_URL (the self-host guide, named in refusals). */
+export function outsideFromEnv(env = {}) {
+  const D = OUTSIDE_DEFAULTS, n = (name, key) => clampInt(env[`PLAY_OUTSIDE_${name}`], 1, 1_000_000, D[key]);
+  const allow = hostList(env.PLAY_OUTSIDE_ALLOW), help = String(env.PLAY_OUTSIDE_HELP_URL ?? '').trim();
+  return {
+    mode: String(env.PLAY_OUTSIDE ?? '').trim().toLowerCase() === 'on' ? 'on' : 'off',
+    roomsPerIpHour: n('ROOMS_PER_IP_HOUR', 'roomsPerIpHour'), roomsPerOriginHour: n('ROOMS_PER_ORIGIN_HOUR', 'roomsPerOriginHour'),
+    joinsPerOriginMin: n('JOINS_PER_ORIGIN_MIN', 'joinsPerOriginMin'), findsPerOriginMin: n('FINDS_PER_ORIGIN_MIN', 'findsPerOriginMin'),
+    roomsPerDay: n('ROOMS_PER_DAY', 'roomsPerDay'), liveRooms: n('LIVE_ROOMS', 'liveRooms'),
+    relayPerIpDay: n('RELAY_PER_IP_DAY', 'relayPerIpDay'), relayPerOriginDay: n('RELAY_PER_ORIGIN_DAY', 'relayPerOriginDay'),
+    relayPerDay: n('RELAY_PER_DAY', 'relayPerDay'), relayTtlS: clampInt(env.PLAY_OUTSIDE_RELAY_TTL_S, 7_200, 172_800, D.relayTtlS),
+    block: hostList(env.PLAY_OUTSIDE_BLOCK), allow: allow.size ? allow : null, help: /^https?:\/\/\S{1,200}$/.test(help) ? help : '',
+  };
+}
+/** → {origin, host, hostname} for an http(s) Origin header (a page's own origin: scheme, host and port), else null ('null'
+ *  from a sandboxed frame or a file, anything with a path or credentials). */
+export function outsideOrigin(origin) {
+  if (typeof origin !== 'string' || origin.length > 200 || origin === 'null') return null;
+  try {
+    const u = new URL(origin);
+    if ((u.protocol !== 'http:' && u.protocol !== 'https:') || u.origin !== origin || u.username || u.password) return null;
+    return { origin: u.origin, host: u.host.toLowerCase(), hostname: u.hostname.toLowerCase() };
+  } catch { return null; }
+}
+/** CORS headers for an answer to a page on another origin: that origin only, and no cookies (the kit sends none). */
+export function corsHeaders(origin) {
+  const o = outsideOrigin(origin);
+  return o ? { 'access-control-allow-origin': o.origin, vary: 'Origin', 'access-control-allow-methods': 'POST, GET, OPTIONS',
+    'access-control-allow-headers': 'content-type', 'access-control-max-age': '600' } : {};
+}
+const hourEnd = t => (Math.floor(t / 3_600_000) + 1) * 60, dayEnd = t => (Math.floor(t / 86_400_000) + 1) * 1440;   // the minute a window ends
+const leftMs = (end, t) => Math.max(1000, end * 60_000 - t);
+const waitWords = ms => { const m = Math.ceil(ms / 60_000); return m <= 1 ? 'a minute' : m < 120 ? `${m} minutes` : `${Math.ceil(m / 60)} hours`; };
+
+const STATUS = { bad: 400, off: 403, 'no-room': 404, full: 409, taken: 409, rate: 429, busy: 503 };
+const fail = (code, reason, status = STATUS[code] ?? 400, extra = null) => ({ status, body: { t: 'error', code, reason, ...extra } });
+const limited = (reason, ms) => fail('rate', reason, 429, { retryAfter: Math.ceil(ms / 1000) });
 const ok = body => ({ status: 200, body });
 const wait = (ms, signal) => new Promise(res => {
   if (signal?.aborted) return res();
@@ -200,13 +266,16 @@ const wait = (ms, signal) => new Promise(res => {
  * → { request({origin, host, ip, body, signal}) → {status, body}, ice({origin, host, env}) → {status, body}, stats() }
  * `host` is this server's own host (Studio: PLAY_HOST; Node: the Host header); `body` is the raw request text.
  */
-export function createSignaling({ store, secret = '', now = () => Date.now(), sleep = wait, limits = SIGNAL_LIMITS, checkOrigin = true } = {}) {
+export function createSignaling({ store, secret = '', now = () => Date.now(), sleep = wait, limits = SIGNAL_LIMITS, checkOrigin = true, outside = null } = {}) {
   if (!store) throw new Error('createSignaling needs a store');
   const L = limits;
-  const stats = { requests: 0, rooms: 0, joins: 0, relayed: 0, polls: 0, rejected: 0, worldRooms: 0, finds: 0, rateLimited: 0 };
+  const stats = { requests: 0, rooms: 0, joins: 0, relayed: 0, polls: 0, rejected: 0, worldRooms: 0, finds: 0, rateLimited: 0, outsideRefused: 0, outsideOff: 0 };
   let lastSweep = 0;
   const no = (...a) => { stats.rejected++; if (a[0] === 'rate') stats.rateLimited++; return fail(...a); };
-  const ipKey = ip => (secret ? hmacHex(secret, `signal-ip|${ip ?? ''}`) : sha256Hex(`signal-ip|${ip ?? ''}`)).then(h => h.slice(0, 24));
+  const ipHash = ip => (secret ? hmacHex(secret, `signal-ip|${ip ?? ''}`) : sha256Hex(`signal-ip|${ip ?? ''}`)).then(h => h.slice(0, 24));
+  // An outside game's address key starts with "o" (the hash is hex, so no other key does): the store can count outside
+  // hosts by prefix with no new column. Its budgets are therefore separate from the same address on our own pages.
+  const ipKey = async (ip, isOutside = false) => (isOutside ? 'o' : '') + (await ipHash(ip));
   const minute = t => Math.floor(t / 60_000);
   const newSession = async () => { const token = base64url(randomBytes(18)); return { peer: base64url(randomBytes(6)), token, tokenHash: await sha256Hex(token) }; };
 
@@ -225,7 +294,10 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
     if (m.key !== undefined && !key) return no('bad', 'key must be world:<slug> (lowercase letters, digits and dashes)');
     if ((await store.hit(`host|${ip}`, minute(t))) > L.hostsPerIpPerMin) return no('rate', 'too many rooms opened from this network, try again in a minute');
     if ((await store.ipPeers(ip, t - L.joinerIdleMs)) >= L.socketsPerIp) return no('rate', 'too many signaling sessions from this network');
-    if ((await store.openRooms(t - L.roomIdleMs)) >= L.maxRooms) return no('busy', 'signaling is full, try again soon');
+    if ((await store.hit(`host-h|${ip}`, hourEnd(t))) > L.hostsPerIpPerHour) return limited('too many rooms from this network this hour: try again in ' + waitWords(leftMs(hourEnd(t), t)), leftMs(hourEnd(t), t));
+    // Rooms whose host went quiet (hostSilentMs: it polls at least every 8 s) refuse joiners already, so they don't count
+    // against the cap: a script that opens rooms and walks away can't fill the 2,000 for two hours.
+    if ((await store.openRooms(t - L.hostSilentMs)) >= L.maxRooms) return no('busy', 'signaling is full, try again soon');
     if (key) return claimKey(key, ip, t, seatCount(m.max, 1, L.worldMaxSeats) ?? L.worldMaxSeats);
     for (let i = 0; i < 8; i++) {
       const code = makeCode(), s = await newSession();
@@ -339,18 +411,50 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
     return ok({ ok: true });
   }
 
-  async function request({ origin = null, host = '', ip = '', body = '', signal = null } = {}) {
+  // The words a player reads when outside games are not answered. `help` is the self-host guide's address, when set.
+  const offReason = cfg => 'Online play for games run from other sites is off for now. Play in two tabs on this machine, or host your own signaling' + (cfg.help ? ` (${cfg.help}).` : '.');
+
+  // The outside game's gate: the switch, the block and allow lists, then the budgets of this operation (address first,
+  // then origin, then the whole host), each checked only once the one before it passed so a refused caller can't spend
+  // the shared budgets. → a failure answer, or null.
+  async function outsideGate(op, o, cfg, ip, t) {
+    if (cfg.mode !== 'on' || cfg.block.has(o.host) || cfg.block.has(o.hostname) || (cfg.allow && !cfg.allow.has(o.host) && !cfg.allow.has(o.hostname))) {
+      stats.outsideOff++;
+      return no('off', offReason(cfg));
+    }
+    const oh = (await sha256Hex(`signal-origin|${o.origin}`)).slice(0, 16);
+    if (op === 'host') {
+      const ik = await ipKey(ip, true);
+      if ((await store.hit(`o-host-ip|${ik}`, hourEnd(t))) > cfg.roomsPerIpHour) { stats.outsideRefused++; return limited('too many rooms from this network: try again in ' + waitWords(leftMs(hourEnd(t), t)), leftMs(hourEnd(t), t)); }
+      if ((await store.hit(`o-host-org|${oh}`, hourEnd(t))) > cfg.roomsPerOriginHour) { stats.outsideRefused++; return limited('this game has opened too many rooms this hour: try again in ' + waitWords(leftMs(hourEnd(t), t)), leftMs(hourEnd(t), t)); }
+      if ((await store.hit('o-host-all', dayEnd(t))) > cfg.roomsPerDay) { stats.outsideRefused++; return limited('online play is at its daily limit for games run from other sites: try again in ' + waitWords(leftMs(dayEnd(t), t)), leftMs(dayEnd(t), t)); }
+      if ((await store.liveHosts('o', t - L.hostSilentMs)) >= cfg.liveRooms) { stats.outsideRefused++; return no('busy', 'online play is full right now for games run from other sites: try again in a few minutes'); }
+    } else if (op === 'join' || op === 'find') {
+      const per = op === 'join' ? cfg.joinsPerOriginMin : cfg.findsPerOriginMin;
+      if ((await store.hit(`o-${op}-org|${oh}`, minute(t))) > per) { stats.outsideRefused++; return limited('too many players are joining this game: try again in a minute', 60_000); }
+    }
+    return null;
+  }
+
+  async function request({ origin = null, host = '', ip = '', body = '', signal = null, outside: outsideArg = undefined } = {}) {
     stats.requests++;
-    if (checkOrigin && !sameOrigin(origin, host)) return no('bad', 'signaling answers only pages on its own origin', 403);
+    const cfg = outsideArg !== undefined ? outsideArg : (typeof outside === 'function' ? outside() : outside);
+    let o = null;   // set when this page is an outside game
+    if (checkOrigin && !sameOrigin(origin, host)) {
+      if (!cfg) return no('bad', 'signaling answers only pages on its own origin', 403);
+      o = outsideOrigin(origin);
+      if (!o) return no('bad', 'signaling cannot tell which site this game is served from (it needs an http or https page)', 403);
+    }
     if (typeof body !== 'string' || !body) return no('bad', 'no request body');
     if (body.length > L.frameBytes) return no('bad', 'request too large', 413);
     let m; try { m = JSON.parse(body); } catch { return no('bad', 'not JSON'); }
     if (!isObj(m)) return no('bad', 'not an object');
     const t = now();
     await sweep(t);
-    if (m.op === 'host') return openRoom(await ipKey(ip), t, m);
-    if (m.op === 'join') return joinRoom(m, await ipKey(ip), t);
-    if (m.op === 'find') return findRoom(m, await ipKey(ip), t);
+    if (o && (m.op === 'host' || m.op === 'join' || m.op === 'find')) { const r = await outsideGate(m.op, o, cfg, ip, t); if (r) return r; }
+    if (m.op === 'host') return openRoom(await ipKey(ip, !!o), t, m);
+    if (m.op === 'join') return joinRoom(m, await ipKey(ip, !!o), t);
+    if (m.op === 'find') return findRoom(m, await ipKey(ip, !!o), t);
     if (m.op !== 'signal' && m.op !== 'poll' && m.op !== 'leave') return no('bad', 'unknown op (signaling carries no game traffic)');
     const me = await session(m);
     if (!me) return no('no-room', 'not in a room (the session ended or expired)');
@@ -364,6 +468,11 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
     if (me.roomClosed != null) return no('no-room', 'the host left');
     if (me.role === 'host') {
       const target = typeof m.to === 'string' && m.to.length <= 32 ? await store.peer(m.to) : null;
+      // A joiner leaves signaling the moment its data channel opens, while the host is still sending the candidates it
+      // gathers late (reflexive and relay ones arrive after the channel is up). Those are not an error: answer ok and say
+      // the peer is gone, so a page's console and the logs stay clean. A peer that exists but is not this room's joiner
+      // is still refused. (gf-multiplayer 1.6.4 also stops sending them.)
+      if (!target && typeof m.to === 'string' && m.to.length <= 32) return ok({ ok: true, gone: true });
       if (!target || target.room !== me.room || target.role !== 'joiner') return no('bad', 'no such peer');
       return deliver(target.id, { t: 'signal', from: 'host', data: m.data }, t);
     }
@@ -376,7 +485,30 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
     return ok({ v: 1, signal: 'http', iceServers: iceServersFromEnv(env) });
   }
 
-  return { request, ice, stats: () => ({ ...stats }), store, limits: L };
+  /** GET /signal/v1/ice from a page on another origin. The relay credentials are the costly part, so they are counted per
+   *  address and per origin per day and for the host as a whole per day; past a budget the page gets STUN only (still a
+   *  working answer: most pairs connect without a relay). → {status, body, mint}; `mint` says the caller may add relay
+   *  credentials (valid cfg.relayTtlS) to body.iceServers. `hasRelay`: whether this host has a relay configured at all. */
+  async function iceOutside({ origin = null, host = '', ip = '', env = {}, outside: outsideArg = undefined, hasRelay = false } = {}) {
+    const cfg = outsideArg !== undefined ? outsideArg : (typeof outside === 'function' ? outside() : outside);
+    if (!cfg) return { ...fail('bad', 'signaling answers only pages on its own origin', 403), mint: false };
+    const o = outsideOrigin(origin);
+    if (!o) return { ...fail('bad', 'signaling cannot tell which site this game is served from (it needs an http or https page)', 403), mint: false };
+    if (cfg.mode !== 'on' || cfg.block.has(o.host) || cfg.block.has(o.hostname) || (cfg.allow && !cfg.allow.has(o.host) && !cfg.allow.has(o.hostname))) {
+      stats.outsideOff++;
+      return { ...fail('off', offReason(cfg)), mint: false };
+    }
+    const t = now(), body = { v: 1, signal: 'http', iceServers: PUBLIC_STUN.map(s => ({ ...s })) };
+    if (!hasRelay) return { status: 200, body, mint: false };
+    const ik = await ipKey(ip, true), oh = (await sha256Hex(`signal-origin|${o.origin}`)).slice(0, 16), end = dayEnd(t);
+    const over = (await store.hit(`o-relay-ip|${ik}`, end)) > cfg.relayPerIpDay || (await store.hit(`o-relay-org|${oh}`, end)) > cfg.relayPerOriginDay
+      || (await store.hit('o-relay-all', end)) > cfg.relayPerDay;
+    if (over) { stats.outsideRefused++; body.relay = 'limited'; return { status: 200, body, mint: false }; }
+    body.relay = 'on';
+    return { status: 200, body, mint: true, ttlS: cfg.relayTtlS };
+  }
+
+  return { request, ice, iceOutside, stats: () => ({ ...stats }), store, limits: L };
 }
 
 /**
@@ -393,6 +525,7 @@ export function createSignaling({ store, secret = '', now = () => Date.now(), sl
  *              pollStart (touch records a poll's start as the peer's `polled`)
  *   addPeer(peer) → bool (false when the room is gone or closed)   touch(id, {tokens, last, seen}, hostRoom|null, t)
  *   ipPeers(ip, since) → n live sessions      joiners(code, since) → [peer ids]     openRooms(since) → n
+ *   liveHosts(prefix, since) → n hosts whose address key starts with `prefix` and who were seen since (outside games: "o")
  *   push(id, body, t, max) → seq | null       ack(id, after)       read(id, after, since, max) → [{seq, body}]
  *   dropPeer(id)    closeRoom(code, t)    hit(key, window) → count    sweep({...before})
  */
@@ -433,6 +566,7 @@ export function memoryStore() {
     async addPeer(p) { const r = rooms.get(p.room); if (!r || r.closed != null || peers.has(p.id)) return false; peers.set(p.id, { ...p }); return true; },
     async touch(id, fields, hostRoom, t) { const p = peers.get(id); if (p) Object.assign(p, fields); const r = hostRoom && rooms.get(hostRoom); if (r) r.seen = t; },
     async ipPeers(ip, since) { let n = 0; for (const p of peers.values()) if (p.ip === ip && p.seen >= since) n++; return n; },
+    async liveHosts(prefix, since) { let n = 0; for (const p of peers.values()) if (p.role === 'host' && p.ip.startsWith(prefix) && p.seen >= since) n++; return n; },
     async joiners(code, since) { return [...peers.values()].filter(p => p.room === code && p.role === 'joiner' && p.created >= since).map(p => p.id); },
     async push(id, body, created, max) {
       if (!peers.has(id)) return null;
