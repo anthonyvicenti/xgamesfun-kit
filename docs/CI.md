@@ -228,6 +228,7 @@ took `continue-on-error` off the verify steps (`gh run list --workflow check.yml
 | 38164013581 | `system=linux-windows`, `job=party` | green: party on Linux and Windows, the party game and the board game under the profile |
 | 38164928678 | every job on every system | five of six green (party on Windows and macOS, scenic on all three). **party on Linux failed**: the party game's lobby legs, 6 of 7, `run-completed`, "timed out waiting for both players in the room" after 43 s; the board game's steps were then skipped |
 | 38165389785 | `system=linux`, `job=party`, the same commit | green, the board game included |
+| 38165565315 | `system=linux-windows`, every job, on the commit after (documents and the examples' records only) | green: all four jobs. macOS was not run again: it is ten times the minutes and nothing a runner executes had changed |
 
 **Fault 7, open (not fixed here: it is in the kits).** In run 38164928678 the two pages were connected and nothing
 moved after that. The gate's record: the host's page in its room with 1 player, the host's kit "Opening a room…" with
