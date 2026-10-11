@@ -19,7 +19,7 @@ const dist = (a, b) => Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.z ?? 0) - (b.z ?? 
 export async function twoPlayers(baseUrl, { shots = null, seconds = 10, log = () => {} } = {}) {
   const b = await ensureBrowser({ log });
   const { chromium } = await import('playwright-core');
-  const browser = await chromium.launch({ executablePath: b.path, headless: process.env.HEADED !== '1', args: ['--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+  const browser = await chromium.launch({ executablePath: b.path, headless: process.env.HEADED !== '1', args: ['--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', ...(process.env.CHROME_ARGS ?? '').split(/\s+/).filter(Boolean)] });
   const errors = [];
   try {
     const open = async label => {
