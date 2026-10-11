@@ -409,3 +409,11 @@ test('the one line is the same in README.md and docs/ONE-LINE.md, and every comm
   for (const step of ['### 1. Clone', '### 2. `npm ci`', '### 3.', '### 4.', '### 5.']) assert.ok(guide.includes(step), step);
   assert.ok((guide.match(/^If it fails/gm) ?? []).length >= 4, 'each step says what to do when it fails');
 });
+
+test('dev: the port and the browser can be set from the environment, and an option wins', async () => {
+  const { devOptions } = await import('../commands/dev.mjs');
+  assert.deepEqual(devOptions({}, {}), { port: null, open: true });
+  assert.deepEqual(devOptions({}, { GAMESFUN_DEV_PORT: '5927', GAMESFUN_NO_OPEN: '1' }), { port: 5927, open: false });
+  assert.deepEqual(devOptions({ port: '5200' }, { GAMESFUN_DEV_PORT: '5927' }), { port: 5200, open: true });
+  assert.deepEqual(devOptions({ 'no-open': true }, { GAMESFUN_DEV_PORT: 'x; rm' }), { port: null, open: false });
+});

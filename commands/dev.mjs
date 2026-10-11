@@ -10,7 +10,16 @@ Serve one game on this machine (127.0.0.1 only) and open the studio: the game, i
 studio/tabs/. Files reload as you (or your agent) save them. Two tabs on /game/gf/mp/ play together through the local
 signaling server. Stop with Ctrl+C.
   --port <n>   that port exactly (default: the first free of 5180–5189, else any free port)
-  --no-open    don't open a browser`;
+  --no-open    don't open a browser
+The environment variables GAMESFUN_DEV_PORT=<n> and GAMESFUN_NO_OPEN=1 do the same when the options are not given
+(a test machine sets them, so the one line runs unchanged without opening the person's browser).`;
+
+/** The port and whether to open a browser, from the options, else the environment. */
+export function devOptions(values, env = process.env) {
+  const port = values.port ?? (/^\d{1,5}$/.test(env.GAMESFUN_DEV_PORT ?? '') ? env.GAMESFUN_DEV_PORT : null);
+  const open = !values['no-open'] && !/^(1|true|yes|on)$/i.test(String(env.GAMESFUN_NO_OPEN ?? '').trim());
+  return { port: port ? Number(port) : null, open };
+}
 
 export default {
   name: 'dev',
@@ -20,7 +29,8 @@ export default {
     const { values, positionals } = parse(args, { port: { type: 'string' }, 'no-open': { type: 'boolean' } }, usage);
     if (values.port && !/^\d{1,5}$/.test(values.port)) throw new UsageError(`--port takes a number\n\n${usage}`);
     const gameDir = await resolveGame(positionals[0]);
-    const srv = await startDevServer({ gameDir, port: values.port ? Number(values.port) : null, log: (...a) => console.log(...a) });
+    const { port, open } = devOptions(values);
+    const srv = await startDevServer({ gameDir, port, log: (...a) => console.log(...a) });
     const entry = { pid: process.pid, url: srv.url, port: srv.port, game: shown(gameDir), gameDir, started: new Date().toISOString() };
     await recordDevServer(entry);
     const failed = srv.router.areas().filter(a => !a.ok);
@@ -31,7 +41,7 @@ export default {
     console.log(`  api      ${srv.router.areas().filter(a => a.ok).map(a => `/api/${a.area}`).join(', ')}`);
     for (const f of failed) console.log(`  routes   ${f.file} did not load: ${f.error}`);
     console.log('Live reload is on. Ctrl+C stops the server.');
-    if (!values['no-open']) openUrl(`${srv.url}studio/`);
+    if (open) openUrl(`${srv.url}studio/`);
     await new Promise(resolve => {
       const stop = async () => { await srv.close(); await forgetDevServer(process.pid).catch(() => {}); resolve(); };
       process.once('SIGINT', stop);
