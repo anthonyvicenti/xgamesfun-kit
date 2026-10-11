@@ -110,6 +110,11 @@ skills · `templates/examples/` example games · `kits/` games.fun's kits, a pin
 Built on games.fun's kits: **gf-three** (the three.js game kit), **gf-multiplayer** (host-in-the-browser multiplayer),
 **gf-audio** and **gf-assets**, snapshotted in `kits/` at the commit in `kits/KITS.json`. They carry three.js, Rapier,
 pmndrs postprocessing, N8AO, ecctrl, ws and ZzFX, and a library of CC0 and CC BY models by Kenney, Quaternius, Poly by
-Google and others. Every licence is listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+Google and others. The people and projects to thank, with the credit line each licence asks for, are in
+[CREDITS.md](CREDITS.md); every licence is listed in [THIRD_PARTY.md](THIRD_PARTY.md).
 
-This repository has no licence yet: its owner has not chosen one.
+## Licence
+
+MIT: see [LICENSE](LICENSE). It covers everything of ours in this repository. The models, textures and libraries that
+come from other people keep their own licences; [docs/LICENSING.md](docs/LICENSING.md) says which is which and what a
+game you make with the kit has to carry.

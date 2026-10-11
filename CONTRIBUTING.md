@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. This repository is private and has no licence yet; contributions are by invitation.
+Thanks for helping. This repository is MIT licensed (see [LICENSE](LICENSE) and [docs/LICENSING.md](docs/LICENSING.md)); it is private for now, and contributions are by invitation. What you contribute is under the same licence. The people and projects the kit builds on are in [CREDITS.md](CREDITS.md).
 
 - **Read first:** `docs/ARCHITECTURE.md` (layout, seams, ownership) and `docs/DEVELOPING.md` (tests, kit sync, examples).
 - **Never edit `kits/`.** It is a snapshot of games.fun's kits. Fix a kit in games.fun, then
