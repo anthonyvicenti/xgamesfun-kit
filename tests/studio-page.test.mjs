@@ -24,6 +24,7 @@ test('request states are in words a person understands', () => {
 test('events (contract kinds): normalised and described; the rest is left to the queue', () => {
   const e = normalizeEvent('{"seq":4,"t":1,"kind":"tool-start","session":"s","tool":"Edit","input":{"file_path":"config/world.json"}}');
   assert.match(describeEvent(e), /Using Edit: config\/world.json/);
+  assert.match(describeEvent(normalizeEvent({ kind: 'prompt', text: 'Requests from the studio page: GF_REQUEST {"id":"r_1"}' })), /handed to your session/, 'a wake is not shown as something the person typed');
   assert.equal(normalizeEvent('not json'), null);
   assert.equal(normalizeEvent({ type: 'old shape' }), null, 'no kind, no event');
   assert.equal(describeEvent(normalizeEvent({ kind: 'tool-end', ok: true })), null);

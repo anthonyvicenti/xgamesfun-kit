@@ -30,7 +30,7 @@ export function describeEvent(e) {
   switch (e.kind) {
     case 'session-start': return 'Your session started';
     case 'session-end': return 'Your session ended';
-    case 'prompt': return e.text ? `You asked: ${clip(e.text, 120)}` : 'A prompt reached your session';
+    case 'prompt': return /GF_REQUEST \{/.test(e.text ?? '') ? 'Your request was handed to your session' : e.text ? `You asked: ${clip(e.text, 120)}` : 'A prompt reached your session';
     case 'tool-start': return `Using ${e.tool ?? 'a tool'}${inputLine(e.input) ? `: ${inputLine(e.input)}` : ''}`;
     case 'tool-end': return e.denied ? `${e.tool ?? 'A tool'} was denied` : e.ok === false ? `${e.tool ?? 'A tool'} failed` : null;
     case 'permission-request': return `Asks to use ${e.permission?.tool ?? 'a tool'}`;

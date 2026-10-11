@@ -100,6 +100,7 @@ try {
     await s.stop('Done');
 
     // permission: Allow
+    await s.prompt('run the checks');
     const heldAllow = s.ask('Bash', { command: 'npx gamesfun verify --quick games/soak-squad' });
     await until(() => p.locator('.perm').count(), 6000, 'permission card');
     check(/Your session asks to use Bash/.test(await text(p, '.perm')) && /Your terminal can answer this too/.test(await text(p, '.perm')), `${label}: the card names the tool and says the terminal can answer too`);
@@ -129,11 +130,13 @@ try {
 
     // a request dropped by the stop guard, and Remove on it does not error
     await s.stop();
+    const w2 = await s.wait();                                 // listening: a new request is handed at once
     const sent2 = (await s.call('POST', 'request', { text: 'add a boss' })).body;
-    await sleep(3300);
-    await s.tool('Read', { file_path: 'rules.js' });         // the session is busy; the wait hands it at the stop
-    const r1 = await s.stop(); const r2 = await s.stop(); const r3 = await s.stop();
-    void r1; void r2; void r3;
+    await until(() => w2.lines.length, 4000, 'second wake');
+    await sleep(3300);                                         // a request handed under 3 s ago is not refused at the stop
+    await s.prompt(w2.lines[0].text);
+    for (let i = 0; i < 2; i++) check((await s.stop()).body?.decision === 'block', `${label}: stop ${i + 1} with the request unreported is refused`);
+    await s.stop();                                            // the third is let through; the request is dropped
     await until(async () => (await s.queue()).requests.find(r => r.id === sent2.id)?.state === 'dropped', 6000, 'dropped');
     await until(async () => /send again/i.test(await text(p, '.req-state')), 6000, 'dropped in page');
     await shot(p, `${label}-9-dropped`, 'A request the session ended two turns without reporting: "Not done: send again"');
@@ -174,6 +177,8 @@ try {
       const ar = await Promise.race([hold, sleep(6000).then(() => null)]);
       check(ar?.body?.hookSpecificOutput?.decision?.behavior === 'allow', 'desktop: a permission after the restart is answered by the click');
       await shot(p, 'desktop-11-after-restart', 'After the studio restarted under the open page: the new session, the new request, no reload');
+      // a request still waiting when its session ends goes to the next session that connects (bridge behaviour), so clear it
+      for (const r of (await s2.queue()).requests.filter(x => x.state === 'waiting')) await s2.call('DELETE', `request/${r.id}`);
       s2.closeAll(); await s2.end();
     }
     await ctx.close();
