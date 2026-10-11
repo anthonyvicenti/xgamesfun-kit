@@ -30,7 +30,17 @@ export default {
     const saveBtn = el('button', { type: 'button' }, 'Save the look');
     const resetBtn = el('button', { type: 'button', className: 'ghost' }, 'Put it back');
     tryon.append(saveBtn, resetBtn);
-    const showTryOn = () => { if (shown) ctx.preview.show(tryOnPath('player', { colour: cur().seats[seat] })); };
+    // the first time, the preview loads the turning player; after that a colour is handed to the running game with the
+    // kit's own loadout message (CONTRACT §6e: gf:loadout, applied within a second), so it changes without a reload
+    const showTryOn = () => {
+      if (!shown) return;
+      const f = ctx.preview.frame, here = (() => { try { return new URL(f.contentWindow.location.href); } catch { return null; } })();
+      const colour = cur().seats[seat];
+      if (here?.searchParams.get('gf-show') === 'character.player' && colour) {
+        try { f.contentWindow.postMessage({ type: 'gf:loadout', loadout: { values: { 'character.tint.player': colour }, files: {}, pass: null } }, location.origin); return; } catch {}
+      }
+      ctx.preview.show(tryOnPath('player', { colour }));
+    };
     const dirty = () => { const d = JSON.stringify(cur()) !== saved; tryon.hidden = !d; };
     const { bar: undoBtns, refresh: refreshUndo, off: offKeys } = undoBar(history, () => { paintSeats(); dirty(); showTryOn(); repaintFlat(); }, panel);
     const stage = next => { history.push(next); refreshUndo(); paintSeats(); dirty(); showTryOn(); repaintFlat(); };
@@ -141,6 +151,7 @@ export default {
         frames = sheetFrames(pic.width, pic.height);
         drawSheet();
         const verdict = judgeMod?.judge?.('body', pic, { style: worldStyle, plane: ctx.game.plane ?? world.plane ?? 'side' });
+        lastVerdict = verdict;
         judgeEl.replaceChildren(verdict ? el('div', {}, el('span', { className: verdict.ok ? 'ok' : 'bad' }, verdict.ok ? '✓ The kit\'s picture judge passes this sheet' : '✕ The kit\'s picture judge refuses this sheet'),
           ...verdict.errors.slice(0, 4).map(e => el('div', { className: 'bad' }, `${e.frame ? `${e.frame}: ` : ''}${e.message}`)), ...verdict.warnings.slice(0, 2).map(w => el('div', { className: 'muted' }, w.message))) : el('span', { className: 'muted' }, 'No picture judge in this game.'));
         play();
@@ -164,13 +175,16 @@ export default {
         try { await ctx.api(`game/slots/file?id=character.body.player&name=${encodeURIComponent(f.name)}`, f); ctx.toast('Your picture is on. The preview reloads with it.', 'ok'); }
         catch (e) { ctx.toast(e.message, 'error'); }
       });
+      let lastVerdict = null;
       async function offer() {
         if (!oldUrl) return;
+        const refused = lastVerdict && !lastVerdict.ok;
         compareEl.replaceChildren(el('div', { className: 'card' },
+          el('div', { className: `judge ${refused ? 'bad' : 'ok'}` }, refused ? 'Your session\'s picture is in, but the kit\'s picture judge refuses it (above): put the old one back, or ask again with what to change.' : 'Your session\'s picture is in and the judge passes it. Keep it?'),
           el('div', { className: 'compare' }, el('figure', {}, el('img', { src: oldUrl, alt: '', style: { width: '100%', imageRendering: worldStyle === 'pixel' ? 'pixelated' : 'auto' } }), 'before'), el('figure', {}, el('img', { src: `/game/${body.file}?t=${Date.now()}`, alt: '', style: { width: '100%', imageRendering: worldStyle === 'pixel' ? 'pixelated' : 'auto' } }), 'new')),
           el('div', { className: 'card-actions' },
-            el('button', { type: 'button', on: { click: () => { compareEl.replaceChildren(); oldUrl = null; ctx.toast('Kept the new picture.', 'ok'); } } }, 'Keep the new one'),
-            el('button', { type: 'button', className: 'ghost', on: { click: async () => { try { await ctx.api('game/slots/file?id=character.body.player&name=body.png', oldBytes); compareEl.replaceChildren(); oldUrl = null; ctx.toast('The old picture is back.', 'ok'); } catch (e) { ctx.toast(e.message, 'error'); } } } }, 'Put the old one back'))));
+            el('button', { type: 'button', className: refused ? 'ghost' : '', on: { click: () => { compareEl.replaceChildren(); oldUrl = null; ctx.toast('Kept the new picture.', 'ok'); } } }, 'Keep the new one'),
+            el('button', { type: 'button', className: refused ? '' : 'ghost', on: { click: async () => { try { await ctx.api('game/slots/file?id=character.body.player&name=body.png', oldBytes); compareEl.replaceChildren(); oldUrl = null; ctx.toast('The old picture is back.', 'ok'); } catch (e) { ctx.toast(e.message, 'error'); } } } }, 'Put the old one back'))));
       }
       await load();
       const off = ctx.on('game', async ({ files = [] }) => { if (!files.length || files.includes(body.file)) { await load(); offer(); } });

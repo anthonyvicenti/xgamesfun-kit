@@ -1,0 +1,242 @@
+// Screenshots and recording frames of the editors (Map, Skins, Items), in real Chrome on real dev servers, with real
+// clicks and drags. A scripted session (tests/stubs/session-driver.mjs: the bridge's real routes, no model) stands in for
+// the person's own agent where a request needs answering; what it writes is said in the notes.
+// Run through the graphics-card gate (the preview is the game, which needs WebGL):
+//   gpu-run.sh node tests/editors-shots.mjs <out dir> [first port]
+// Writes <out>/*.png, <out>/frames/<seq>-NN.png (the recordings, one frame a step) and <out>/shots.json.
+import { spawnSync } from 'node:child_process';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { createGame } from '../lib/create.mjs';
+import { ensureBrowser } from '../lib/chrome.mjs';
+import { BIN } from '../lib/paths.mjs';
+import { startDevServer } from '../server/index.mjs';
+import { sessionDriver } from './stubs/session-driver.mjs';
+
+const out = path.resolve(process.argv[2] ?? 'editor-shots'), basePort = Number(process.argv[3] ?? 6004);
+await mkdir(path.join(out, 'frames'), { recursive: true });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const root = path.join(os.tmpdir(), `gf-editors-shots-${process.pid}`);
+const notes = [];
+const note = (file, what) => { notes.push({ file, what }); console.log(`${file}\t${what}`); };
+const problems = [];
+
+// ---- the games: a side-on flat game, a melee party game, the soak example ----
+const ROWS = ['B............................B', 'B............................B', 'B............o..o............B', 'B............................B', 'B..o........======........o..B', 'B............................B', 'B.===..====..o..o..====..===.B', 'B............................B', 'B....====..========..====....B', 'B..o......................o..B', 'B.1...BB..1...BB...1..BB...1.B', '##############################'];
+const FLAT = { specVersion: 0, engine: 'flat', plane: 'side', loop: 'round', title: 'Coin Hop', hook: 'A side-on scramble: jump the ledges and grab more coins than your friends.', prompt: 'a 2D side-on platformer coin grab with friends, drawn cartoon art',
+  players: { min: 1, max: 4, bots: true, teams: 0, mode: 'versus' }, round: { seconds: 60, winBy: 'most coins when the time runs out', replay: true }, camera: 'side', controls: { interact: 'grab a coin', jump: 'jump (hold Down on a ledge to drop through it)' },
+  world: { template: 'stage', size: 'small', props: [{ name: 'coin', describe: 'a shiny gold coin', count: 12, from: 'library', role: 'collected by players' }], map: { legend: { o: 'mark:coin' }, rows: ROWS } },
+  mechanics: [{ id: 'pickup', as: 'coins to collect', params: { prop: 'coin', count: 0, effect: 'score', value: 1, respawnSeconds: 4, size: 0.8, collect: 'both' } }],
+  rules: { summary: 'Run and jump into a coin to take it. Most coins wins.', scoring: '+1 per coin', params: { coinPoints: 1 } },
+  characters: [{ role: 'player', describe: 'a round kid in a cap, seen from the side', body: { from: 'sprite' } }], look: { preset: 'drawn-day' }, sounds: [{ id: 'coin', describe: 'a bright coin chime' }], content: { rating: 'E' }, accept: ['coins'] };
+const PILLOW = { specVersion: 0, title: 'Pillow Brawl', hook: 'A backyard pillow fight: bop your friends, grab feathers, most bops wins.', prompt: 'a silly pillow fight with friends in a backyard, with a few different pillows to swing',
+  players: { min: 1, max: 4, bots: true, teams: 0, mode: 'versus' }, round: { seconds: 90, winBy: 'most bops when time is up', replay: true }, camera: 'third',
+  controls: { primary: 'swing your pillow', secondary: 'big swing', interact: 'grab a feather', jump: 'dash' },
+  world: { template: 'backyard', size: 'small', props: [{ name: 'crate', describe: 'a wooden crate of feathers', count: 6, from: 'library', role: 'a pickup that heals you' }, { name: 'bench', describe: 'a wooden bench', count: 2, from: 'library', role: 'scenery' }] },
+  mechanics: [
+    { id: 'melee', as: 'your pillow: swing it to bop friends', params: { weapon: 'pillow', weapons: [
+      { id: 'pillow', name: 'Pillow', kind: 'sword', color: '#f4f1ea', combo: [{ damage: 1, reach: 2.2, windup: 0.1, knockback: 3.5 }], heavy: { damage: 3, reach: 2.8 } },
+      { id: 'big-pillow', name: 'Big pillow', kind: 'axe', color: '#ffc94d', combo: [{ damage: 2, reach: 2.4, windup: 0.17, knockback: 6 }], heavy: { damage: 4, reach: 2.6 } }] } },
+    { id: 'pickup', as: 'feather crates that patch you up', params: { prop: 'crate', respawnSeconds: 10, effect: 'heal', value: 20 } },
+    { id: 'health', as: 'bopped: knocked over, back up soon', params: { hp: 100 } }],
+  rules: { summary: 'Swing to bop. Crates heal. Most bops wins.', scoring: '+1 per knock-over', params: { bopPoints: 1 } },
+  characters: [{ role: 'player', describe: 'a round jelly-bean kid in pyjamas', body: { from: 'bean' } }], look: { preset: 'jelly-pastel', time: 'day' },
+  sounds: [{ id: 'bop', describe: 'a soft pillow thump' }], content: { rating: 'E' }, accept: ['friends see each other'] };
+
+async function make(name, spec, from) {
+  const dir = path.join(root, name);
+  if (spec) { const f = path.join(root, `${name}.spec.json`); await mkdir(root, { recursive: true }); await writeFile(f, JSON.stringify(spec)); await createGame(dir, { spec: f }); }
+  else await createGame(dir, { from });
+  return dir;
+}
+const games = { flat: await make('coin-hop', FLAT), pillow: await make('pillow', PILLOW), soak: await make('soak', null, 'soak-squad') };
+// the flat example's own rules (a coin is a point): the stub create writes is enough for the editors, which never read rules.js
+const servers = {};
+let port = basePort;
+for (const [k, dir] of Object.entries(games)) servers[k] = await startDevServer({ gameDir: dir, port: port++, log: () => {} });
+const url = k => `http://127.0.0.1:${servers[k].port}/studio/`;
+
+const b = await ensureBrowser({});
+const { chromium } = await import('playwright-core');
+const browser = await chromium.launch({ executablePath: b.path, headless: true, args: ['--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', ...(process.env.CHROME_ARGS ?? '').split(/\s+/).filter(Boolean)] });
+async function page(k, w = 1280, h = 800) {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+  const p = await ctx.newPage();
+  p.errors = [];
+  p.on('pageerror', e => p.errors.push(e.message));
+  p.on('console', m => { if (m.type() === 'error' && !/favicon/.test(m.text())) p.errors.push(m.text()); });
+  await p.goto(url(k), { waitUntil: 'load' });
+  await sleep(1500);
+  return p;
+}
+const tab = async (p, id) => { await p.click(`#tabs button[data-id="${id}"]`); await sleep(1200); };
+const shot = async (p, name, what) => { await sleep(300); await p.screenshot({ path: path.join(out, `${name}.png`) }); note(`${name}.png`, what); };
+const frames = {};
+const frame = async (p, seq, what) => { frames[seq] = (frames[seq] ?? 0) + 1; const f = `frames/${seq}-${String(frames[seq]).padStart(2, '0')}.png`; await sleep(250); await p.screenshot({ path: path.join(out, f) }); note(f, what); };
+const noSideScroll = async (p, name) => { const [sw, iw] = await p.evaluate(() => [document.documentElement.scrollWidth, innerWidth]); if (sw > iw) problems.push(`${name}: sideways scroll ${sw} > ${iw}`); };
+const errorsOf = (p, name) => { const e = p.errors.filter(x => !/WebGL|gpu/i.test(x)); if (e.length) problems.push(`${name}: ${e.join(' | ')}`); };
+async function cellXY(p, c, r) {
+  const geo = JSON.parse(await p.getAttribute('.paint-view canvas', 'data-geo')), box = await p.locator('.paint-view canvas').boundingBox();
+  return [box.x + geo.ox + (c + 0.5) * geo.cell, box.y + geo.oy + (r + 0.5) * geo.cell];
+}
+async function stroke(p, cells) {
+  let [x, y] = await cellXY(p, cells[0].c, cells[0].r);
+  await p.mouse.move(x, y); await p.mouse.down();
+  for (const q of cells.slice(1)) { [x, y] = await cellXY(p, q.c, q.r); await p.mouse.move(x, y, { steps: 3 }); }
+  await p.mouse.up();
+}
+const pickPaint = (p, label) => p.click(`.palette .swatch-item:has-text("${label}")`);
+
+try {
+  // ================= A. the map painter (flat) =================
+  {
+    const p = await page('flat');
+    await tab(p, 'map');
+    await shot(p, 'map-flat-1-open', 'Map tab on a side-on flat game: the painter laid over the preview, tools, the palette from the tile slots, start spots and coins, the kit\'s checks green');
+    await frame(p, 'a-map', 'the painter opens over the game');
+    await pickPaint(p, 'Ledge');
+    await stroke(p, [3, 4, 5, 6, 7, 8].map(c => ({ c, r: 1 })));
+    let [x, y] = await cellXY(p, 12, 9); await p.mouse.move(x, y);
+    await shot(p, 'map-flat-2-red', 'A ledge painted too high: it and the place above it turn red, the checks say why in words, Save & play is off; the blue shade is where a jump from the floor under the cursor lands');
+    await frame(p, 'a-map', 'a ledge too high: red, and the words say why');
+    await p.click('button:has-text("Undo")');
+    await frame(p, 'a-map', 'Undo');
+    await stroke(p, [20, 21, 22, 23].map(c => ({ c, r: 2 })));
+    await pickPaint(p, 'Coin');
+    for (const c of [21, 22]) { [x, y] = await cellXY(p, c, 1); await p.mouse.click(x, y); }
+    [x, y] = await cellXY(p, 24, 3); await p.mouse.move(x, y);
+    await shot(p, 'map-flat-3-fixed', 'A new ledge a jump above the top one, with two coins: every ledge, coin and start spot can be reached (green), Save & play is on');
+    await frame(p, 'a-map', 'a ledge in reach, two coins: green');
+    await p.click('button:has-text("Save & play")');
+    await sleep(6000);
+    await shot(p, 'map-flat-4-playing', 'After Save & play: the slot world.map is written, the game reloads and plays the new map (the new ledge and coins top right)');
+    await frame(p, 'a-map', 'Save & play: the game reloads with the map');
+    const world = JSON.parse(await readFile(path.join(games.flat, 'config/world.json'), 'utf8'));
+    if (world.map.rows[2].slice(20, 24) !== '====') problems.push(`map save: row 3 is ${world.map.rows[2]}`);
+    await noSideScroll(p, 'map-flat'); errorsOf(p, 'map-flat');
+    await p.context().close();
+  }
+  // ================= B. the layout (3D) =================
+  {
+    const p = await page('soak');
+    await tab(p, 'map');
+    const v = JSON.parse(await p.getAttribute('.paint-view canvas', 'data-view')), box = await p.locator('.paint-view canvas').boundingBox();
+    const at = (x, z) => [box.x + v.origin[0] + x * v.k, box.y + v.origin[1] + z * v.k];
+    let [x, y] = at(9.5, -6.8); await p.mouse.move(x, y); await p.mouse.down();
+    for (const [a, c] of [[8, -6], [6, -4.5], [4, -3]]) { [x, y] = at(a, c); await p.mouse.move(x, y, { steps: 4 }); }
+    await p.mouse.up(); await p.keyboard.press('r');
+    await shot(p, 'map-layout-1', 'Map tab on a 3D party world: the props from above at their measured size, start spots numbered; the slide picked, dragged nearer the middle and turned (R); its card on the right');
+    await p.click('button:has-text("Save & play")');
+    await sleep(6000);
+    await shot(p, 'map-layout-2-playing', 'After Save & play: the layout slot written (world.backyard.layout), the game reloads');
+    errorsOf(p, 'map-layout');
+    await p.context().close();
+  }
+  // ================= C. skins (3D) =================
+  {
+    const p = await page('pillow');
+    await tab(p, 'skins');
+    await sleep(4000);
+    await shot(p, 'skins-3d-1-open', 'Skins tab on a party game: seat colours, the small palette, the library bodies with pictures; the preview shows the player turning (?gf-show=character.player)');
+    await frame(p, 'b-skin', 'Skins: the player turning in the preview');
+    await p.click('.swatch[title="#6d8bff"]');
+    await sleep(4500);
+    await shot(p, 'skins-3d-2-tryon', 'Player 1 set to blue: tried on in the preview through the kit\'s loadout input, nothing saved yet ("Trying it on")');
+    await frame(p, 'b-skin', 'pick blue: tried on before saving');
+    await p.click('button:has-text("Save the look")');
+    await sleep(800);
+    await frame(p, 'b-skin', 'Save the look: written through character.tint.player');
+    await p.click('.body-pick:has-text("Tall bean")');
+    await sleep(5000);
+    await shot(p, 'skins-3d-3-body', 'A library body picked (Tall bean): swapped into character.body.player and its height set, the preview reloads with it; "Put the last body back" undoes it');
+    await frame(p, 'b-skin', 'a new body from the library');
+    const chars = JSON.parse(await readFile(path.join(games.pillow, 'config/characters.json'), 'utf8'));
+    if (chars.palette[0] !== '#6d8bff') problems.push(`skins save: palette[0] is ${chars.palette[0]}`);
+    errorsOf(p, 'skins-3d');
+    await p.context().close();
+  }
+  // ================= D. skins (2D) with a stand-in session =================
+  {
+    const p = await page('flat');
+    const s = await sessionDriver(`http://127.0.0.1:${servers.flat.port}`, { id: 'shots-flat', cwd: games.flat });
+    await s.start();
+    await tab(p, 'skins');
+    await p.click('.swatch[title="#4be0a8"]');
+    await sleep(600);
+    await shot(p, 'skins-2d-1', 'Skins on a flat game: the six frames and the walk tinted with player 1\'s new colour (light parts take it), the kit\'s picture judge passes the sheet');
+    await p.fill('.ask-box textarea', 'a small knight in blue armour with a feather on the helmet');
+    await p.click('button:has-text("Ask my session to draw it")');
+    await sleep(800);
+    const got = await s.collect();
+    // the stand-in session answers with the kit's PIXEL stand-in sheet through the slot route (a real session would draw
+    // through the art tool, gamesfun_art_request then gamesfun_art_take, which writes the same slot)
+    const standin = path.join(path.dirname(BIN), '..', 'kits', 'research', 'gf-three', 'tools', 'lib', 'standin-assets', 'flat', 'pixel', 'body-side.png');
+    const bytes = await readFile(standin);
+    await fetch(`http://127.0.0.1:${servers.flat.port}/api/game/slots/file?id=character.body.player&name=body.png`, { method: 'POST', body: bytes, headers: { 'content-type': 'application/octet-stream' } });
+    const rid = got.body?.requests?.at(-1)?.id; if (rid) await s.done(rid, 'drew it (stand-in: the kit\'s pixel sheet)');
+    await sleep(2500);
+    await shot(p, 'skins-2d-2-offer', 'After "Ask my session to draw it": the session\'s picture (here a stand-in: the kit\'s own pixel sheet) shown beside the old one, judged, with Keep or Put the old one back');
+    errorsOf(p, 'skins-2d');
+    s.closeAll();
+    await p.context().close();
+  }
+  // ================= E. items, with a stand-in session adding one =================
+  {
+    const p = await page('pillow');
+    const s = await sessionDriver(`http://127.0.0.1:${servers.pillow.port}`, { id: 'shots-pillow', cwd: games.pillow });
+    await s.start();
+    await tab(p, 'items');
+    await shot(p, 'items-1-open', 'Items tab on a melee party game: a card per item (the crate pickup with its mechanic\'s numbers, each pillow), plain words, the slot\'s own limits, the other pillow\'s value under each number');
+    await frame(p, 'c-item', 'Items: a card per item');
+    const r = p.locator('.card:has(h4:text-is("Pillow")) input[type=range]').first();
+    const bb = await r.boundingBox();
+    await p.mouse.click(bb.x + bb.width * 0.03, bb.y + bb.height / 2);
+    await sleep(1500);
+    await frame(p, 'c-item', 'slide the pillow\'s damage and let go: saved through its slot');
+    await p.selectOption('.ask-box:has-text("Add an item like") select', 'weapon:pillow');
+    await p.fill('.ask-box:has-text("Add an item like") input[type=text]', 'Feather duster');
+    await p.fill('.ask-box:has-text("Add an item like") textarea', 'quick and long, but weak');
+    await p.click('button:has-text("Ask my session to add it")');
+    await sleep(800);
+    await p.locator('.ask-box:has-text("Add an item like")').scrollIntoViewIfNeeded();
+    await shot(p, 'items-2-asked', 'Add an item like Pillow, named Feather duster: the words go to the person\'s own session as a request (the page cannot add a table entry through a slot)');
+    await frame(p, 'c-item', 'add one like Pillow: asked of the session');
+    // the stand-in session does what the request says: a new entry in the melee table, then `gamesfun slots write`
+    const got = await s.collect();
+    const gf = path.join(games.pillow, 'config/game.json'), game = JSON.parse(await readFile(gf, 'utf8'));
+    const melee = game.mechanics.find(m => m.id === 'melee');
+    melee.params.weapons.push({ id: 'feather-duster', name: 'Feather duster', kind: 'spear', color: '#b79bff', combo: [{ damage: 0.5, reach: 3.2, windup: 0.06, knockback: 2 }], heavy: { damage: 1.5, reach: 3.4 } });
+    await writeFile(gf, `${JSON.stringify(game, null, 1)}\n`);
+    const w = spawnSync(process.execPath, [BIN, 'slots', 'write', games.pillow], { encoding: 'utf8' });
+    if (w.status !== 0) problems.push(`slots write: ${w.stderr || w.stdout}`);
+    const rid = got.body?.requests?.at(-1)?.id; if (rid) await s.done(rid, 'added Feather duster');
+    await sleep(2500);
+    await p.locator('.card:has(h4:text-is("Feather duster"))').scrollIntoViewIfNeeded().catch(() => problems.push('items: no Feather duster card'));
+    await shot(p, 'items-3-added', 'The stand-in session added the weapon (config/game.json, then `gamesfun slots write`): its card appears by itself, with the other pillows\' values beside each number');
+    await frame(p, 'c-item', 'the session added it: its card appears');
+    await p.locator('.card:has(h4:text-is("Crate")) button:has-text("See it")').click();
+    await sleep(5000);
+    await shot(p, 'items-4-see', '"See it" on the crate: the preview shows the prop (?gf-show=prop.crate)');
+    errorsOf(p, 'items');
+    s.closeAll();
+    await p.context().close();
+  }
+  // ================= phone width =================
+  for (const [k, id, name] of [['flat', 'map', 'phone-map'], ['flat', 'skins', 'phone-skins-2d'], ['pillow', 'items', 'phone-items'], ['pillow', 'skins', 'phone-skins-3d']]) {
+    const p = await page(k, 390, 844);
+    await tab(p, id);
+    await sleep(2500);
+    await shot(p, name, `${id} at phone width (390 x 844)`);
+    if (id !== 'map') { await p.locator('.panel:not([hidden])').evaluate(e => e.scrollIntoView()); await p.evaluate(() => scrollBy(0, 420)); await shot(p, `${name}-lower`, `${id} at phone width, scrolled to the tab`); }
+    await noSideScroll(p, name); errorsOf(p, name);
+    await p.context().close();
+  }
+} catch (e) { problems.push(`stopped: ${e.stack ?? e.message}`); }
+finally {
+  await browser.close();
+  for (const s of Object.values(servers)) await s.close().catch(() => {});
+  await writeFile(path.join(out, 'shots.json'), JSON.stringify({ when: new Date().toISOString(), chrome: b.path, chromeArgs: process.env.CHROME_ARGS ?? '', shots: notes, problems }, null, 1));
+  await rm(root, { recursive: true, force: true });
+  console.log(problems.length ? `PROBLEMS:\n${problems.join('\n')}` : 'no problems');
+}

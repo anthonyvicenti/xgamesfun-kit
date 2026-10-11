@@ -97,6 +97,8 @@ export async function mountPainter(root, ctx, slotList) {
   const banner = el('div', { className: 'overlay-bar' }, el('strong', {}, 'Editing the level'), el('span', { className: 'muted small' }, 'Save & play to try it'));
   const keyNote = el('div', { className: 'overlay-key small' },
     el('span', {}, el('i', { className: 'k bad' }), 'no jump reaches it'), el('span', {}, el('i', { className: 'k shade' }), 'a jump from the cursor lands here'), el('span', {}, el('i', { className: 'k ok' }), 'a player can stand and get here'));
+  const pan = el('input', { type: 'range', className: 'pan', min: 0, max: 0, value: 0, hidden: true, 'aria-label': 'Slide along the map', on: { input: () => layout() } });
+  keyNote.prepend(pan);
   const view = el('div', { className: 'paint-view' }, banner, canvas, keyNote);
   let geo = { cell: 16, ox: 0, oy: 0 };
   const g = canvas.getContext('2d');
@@ -104,11 +106,16 @@ export async function mountPainter(root, ctx, slotList) {
   function layout() {
     const rect = view.getBoundingClientRect(), dpr = window.devicePixelRatio || 1, M = map(), cols = M.rows[0].length, rows = M.rows.length;
     const top = banner.offsetHeight + 6, bottom = keyNote.offsetHeight + 6;
-    const cell = Math.max(6, Math.floor(Math.min((rect.width - 16) / cols, (rect.height - top - bottom - 8) / rows)));
+    // a finger needs about 22 px: when the whole map would be smaller, keep the cells that big and slide along it
+    const fit = Math.floor(Math.min((rect.width - 16) / cols, (rect.height - top - bottom - 8) / rows));
+    const cell = Math.max(fit, Math.min(22, Math.floor((rect.height - top - bottom - 8) / rows)));
+    const wide = cell * cols > rect.width - 16;
+    pan.hidden = !wide; pan.max = String(Math.max(0, cell * cols - (rect.width - 16)));
+    if (Number(pan.value) > Number(pan.max)) pan.value = pan.max;
     canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
     canvas.style.width = `${rect.width}px`; canvas.style.height = `${rect.height}px`;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    geo = { cell, ox: Math.round((rect.width - cell * cols) / 2), oy: Math.round(top + (rect.height - top - bottom - cell * rows) / 2), w: rect.width, h: rect.height };
+    geo = { cell, ox: wide ? 8 - Number(pan.value) : Math.round((rect.width - cell * cols) / 2), oy: Math.round(top + (rect.height - top - bottom - cell * rows) / 2), w: rect.width, h: rect.height };
     canvas.dataset.geo = JSON.stringify({ cell, ox: geo.ox, oy: geo.oy, cols, rows });      // where the cells are (tests, tools)
     draw();
   }

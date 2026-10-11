@@ -70,7 +70,7 @@ export function itemsOf(slots, { mechanics = [] } = {}) {
     // inside its own card a field drops the weapon's name: "Pillow, swing 1: damage" reads "Swing 1: damage"
     const mine = melee.filter(s => s.id.startsWith(`mechanic.melee.${w}.`)).map(s => ({ ...s, label: cap(String(s.label ?? s.id).replace(new RegExp(`^${esc(nameOf)}[,:]\\s*`), '')) }));
     const model = mine.find(s => s.type === 'model');
-    cards.push({ id: `weapon:${w}`, kind: 'weapon', name: nameOf, what: asOf('melee') ?? 'a weapon', mechanic: 'melee', weapon: w,
+    cards.push({ id: `weapon:${w}`, kind: 'weapon', name: nameOf, what: weapons.length > 1 ? `one of ${weapons.length} weapons${asOf('melee') ? ` (${asOf('melee')})` : ''}` : asOf('melee') ?? 'a weapon', mechanic: 'melee', weapon: w,
       picture: model ? { slot: model.id, type: 'model', file: model.file } : null, show: null, ...fields(mine.filter(s => s.type !== 'model')) });
   }
   // an aimed mechanic with no prop (a stream, a spell): the "weapon" is its numbers and its colour
