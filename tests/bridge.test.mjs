@@ -152,20 +152,29 @@ test('stop guard: requests that arrived during the turn are handed over at the s
   assert.equal(q.sessions[0].state, 'working');
 });
 
-test('stop guard: while the play-tester subagent has the round, the session is told to wait for its report, not to go on', async () => {
+test('stop guard: while the play-tester subagent has the round, one refusal, then the session may wait for its report', async () => {
   // found in the end-to-end run: the session ended its turn to wait for a background play-tester and was told
   // "call gamesfun_next and do what it returns" three times, then the page said the session was waiting for the person
   const b = mk({ loop: { status: 'building', step: 'playtest', why: 'a play-tester plays the game', round: 1, updated: 't1', handed: 'playtest' } });
   start(b, 'A');
+  const seen = [];
+  b.subscribe(e => seen.push(e));
   const first = await b.stop({ session: 'A' });
   assert.match(first.refuse, /play-tester subagent has the round/);
+  assert.match(first.refuse, /end your turn now and wait/);
   assert.match(first.refuse, /gamesfun_step_playtest/);
   assert.doesNotMatch(first.refuse, /no question is waiting/);
-  await b.stop({ session: 'A' }); await b.stop({ session: 'A' });
-  const fourth = await b.stop({ session: 'A' });
-  assert.equal(fourth.refuse, null);
-  assert.match(fourth.notice, /play-tester has had the game through 3 refused stops/);
-  assert.doesNotMatch(fourth.notice, /waiting for you/);
+  // one refusal made sure it was started; the session may now wait for the report with its turn ended
+  for (let i = 0; i < 4; i++) {
+    const next = await b.stop({ session: 'A' });
+    assert.equal(next.refuse, null);
+    assert.equal(next.notice, null, 'the person is not told the session waits for them');
+  }
+  assert.ok(!seen.some(e => e.kind === 'guard'));
+  assert.equal((await b.queue()).sessions[0].guard, null);
+  // the report came and failed a promise: the next step holds as any other
+  b.setLoop({ status: 'building', step: 'repair', why: 'w', round: 1, updated: 't2', handed: 'repair' });
+  assert.match((await b.stop({ session: 'A' })).refuse, /next step is "repair"/);
   // the play-test step before it is handed over is an ordinary step
   const c = mk({ loop: { status: 'building', step: 'playtest', why: 'w', round: 1, updated: 't1', handed: null } });
   start(c, 'A');

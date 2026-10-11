@@ -273,6 +273,10 @@ instruction) in two cases, both bounded:
    (`systemMessage`) and lets the session stop until the loop state changes. The bridge never writes the loop state.
    When the state file carries a `session` field, only that session is held; otherwise every session whose working
    directory is the game folder, inside it or above it.
+   **While the play-tester subagent has the round** (the state's `step` is `playtest` and `handed.step` is `playtest`):
+   one refusal, which tells the session to wait for the report if the subagent is playing and to start it if it is
+   not; later stops for the same state are let through with no notice to the person, because an agent may run the
+   subagent in the background and end its turn to wait, and the report wakes it.
 2. **A request is unanswered.** A request this session was handed and has not reported. At most 2 refusals for each
    request; then the request becomes `dropped`. A request the wait handed over less than 3 seconds ago does not refuse
    the stop: its wake is already bringing it.
