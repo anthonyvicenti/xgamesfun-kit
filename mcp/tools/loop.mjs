@@ -17,6 +17,7 @@
 //   - Before each agent round the game folder is checkpointed (lib/checkpoint.mjs); gamesfun_rollback restores one.
 //   - No tool starts an agent, calls a model, signs anyone in or holds a credential.
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -29,7 +30,7 @@ import { check as schemaProblems } from '../../kits/research/gf-three/tools/lib/
 import { clearCancel, readCancel } from '../../lib/cancel.mjs';
 import { catalog as kitCatalog } from '../../lib/catalog.mjs';
 import { CHAR_DEPS, npmCli } from '../../lib/char-deps.mjs';
-import { checkpointStore, treeHash } from '../../lib/checkpoint.mjs';
+import { checkpointStore, gameFiles, treeHash } from '../../lib/checkpoint.mjs';
 import { ensureBrowser } from '../../lib/chrome.mjs';
 import { createGame as kitCreate } from '../../lib/create.mjs';
 import { isGame } from '../../lib/games.mjs';
@@ -374,6 +375,25 @@ const withCancel = t => ({
   },
 });
 
+// ---------------------------------------------------------------- keeping the person's edits (question 29, 2026-10-11)
+export const KEEP_EDITS = 'gamesfun_keep_edits';
+/** The record of every time the person chose to keep edits made while the play-tester had the game. */
+const keptFile = G => path.join(G.job, 'kept-edits.json');
+/** Which game files differ from a checkpoint. → { added, changed, removed } (at most 40 names each) */
+async function changedSince(cp, name, root) {
+  const m = await cp.get(name);
+  if (!m?.files) return null;
+  const { files } = await gameFiles(root);
+  const added = [], changed = [], have = new Set(files);
+  for (const rel of files) {
+    if (!(rel in m.files)) { added.push(rel); continue; }
+    const h = createHash('sha256').update(await readFile(path.join(root, ...rel.split('/')))).digest('hex');
+    if (h !== m.files[rel]) changed.push(rel);
+  }
+  const removed = Object.keys(m.files).filter(rel => !have.has(rel));
+  return { added: added.slice(0, 40), changed: changed.slice(0, 40), removed: removed.slice(0, 40) };
+}
+
 // ---------------------------------------------------------------- rounds
 /** The checkpoint of the play-test round that is under way: the newest one (they are numbered across runs). */
 const latestPlaytest = async cp => `playtest-${await cp.next('playtest') - 1}`;
@@ -402,6 +422,18 @@ async function currentRound(G, s) {
   if (isTalk(s)) return { kind: s.handed.kind, brief: null };
   const n = await cp.next('round') - 1, name = `round-${n}`;
   return { n, checkpoint: name, kind: s.handed.kind, brief: await readFile(roundFile(G, name), 'utf8').catch(() => null) };
+}
+
+/** Hand a play-test round to the play-tester subagent: a checkpoint of the files it is given, and the round's message. */
+async function handPlaytest(L, G, cp, r) {
+  const again = { tool: 'gamesfun_step_playtest', args: { game: p(G.game) } };
+  // numbered across runs, like the rounds: a later run's play-test never overwrites an earlier one's checkpoint
+  const name = `playtest-${await cp.next('playtest')}`;
+  const kept = await cp.keep(name, { step: 'playtest', kind: `${L.state.kind === 'change' ? 'change' : 'build'}, play-test round ${L.state.handed.n}`, hash: await filesHash(G.game) });
+  const brief = [r.message, '', `Start the \`${PLAYTESTER}\` subagent with the line above as its whole task (it reads ${p(G.playtest)}/PLAYTEST.md itself; it must not see this conversation or the game's code).${r.model ? ` A ${r.model}-class model is enough for it.` : ''} Do not play-test the game yourself and do not change the game while it plays. When it has reported, call \`gamesfun_step_playtest\` again.`].join('\n');
+  await mkdir(G.rounds, { recursive: true });
+  await writeFile(roundFile(G, name), brief);
+  return { game: p(G.game), ...refusedOf(L), ran: ['playtest'], status: L.state.status, step: 'playtest', why: 'the play-tester has the round', round: { n: L.state.handed.n, checkpoint: kept.name, kind: 'playtest', agent: PLAYTESTER, ...(r.model ? { model: r.model } : {}), brief }, next: { ...again, do: where(L.state, G).do } };
 }
 
 /** After a step: hand over the agent round when that is next, then say where the loop stands. */
@@ -595,7 +627,7 @@ const TOOLS = [
         await rm(failure, { force: true });
         const r = await L.step();
         if (!r.waiting) return report(L, host, G, { ran: ['playtest'], playtest: L.state.playtest, ...(lines.length ? { log: lines.slice(-8) } : {}) });
-        return handPlaytest(r);
+        return handPlaytest(L, G, cp, r);
       }
       // the report must be this round's, about the files as they are
       const k = L.state.handed, name = await latestPlaytest(cp), handedAt = Date.parse(k.at);
@@ -603,25 +635,66 @@ const TOOLS = [
       if (at == null) return refuse('no-report', `The play-tester has not reported: ${p(reportFile)} is not there. Start the ${PLAYTESTER} subagent with the round's message (gamesfun_next shows it again) and call this tool when it is done.`, again, { round: await currentRound(G, L.state) });
       if (at + 1000 < handedAt) return refuse('stale-playtest', `The report in ${p(out)} is older than this play-test round (${k.at}): it is not about this version. Run the ${PLAYTESTER} subagent again.`, again);
       const then = (await cp.get(name))?.meta?.hash ?? null, now = await filesHash(G.game);
-      if (then && then !== now) return refuse('stale-playtest', 'The game\'s files changed after the play-tester was given the game, so its report is about other files. Undo the change, then call this tool again.', { tool: 'gamesfun_rollback', args: { game: p(G.game), checkpoint: name } }, { hashThen: then, hashNow: now });
+      if (then && then !== now) return refuse('stale-playtest', 'The game\'s files changed after the play-tester was given the game, so its report is about other files. There are two ways on, and the person chooses when the change was theirs: undo the change (gamesfun_rollback to this checkpoint, then call this tool again), or keep it (gamesfun_keep_edits with their words: the report is set aside and the game is verified again as it is).', { tool: 'gamesfun_rollback', args: { game: p(G.game), checkpoint: name } }, { or: { tool: 'gamesfun_keep_edits', args: { game: p(G.game), wish: '<the person\'s own words>' } }, changed: await changedSince(cp, name, G.game), hashThen: then, hashNow: now });
       const r = await L.step();
       // the brief was not the one the loop wrote: the report is dropped and the round handed over again
-      if (r.waiting) return handPlaytest(r);
+      if (r.waiting) return handPlaytest(L, G, cp, r);
       const pt = L.mem.pt;
       return report(L, host, G, {
         ran: ['playtest'],
         playtest: { ...L.state.playtest, failed: pt?.failedIds ?? [], blockers: (pt?.feel ?? []).filter(f => f.severity === 'blocker').map(f => f.issue), summary: pt?.summary ?? '', report: p(reportFile) },
         ...(lines.length ? { log: lines.slice(-8) } : {}),
       });
-      async function handPlaytest(r) {
-        // numbered across runs, like the rounds: a later run's play-test never overwrites an earlier one's checkpoint
-        const name = `playtest-${await cp.next('playtest')}`;
-        const kept = await cp.keep(name, { step: 'playtest', kind: `${L.state.kind === 'change' ? 'change' : 'build'}, play-test round ${L.state.handed.n}`, hash: await filesHash(G.game) });
-        const brief = [r.message, '', `Start the \`${PLAYTESTER}\` subagent with the line above as its whole task (it reads ${p(G.playtest)}/PLAYTEST.md itself; it must not see this conversation or the game's code).${r.model ? ` A ${r.model}-class model is enough for it.` : ''} Do not play-test the game yourself and do not change the game while it plays. When it has reported, call \`gamesfun_step_playtest\` again.`].join('\n');
-        await mkdir(G.rounds, { recursive: true });
-        await writeFile(roundFile(G, name), brief);
-        return { game: p(G.game), ...refusedOf(L), ran: ['playtest'], status: L.state.status, step: 'playtest', why: 'the play-tester has the round', round: { n: L.state.handed.n, checkpoint: kept.name, kind: 'playtest', agent: PLAYTESTER, ...(r.model ? { model: r.model } : {}), brief }, next: { ...again, do: where(L.state, G).do } };
+    }); },
+  },
+  {
+    name: KEEP_EDITS,
+    description: 'Keep changes made to the game while the play-tester had it, and verify again. Only on the person\'s word, after gamesfun_step_playtest refused its report as stale: ask them whether to undo the change (gamesfun_rollback) or keep it, and pass what they said as `wish`. The tool records the wish (.gf-loop/job/kept-edits.json), keeps a checkpoint of the files as they are (kept-<n>), reads the play-tester\'s report as proof for the files it was given and for no others, and sends the loop back to the full verify on the kept files; the play-test is then run again on them before delivery. The locked spec stays locked: an edit to the game\'s spec.json is put back, and the game is still checked against the plan the person agreed to.',
+    inputSchema: schema({ wish: { type: 'string', description: 'The person\'s own words: that they want the changes kept (and what they changed, when they said).' } }, ['game', 'wish']),
+    handler: ({ game, wish }) => { const G = places(game); return serial(G.game, async () => {
+      const s = await readState(G);
+      if (!s || isTalk(s) || s.step !== 'playtest' || !s.handed) return refuse('out-of-order', `${KEEP_EDITS} is for one moment: the play-tester has the game and its files were changed meanwhile. ${s && !isTalk(s) && s.step === 'deliver' ? 'At delivery nothing has to be kept by hand: gamesfun_step_deliver sends the loop back to verify when the files changed.' : where(s, G).do}`, where(s, G).tool ? { tool: where(s, G).tool, args: where(s, G).args } : (where(s, G).after ?? null), { step: s?.step ?? null });
+      const words = String(wish ?? '').trim();
+      if (words.length < 3) return refuse('no-wish', 'This is the person\'s choice, not yours: ask them whether to undo the change or keep it, and pass their own words as `wish`.', { tool: KEEP_EDITS, args: { game: p(G.game), wish: '<the person\'s own words>' } });
+      const cp = checkpointStore(G.game), name = await latestPlaytest(cp);
+      const then = (await cp.get(name))?.meta?.hash ?? null, now = await filesHash(G.game);
+      if (!then || then === now) return refuse('nothing-to-keep', 'The game\'s files are what the play-tester was given: there is no change to keep. Read its report.', { tool: 'gamesfun_step_playtest', args: { game: p(G.game) } });
+      const changed = await changedSince(cp, name, G.game);
+      // the files as the person wants them, kept before anything else moves (gamesfun_rollback can restore them)
+      const kept = await cp.keep(`kept-${await cp.next('kept')}`, { step: 'playtest', kind: 'kept on the person\'s word', hash: now });
+      const record = { at: new Date().toISOString(), wish: words.slice(0, 2000), playtestRound: s.handed.n ?? null, was: name, checkpoint: kept.name, hashThen: then, hashNow: now, changed };
+      const list = await readJson(keptFile(G), []);
+      await mkdir(G.job, { recursive: true });
+      await writeFile(keptFile(G), JSON.stringify([...(Array.isArray(list) ? list : []), record], null, 2) + '\n');
+      const out = path.join(G.playtest, 'out'), reportFile = path.join(out, 'playtest.json');
+      const reportAt = await mtime(reportFile), usable = reportAt != null && reportAt + 1000 >= Date.parse(s.handed.at);
+      const { L, host, lines } = await openBuild(G, { kind: s.kind });
+      const ran = [];
+      let r;
+      if (usable) {
+        // The report is about the files the play-tester was given. So it is read on exactly those files (the proof on
+        // record then names the files it was about, and no others), and the person's files are put back at once.
+        // Nothing is written into the loop's state here: these are the library's own steps.
+        await cp.restore(name);
+        try { r = await L.step(); ran.push(r.ran); } finally { await cp.restore(kept.name); }
+      } else {
+        // no report of this round: the round ends as one that proved nothing
+        await mkdir(out, { recursive: true });
+        if (reportAt != null) await rename(reportFile, `${reportFile}.set-aside-${kept.name}`);
+        await writeFile(path.join(out, 'failure.txt'), 'the game\'s files were changed while the play-test was under way and the person chose to keep the changes; the play-tester had not reported on the files it was given\n');
+        r = await L.step(); ran.push(r.ran);
       }
+      const keptSaid = { checkpoint: kept.name, changed, wish: record.wish, record: p(keptFile(G)), playtestReport: usable ? 'read, as proof for the files the play-tester was given' : 'none: that round proved nothing' };
+      // the brief was not the loop's own: the round is handed over again, on the files as they now are
+      if (r.waiting) return { ...await handPlaytest(L, G, cp, r), kept: keptSaid };
+      // the verify on record is about other files: the library's delivery step refuses it and goes back to verify
+      if (L.state.step === 'deliver' && (await L.proof()).verify === 'stale') { r = await L.step(); ran.push(r.ran); }
+      const at = L.state.step;
+      return report(L, host, G, {
+        ran, kept: keptSaid,
+        note: `The changes are kept (checkpoint ${kept.name}). ${at === 'verify' ? 'The full verify runs next on the files as they are' : at === 'repair' ? 'The play-tester found a problem on the files it was given: a repair round is yours, on the files as they are now, and the full verify follows it' : 'The loop goes on from the files as they are'}; the spec is still the locked one${usable ? ', and the play-test is run again on the kept files before delivery' : '. No play-test has run on any version of these files yet: say so to the person at delivery unless the loop plays it again'}.`,
+        ...(lines.length ? { log: lines.slice(-8) } : {}),
+      });
     }); },
   },
   {

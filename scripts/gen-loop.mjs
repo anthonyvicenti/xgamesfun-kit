@@ -57,6 +57,7 @@ export function buildLoopSkill() {
     `- **The play-test is not yours.** \`gamesfun_step_playtest\` returns a message: start the \`${PLAYTESTER}\` subagent with it, do not change the game while it plays, then call the tool again. A report that is older than the game's files is refused.`,
     '- **Proof must be about the files as they are.** Every verify and play-test is recorded with a hash of the game\'s files. Change a file afterwards and delivery is refused until that step has run again.',
     '- **Before each agent round the game is checkpointed.** `gamesfun_rollback` puts the folder back, byte for byte.',
+    '- **When the person changed the game while the play-tester had it,** the report is refused as stale. Ask them: undo the change (`gamesfun_rollback`), or keep it (`gamesfun_keep_edits` with their own words). Keeping verifies and play-tests again on the kept files; the spec stays the locked one. Never choose for them.',
     '- **After a restart,** call `gamesfun_next`: it reads the state file and picks the build up at the right step, with the round\'s brief.',
     '- While the state says `building`, a session with the games.fun plugin is not allowed to stop; `waiting-on-question` and `delivered` let it.',
     '',

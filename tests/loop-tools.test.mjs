@@ -146,6 +146,8 @@ test('the order is held: each tool is refused until its step, and names the righ
   r = await call('gamesfun_step_playtest');
   assert.equal(r.refused, 'stale-playtest'); assert.match(r.why, /files changed after the play-tester/);
   assert.deepEqual(r.next, { tool: 'gamesfun_rollback', args: { game: b.game.split(path.sep).join('/'), checkpoint: 'playtest-1' } });
+  assert.equal(r.or.tool, 'gamesfun_keep_edits', 'the other way on is named too');
+  assert.deepEqual(r.changed, { added: ['config/late.json'], changed: [], removed: [] });
   assert.equal((await state(b)).step, 'playtest', 'a refused report leaves the loop where it was');
   r = await call('gamesfun_rollback', { checkpoint: 'playtest-1' });
   assert.deepEqual(r.removed, ['config/late.json']);
@@ -187,6 +189,72 @@ test('stale proof is refused at delivery: a file changed after verify sends the 
   await b.call('gamesfun_step_playtest');
   r = await b.call('gamesfun_step_deliver');
   assert.equal(r.outcome, 'delivered');
+});
+
+test('keep my edits and re-verify: files changed while the play-tester played are kept on the person\'s word, the report is set aside, the loop verifies again and the spec stays locked', async t => {
+  const b = await bench(t);
+  await lockSpec(b);
+  await b.call('gamesfun_step_create');
+  await b.call('gamesfun_step_fix', DONE);
+  await b.call('gamesfun_step_verify');
+  // not yet: nothing has been handed to a play-tester
+  let r = await b.call('gamesfun_keep_edits', { wish: 'keep it' });
+  assert.equal(r.refused, 'out-of-order');
+  await b.call('gamesfun_step_playtest');
+  r = await b.call('gamesfun_keep_edits', { wish: 'keep it' });
+  assert.equal(r.refused, 'nothing-to-keep'); assert.equal(r.next.tool, 'gamesfun_step_playtest');
+  await answerAll(b);
+  // the person edits two files while the play-tester plays; one of them is the game's own copy of the locked spec
+  const rules = `${await readFile(path.join(b.game, 'rules.js'), 'utf8')}\n// the person's own edit\n`;
+  await writeFile(path.join(b.game, 'rules.js'), rules);
+  const locked = await readFile(path.join(b.game, 'spec.json'), 'utf8');
+  await writeFile(path.join(b.game, 'spec.json'), locked.replace('"title"', '"title2"'));
+  r = await b.call('gamesfun_step_playtest');
+  assert.equal(r.refused, 'stale-playtest'); assert.deepEqual(r.changed.changed, ['rules.js', 'spec.json']);
+  r = await b.call('gamesfun_keep_edits', { wish: ' ' });
+  assert.equal(r.refused, 'no-wish', 'it is the person\'s choice: their words are required');
+  assert.equal((await state(b)).step, 'playtest');
+  r = await b.call('gamesfun_keep_edits', { wish: 'I changed the rules myself, keep my edits' });
+  assert.equal(r.step, 'verify'); assert.equal(r.status, 'building'); assert.equal(r.next.tool, 'gamesfun_step_verify');
+  assert.equal(r.kept.checkpoint, 'kept-1'); assert.deepEqual(r.kept.changed.changed, ['rules.js', 'spec.json']);
+  const record = JSON.parse(await readFile(path.join(b.G.job, 'kept-edits.json'), 'utf8'));
+  assert.equal(record.length, 1); assert.equal(record[0].wish, 'I changed the rules myself, keep my edits'); assert.equal(record[0].was, 'playtest-1');
+  assert.match(r.kept.playtestReport, /^read/);
+  assert.equal((await state(b)).playtest.hash, record[0].hashThen, 'the play-test on record is proof for the files the play-tester was given, not for the kept ones');
+  assert.equal(await readFile(path.join(b.game, 'rules.js'), 'utf8'), rules, 'the person\'s files are back in place');
+  assert.ok((await state(b)).lock, 'the lock is still there');
+  // the verify runs on the kept files, and the lock puts the spec back
+  r = await b.call('gamesfun_step_verify');
+  assert.equal(r.verify.pass, true);
+  assert.equal(await readFile(path.join(b.game, 'rules.js'), 'utf8'), rules, 'the person\'s edit is kept');
+  assert.equal(await readFile(path.join(b.game, 'spec.json'), 'utf8'), locked, 'the game\'s spec is the locked one again');
+  const seq = [r.next.tool];
+  for (let n = 0; n < 6 && r.next?.tool && r.status === 'building'; n++) {
+    if (r.next.tool === 'gamesfun_step_playtest') { r = await b.call('gamesfun_step_playtest'); if (r.round) { await answerAll(b); r = await b.call('gamesfun_step_playtest'); } }
+    else r = await b.call(r.next.tool);
+    seq.push(r.next?.tool ?? `(${r.outcome})`);
+  }
+  t.diagnostic(`after keeping the edits: ${seq.join(' → ')}`);
+  assert.equal(r.outcome, 'delivered');
+  assert.deepEqual(r.proof.stale, []);
+  assert.deepEqual(seq, ['gamesfun_step_deliver', 'gamesfun_step_playtest', 'gamesfun_step_deliver', '(delivered)'], 'verified again, then played again on the kept files, then delivered');
+  assert.equal(await readFile(path.join(b.game, 'rules.js'), 'utf8'), rules);
+  const s = await state(b);
+  assert.equal(s.playtest.hash, s.verify.hash, 'both proofs are about the delivered files');
+});
+
+test('keep my edits when the play-tester never reported: the round proves nothing, and the tool says no play-test has run', async t => {
+  const b = await bench(t);
+  await lockSpec(b);
+  await b.call('gamesfun_step_create');
+  await b.call('gamesfun_step_fix', DONE);
+  await b.call('gamesfun_step_verify');
+  await b.call('gamesfun_step_playtest');
+  await writeFile(path.join(b.game, 'config', 'mine.json'), '{"the person":"added this"}');
+  const r = await b.call('gamesfun_keep_edits', { wish: 'keep what I added' });
+  assert.equal(r.step, 'verify'); assert.match(r.kept.playtestReport, /^none/); assert.match(r.note, /No play-test has run/);
+  assert.deepEqual(r.kept.changed.added, ['config/mine.json']);
+  assert.ok(existsSync(path.join(b.game, 'config', 'mine.json')));
 });
 
 test('resume: a new copy of the tools picks a build up at the right step, with the round\'s brief', async t => {
@@ -438,7 +506,7 @@ test('web3 tools are off by default and an environment variable turns them on', 
   const off = await names({}), on = await names({ GAMESFUN_WEB3: '1' });
   assert.deepEqual(off.filter(n => n.startsWith('web3_')), []);
   assert.ok(on.filter(n => n.startsWith('web3_')).length >= 10);
-  for (const n of ['gamesfun_next', 'gamesfun_step_pitch', 'gamesfun_step_spec', 'gamesfun_step_create', 'gamesfun_step_fix', 'gamesfun_step_verify', 'gamesfun_step_playtest', 'gamesfun_step_deliver', 'gamesfun_ask', 'gamesfun_change', 'gamesfun_rollback', 'gamesfun_requests', 'gamesfun_play', 'gamesfun_playtest_report']) assert.ok(off.includes(n), n);
+  for (const n of ['gamesfun_next', 'gamesfun_step_pitch', 'gamesfun_step_spec', 'gamesfun_step_create', 'gamesfun_step_fix', 'gamesfun_step_verify', 'gamesfun_step_playtest', 'gamesfun_step_deliver', 'gamesfun_ask', 'gamesfun_change', 'gamesfun_rollback', 'gamesfun_requests', 'gamesfun_play', 'gamesfun_playtest_report', 'gamesfun_keep_edits']) assert.ok(off.includes(n), n);
   for (const o of loop.ORDER) assert.ok(INSTRUCTIONS.includes(o.tool), `the server's instructions name ${o.tool}`);
 });
 

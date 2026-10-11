@@ -16,7 +16,7 @@ instead of running `npx gamesfun …` in a terminal (both work; the playbook use
 which tool comes next; `gamesfun_step_pitch`, `gamesfun_step_spec`, `gamesfun_step_create`, `gamesfun_step_fix`,
 `gamesfun_step_verify`, `gamesfun_step_playtest` and `gamesfun_step_deliver` each run one step of the loop library
 (`kits/research/gf-three/loop/`) and refuse a call out of order; `gamesfun_ask`, `gamesfun_change`,
-`gamesfun_rollback`, `gamesfun_play`, `gamesfun_playtest_report` and `gamesfun_requests` go with them. The skill
+`gamesfun_rollback`, `gamesfun_keep_edits`, `gamesfun_play`, `gamesfun_playtest_report` and `gamesfun_requests` go with them. The skill
 `build-loop` (generated from the tool list) has the table.
 
 Plus any tools other parts of the kit add in `mcp/tools/*.mjs`. The `web3_*` tools are off unless the server is
