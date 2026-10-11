@@ -32,18 +32,26 @@ export function deviceFacts() {
   };
 }
 
+/** Renderer names of the software rasterizers browsers fall back to (Chrome's SwiftShader, Mesa's llvmpipe and softpipe, Windows' WARP). */
+export const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render/i;
+
 /**
- * Does this browser draw 3D on a graphics card? Asked the web's own way: a WebGL context with
- * failIfMajorPerformanceCaveat, which a browser refuses when it would draw on the processor (Chrome's SwiftShader on a
- * machine with no card: a virtual machine, a remote desktop, a blocked driver, a CI runner). No WebGL at all is a no.
- * The probe context is given back at once. `doc` is the page's document (tests pass their own).
+ * Does this browser draw 3D on a graphics card? Two questions, because neither is answered everywhere:
+ *   a WebGL context asked with failIfMajorPerformanceCaveat, which a browser refuses when it would draw on the
+ *     processor (Chrome on a Windows machine with no card refuses; headless Chrome on Linux does not: measured on
+ *     GitHub's runners, 2026-10-11);
+ *   the renderer's own name (WEBGL_debug_renderer_info), which names the software rasterizer when there is one.
+ * No WebGL at all is a no. A machine with no card is a virtual machine, a remote desktop, a blocked driver, a CI
+ * runner. The probe context is given back at once. `doc` is the page's document (tests pass their own).
  */
 export function drawsOnCard(doc = globalThis.document) {
   try {
     const canvas = doc.createElement('canvas'), opts = { failIfMajorPerformanceCaveat: true };
     const gl = canvas.getContext('webgl2', opts) ?? canvas.getContext('webgl', opts);
     if (!gl) return false;
+    let name = '';
+    try { const ext = gl.getExtension('WEBGL_debug_renderer_info'); name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? ''); } catch {}
     try { gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch {}
-    return true;
+    return !SOFTWARE_RENDERER.test(name);
   } catch { return false; }
 }

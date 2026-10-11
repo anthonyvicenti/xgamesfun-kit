@@ -9,7 +9,7 @@ export const snap = page => page.evaluate(() => window.__party?.snapshot() ?? nu
 export const p2p = page => page.evaluate(() => window.__p2p?.snapshot() ?? null).catch(() => null);
 /**
  * What this Chrome draws WebGL with: {renderer, card}. `card` is false when the browser would draw on the processor
- * (a context asked with failIfMajorPerformanceCaveat is refused), null when the page gave no answer. For the record:
+ * (a context asked with failIfMajorPerformanceCaveat is refused, or the renderer names a software rasterizer), null when the page gave no answer. For the record:
  * a gate that passed on a graphics card says nothing about a machine without one.
  */
 export async function graphicsOf(browser) {
@@ -19,11 +19,33 @@ export async function graphicsOf(browser) {
       const gl = document.createElement('canvas').getContext('webgl2') ?? document.createElement('canvas').getContext('webgl');
       const ext = gl?.getExtension('WEBGL_debug_renderer_info');
       const o = { failIfMajorPerformanceCaveat: true }, c = document.createElement('canvas');
-      return { renderer: gl ? String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)).slice(0, 160) : null, card: !!(c.getContext('webgl2', o) ?? c.getContext('webgl', o)), processors: navigator.hardwareConcurrency ?? null };
+      const renderer = gl ? String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)).slice(0, 160) : null;
+      // (the two questions of gf-three's kit/core/quality.js drawsOnCard: headless Chrome on Linux does not refuse the context)
+      return { renderer, card: !!(c.getContext('webgl2', o) ?? c.getContext('webgl', o)) && !/swiftshader|llvmpipe|softpipe|software|basic render/i.test(renderer ?? ''), processors: navigator.hardwareConcurrency ?? null };
     });
   } catch { return { renderer: null, card: null, processors: null }; }
   finally { await page.close().catch(() => {}); }
 }
+/**
+ * The WebRTC connection states of a join, as the kit's own observation gives them (window.__p2p: the host's peers, the
+ * joiner's connection and channel). `watch()` is called on each turn of a wait and keeps the changes, so a join that
+ * failed says how far it got: no state at all (the offer never arrived: signaling, or a page that stopped answering),
+ * "connecting" and then "failed" (no route between the two: ICE), or connected and then lost.
+ */
+export function connectionTrace(H, J) {
+  const t0 = Date.now(), seen = { host: [], joiner: [] };
+  const add = (who, v) => { if (v && seen[who].at(-1)?.[1] !== v) seen[who].push([Math.round((Date.now() - t0) / 100) / 10, v]); };
+  return {
+    async watch() {
+      const peers = await H.page.evaluate(() => window.__p2p?.peers?.() ?? null).catch(() => null);
+      const jt = await J.page.evaluate(() => window.__p2p?.transport?.() ?? null).catch(() => null);
+      add('host', peers ? (peers.map(x => `${x.state}${x.open ? '+channel' : ''}`).join(',') || 'no peer') : null);
+      add('joiner', jt ? `${jt.pc ?? 'no connection'}${jt.dc ? `+channel ${jt.dc}` : ''}` : null);
+    },
+    text: () => `host's peer: ${seen.host.map(([t, v]) => `${v} at ${t} s`).join(' → ') || 'never seen'}; joiner's connection: ${seen.joiner.map(([t, v]) => `${v} at ${t} s`).join(' → ') || 'never seen'}`,
+  };
+}
+
 /**
  * What both pages show while a joiner is joining, as one line: for a wait that ran out, so the record says where the
  * join stood and not only that the gate waited (the party page's phase and players, the kit's own connection state).
@@ -33,7 +55,7 @@ export async function joinState(H, J) {
   const jt = await J.page.evaluate(() => window.__p2p?.transport?.() ?? null).catch(() => null);
   const peers = await H.page.evaluate(() => window.__p2p?.peers?.() ?? null).catch(() => null);
   const party = s => (s ? `${s.phase}, ${s.racers?.length ?? 0} player${s.racers?.length === 1 ? '' : 's'}` : 'no answer from the page');
-  const kit = s => (s ? `${s.phase}${s.connected ? ', connected' : ''}${s.reason ? ` ("${String(s.reason).slice(0, 60)}")` : ''}` : 'no answer');
+  const kit = s => (s ? `${s.phase}${s.connected ? ', connected' : ''}${s.reason ? ` ("${String(s.reason).slice(0, 60)}${s.detail ? ` ${String(s.detail).slice(0, 90)}` : ''}")` : ''}` : 'no answer');
   return `host page: ${party(h)}; host kit: ${kit(hp)}, peers ${peers ? JSON.stringify(peers.map(x => `${x.state}${x.open ? ' open' : ''}`)) : '?'}; joiner page: ${party(j)}; joiner kit: ${kit(jp)}${jt ? `, channel ${jt.dc ?? 'none'}, connection ${jt.pc ?? 'none'}` : ''}`;
 }
 

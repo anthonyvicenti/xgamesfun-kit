@@ -51,7 +51,7 @@ export async function gate(gameDir, { out = null, seconds = 75, draft = null, de
   const dir = resolve(gameDir);
   const checks = [], notes = [];
   const t0 = Date.now(), timeline = [];   // [check, seconds since the gate began]: where a slow run spent its time
-  const check = (name, ok, detail = '', { soft = false } = {}) => { timeline.push([name, Math.round((Date.now() - t0) / 100) / 10]); checks.push({ name, ok: !!ok, ...(soft ? { soft: true } : {}), detail: String(detail ?? '').slice(0, 500) }); log(`${ok ? 'PASS' : soft ? 'SOFT' : 'FAIL'} ${name}${detail ? ` — ${String(detail).slice(0, 220)}` : ''}`); return !!ok; };
+  const check = (name, ok, detail = '', { soft = false } = {}) => { timeline.push([name, Math.round((Date.now() - t0) / 100) / 10]); checks.push({ name, ok: !!ok, ...(soft ? { soft: true } : {}), detail: String(detail ?? '').slice(0, 900) }); log(`${ok ? 'PASS' : soft ? 'SOFT' : 'FAIL'} ${name}${detail ? ` — ${String(detail).slice(0, 220)}` : ''}`); return !!ok; };
   if (signal !== null && signal !== 'http' && signal !== 'ws') throw new Error(`--signal must be http or ws (got ${JSON.stringify(signal)})`);
   // legs "lobby" (a live game): stop once both players are in the room over WebRTC. For a machine that cannot draw a
   // round (a CI runner with no graphics card); the record says so and verify never counts it as the whole gate.
