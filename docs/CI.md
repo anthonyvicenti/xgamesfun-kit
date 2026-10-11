@@ -22,7 +22,7 @@ the 4 CPUs were shared and these numbers are worse than a dedicated 4-vCPU runne
 | 11 set dressing | pass | under 1 |
 | 14 looks honoured | pass | under 1 |
 | 17 world complete | pass | under 1 |
-| 5 two-player gate, lobby legs (manifest, kit identical, entry, solo untouched, shell boots, host opens room, joiner joins over WebRTC, both games ready) | pass (8 of 24 sub-checks) | about 60 |
+| 5 two-player gate, lobby legs (manifest, kit identical, entry, solo untouched, shell boots, host opens room, joiner joins over WebRTC, both games ready) | pass (12 of 24 sub-checks passed in all; the lobby ones are among them, the rest of the gate failed below) | within the gate's 315 |
 | 5 gate, in-round legs (everyone starts together, one host, results, replay, reload) and the loadout leg | fail: the round never starts | gate 315, loadouts 1185 (timed out) |
 | 3 boots to play, no console errors | cannot run: the round never starts | 39 then timed out |
 | 4 slot coverage, 6 round to results, 7 audio, 8 swap proof, 10 fair play, 12 something happens, 13 controls, 15 loop alive, 16 hits | cannot run (same cause) | - |
@@ -110,8 +110,8 @@ macOS minutes in one job: that is why they are off until `GF_VERIFY_PROFILE=1`.
 Nothing of ours has run on either. Expected, most likely first:
 
 1. **Windows: the tools' start-up guard.** 8 files compare `import.meta.url` with `argv[1]` in a form that breaks on
-   `C:\` paths and 29 in another (M1-A item). The kit's `bin/` shims hide most, but a tool run directly does nothing
-   and exits 0. Silent.
+   `C:\` paths and 29 in another (M1-A item). A tool run directly may do nothing and exit 0. Silent. (From the handoff; not
+   tested here.)
 2. **Windows: line endings in `kits/`.** `.gitattributes` marks `kits/** -text`, but the `* text=auto eol=lf`
    line comes first and `core.autocrlf` on the runner can still convert; check 2 and `kits.test.mjs` compare hashes.
 3. **Windows: paths and processes.** Paths over 260 characters under `kits/` plus the checkout dir, a `spawn` of
@@ -124,7 +124,7 @@ Nothing of ours has run on either. Expected, most likely first:
    are not expected on a runner.
 6. **macOS and Windows: the gate's WebRTC over loopback** with the runners' virtual network adapters: ICE can
    pick an address that does not route. Watch check 5's lobby legs first.
-7. **Tests that assume POSIX:** the `npm test` suites (127 pass, 1 skipped on Linux) include path assertions; any
+7. **Tests that assume POSIX:** the `npm test` suites (127 pass, 1 skipped on Linux) may include path assertions (not read); any
    `\` versus `/` difference shows as a failure in `paths.test.mjs`, `kits.test.mjs`, `seams.test.mjs`.
 8. **Slow runners:** a 3-vCPU macOS image under SwiftShader will be no better than section 1's 1.6 fps; the profile
    already leaves those checks out.
