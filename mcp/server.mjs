@@ -123,6 +123,7 @@ export async function createServer({ toolsDir = TOOLS_DIR, log = (...a) => conso
     let n = 0;
     const ctx = {
       kitRoot: KIT_ROOT,
+      client: server.getClientVersion()?.name ?? null,   // which agent is connected (lib/art/providers.mjs)
       log,
       progress: message => { if (token === undefined) return; extra.sendNotification({ method: 'notifications/progress', params: { progressToken: token, progress: ++n, message: String(message).slice(0, 300) } }).catch(() => {}); },
       runCli,
