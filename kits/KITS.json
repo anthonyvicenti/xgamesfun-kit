@@ -3,8 +3,8 @@
  "about": "A sparse mirror of the games.fun repository at one commit: the kits games are built on and the tools that create and verify them. Written by scripts/sync-kits.mjs; never edited by hand (fix the kit in games.fun and sync again). tests/kits.test.mjs checks kits/ against this file.",
  "source": {
   "repo": "games.fun",
-  "commit": "e11b74df9c6dd29ea93d55f70352d464dbcb9b6c",
-  "date": "2026-10-11T06:22:39-07:00"
+  "commit": "b095b4b1fd2498aba7aff58bd4d281f7c5cc0fb9",
+  "date": "2026-10-11T08:54:13-07:00"
  },
  "kits": {
   "gf-three": {
@@ -75,7 +75,7 @@
  },
  "totals": {
   "files": 1075,
-  "bytes": 36014542,
+  "bytes": 36023201,
   "excluded": 152,
   "excludedBy": {
    "Meshy-generated (licence tier unconfirmed)": 3,
@@ -195,7 +195,7 @@
  ],
  "closure": {
   "files": 119,
-  "bytes": 1959730,
+  "bytes": 1967842,
   "modules": [
    "creator-studio/lib/asset-kinds.mjs",
    "creator-studio/lib/code-literals.mjs",
@@ -329,7 +329,7 @@
    "path": "research/gf-three/CONTRACT.md",
    "why": "gf-three API: what rules.js and config are written against",
    "files": 1,
-   "bytes": 150429
+   "bytes": 150976
   },
   {
    "path": "research/gf-three/kit",
@@ -809,7 +809,7 @@
   "research/gf-scenic/tools/lib/vendor/three/examples/jsm/tsl/utils/SoftParticles.js": "e79cc1a2ac697217c8ed9fbb4983fed012fb63848f96fb5fca0869676ee65eb3",
   "research/gf-scenic/tools/lib/vendor/three/examples/jsm/tsl/utils/SpecularHelpers.js": "cce8b1cffde0b7f7966a062d0d05b97318ce180f411c76fe3e25ebbef49e4220",
   "research/gf-scenic/tools/lib/vendor/three/examples/jsm/tsl/utils/TAAUtils.js": "eb744737027b4e1bc1ddb3168733051d93e12c7ab85c1b365e1726c345fc134d",
-  "research/gf-three/CONTRACT.md": "5f63023ec941ebd8fa9a169cebef68a53ffccf804deb32f617f4e3066a28771b",
+  "research/gf-three/CONTRACT.md": "6fc87719b1c4d540bed59be24c6039a410314826e7702d71c3c7b5e90374a9ed",
   "research/gf-three/README.md": "afcf91782dede56c0ea1d00ec961eb210f79fafb5364fc8692d0799b6a3da6af",
   "research/gf-three/character-bench/assets.json": "98d33abdba9511a5f2dc42a213777b1ff907723e41abdb40ec4f2bb83c0e48cd",
   "research/gf-three/character-bench/bench.js": "31a851777b0beb1237ed7031069a8b1b5c8f447b4dceb791a58a64a0172c360d",
@@ -1266,8 +1266,8 @@
   "research/gf-three/tools/lib/fix-lib.mjs": "27c45e90ac242eb9e46037d770bd2095b3b5eafbf4c65ec1fce39f2d917751ae",
   "research/gf-three/tools/lib/forge-controls-check.mjs": "8654b91b9e431dc2c7cf1290e733e5ce46e72947e47cdd1ea1f292d3669b3df0",
   "research/gf-three/tools/lib/forge-feel-check.mjs": "cbde0b33a2f96e554fe9fb738445ff51dd4f2b1917e370ee839dfb4880f05a78",
-  "research/gf-three/tools/lib/forge-fight.mjs": "8ca5ff6e9777944f148149b7e9be4cef50b40f82749b2224bfd52283e52a30fe",
-  "research/gf-three/tools/lib/forge-first-wave-check.mjs": "348fe946de5e2d5d83be1dc2d331bde98cf8e164a91b561651d49e9ef5749583",
+  "research/gf-three/tools/lib/forge-fight.mjs": "e09a41f62133af201b59bea40500ffeb294679459a3ab08a90661d95d658b079",
+  "research/gf-three/tools/lib/forge-first-wave-check.mjs": "e649aac71f3deff09f6eeb8c6a06a88e41dfeec771a67e1f24a4a959fd4b033c",
   "research/gf-three/tools/lib/forge-hud-check.mjs": "f44b0bf7327488a32597217ba991b4fa2e6c4f3a12d9df79aa39001c4c3fbb1a",
   "research/gf-three/tools/lib/forge-keys-check.mjs": "e63607af960059920d784fe03419c64d10622b95f799a85134f47e1a7e16c592",
   "research/gf-three/tools/lib/forge-round-check.mjs": "8d9b8549e4f111f7a066298b5929b0b620cedfc38481eb832ed9240059a253b4",
@@ -1281,15 +1281,15 @@
   "research/gf-three/tools/lib/homes.json": "d0ff2baa3aaa3a59f44d86c9aee58731fe7bd1f671ddc08676697881fbb95252",
   "research/gf-three/tools/lib/homes.mjs": "243892e0953a1a3b70e58b21cb55e5e8a716be466a273b4c1ff1fca1373fb752",
   "research/gf-three/tools/lib/kit-check.mjs": "ecadcf851ceb91f3d43d9947bfec7f96418a1b00c186f0ac31aadaf0b70c3ecf",
-  "research/gf-three/tools/lib/kit-import.mjs": "034cfc2450451c15c07e83ef7107c556953efe5c16a7fe077882404656b1922c",
-  "research/gf-three/tools/lib/likeness-check.mjs": "b8fc31ee5809944c3c690cb32ebd142139a9862624cbdfb526d4a8706a19206b",
+  "research/gf-three/tools/lib/kit-import.mjs": "922a82294368d5a505457d28acccbf1833e4a85189d50fb73fdb7871b113f885",
+  "research/gf-three/tools/lib/likeness-check.mjs": "42fc8d3a52ffd47a56cd3ff999a9510c8ae8e987802a44b0a41fcb45d0c013b3",
   "research/gf-three/tools/lib/loadout-check.mjs": "e42b145e6244203aba04527cad24860f72891f044fdcc00abde25da2157b05dc",
   "research/gf-three/tools/lib/lock.mjs": "c41f68ad2bb3cf7c1b2f29bf939fe5d1a96bf9689179db3f6012c144b62ef7e9",
   "research/gf-three/tools/lib/looks-check.mjs": "271f505326b26d3f3a53607cada7d5d24a06bb319edfb1bb5929ba5860d62b8e",
   "research/gf-three/tools/lib/main.mjs": "ffa7e7bbad9eef04e65e286012dc3c60dc1efff4832097cc50b9d4c84ac31607",
   "research/gf-three/tools/lib/menu-check.mjs": "fe16b0f21cdc17eda6041805376f3dc8034749c3c93338e3a965d867094e48e9",
   "research/gf-three/tools/lib/own-verify.mjs": "d09cc69646ac74f7bda8f789bf2e63f60eea34fbc6b10049543e8e5fc7955dc4",
-  "research/gf-three/tools/lib/paths.mjs": "d85d7f47193132b26b094fd40ffb37a8679cf7ec7b460e90c75dea097ad59552",
+  "research/gf-three/tools/lib/paths.mjs": "0667cf12a89d7ba67a5a3fc2be165eff345527ec6935a6270ea2e3f48bc4f280",
   "research/gf-three/tools/lib/play-script.mjs": "c7177e05f6956a35b651aa2f58af99759651465cef3cb362e5782d4edd18cb94",
   "research/gf-three/tools/lib/promises.mjs": "627f2f64b245da71b1084254b73f87e7e46e6d376cb156422cfb4a15d7e94ff1",
   "research/gf-three/tools/lib/schema.mjs": "5e9646686c45c08c58cb25f4b64db8090e139b47cbf177cfce0a9457076d87f4",

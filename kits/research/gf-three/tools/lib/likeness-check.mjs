@@ -27,7 +27,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join, resolve, dirname, extname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { walk } from './paths.mjs';
+import { walk, below } from './paths.mjs';
 
 export const LIKENESS_MODEL = process.env.GF_LIKENESS_MODEL || 'claude-opus-5-5';
 export const ASPECTS = ['camera', 'palette', 'light', 'environment', 'characters', 'vibe'];
@@ -67,7 +67,7 @@ export async function likenessTargets(gameDir, { refs = null } = {}) {
   for (const w of wanted) {
     const f = files.find(x => x.revisionId === w.revisionId && (x.kind ?? 'image') === 'image');
     const abs = f?.file ? resolve(refsDir, f.file) : null;
-    if (abs && abs.startsWith(refsDir + '/') && existsSync(abs) && /\.(png|jpe?g|webp|gif)$/i.test(abs)) targets.push({ file: abs, revisionId: w.revisionId, use: w.use, note: w.note ?? f.note ?? null, label: f.label ?? null });
+    if (abs && below(refsDir, abs) && existsSync(abs) && /\.(png|jpe?g|webp|gif)$/i.test(abs)) targets.push({ file: abs, revisionId: w.revisionId, use: w.use, note: w.note ?? f.note ?? null, label: f.label ?? null });
   }
   return { targets, wanted, refsDir, why: targets.length ? null : `none of the ${wanted.length} reference images the spec lists is in ${refsDir}` };
 }

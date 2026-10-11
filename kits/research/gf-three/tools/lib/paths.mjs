@@ -116,6 +116,17 @@ export function rendererFor(engine, { software = false } = {}) {
 export const relPosix = (base, p, impl = pathImpl) => impl.relative(base, p).split(impl.sep).join('/');
 
 /**
+ * Is `file` inside the folder `base`? → the path below it, in the system's own form, or null (the folder itself, a
+ * sibling whose name only starts the same, another drive). The one test for "under this folder": `file.startsWith(base
+ * + '/')` is never true on Windows, where the paths Node hands out have backslashes (a scenic `create` failed there on
+ * the first Windows run, 2026-10-11: kit-import.mjs never mapped research/gf-scenic/three/ to the kit).
+ */
+export function below(base, file, impl = pathImpl) {
+  const rel = impl.relative(base, file);
+  return rel && !impl.isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + impl.sep) ? rel : null;
+}
+
+/**
  * Import a module of a part of the repository that a checkout may not carry (the forge engine, the watch relay, the
  * world server, the character bench): by path at the moment it is needed, with a plain error when it is absent.
  * `what` names the part for the person ("the forge engine (research/gf-forge)").
