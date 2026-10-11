@@ -244,6 +244,16 @@ the plugin and only an environment variable of the person's own shell can fill a
 session with `GAMESFUN_BRIDGE_TOKEN` set and a fixed port may point HTTP hooks straight at
 `/api/session/hook/<Event>` with the header `x-gamesfun-token: $GAMESFUN_BRIDGE_TOKEN`; the route is the same.
 
+**The write guard** (`plugin/scripts/guard.mjs`, a second `PreToolUse` hook, not async, needs no studio): denies
+`Edit`, `Write`, `MultiEdit` and `NotebookEdit` on a path under a `.gf-loop/` folder, and `Bash` or `PowerShell` when
+the command names such a path at all (the `Read` tool reads it). The reason names `gamesfun_ask`. The play-tester
+subagent (`agent_type` `playtester`) may write only `job/playtest/out/` and `job/playtest/runs/`. It also refuses an
+edit inside a game the person has just rolled back, until `gamesfun_next` has been called. The answer is
+`{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":…}}`
+with exit 0 (hooks documentation read 2026-10-11). It cannot stop a command that builds the path when it runs (a
+variable, a glob, a script file), another MCP server's file tool, or anything outside the session; for those the
+loop library's lock stands, held in the MCP server's memory. `tests/guard.test.mjs` has both lists.
+
 ## 5. Files
 
 | File | Written by | Read by | Holds |

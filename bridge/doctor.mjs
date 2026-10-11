@@ -20,6 +20,7 @@ export async function checkPlugin(pluginDir) {
     if (h.type !== 'command' || h.command !== 'node' || !Array.isArray(h.args)) problems.push(`${event}: a hook that is not "node" in exec form (it would need a shell)`);
   }
   for (const need of ['SessionStart', 'Stop', 'PermissionRequest']) if (hooks && !hooks[need]) problems.push(`no ${need} hook`);
+  if (hooks && !hooks.PreToolUse?.some(g => !g.hooks?.some(h => h.async) && g.hooks?.some(h => h.args?.some(x => /guard\.mjs$/.test(x))))) problems.push('no write guard on PreToolUse (scripts/guard.mjs, not async)');
   const waits = ['SessionStart', 'Stop'].filter(e => hooks?.[e]?.some(g => g.hooks?.some(h => h.asyncRewake)));
   if (hooks && waits.length !== 2) problems.push('the wait (asyncRewake) is not on both SessionStart and Stop');
   return problems;
