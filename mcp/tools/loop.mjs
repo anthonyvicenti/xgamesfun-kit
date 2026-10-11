@@ -22,7 +22,7 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from '
 import os from 'node:os';
 import path from 'node:path';
 import {
-  openBuildLoop, openTalkLoop, kitTools, heldStore, specLock, ignoreStateDir, stateFileOf, filesHash, proofOf, composeBrief, loadParts, partsWords,
+  openBuildLoop, openTalkLoop, kitTools, heldStore, specLock, stateFileOf, filesHash, proofOf, composeBrief, loadParts, partsWords,
   readPlaytestReport,
 } from '../../kits/research/gf-three/loop/index.mjs';
 import { check as schemaProblems } from '../../kits/research/gf-three/tools/lib/schema.mjs';
@@ -72,7 +72,7 @@ export function places(gameArg) {
 const HELD = new Map();
 function heldOf(G) {
   let h = HELD.get(G.game);
-  if (!h) HELD.set(G.game, h = { store: heldStore(G.state), spec: null, lock: null });
+  if (!h) HELD.set(G.game, h = { store: heldStore(G.state), spec: null, lock: null, session: null });
   return h;
 }
 export const readState = G => heldOf(G).store.load();
@@ -153,6 +153,7 @@ const DELIVERY_WORDS = 'the summary and controls you pass to gamesfun_step_fix';
 const playWords = G => ({
   PLAY_HOW: `Call the tool \`gamesfun_play\` with \`{"game": "${p(G.game)}", "name": "<a short name for the run>", "steps": [ … ]}\`. It answers with the play log and the path of each screenshot.`,
   PLAY_STEPS_AT: 'The tool\'s own description names every step it takes.',
+  REPORT_HOW: 'Call the tool `gamesfun_playtest_report` with `{"game": "'+p(G.game)+'", "report": { … }}` in the shape below. It checks the report and writes `out/playtest.json`; fix what it names and call it again.',
   RUN_NODE: '',
 });
 
@@ -254,6 +255,8 @@ async function buildHost(G, { kind = 'build', resume = true, request = null, log
     store: h.store, ...(locked ? { locked } : {}),
     paths: { JOB: p(G.job), KIT_TOOLS: p(GF3_TOOLS), PLAYTEST: p(G.playtest), GAME: p(G.game), OUT: p(G.out), SPEC: p(specFile), QUESTIONS: p(path.join(G.out, 'questions.json')), DELIVERY: DELIVERY_WORDS },
     toolNames: TOOL_NAMES, playWords: playWords(G),
+    // the session that is building, as its own calls gave it: the stop guard holds exactly that session (state.session)
+    ...(h.session ? { session: h.session } : {}),
     // a verify that is running when the MCP server is told to stop (the call is cancelled, or the process ends) is stopped with its browser
     signal: signal ?? undefined,
     firstMessage: await roundBrief(G, spec, { kind, request }),
@@ -270,7 +273,6 @@ async function buildHost(G, { kind = 'build', resume = true, request = null, log
           catch (e) { return { end: { outcome: 'asked', why: 'create', message: String(e.message).slice(0, 800) } }; }
         }
         if (!same || !await versions.has('created')) await versions.keep('created', { step: 'create' });
-        await ignoreStateDir(G.game);       // the loop's folder is in the game's folder: not a game asset (the library does this only for its own default store)
         return null;
       },
     },
@@ -354,7 +356,7 @@ const withCancel = t => ({
   ...t,
   async handler(input, ctx) {
     let told = null;
-    if (typeof input?.game === 'string' && input.game.trim()) { const G = places(input.game); told = await serial(G.game, () => applyCancel(G)); }
+    if (typeof input?.game === 'string' && input.game.trim()) { const G = places(input.game); if (typeof input.session === 'string' && input.session.trim()) heldOf(G).session = input.session.trim(); told = await serial(G.game, () => applyCancel(G)); }
     const r = await t.handler(input, ctx);
     if (!told) return r;
     if (r && Array.isArray(r.content)) { try { return { ...r, content: [{ type: 'text', text: JSON.stringify({ rolledBack: told, ...JSON.parse(r.content[0].text) }, null, 2) }] }; } catch { return r; } }
@@ -430,7 +432,8 @@ async function readyToVerify(ctx) {
 }
 
 const gameProp = { type: 'string', description: 'The game folder, relative to the kit root (e.g. games/my-game), or absolute.' };
-const schema = (properties = {}, required = ['game']) => ({ type: 'object', required, properties: { game: gameProp, ...properties } });
+const sessionProp = { type: 'string', description: 'Your session id (the plugin tells you at session start). Optional: it lets the studio\'s stop guard hold this session, and no other, while the build is not delivered.' };
+const schema = (properties = {}, required = ['game']) => ({ type: 'object', required, properties: { game: gameProp, session: sessionProp, ...properties } });
 const keepAlive = (ctx, words) => { const t0 = Date.now(), t = setInterval(() => ctx.progress?.(`${words} (${Math.round((Date.now() - t0) / 1000)} s)`), 10000); return () => clearInterval(t); };
 
 // ---------------------------------------------------------------- the tools

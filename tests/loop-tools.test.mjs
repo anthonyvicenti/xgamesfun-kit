@@ -127,6 +127,7 @@ test('the order is held: each tool is refused until its step, and names the righ
   r = await call('gamesfun_step_playtest');
   assert.equal(r.round.agent, 'playtester'); assert.equal(r.round.checkpoint, 'playtest-1');
   assert.ok(existsSync(path.join(b.G.playtest, 'PLAYTEST.md')));
+  assert.match(await readFile(path.join(b.G.playtest, 'PLAYTEST.md'), 'utf8'), /gamesfun_playtest_report/, 'the brief names the report tool');
   r = await call('gamesfun_step_deliver');
   assert.equal(r.refused, 'out-of-order');
   r = await call('gamesfun_step_playtest');
@@ -316,11 +317,9 @@ test('the locked spec is locked: an edited spec is put back and refused, the bri
   r = await b.call('gamesfun_step_fix', DONE);
   assert.equal(r.refused, 'spec-changed'); assert.deepEqual(r.ran, ['agent', 'fix']);
   assert.equal(await readFile(b.G.spec, 'utf8'), locked); assert.equal(await readFile(path.join(b.game, 'spec.json'), 'utf8'), inGame);
-  // the refusal is on the loop's record until a round's message has said it: the guard says it once
+  // the refusal that step() returned was told by the library (the tool's answer carries it): the guard does not say it a second time
   st = await bridge.stop({ session: 'S', cwd: b.game });
-  assert.ok(st.reasons.includes('lock')); assert.match(st.refuse, /The loop refused this.*locked spec was edited and put back/s);
-  st = await bridge.stop({ session: 'S', cwd: b.game });
-  assert.deepEqual(st.reasons, ['build'], 'told once');
+  assert.deepEqual(st.reasons, ['build'], 'told once, in the answer');
 
   // the state file is the loop's: a session that writes itself to "deliver" is not believed
   const disk = await state(b);
@@ -494,4 +493,18 @@ test('the skill and the play-tester agent are generated from the tools and the l
   const prompt = await readFile(path.join(loop.PROMPTS, 'playtest.md'), 'utf8');
   assert.ok(agent.text.includes(prompt.split('## Judge\n')[1].split('\n## ')[0].trim()), 'the judging rules are the prompt\'s own words');
   assert.doesNotMatch(agent.text, /\{\{[A-Z_]+\}\}/);
+});
+
+test('the host fields: the session that builds is on the state, the loop folder is ignored by the library', async t => {
+  const b = await bench(t, { verdicts: [true] });
+  await lockSpec(b);
+  await b.call('gamesfun_step_create', { session: 'S-1' });
+  assert.equal((await state(b)).session, 'S-1');
+  assert.ok(JSON.parse(await readFile(path.join(b.game, 'assets.json'), 'utf8')).ignore.some(x => JSON.stringify(x).includes('.gf-loop')), 'the library added the ignore entry');
+  const { createBridge } = await import('../bridge/core.mjs');
+  const bridge = createBridge({ gameDir: b.game });
+  bridge.event('session-start', { session: 'S-2', cwd: b.game, mode: 'default' });
+  assert.equal((await bridge.stop({ session: 'S-2', cwd: b.game })).refuse, null, 'a session the state does not name is let go');
+  bridge.event('session-start', { session: 'S-1', cwd: b.game, mode: 'default' });
+  assert.ok((await bridge.stop({ session: 'S-1', cwd: b.game })).refuse, 'the building session is held');
 });
