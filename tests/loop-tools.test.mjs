@@ -269,6 +269,18 @@ test('keep my edits when the play-tester never reported: the round proves nothin
   assert.equal(r.step, 'verify'); assert.match(r.kept.playtestReport, /^none/); assert.match(r.note, /No play-test has run/);
   assert.deepEqual(r.kept.changed.added, ['config/mine.json']);
   assert.ok(existsSync(path.join(b.game, 'config', 'mine.json')));
+  // what the library does next, recorded as it is: the verify runs again, and the delivery names the play-test that did not run
+  let d = await b.call('gamesfun_step_verify');
+  const seq = [d.next.tool];
+  for (let n = 0; n < 6 && d.next?.tool && d.status === 'building'; n++) {
+    if (d.next.tool === 'gamesfun_step_playtest') { d = await b.call('gamesfun_step_playtest'); if (d.round) { await answerAll(b); d = await b.call('gamesfun_step_playtest'); } }
+    else d = await b.call(d.next.tool);
+    seq.push(d.next?.tool ?? `(${d.outcome})`);
+  }
+  t.diagnostic(`no report, after keeping: ${seq.join(' → ')}; play-test on record: ${JSON.stringify((await state(b)).playtest)}`);
+  assert.match(String(d.outcome), /^delivered/);
+  assert.match(d.playtestDidNotRun, /chose to keep the changes/, 'the delivery says by name that no play-tester played this version');
+  assert.match(d.tellThePerson, /no play-tester played this version/);
 });
 
 test('resume: a new copy of the tools picks a build up at the right step, with the round\'s brief', async t => {

@@ -759,7 +759,9 @@ const TOOLS = [
         ...(o.failed ? { failed: o.failed } : {}), ...(L.state.fallback ? { fallback: L.state.fallback } : {}),
         ...(delivery ? { delivery } : {}),
         ...(pt && !pt.skipped ? { playtest: { verdict: pt.verdict, failed: pt.failedIds ?? [], blockers: (pt.feel ?? []).filter(f => f.severity === 'blocker').map(f => f.issue), summary: pt.summary ?? '' } } : {}),
-        tellThePerson: 'Say what they will see, what you left out and why, and anything that still fails. A green verify is the kit\'s bar, not their verdict. To play it: gamesfun_dev_start.',
+        // a play-test that could not run proved nothing: said by name, whatever the outcome is called
+        ...(L.state.playtest?.verdict === 'error' ? { playtestDidNotRun: L.state.playtest.error ?? 'the play-test could not run' } : {}),
+        tellThePerson: `Say what they will see, what you left out and why, and anything that still fails.${L.state.playtest?.verdict === 'error' ? ' Say plainly that no play-tester played this version (playtestDidNotRun says why).' : ''} A green verify is the kit's bar, not their verdict. To play it: gamesfun_dev_start.`,
       });
     }); },
   },

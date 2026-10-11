@@ -7,6 +7,9 @@ in the game. Every model, texture and number is a slot you can swap without code
 
 Windows, macOS and Linux. No desktop app and no build step: Node 24 and Chrome. For advanced users.
 
+**Trying it by hand on Windows or a Mac?** [docs/TRY-IT.md](docs/TRY-IT.md) is one page: what to install, the one
+line, what you should see, eight things to try and what to send us when one goes wrong.
+
 ## The one line
 
 Open your coding agent (Claude Code or Codex) in a terminal and paste this:
@@ -59,8 +62,8 @@ playbook) and the skills in `skills/`.
 
 | Command | |
 |---|---|
-| `npx gamesfun examples` | complete example games to start from |
-| `npx gamesfun catalog [--all]` | what the kit can build: mechanics, worlds, looks, bodies, props |
+| `npx gamesfun examples` | complete example games to start from: `soak-squad` (a party round), `giant-four` (a turn-based board game), `isle-run` (a scenic action run) |
+| `npx gamesfun catalog [--all]` | what the kit can build: loops (how a game is played), mechanics, worlds, looks, bodies, props |
 | `npx gamesfun create <dir> --from <example>` or `--spec <spec.json>` | make a game |
 | `npx gamesfun dev [dir]` | the studio, live reload and local multiplayer (127.0.0.1 only) |
 | `npx gamesfun verify [dir] --quick` | the checks a game must pass, in real Chrome with real input (about 2 minutes) |
