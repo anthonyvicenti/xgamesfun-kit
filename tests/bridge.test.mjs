@@ -152,6 +152,41 @@ test('stop guard: requests that arrived during the turn are handed over at the s
   assert.equal(q.sessions[0].state, 'working');
 });
 
+test('stop guard: while the play-tester subagent has the round, the session is told to wait for its report, not to go on', async () => {
+  // found in the end-to-end run: the session ended its turn to wait for a background play-tester and was told
+  // "call gamesfun_next and do what it returns" three times, then the page said the session was waiting for the person
+  const b = mk({ loop: { status: 'building', step: 'playtest', why: 'a play-tester plays the game', round: 1, updated: 't1', handed: 'playtest' } });
+  start(b, 'A');
+  const first = await b.stop({ session: 'A' });
+  assert.match(first.refuse, /play-tester subagent has the round/);
+  assert.match(first.refuse, /gamesfun_step_playtest/);
+  assert.doesNotMatch(first.refuse, /no question is waiting/);
+  await b.stop({ session: 'A' }); await b.stop({ session: 'A' });
+  const fourth = await b.stop({ session: 'A' });
+  assert.equal(fourth.refuse, null);
+  assert.match(fourth.notice, /play-tester has had the game through 3 refused stops/);
+  assert.doesNotMatch(fourth.notice, /waiting for you/);
+  // the play-test step before it is handed over is an ordinary step
+  const c = mk({ loop: { status: 'building', step: 'playtest', why: 'w', round: 1, updated: 't1', handed: null } });
+  start(c, 'A');
+  assert.match((await c.stop({ session: 'A' })).refuse, /next step is "playtest"/);
+});
+
+test('the loop state reader says who has the round', async () => {
+  const { readLoopState } = await import('../bridge/loop-state.mjs');
+  const t = await tempDir('gf-loop-state-');
+  try {
+    await mkdir(path.join(t.dir, '.gf-loop'), { recursive: true });
+    const put = v => writeFile(path.join(t.dir, '.gf-loop', 'state.json'), JSON.stringify({ schema: 'gf-loop/1', status: 'building', step: 'playtest', ...v }));
+    await put({ handed: { step: 'playtest', n: 1, at: 'x' } });
+    assert.equal((await readLoopState(t.dir)).handed, 'playtest');
+    await put({ handed: null });
+    assert.equal((await readLoopState(t.dir)).handed, null);
+    await put({ step: 'agent', handed: { kind: 'build' } });
+    assert.equal((await readLoopState(t.dir)).handed, 'build');
+  } finally { await t.cleanup(); }
+});
+
 test('stop guard: only "building" holds; bounded at 3, then waiting-on-question with the reason for the person', async () => {
   const b = mk({ loop: { status: 'building', step: 'verify', why: 'the full verify has not run', round: 1, updated: 't1' } });
   start(b, 'A');
@@ -199,7 +234,7 @@ test('readLoopState: the merged shape, and null for anything else', async () => 
     assert.equal(await readLoopState(t.dir), null);
     await mkdir(path.join(t.dir, '.gf-loop'));
     await writeFile(path.join(t.dir, '.gf-loop', 'state.json'), JSON.stringify({ schema: 'gf-loop/1', status: 'building', step: 'repair', why: 'because', round: 1, updated: 'u', history: [] }));
-    assert.deepEqual(await readLoopState(t.dir), { status: 'building', step: 'repair', why: 'because', round: 1, updated: 'u', session: null });
+    assert.deepEqual(await readLoopState(t.dir), { status: 'building', step: 'repair', why: 'because', round: 1, updated: 'u', session: null, handed: null });
     await writeFile(path.join(t.dir, '.gf-loop', 'state.json'), JSON.stringify({ status: 'something-new' }));
     assert.equal(await readLoopState(t.dir), null);
     await writeFile(path.join(t.dir, '.gf-loop', 'state.json'), '{ half');

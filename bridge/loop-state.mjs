@@ -7,7 +7,7 @@ import path from 'node:path';
 export const LOOP_STATE = ['.gf-loop', 'state.json'];
 export const LOOP_STATUSES = ['building', 'waiting-on-question', 'delivered', 'failed'];
 
-/** → { status, step, why, round, updated, session } or null (no file, not JSON, or a status the bridge does not know). */
+/** → { status, step, why, round, updated, session, handed } or null (no file, not JSON, or a status the bridge does not know). */
 export async function readLoopState(gameDir) {
   let s;
   try { s = JSON.parse(await readFile(path.join(gameDir, ...LOOP_STATE), 'utf8')); } catch { return null; }
@@ -19,5 +19,7 @@ export async function readLoopState(gameDir) {
     round: s.round ?? null,
     updated: s.updated ?? null,
     session: typeof s.session === 'string' ? s.session : null,
+    // who has the round, when someone does: 'playtest' means the play-tester subagent, not the session itself
+    handed: s.handed && typeof s.handed === 'object' ? String(s.handed.step ?? s.handed.kind ?? 'round') : null,
   };
 }

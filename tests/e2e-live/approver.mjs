@@ -28,7 +28,7 @@ for (;;) {
   const foot = screen.lastIndexOf('Esc to cancel');
   const asked = screen.lastIndexOf('Do you want');
   if (foot < 0 || asked < 0 || asked > foot || foot - asked > 1500) continue;
-  const after = screen.slice(foot).replace(/^Esc to cancel( · Tab to amend)?/, '').replace(/[\s●○◐◑◒◓✶✻✽✢✳·*]/g, '');
+  const after = screen.slice(foot).replace(/^Esc to cancel[^\n]*/, '').replace(/\b\d+ of \d+\b/g, '').replace(/[\s●○◐◑◒◓✶✻✽✢✳·*]/g, '');
   if (after.length > 12) continue;
   const tail = screen.slice(Math.max(0, asked - 300), foot);
   if (tail === lastTail && Date.now() - lastAt < 20000) continue;   // the same question: give the key time to land

@@ -286,13 +286,19 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     else {
       const fingerprint = [loop.step, loop.round, loop.updated].join('|');
       if (s.guard.fingerprint !== fingerprint) s.guard = { fingerprint, refusals: 0, released: null };
+      const withTester = loop.step === 'playtest' && loop.handed === 'playtest';
       if (!s.guard.released) {
         if (s.guard.refusals < L.buildRefusals) {
           s.guard.refusals++;
           reasons.push('build');
-          parts.push(`The build is not delivered and no question is waiting for the person. The next step is "${loop.step ?? 'unknown'}"${loop.why ? `: ${loop.why}` : ''}. Call the gamesfun_next tool and do what it returns. If you cannot go on, ask the person your question through the loop's ask step instead of stopping.`);
+          // the play-tester subagent has the round: the session has nothing to do but wait for it, and must not be told to "go on"
+          parts.push(withTester
+            ? 'The build is not delivered: the play-tester subagent has the round. If it is still playing, wait for its report (check for it rather than ending your turn); when it has reported, call gamesfun_step_playtest. If it never started or stopped without a report, gamesfun_next shows its task again: start it.'
+            : `The build is not delivered and no question is waiting for the person. The next step is "${loop.step ?? 'unknown'}"${loop.why ? `: ${loop.why}` : ''}. Call the gamesfun_next tool and do what it returns. If you cannot go on, ask the person your question through the loop's ask step instead of stopping.`);
         } else {
-          const why = `The build stayed at the step "${loop.step ?? 'unknown'}" through ${L.buildRefusals} refused stops${loop.why ? ` (${loop.why})` : ''}. The session is waiting for you: tell it how to go on.`;
+          const why = withTester
+            ? `The play-tester has had the game through ${L.buildRefusals} refused stops and has not reported yet. Your session reads its report when it arrives; if nothing moves, tell the session to go on.`
+            : `The build stayed at the step "${loop.step ?? 'unknown'}" through ${L.buildRefusals} refused stops${loop.why ? ` (${loop.why})` : ''}. The session is waiting for you: tell it how to go on.`;
           s.guard.released = { why, at: now() };
           emit('guard', { session: s.id, status: 'waiting-on-question', why });
           notice = `games.fun studio: ${why}`;
