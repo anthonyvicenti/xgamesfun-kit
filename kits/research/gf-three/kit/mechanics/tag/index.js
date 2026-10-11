@@ -162,3 +162,43 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Roles that pass between players on contact, hide and seek',
+  rank: 90,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: [],
+  owns: p => (p.hideSeconds > 0 ? [{ res: 'player.control', why: 'whoever is it stands still for hideSeconds (params.hideSeconds)', free: 'set tag params.hideSeconds to 0' }] : []),
+  state: { key: 'tag', fields: { t: 'ids of the players who are it', h: 'hide seconds left', ti: '{ playerId: seconds spent as it }' } },
+  events: [
+    { name: 'onTag', on: 'host', args: '{ from, to }', when: 'a tag counted' },
+  ],
+  sync: { owner: 'host', how: 'the host decides every tag, the cooldowns and the hide timer' },
+  note: [
+    'The kit picks who is it at round start, judges contact, and draws the marker over them: mode "swap" passes it on, "infect" adds to the its.',
+    'tag.isIt(p), tag.its(), tag.notIt() and tag.itTime(p) are the same on every copy: score from itTime in results().',
+    'hideSeconds > 0 is hide and seek: the it waits that long before chasing.',
+  ],
+  stub: {
+    as: 'tag',
+    worked: 'results(ctx) { return ctx.players.list().map(p => ({ id: p.id, name: p.name, value: Math.round(tag.itTime(p)) })); }',
+    traps: [
+      'bots neither chase nor flee unless the rules steer them: in bot(ctx, p) call tag.botStep(p)',
+      'with mode "infect", end the round in check(ctx) when tag.notIt().length === 0, or the last runner is chased until the clock runs out',
+    ],
+  },
+  signs: {
+    sample: sh => (sh.tag ? { tag: sh.tag.t ?? [] } : null),
+    judge: v => {
+      const ok = v.others.it;
+      v.add('someone is it', ok ? 'ok' : 'dead', 'shared.tag.t', ok ? 'yes' + (v.others.itPassed ? ', and it passed on' : '') : `nobody was it on any page (${v.names})`, ok ? '' : 'tag makes an it at round start unless rules clear it');
+    },
+  },
+};

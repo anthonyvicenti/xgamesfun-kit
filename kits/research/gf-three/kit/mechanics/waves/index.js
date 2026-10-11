@@ -803,3 +803,81 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Host-owned enemies, spawners, a target to defend',
+  rank: 60,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: ['projectile', 'melee', 'health', 'levels', 'boss', 'loot'],
+  owns: () => [],
+  state: { key: 'waves', fields: { e: '[[id, x, z, hp, max]] per enemy (a typed row adds type, state, yaw)', w: '[wave, kills, targetHp, phase] (levels add level, encounter on, cleared, tokens)', k: '[[enemyId, killerId]] the last 6 kills' } },
+  events: [
+    { name: 'onKill', on: 'host', args: '{ enemy: { id, x, z, hp, wave }, from }', when: 'an enemy went down (from: the player who did it, or null)' },
+    { name: 'onSpawn', on: 'host', args: '{ enemy }', when: 'an enemy came in' },
+    { name: 'onPlayerHit', on: 'host', args: '{ enemy, player }', when: 'an enemy hit a player' },
+    { name: 'onTargetHit', on: 'host', args: '{ enemy, hp }', when: 'an enemy hit the target' },
+    { name: 'onTargetDown', on: 'host', args: '{}', when: 'the target ran out of health' },
+  ],
+  sync: { owner: 'host', how: 'the host owns every enemy, the wave plan and the target\'s health; copies draw from the shared rows' },
+  note: [
+    'target is the name of a zone in config/world.json (never a prop\'s name): the enemies go for it and the HUD shows its health; put the thing to defend in that zone.',
+    'A kill already scores killPoints for the player who did it, and shots and swings already hurt enemies: nothing to wire.',
+    'A basic enemy takes 2 to 4 hits; one-hit kills only when the spec sets oneHitKills.',
+  ],
+  stub: {
+    as: 'waves',
+    worked: 'check(ctx) { return waves.state().targetHp <= 0 ? { winners: [], reason: \'lost\' } : null; }',
+    traps: [
+      'adding score in onKill counts every kill twice (killPoints is already added): set killPoints to 0 first, or score something else there',
+      'with aggro "target" and a target that is not a zone, the enemies stand where they came in',
+    ],
+  },
+  signs: {
+    sample: sh => (sh.waves ? { waves: { e: sh.waves.e ?? [], w: sh.waves.w ?? null } } : null),
+    judge: v => {
+      const W = v.goal.waves, L = v.limits, r1 = v.r1, aim = v.aim, names = v.names;
+      const page = v.alive ?? null;
+      const ws = page ? v.wavesOn(page) : v.waves, wAll = v.waves;
+      const where = page ? `undefended for ${v.secs(page)} s (no bots, the player standing still)` : `on ${names}`;
+      if (!ws.seen) { v.add('enemies come', 'unmeasured', 'snapshot().shared.waves', `no waves state ${where}`); return; }
+      if (!ws.maxAlive) v.add('enemies come', 'dead', 'shared.waves.e', `no enemy came ${where} (firstDelay ${W.firstDelay} s, startCount ${W.startCount})`, 'check mechanics[waves].params (firstDelay, startCount, maxWaves) and that rules do not remove enemies');
+      else {
+        v.add('enemies come', 'ok', 'shared.waves.e', `${ws.maxAlive} at once, the first at ${r1(ws.firstAt)} s`);
+        const goalWords = W.aggro === 'target' ? (W.zone ? `the target zone "${W.zone.name}"` : 'a target that does not exist') : W.aggro === 'players' ? 'the nearest player' : `the nearest player${W.zone ? ` or zone "${W.zone.name}"` : ''}`;
+        if (ws.closed >= L.APPROACH_M || ws.reached) v.add('enemies go for their goal', 'ok', 'shared.waves.e positions', `they closed ${ws.closed} m on ${goalWords}${ws.reached ? ' and reached it' : ''}`);
+        else v.add('enemies go for their goal', 'dead', 'shared.waves.e positions', `${W.aggro === 'target' && !W.zone ? 'the enemies had no goal (their target does not exist)' : `the enemies did not go for ${goalWords}`} ${where}: the most any closed on a goal was ${ws.closed} m, the farthest any moved ${ws.moved} m`,
+          W.zone || W.aggro !== 'target' ? 'check waves speed and that walls or props do not box the spawn edges in' : 'give waves a target zone (above), or set aggro "nearest" so they come for the players');
+      }
+      if (W.zone) {
+        if (!page) v.add('an idle player loses the target', 'unmeasured', 'shared.waves.w[2] (target health), undefended', 'the undefended page did not run');
+        else {
+          const drop = ws.hp0 > 0 && ws.hpMin !== null ? (ws.hp0 - ws.hpMin) / ws.hp0 : 0;
+          if (ws.hp0 === null) v.add('an idle player loses the target', 'unmeasured', 'shared.waves.w[2]', 'the target\'s health was never reported');
+          else if (drop >= L.TARGET_DROP || ws.hpMin <= 0) v.add('an idle player loses the target', 'ok', 'shared.waves.w[2] (target health)', `nobody defended it: ${W.label} ${r1(ws.hp0)} → ${r1(ws.hpMin)} in ${v.secs(page)} s`);
+          else v.add('an idle player loses the target', 'dead', 'shared.waves.w[2] (target health)', `nobody defended the ${W.label} for ${v.secs(page)} s and its health went ${r1(ws.hp0)} → ${r1(ws.hpMin)} (needs a ${L.TARGET_DROP * 100}% drop): ${ws.reached ? 'enemies reached it but did not hurt it' : `no enemy got within attackRange ${W.attackRange} m (+${L.REACH_SLACK})`}`,
+            ws.reached ? 'check waves damage and attackInterval, and that rules do not refill targetHp' : 'check attackRange against the size of what stands in the zone (enemies stop at its collider), and waves speed');
+        }
+      } else if (page && W.aggro !== 'target' && v.has('health')) {
+        // no target: the goal is the player's own skin, and an idle player alone must get hurt
+        const me = v.othersOn(page);
+        if (me.hpFell || me.down) v.add('an idle player is hurt', 'ok', 'shared.hp.h, players down (undefended)', `the enemies reached the idle player and ${me.hpFell ? `hurt them (hit points down to ${me.hpMin})` : 'knocked them down'}`);
+        else v.add('an idle player is hurt', 'dead', 'shared.hp.h, players down (undefended)', `the player stood still for ${v.secs(page)} s with no bots and was never hurt (the closest an enemy came: ${ws.reached ? 'in reach' : `${ws.closed} m closer than where it came in`})`,
+          'check waves damage, attackRange and aggro ("nearest" or "players"), and that rules do not protect the player');
+      }
+      // a player's shot hurts an enemy
+      if (W.hittable && v.has('projectile')) {
+        if (aim?.hit) v.add('a shot hurts an enemy', 'ok', 'shared.waves.e hp and w[1] kills, while the player fired', `the player aimed at an enemy ${aim.distance} m away and fired: ${aim.kill ? 'it died' : `its hit points went ${aim.hpBefore} → ${aim.hpAfter}`}`);
+        else if (wAll.kills > 0 || wAll.enemyHpDrop) v.add('a shot hurts an enemy', 'ok', 'shared.waves.w[1] kills', `${wAll.kills} killed on the pages with bots${aim ? `; the aimed shot did not land (${aim.why})` : ''}`);
+        else v.add('a shot hurts an enemy', aim?.measured ? 'dead' : 'unmeasured', 'shared.waves.e hp and w[1] kills', `no enemy was hurt or killed on any page (${names})${aim ? `; the aimed player: ${aim.why}` : ''}`,
+          'check that waves.hittable is on and the shots reach the enemies (projectile speed, lifetime, the aim at the crosshair), and that rules.bot makes bots shoot them');
+      }
+    },
+  },
+};

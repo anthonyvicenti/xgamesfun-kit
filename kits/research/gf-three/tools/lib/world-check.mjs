@@ -105,6 +105,22 @@ function levelsAsked(subject) {
   return Math.max(1, Math.round(n) || 1);
 }
 
+/**
+ * A scenic level's play area. An island is round: the disc of its radius. A level made of rooms (a dungeon: `box` is
+ * the rectangle round its room set, with a 1 m margin) is measured like every other building here, by the rectangle
+ * its rooms stand in. Before 2026-10-10 a dungeon was measured as a disc over the half-diagonal of that rectangle
+ * (`radius`), which called a 39 x 27 m room set "1981 m² walkable" and failed every dungeon create made for "medium".
+ * → {area (m²), size: [w, d], how (words for the message)}
+ */
+export function scenicLevelArea(L, r) {
+  const b = Array.isArray(L?.box) && L.box.length === 4 && L.box.every(Number.isFinite) ? L.box : null;
+  if (b && Array.isArray(L.rooms) && L.rooms.length) {
+    const w = Math.max(0, b[2] - b[0] - 2), d = Math.max(0, b[3] - b[1] - 2);
+    return { area: w * d, size: [+w.toFixed(1), +d.toFixed(1)], how: `${L.rooms.length} rooms in ${fmt(w)} x ${fmt(d)} m (${Math.round(w * d)} m²)` };
+  }
+  return { area: Math.PI * r * r, size: [+(r * 2).toFixed(1), +(r * 2).toFixed(1)], how: `${fmt(r * 2)} m across (${Math.round(Math.PI * r * r)} m² walkable)` };
+}
+
 /** Check 17 for a scenic world. Same report shape as checkWorld (stats.size is the first level's span). */
 export function checkScenicWorld(subject) {
   const cfg = subject.world, t = cfg.template ?? 'world';
@@ -119,8 +135,9 @@ export function checkScenicWorld(subject) {
   const regen = 'node research/gf-three/tools/upgrade.mjs <game> --world, or create again: the scenic world module generates one island or room set per level';
   if (levels.length < asked) add('levels', 'error', `the game plays ${asked} levels but config/world.json has ${levels.length}`, regen);
   for (const [i, L] of levels.entries()) {
-    const r = Number(L.radius ?? R) || 0, area = Math.PI * r * r, name = L.id ?? `level ${i + 1}`;
-    if (area < cls.area[0] || area > cls.area[1]) add('size', 'error', `${name} is ${fmt(r * 2)} m across (${Math.round(area)} m² walkable); the spec asks for "${intent}", which needs ${cls.area[0]}–${cls.area[1]} m² (${cls.describe})`, regen);
+    const r = Number(L.radius ?? R) || 0, name = L.id ?? `level ${i + 1}`;
+    const { area, how } = scenicLevelArea(L, r);
+    if (area < cls.area[0] || area > cls.area[1]) add('size', 'error', `${name} is ${how}; the spec asks for "${intent}", which needs ${cls.area[0]}–${cls.area[1]} m² (${cls.describe})`, regen);
     const at = L.at ?? [0, 0, 0];
     const sp = L.spawns ?? [];
     if (sp.length < seats) add('spawns', 'error', `${name} has ${sp.length} spawns for ${seats} seats`, regen);
@@ -138,9 +155,10 @@ export function checkScenicWorld(subject) {
   for (const n of notes) problems.push({ rule: 'scenic', severity: 'warning', message: n, fix: null, slot: `world.${t}.layout` });
   const errors = problems.filter(p => p.severity === 'error').length;
   const r0 = Number(levels[0].radius ?? R) || 0;
+  const a0 = scenicLevelArea(levels[0], r0);
   return {
     tool: 'research/gf-three/tools/world.mjs', check: 17, target: subject.target, template: t, kind: cfg.kind ?? t, engine: 'scenic', ok: errors === 0, errors, warnings: problems.length - errors, problems,
-    stats: { size: [+(r0 * 2).toFixed(1), +(r0 * 2).toFixed(1)], area: Math.round(Math.PI * r0 * r0), sizeClass: intent, measuredClass: sizeClassOf(Math.PI * r0 * r0), rooms: 0, levels: levels.length, levelsAsked: asked, radius: r0, entries: 0, ceiling: null, filledGround: 0 },
+    stats: { size: a0.size, area: Math.round(a0.area), sizeClass: intent, measuredClass: sizeClassOf(a0.area), rooms: 0, levels: levels.length, levelsAsked: asked, radius: r0, entries: 0, ceiling: null, filledGround: 0 },
   };
 }
 

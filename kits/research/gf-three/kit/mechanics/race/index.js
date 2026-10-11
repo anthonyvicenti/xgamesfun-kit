@@ -149,3 +149,45 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Checkpoints, laps, a finish order',
+  rank: 80,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: [],
+  owns: () => [],
+  state: { key: 'race', fields: { r: '{ playerId: [lap, checkpoint, place] }', o: 'the finish order (player ids)' } },
+  events: [
+    { name: 'onCheckpoint', on: 'host', args: '{ player, index }', when: 'a player passed a gate' },
+    { name: 'onLap', on: 'host', args: '{ player, lap }', when: 'a player finished a lap' },
+    { name: 'onFinish', on: 'host', args: '{ player, place, points }', when: 'a player finished the race' },
+  ],
+  sync: { owner: 'host', how: 'the host judges every crossing and the finish order' },
+  note: [
+    'The gates are drawn and judged by the kit: params.checkpoints is [[x, z], …], or leave it empty for a ring of ringCount gates.',
+    'The race ends the round only when rules.check returns race.check(); a finish already scores placePoints.',
+    'race.standings() and race.progress(p) are the same on every copy.',
+  ],
+  stub: {
+    as: 'race',
+    worked: 'check(ctx) { return race.check(); }   // null, or { winners: [first to finish], reason: \'finished\' }',
+    traps: [
+      'bots stand still unless the rules steer them: in bot(ctx, p) call race.botStep(p)',
+      'adding score in onFinish counts a place twice (placePoints is already added)',
+    ],
+  },
+  signs: {
+    sample: sh => (sh.race ? { race: sh.race.r ?? {} } : null),
+    judge: v => {
+      const ok = v.others.race;
+      v.add('a gate is passed', ok ? 'ok' : 'dead', 'shared.race.r', ok ? 'yes' : `nobody passed a gate on any page (${v.names})`, ok ? '' : 'call race.botStep(p) in rules.bot and check the gates are reachable');
+    },
+  },
+};

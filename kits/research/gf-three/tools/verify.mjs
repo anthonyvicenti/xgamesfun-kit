@@ -1,7 +1,18 @@
 #!/usr/bin/env node
 // gf-three verify: is this game good? One command, one verdict (CONTRACT §5).
 //
-//   node research/gf-three/tools/verify.mjs <game> [--quick] [--out <dir>] [--json] [--check 10|13|14|15|16|20|21|22|23|24|25] [--refs <folder>]
+//   node research/gf-three/tools/verify.mjs <game> [--quick] [--all] [--release] [--profile <file>] [--check N[,N…]]
+//                                           [--out <dir>] [--json] [--refs <folder>]
+//
+// What it prints: each FAILING check with its rule and its fix (tools/lib/homes.json), then one summary line. --all
+// (or --verbose) prints every check and the progress lines as well.
+// A build's verify runs every check below except 8, 31 and 34: those test the kit, no game can fail them, and they run
+// per release (--release; regress.mjs --corpus passes it). tools/lib/verdict.mjs RELEASE_ONLY.
+// --profile <file>: a machine that cannot run everything (a CI runner with no graphics card). The file is
+// {name, environment: {VAR: value}, skip: [{check, reason, legs?}]}: the environment is set before any browser starts,
+// each skipped check is recorded ok: null with its reason, check 5 with "legs": "lobby" runs the gate's lobby legs only,
+// and the verdict carries profile (name, skipped) and profilePass. A profiled run is never a pass: `pass` stays false
+// while a required check is skipped. Exit 0 when everything that was not skipped passed.
 //
 //   1 assets.json valid (research/asset-manifest/validate.mjs) and multiplayer.json valid
 //   2 kit copies unedited (gf/three, gf/mp, audio, gf/gf-assets.js) and vendor/ the pinned libraries
@@ -75,11 +86,13 @@
 //
 // Engines (CONTRACT §8): a scenic game's pages run in WebGPU Chrome (its real renderer), a party game's in WebGL Chrome.
 //
-// --check 10, 13, 14, 15 or 16 runs that check alone (a quick repair loop); --check 17, --check 11 or --check 11,17 runs
-// the static checks alone (no browser, about a second). Evidence: <game>/evidence/verify-N/ (or --out):
-// verdict.json (with `timing`, seconds per step), screenshots, the gate's own record. Append-only. The two-player gate
+// --check takes one check or any list (1,2 or 13,16 or 3,4,5). One of 10, 13, 15, 16, 20, 21, 22, 23, 24, 25, 31, 34
+// runs alone on a page of its own (a quick repair loop); a list of the static checks (1, 2, 11, 14, 17, 18, 19) runs
+// with no browser, in about a second; any other list runs the whole flow with every other check left out. Evidence:
+// <game>/evidence/verify-N/ (or --out): verdict.json (`timing`, seconds per step; each check's own `seconds`; a
+// failing check's `rule` and `fix`), screenshots, the gate's own record. Append-only. The two-player gate
 // and its loadout leg run in their own browser beside the solo session. Exit 0 when every check REQUIRED in
-// tools/lib/verdict.mjs passes (9 counts when run).
+// tools/lib/verdict.mjs for this run passes (requiredFor: a build's list, or a release's; 9 counts when run).
 import { isMain } from './lib/main.mjs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -100,7 +113,8 @@ import { checkLoadouts } from './lib/loadout-check.mjs';
 import { loadSubject, lintDressing, lines as dressingLines } from './lib/dressing.mjs';
 import { RECORDER, recordingOf, firstLook, undefended, judgeAlive, goalOf } from './lib/alive-check.mjs';
 import { gameFingerprint } from './lib/own-verify.mjs';
-import { passes } from './lib/verdict.mjs';
+import { passes, passesForge, profilePasses, requiredFor, runsHere, checkProfile } from './lib/verdict.mjs';
+import { checkHome } from './lib/homes.mjs';
 import { checkLooks } from './lib/looks-check.mjs';
 import { worldCheck } from './lib/world-check.mjs';
 import { checkSounds } from './lib/sounds-check.mjs';
@@ -115,88 +129,148 @@ import { checkLikeness, likenessTargets } from './lib/likeness-check.mjs';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
 
-export async function verify(gameDir, { quick = false, out = null, log = console.log, only = null, refs = null } = {}) {
+export async function verify(gameDir, { quick = false, out = null, log = console.log, only = null, refs = null, release = false, profile = null, all = false } = {}) {
   const dir = resolve(gameDir);
   const t0 = Date.now();
   const checks = [];
-  const add = (n, name, ok, detail = '', extra = {}) => { checks.push({ n, name, ok: ok === null ? null : !!ok, detail: String(detail ?? '').slice(0, 1800), ...extra }); log(`${ok === null ? 'SKIP' : ok ? 'PASS' : 'FAIL'} ${n} ${name}${detail ? ` — ${String(detail).slice(0, 240)}` : ''}`); return !!ok; };
+  // the profile's environment, before any browser is launched (GF_VERIFY_SOFTWARE and the like)
+  for (const [k, v] of Object.entries(profile?.environment ?? {})) process.env[k] = String(v);
+  // what is printed: a failing check with its rule and its fix, always; passes, skips and progress lines with --all
+  const say = all ? log : () => {};
+  // seconds per check: from begin(n) when the flow marked the check's start, else since the check recorded before it
+  // (the world and forge flows, and a check alone); a step that several checks share is passed in as `seconds`
+  const started = new Map(); let lastAdd = t0;
+  const begin = (...ns) => { const t = Date.now(); for (const n of ns) started.set(n, t); };
+  const add = (n, name, ok, detail = '', extra = {}) => {
+    const now = Date.now(), home = checkHome(n), failed = ok !== null && !ok;
+    const { seconds: given, ...rest } = extra;
+    const seconds = ok === null ? null : Math.round((given ?? (now - (started.get(n) ?? lastAdd)) / 1000) * 10) / 10;
+    lastAdd = now;
+    checks.push({ n, name, ok: ok === null ? null : !!ok, detail: String(detail ?? '').slice(0, 1800), ...(seconds === null ? {} : { seconds }), ...rest, ...(failed && home ? { rule: home.rule, fix: home.fix } : {}) });
+    if (failed) log(`FAIL ${n} ${name}${detail ? ` — ${String(detail).slice(0, 600)}` : ''}${home ? `\n  rule: ${home.rule}\n  fix:  ${home.fix}` : ''}`);
+    else say(`${ok === null ? 'SKIP' : 'PASS'} ${n} ${name}${detail ? ` — ${String(detail).slice(0, 240)}` : ''}`);
+    return !!ok;
+  };
   // evidence folder: the next free verify-N
   let outDir = out ? resolve(out) : null;
   if (!outDir) { const root = join(dir, 'evidence'); await mkdir(root, { recursive: true }); const taken = new Set(await readdir(root)); let n = 1; while (taken.has(`verify-${n}`)) n++; outDir = join(root, `verify-${n}`); }
   await mkdir(outDir, { recursive: true });
-  const rec = { schema: 'gf-three-verify/1', game: basename(dir), kit: KIT_VERSION, quick, ...(only ? { only } : {}), started: new Date().toISOString(), checks, notes: [], shots: [], timing: {} };
+  const rec = { schema: 'gf-three-verify/1', game: basename(dir), kit: KIT_VERSION, quick, ...(release ? { release: true } : {}), ...(only !== null ? { only } : {}), started: new Date().toISOString(), checks, notes: [], shots: [], timing: {} };
   const lap = (name, since) => { rec.timing[name] = Math.round((Date.now() - since) / 100) / 10; };   // seconds per step
   rec.gameFiles = await gameFingerprint(dir).catch(() => null);   // the files the agent tunes, as verified (own-verify.mjs)
-  // a world (CONTRACT §9: config/game.json round.mode "world") has its own flow: tools/verify-world.mjs
+  const list = only === null ? null : [].concat(only);
+  const one = list?.length === 1 ? list[0] : null;
+  // a world (CONTRACT §9: config/game.json round.mode "world") has its own flow, tools/verify-world.mjs; so has a forge
+  // game (CONTRACT §8 forge: tools/verify-forge.mjs, the checks that apply through the forge observation interface; the
+  // rest listed "not yet for forge", never passed)
   const roundMode = JSON.parse(await readFile(join(dir, 'config/game.json'), 'utf8').catch(() => '{}')).round?.mode;
-  if (roundMode === 'world') return (await import('./verify-world.mjs')).verifyWorld(dir, { rec, outDir, add, log, t0, lap, quick, only,
-    statics: { looks: () => looks(dir, rec, add), check18: () => check18(dir, { rec, add }), check19: () => check19(dir, { rec, add }) } });
-  // a forge game (CONTRACT §8 forge) has its own flow: tools/verify-forge.mjs (the checks that apply through the forge
-  // observation interface; the rest listed "not yet for forge", never passed)
-  if (await engineOfGame(dir) === 'forge') return (await import('./verify-forge.mjs')).verifyForge(dir, { rec, outDir, add, log, t0, lap, quick, only,
-    statics: { looks: () => looks(dir, rec, add), check18: () => check18(dir, { rec, add }), likeness: shots => likeness(dir, { rec, add, shots, refs }) } });
-  if (only === 10) return fairOnly(dir, { rec, outDir, add, log, t0 });
-  if (only === 13) return controlsOnly(dir, { rec, outDir, add, log, t0 });
-  if (only === 14) return looksOnly(dir, { rec, outDir, add, t0 });
-  if (only === 15) return aliveOnly(dir, { rec, outDir, add, log, t0, lap });
-  if (only === 16) return hitsOnly(dir, { rec, outDir, add, log, t0 });
-  if ([20, 21, 22, 24, 31].includes(only)) return menuOnly(dir, only, { rec, outDir, add, log, t0 });
-  if (only === 23) return likenessOnly(dir, { rec, outDir, add, log, t0, refs });
-  if (only === 25) return friendsOnly(dir, { rec, outDir, add, log, t0 });
-  if (only === 34) return watchOnly(dir, { rec, outDir, add, log, t0 });
-  if (only !== null && [].concat(only).every(n => STATIC_ALONE.includes(n))) return staticOnly(dir, [].concat(only), { rec, outDir, add, t0 });
+  const kind = roundMode === 'world' ? 'world' : await engineOfGame(dir) === 'forge' ? 'forge' : 'round';
+  const required = requiredFor(kind, { release });
+  if (kind !== 'round') {
+    // a profile here: its checks are left out of the run and recorded as skipped after it (the gate's lobby-only legs
+    // are a round game's; here check 5 is skipped whole)
+    const skip = profile ? profile.skip.filter(s => (list ?? [...required, 9]).includes(s.check)) : [];
+    const run = profile ? (list ?? required).filter(n => !skip.some(s => s.check === n)) : only;
+    const flow = kind === 'world' ? (await import('./verify-world.mjs')).verifyWorld : (await import('./verify-forge.mjs')).verifyForge;
+    const r = await flow(dir, { rec, outDir, add, log: say, t0, lap, quick, only: run, release,
+      statics: { looks: () => looks(dir, rec, add), check18: () => check18(dir, { rec, add }), check19: () => check19(dir, { rec, add }), likeness: shots => likeness(dir, { rec, add, shots, refs }) } });
+    if (profile) {
+      for (const s of skip) add(s.check, checkHome(s.check)?.name ?? `check ${s.check}`, null, `skipped by profile ${profile.name}: ${s.reason}`, { skippedBy: 'profile', reason: s.reason });
+      checks.sort((a, b) => (typeof a.n === 'number' ? a.n : 99) - (typeof b.n === 'number' ? b.n : 99));
+      if (!list) r.pass = kind === 'forge' ? passesForge(checks, required) : passes(checks, required);
+      stampProfile(r, profile, required);
+      await writeFile(join(outDir, 'verdict.json'), JSON.stringify(r, null, 2) + '\n');
+    }
+    return r;
+  }
+  const A = { rec, outDir, add, log: say, t0, lap, refs };
+  if (list && list.every(n => STATIC_ALONE.includes(n))) return staticOnly(dir, list, A);
+  if (one === 10) return fairOnly(dir, A);
+  if (one === 13) return controlsOnly(dir, A);
+  if (one === 15) return aliveOnly(dir, A);
+  if (one === 16) return hitsOnly(dir, A);
+  if ([20, 21, 22, 24, 31].includes(one)) return menuOnly(dir, one, A);
+  if (one === 23) return likenessOnly(dir, A);
+  if (one === 25) return friendsOnly(dir, A);
+  if (one === 34) return watchOnly(dir, A);
 
-  // ---- 1. manifests ----
-  const v = await validateGame(dir);
+  // ---- which checks this run makes: a list (--check), else every check of a build (a release adds 8, 31 and 34);
+  // a profile's skipped checks are recorded first, each with its reason, and never run ----
+  const skipBy = new Map((profile?.skip ?? []).map(x => [x.check, x]));
+  const asked = n => (list ? list.includes(n) : n === 9 || runsHere(n, { release }));
+  const lobbyOnly = asked(5) && skipBy.get(5)?.legs === 'lobby';
+  const want = n => asked(n) && !skipBy.has(n);
+  for (const n of [...requiredFor('round', { release: true }), 9].sort((a, b) => a - b)) {
+    if (asked(n) && skipBy.has(n) && !(n === 5 && lobbyOnly)) add(n, checkHome(n)?.name ?? `check ${n}`, null, `skipped by profile ${profile.name}: ${skipBy.get(n).reason}`, { skippedBy: 'profile', reason: skipBy.get(n).reason });
+  }
+  const timed = async fn => { const t = Date.now(); const r = await fn(); return [r, (Date.now() - t) / 1000]; };
+
+  // ---- 1. manifests ---- 2. kit copies ----
   const mpm = await readManifest(dir);
-  const mv = mpm.error ? { ok: false, problems: [`multiplayer.json is ${mpm.error}`] } : validateMultiplayer(mpm.manifest);
   const live = mpm.manifest?.mode === 'live';
-  add(1, 'manifests', v.ok && mv.ok && live, [v.ok ? `assets.json valid (${v.stats?.slots ?? '?'} slots, ${v.stats?.mainSlots ?? v.stats?.main ?? '?'} main)` : `assets.json: ${v.errors.slice(0, 4).join('; ')}`, mv.ok ? `multiplayer.json valid, mode ${mpm.manifest?.mode}` : `multiplayer.json: ${mv.problems.join('; ')}`].join(' · '));
-  if (v.warnings?.length) rec.notes.push(`assets.json warnings: ${v.warnings.slice(0, 5).join('; ')}`);
-
-  // ---- 2. kit copies ----
-  const kc = await checkKitCopies(dir);
-  add(2, 'kit copies unedited', kc.ok, kc.ok ? 'gf/three, gf/mp, audio, gf/gf-assets.js and vendor/ match their sources' : kc.problems.slice(0, 6).join('; '));
-  rec.notes.push(...kc.notes);
+  if (want(1)) { begin(1); await check1(dir, { rec, add, mpm }); }
+  if (want(2)) { begin(2); await check2(dir, { rec, add }); }
 
   // ---- 11. set dressing (static, fast; creator feedback on Bladder Wars, 2026-10-06: "maybe some cleanup on the assets") ----
-  try {
-    const dr = lintDressing(await loadSubject(dir));
-    const ls = dressingLines(dr);
-    add(11, 'set dressing', dr.errors === 0, dr.errors === 0
-      ? `clean: 0 errors, ${dr.warnings} warnings, open floor ${(dr.stats.openFloor * 100).toFixed(0)}%`
-      : `${dr.errors} errors (fix in config/world.json and the slots named; node ${join(GF3, 'tools/dressing.mjs')} <game> lists them all): ${ls.filter(l => l.startsWith('ERROR')).slice(0, 6).join(' | ')}`);
-    if (dr.warnings) rec.notes.push(`set dressing warnings: ${ls.filter(l => l.startsWith('warn')).slice(0, 6).join(' | ')}`);
-    rec.dressing = { errors: dr.errors, warnings: dr.warnings, stats: dr.stats };
-  } catch (e) { add(11, 'set dressing', false, `the lint could not run: ${e.message}`); }
+  if (want(11)) {
+    begin(11);
+    try {
+      const dr = lintDressing(await loadSubject(dir));
+      const ls = dressingLines(dr);
+      add(11, 'set dressing', dr.errors === 0, dr.errors === 0
+        ? `clean: 0 errors, ${dr.warnings} warnings, open floor ${(dr.stats.openFloor * 100).toFixed(0)}%`
+        : `${dr.errors} errors (fix in config/world.json and the slots named; node ${join(GF3, 'tools/dressing.mjs')} <game> lists them all): ${ls.filter(l => l.startsWith('ERROR')).slice(0, 6).join(' | ')}`);
+      if (dr.warnings) rec.notes.push(`set dressing warnings: ${ls.filter(l => l.startsWith('warn')).slice(0, 6).join(' | ')}`);
+      rec.dressing = { errors: dr.errors, warnings: dr.warnings, stats: dr.stats };
+    } catch (e) { add(11, 'set dressing', false, `the lint could not run: ${e.message}`); }
+  }
   // ---- 14. looks honoured (static; creator on Hang Up On Them, 2026-10-07: "the final assets look nothing like the reference image") ----
-  await looks(dir, rec, add);
-  await check17(dir, { rec, add });
-  await check18(dir, { rec, add });
-  await check19(dir, { rec, add });
+  if (want(14)) { begin(14); await looks(dir, rec, add); }
+  if (want(17)) { begin(17); await check17(dir, { rec, add }); }
+  if (want(18)) { begin(18); await check18(dir, { rec, add }); }
+  if (want(19)) { begin(19); await check19(dir, { rec, add }); }
 
   // ---- 5. the two-player live gate and its loadout leg: their own server and browsers, beside the solo session ----
   // (they share nothing with it; run one after the other they were 80 of verify's 183 s with --quick, 2026-10-07)
-  const duo = live ? (async () => {
-    const t = Date.now();
-    const g = await gate(dir, { out: outDir, seconds: 75, log: line => log(`  gate ${line}`) }).catch(e => ({ verdict: 'fail', checks: [{ name: 'run', ok: false, detail: e.message }] }));
-    lap('gate', t);
-    const t2 = Date.now();
-    // the loadout leg (CONTRACT §6e, tools/lib/loadout-check.mjs): each screen draws the other player in their own look
-    const lo = await checkLoadouts({ dir, outDir, shots: rec.shots, log: line => log(`  ${line}`) }).catch(e => ({ ok: false, detail: `loadouts: ${e.message}`, record: null, warnings: [] }));
-    lap('loadouts', t2);
-    // 25. playing with friends (tools/lib/friends-check.mjs): the friends page the way a new player meets it
-    const t3 = Date.now();
-    const fr = await checkFriends({ dir, outDir, shots: rec.shots, log: line => log(`  ${line}`) }).catch(e => ({ ok: false, detail: `friends: ${e.message}`, record: null, warnings: [] }));
-    lap('friends', t3);
-    // 34. watch then play (tools/lib/friends-watch-check.mjs, CONTRACT §9b; forge's own 32 and 33 came first): go live in a round, a viewer watches, then joins
-    const t4 = Date.now();
-    const wa = await checkFriendsWatch({ dir, outDir, shots: rec.shots, log: line => log(`  ${line}`) }).catch(e => ({ ok: false, detail: `watch: ${e.message}`, record: null, warnings: [] }));
-    lap('watch', t4);
-    return { gateRec: g, lo, fr, wa };
+  // each leg runs only when a check of this run needs it; under a profile that keeps check 5's lobby legs, the gate
+  // stops once both players are in the room over WebRTC
+  const needGate = want(5) || want(6) || lobbyOnly;
+  const duo = live && (needGate || want(25) || want(34)) ? (async () => {
+    const R = { seconds: {} };
+    if (needGate) {
+      const t = Date.now();
+      R.gateRec = await gate(dir, { out: outDir, seconds: 75, ...(lobbyOnly && !want(6) ? { legs: 'lobby' } : {}), log: line => say(`  gate ${line}`) }).catch(e => ({ verdict: 'fail', checks: [{ name: 'run', ok: false, detail: e.message }] }));
+      lap('gate', t); R.seconds.gate = (Date.now() - t) / 1000;
+    }
+    if (want(5)) {
+      const t2 = Date.now();
+      // the loadout leg (CONTRACT §6e, tools/lib/loadout-check.mjs): each screen draws the other player in their own look
+      R.lo = await checkLoadouts({ dir, outDir, shots: rec.shots, log: line => say(`  ${line}`) }).catch(e => ({ ok: false, detail: `loadouts: ${e.message}`, record: null, warnings: [] }));
+      lap('loadouts', t2); R.seconds.loadouts = (Date.now() - t2) / 1000;
+    }
+    if (want(25)) {
+      // 25. playing with friends (tools/lib/friends-check.mjs): the friends page the way a new player meets it
+      const t3 = Date.now();
+      R.fr = await checkFriends({ dir, outDir, shots: rec.shots, log: line => say(`  ${line}`) }).catch(e => ({ ok: false, detail: `friends: ${e.message}`, record: null, warnings: [] }));
+      lap('friends', t3); R.seconds.friends = (Date.now() - t3) / 1000;
+    }
+    if (want(34)) {
+      // 34. watch then play (tools/lib/friends-watch-check.mjs, CONTRACT §9b; a release check): go live in a round, a viewer watches, then joins
+      const t4 = Date.now();
+      R.wa = await checkFriendsWatch({ dir, outDir, shots: rec.shots, log: line => say(`  ${line}`) }).catch(e => ({ ok: false, detail: `watch: ${e.message}`, record: null, warnings: [] }));
+      lap('watch', t4); R.seconds.watch = (Date.now() - t4) / 1000;
+    }
+    return R;
   })() : null;
 
   // ---- 3, 4, 6 (alone), 7, 8, 10, 12, 13, 15: one solo session with bots, real input ----
+  // the solo round; check 23 looks at its screenshots, but only when the job has reference pictures to compare with
+  const refShots = want(23) && ((await likenessTargets(dir, { refs }).catch(() => null))?.targets?.length ?? 0) > 0;
+  const needRound = [3, 4, 6, 7, 12, 15].some(want) || refShots;
+  const needFair = [10, 12, 15].some(want);                       // check 10's two pages (12 and 15 read them too)
+  const needBrowser = needRound || needFair || [8, 13, 16, 20, 21, 22, 24, 31].some(want);
+  let solo = null, gateRec = null, soloSeconds = 0;
+  if (needBrowser) {
   const assets = JSON.parse(await readFile(join(dir, 'assets.json'), 'utf8'));
   const srv = await startParty({ dir, port: 0 });
   // Gameplay checks run on the real GPU when there is one (WebGL through ANGLE; Chrome falls back to SwiftShader on a
@@ -231,10 +305,11 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   let look = null;
   const snap = page => page.evaluate(() => window.__game?.snapshot?.() ?? null);
   const roundSeconds = 25;
-  let solo = null, gateRec = null;
+  let S = null, sr = null, replayed = null, audio = null, cov = [];
   try {
+    if (needRound) {
     // the solo round: real clicks and keys; a 25 s round through Studio's own override mechanism
-    const S = await newPage('solo', { audio: true, overrides: { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: roundSeconds }] } });
+    S = await newPage('solo', { audio: true, overrides: { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: roundSeconds }] } });
     solo = S;
     const p = S.page;
     await p.goto(`${srv.url}?seed=7&bots=3&gf-calm=6`, { waitUntil: 'load' });   // gf-calm: bots stand still for the walk test
@@ -266,22 +341,25 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     s1 = await snap(p);
     await shot(p, 'playing');
     // coverage while things move (balls flying, players knocked over): three samples
-    const cov = [];
     for (let i = 0; i < 3; i++) { cov.push(await p.evaluate(() => window.__game.coverage())); await sleep(2500); }
     await shot(p, 'mid-round');
     await until(async () => (await snap(p))?.phase === 'results', (roundSeconds + 20) * 1000, 'the results');
-    const sr = await snap(p);
+    sr = await snap(p);
     await shot(p, 'results');
     const again = await p.locator('#gf-again').boundingBox().catch(() => null);
     if (again) await p.mouse.click(again.x + again.width / 2, again.y + again.height / 2);
-    const replayed = await until(async () => { const s = await snap(p); return s && s.round === 2 && ['countdown', 'playing'].includes(s.phase) ? s : null; }, 10000, 'round 2').catch(() => null);
+    replayed = await until(async () => { const s = await snap(p); return s && s.round === 2 && ['countdown', 'playing'].includes(s.phase) ? s : null; }, 10000, 'round 2').catch(() => null);
     await until(async () => (await snap(p))?.phase === 'playing', 8000, 'round 2 to play').catch(() => {});
     await sleep(1500);
     await shot(p, 'round-2');
-    const audio = await audioReport(p);
+    audio = await audioReport(p);
+    soloSeconds = (Date.now() - tStep) / 1000;
     rec.solo = { moved: +moved.toFixed(2), results: sr.results, winners: sr.winners, coverage: cov.map(c => ({ meshes: c.meshes, tagged: c.tagged, exempt: c.exempt, untagged: c.untagged.length, unknownSlots: c.unknownSlots })), audio: { ok: audio.ok, heard: audio.heard, problems: audio.problems, mix: audio.mix, maxSoundsPer100ms: audio.maxSoundsPer100ms, hidden: audio.hidden } };
-    add(3, 'boots to play with no console errors', S.errors.length === 0 && moved > 0.5, `${S.errors.length ? `console errors: ${[...new Set(S.errors)].slice(0, 3).join(' | ')}` : 'no console errors'}; the player walked ${moved.toFixed(2)} m on real keys${walkTries > 1 ? ' (second try)' : ''}; ${s1.players.length} players`);
+    if (want(3)) add(3, 'boots to play with no console errors', S.errors.length === 0 && moved > 0.5, `${S.errors.length ? `console errors: ${[...new Set(S.errors)].slice(0, 3).join(' | ')}` : 'no console errors'}; the player walked ${moved.toFixed(2)} m on real keys${walkTries > 1 ? ' (second try)' : ''}; ${s1.players.length} players`, { seconds: soloSeconds, shares: 'the solo round, with 6 and 7' });
     lap('solo round', tStep); tStep = Date.now();
+    }
+    if (want(4)) {
+    begin(4);   // its seconds are the preview subjects; the three samples in play were taken during the solo round
     // coverage: in play and in every preview subject
     const subjects = (assets.showcase ?? []).map(x => x.query);
     const subjectCov = await pool(subjects, 3, async q => {
@@ -301,8 +379,11 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     if (unknown.length) rec.notes.push(`meshes tagged with ids assets.json lacks (not counted against coverage; the module should use a declared slot id): ${unknown.join(', ')}`);
     rec.solo.subjects = subjectCov.map(x => ({ q: x.q, meshes: x.c?.meshes, tagged: x.c?.tagged, untagged: x.c?.untagged?.length }));
     lap('coverage subjects', tStep); tStep = Date.now();
+    }
 
-    // ---- 8. swap proof: a body and a prop replaced the way Studio does it ----
+    // ---- 8. swap proof: a body and a prop replaced the way Studio does it (a release check) ----
+    if (want(8)) {
+    begin(8);
     const record = JSON.parse(await readFile(join(dir, 'gf-three.json'), 'utf8').catch(() => '{}'));
     // a model the worker generated and placed (game/generated.json) is the one swapped first: it must swap like any other
     const made = (JSON.parse(await readFile(join(dir, 'generated.json'), 'utf8').catch(() => '{}')).items ?? []).filter(i => i.state === 'placed').map(i => i.slot);
@@ -335,16 +416,21 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     rec.swaps = swaps;
     add(8, 'swap proof', swaps.length === 2 && swaps.every(s => s.ok), swaps.map(s => s.ok ? `${s.slot}: ${s.before.triangles} → ${s.after.triangles} triangles, on screen, ${(s.pixelsChanged * 100).toFixed(1)}% of pixels changed` : `${s.slot}: ${s.why ?? `not shown (${JSON.stringify(s.after)}${s.errors?.length ? `; ${s.errors[0]}` : ''})`}`).join(' · '));
     lap('swaps', tStep); tStep = Date.now();
+    }
 
     // ---- 13. controls work: each listed control, from the player's own view (a page of its own, no bots) ----
-    await S.ctx.close();
-    {
-      const cc = await checkControls({ newPage, browser, url: srv.url, game, log, shot: controlsShot(shot, outDir, rec) });
+    if (S) await S.ctx.close();
+    if (want(13)) {
+      begin(13);
+      const cc = await checkControls({ newPage, browser, url: srv.url, game, log: say, shot: controlsShot(shot, outDir, rec) });
       rec.controls = cc.record;
       if (cc.warnings.length) rec.notes.push(...cc.warnings);
       add(13, 'controls work', cc.ok, cc.detail);
+    }
+    if (want(16)) {
       // ---- 16. hits read: shoot an enemy from the player's own view (a page of its own, no bots) ----
-      const hc = await checkHits({ newPage, browser, url: srv.url, game, dir, log, shot: controlsShot(shot, outDir, rec) });
+      begin(16);
+      const hc = await checkHits({ newPage, browser, url: srv.url, game, dir, log: say, shot: controlsShot(shot, outDir, rec) });
       rec.hits = hc.record;
       if (hc.warnings.length) rec.notes.push(...hc.warnings);
       add(16, 'hits read', hc.ok, hc.detail);
@@ -352,104 +438,131 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     lap('controls', tStep); tStep = Date.now();
     // ---- 20, 21, 22: the home menu, the HUD and the wallet in the menu (CONTRACT §6g; creator 2026-10-08: "our games are
     // all missing a home menu and a lot of user HUDs, especially for health ... wallet connect in the home menu") ----
-    {
-      const mc = await checkMenu({ newPage, url: srv.url, game, log, shot });
+    if (want(20)) {
+      begin(20);
+      const mc = await checkMenu({ newPage, url: srv.url, game, log: say, shot });
       rec.menu = mc.record; if (mc.warnings.length) rec.notes.push(...mc.warnings);
       add(20, 'the menu works', mc.ok, mc.detail);
-      const [hu, wa] = await Promise.all([checkHud({ newPage, url: srv.url, game, log, shot }), checkWallet({ newPage, url: srv.url, log, shot })]);
-      rec.hud = hu.record; if (hu.warnings.length) rec.notes.push(...hu.warnings);
-      add(21, 'the HUD shows your state', hu.ok, hu.detail);
-      rec.wallet = wa.record; if (wa.warnings.length) rec.notes.push(...wa.warnings);
-      add(22, 'the wallet in the menu', wa.ok, wa.detail);
+    }
+    {
+      const [[hu, huS], [wa, waS]] = await Promise.all([
+        want(21) ? timed(() => checkHud({ newPage, url: srv.url, game, log: say, shot })) : [null, 0],
+        want(22) ? timed(() => checkWallet({ newPage, url: srv.url, log: say, shot })) : [null, 0]]);
+      if (hu) { rec.hud = hu.record; if (hu.warnings.length) rec.notes.push(...hu.warnings); add(21, 'the HUD shows your state', hu.ok, hu.detail, { seconds: huS }); }
+      if (wa) { rec.wallet = wa.record; if (wa.warnings.length) rec.notes.push(...wa.warnings); add(22, 'the wallet in the menu', wa.ok, wa.detail, { seconds: waS }); }
+    }
+    if (want(24)) {
       // 24. plays inside a post (CONTRACT §6d; creator 2026-10-08, a post on X: "It doesn't stay in the iframe, you can
       // easily move your mouse out")
-      const em = await checkEmbed({ newPage, url: srv.url, game, log, shot });
+      begin(24);
+      const em = await checkEmbed({ newPage, url: srv.url, game, log: say, shot });
       rec.embed = em.record; if (em.warnings.length) rec.notes.push(...em.warnings);
       add(24, 'plays inside a post', em.ok, em.detail);
-      // 31. sharp on every screen (CONTRACT §6i; creator 2026-10-09: "Different screen sizes make the game look bad")
-      const sc = await checkScreens({ browser, url: srv.url, log });
+    }
+    if (want(31)) {
+      // 31. sharp on every screen (CONTRACT §6i; creator 2026-10-09: "Different screen sizes make the game look bad"; a release check)
+      begin(31);
+      const sc = await checkScreens({ browser, url: srv.url, log: say });
       rec.screens = sc.record; if (sc.warnings.length) rec.notes.push(...sc.warnings);
       add(31, 'sharp on every screen', sc.ok, sc.detail);
     }
     lap('menu, HUD, wallet, post and screens', tStep); tStep = Date.now();
     // ---- 10. fair play: a scripted human vs 3 bots, for real (no gf-calm); beside it, check 15's undefended page ----
     const W = goalOf(game, world).waves;
-    const [fp, und] = await Promise.all([
-      checkFairPlay({ newPage, url: srv.url, log }),
-      W ? undefended({ newPage, url: srv.url, game, world, shot, log }).catch(e => ({ error: e.message })) : null,
-    ]);
-    rec.fair = fp.record;
-    if (fp.warnings.length) rec.notes.push(...fp.warnings);
-    add(10, 'fair play', fp.ok, fp.detail);
-    lap('fair play and the undefended page', tStep); tStep = Date.now();
+    let fp = null, und = null, fairSeconds = 0;
+    if (needFair) {
+      [[fp, und], fairSeconds] = await timed(() => Promise.all([
+        checkFairPlay({ newPage, url: srv.url, log: say }),
+        W && want(15) ? undefended({ newPage, url: srv.url, game, world, shot, log: say }).catch(e => ({ error: e.message })) : null,
+      ]));
+      rec.fair = fp.record;
+      if (fp.warnings.length) rec.notes.push(...fp.warnings);
+      if (want(10)) add(10, 'fair play', fp.ok, fp.detail, { seconds: fairSeconds });
+      lap('fair play and the undefended page', tStep); tStep = Date.now();
+    }
     // ---- 12. the pulse: something happens. Three rounds with bots (the solo round and check 10's two pages) in
     // which no score ever moved means a dead game, whatever else passes (T1 run 5 shipped one: its rules read
     // paint.coverageOf(p).cells, which is undefined, so nobody ever scored and fair play passed with 0 knocks).
-    {
-      const vals = (sr.results ?? []).map(r => Number(r.value) || 0);
+    if (want(12)) {
+      const vals = (sr?.results ?? []).map(r => Number(r.value) || 0);
       const soloMoved = Math.max(0, ...vals) >= 2;   // the bell's results: a score that built up (a lone 1 can be a flicker)
-      const pages = fp.record.pages ?? [];
+      const pages = fp?.record.pages ?? [];
       const fairMoved = pages.some(pg => pg.scoreMoved);
       const ok = soloMoved || fairMoved;
       add(12, 'something happens', ok, ok
         ? `scores moved: solo round ${vals.join('/') || '—'}; fair-play pages max score ${pages.map(pg => pg.maxScore ?? 0).join(', ')}, held moved ${pages.map(pg => `${pg.scoreHeldSec ?? 0} s`).join(', ')}`
         : `no score moved, built up to 2 and stayed (≥ 1.5 s) in ${1 + pages.length} rounds with 3 bots (solo results ${vals.join('/') || 'none'}; fair-play pages ${pages.map(pg => `${pg.mode} ${pg.observed} s`).join(', ')}; ${pages.reduce((n, pg) => n + (pg.knocks ?? 0), 0)} knocks). ` +
           'The game does nothing a player can see. Check the score code in rules.update against each mechanic\'s API in its README (e.g. paint.coverageOf(owner) returns a share 0..1, not an object; paint.coverage() lists {owner, cells, share}); ' +
-          'check that rules.bot makes bots act (ctx.bots.target / attack, p.bot.seek, holding primary) and that scoring does not depend on a score that starts at 0 (stealing from nobody). Play ?bots=3&seed=1 and watch the scoreboard.');
+          'check that rules.bot makes bots act (ctx.bots.target / attack, p.bot.seek, holding primary) and that scoring does not depend on a score that starts at 0 (stealing from nobody). Play ?bots=3&seed=1 and watch the scoreboard.',
+        { seconds: 0, from: 'the solo round and check 10\'s two pages' });
     }
     // ---- 15. the loop is alive: every page's recording, the undefended page and the first look ----
-    {
+    if (want(15)) {
       if (und?.error) rec.notes.push(`check 15's undefended page stopped: ${und.error}`);
       const al = judgeAlive({ game, world, pages: recordings, firstLook: look, aim: und?.aim ?? null });
       rec.alive = { goal: al.goal, firstLook: look, aim: und?.aim ?? null, undefendedSeconds: und?.seconds ?? null, pages: recordings.map(r => ({ label: r.label, samples: r.samples.length })), items: al.items };
-      add(15, 'the loop is alive', al.ok, al.detail);
+      add(15, 'the loop is alive', al.ok, al.detail, { seconds: 0, from: 'the recordings of every page above and the undefended page' });
     }
     // ---- 5. the two-player live gate ---- (running beside this session since it started; awaited below)
-    solo = { ...solo, sr, replayed, audio };
+    solo = { errors: S?.errors ?? [], sr, replayed, audio };
   } catch (e) {
     rec.notes.push(`solo session stopped: ${e.message}`);
-    for (const [n, name] of [[3, 'boots to play with no console errors'], [4, 'slot coverage 100%'], [8, 'swap proof'], [10, 'fair play'], [12, 'something happens'], [13, 'controls work'], [15, 'the loop is alive'], [16, 'hits read'], [20, 'the menu works'], [21, 'the HUD shows your state'], [22, 'the wallet in the menu']]) if (!checks.some(c => c.n === n)) add(n, name, false, `not reached: ${e.message}${solo?.errors?.length ? `; console: ${solo.errors.slice(0, 2).join(' | ')}` : ''}`);
+    for (const [n, name] of [[3, 'boots to play with no console errors'], [4, 'slot coverage 100%'], [8, 'swap proof'], [10, 'fair play'], [12, 'something happens'], [13, 'controls work'], [15, 'the loop is alive'], [16, 'hits read'], [20, 'the menu works'], [21, 'the HUD shows your state'], [22, 'the wallet in the menu'], [24, 'plays inside a post'], [31, 'sharp on every screen']]) if (want(n) && !checks.some(c => c.n === n)) add(n, name, false, `not reached: ${e.message}${solo?.errors?.length ? `; console: ${solo.errors.slice(0, 2).join(' | ')}` : ''}`);
   } finally {
     await browser.close().catch(() => {});
     await srv.close().catch(() => {});
   }
   lap('solo session', t0);
-  if (live) {
+  }
+  const NOT_LIVE = `multiplayer.json mode is ${mpm.manifest?.mode ?? 'missing'}, not live`;
+  if (duo) {
     const d = await duo;
     lap('solo session and the gate (side by side)', t0);
-    gateRec = d.gateRec;
-    const lo = d.lo;
-    const failed = (gateRec.checks ?? []).filter(c => !c.ok);
-    rec.gate = { verdict: gateRec.verdict, passed: gateRec.passed, total: gateRec.total, run: gateRec.run ?? null, failed: failed.map(c => `${c.name}${c.soft ? ' (soft)' : ''}: ${c.detail}`) };
-    rec.loadouts = lo.record ? { ok: lo.ok, steps: lo.record.steps, shots: lo.record.shots } : { ok: false, detail: lo.detail };
-    rec.notes.push(...lo.warnings);
-    add(5, 'two-player live gate', gateRec.verdict === 'pass' && lo.ok, `${gateRec.verdict} ${gateRec.passed ?? 0}/${gateRec.total ?? 0}${gateRec.run ? ` (${gateRec.run})` : ''}${failed.length ? `; failed: ${failed.slice(0, 3).map(c => c.name).join(', ')}` : ''}; ${lo.detail}`);
-    const fr = d.fr;
-    rec.friends = fr.record; if (fr.warnings?.length) rec.notes.push(...fr.warnings);
-    add(25, 'playing with friends', fr.ok, fr.detail);
-    const wa = d.wa;
-    rec.watch = wa.record; if (wa.warnings?.length) rec.notes.push(...wa.warnings);
-    add(34, 'watch then play', wa.ok, wa.detail);
-  } else {
-    add(5, 'two-player live gate', false, `multiplayer.json mode is ${mpm.manifest?.mode ?? 'missing'}, not live`);
-    add(25, 'playing with friends', false, `multiplayer.json mode is ${mpm.manifest?.mode ?? 'missing'}, not live`);
-    add(34, 'watch then play', false, `multiplayer.json mode is ${mpm.manifest?.mode ?? 'missing'}, not live`);
+    gateRec = d.gateRec ?? null;
+    const failed = (gateRec?.checks ?? []).filter(c => !c.ok);
+    if (gateRec) rec.gate = { verdict: gateRec.verdict, passed: gateRec.passed, total: gateRec.total, run: gateRec.run ?? null, ...(gateRec.legs ? { legs: gateRec.legs } : {}), failed: failed.map(c => `${c.name}${c.soft ? ' (soft)' : ''}: ${c.detail}`) };
+    const gateLine = gateRec ? `${gateRec.verdict} ${gateRec.passed ?? 0}/${gateRec.total ?? 0}${gateRec.run ? ` (${gateRec.run})` : ''}${failed.length ? `; failed: ${failed.slice(0, 3).map(c => c.name).join(', ')}` : ''}` : '';
+    if (want(5)) {
+      const lo = d.lo;
+      rec.loadouts = lo.record ? { ok: lo.ok, steps: lo.record.steps, shots: lo.record.shots } : { ok: false, detail: lo.detail };
+      rec.notes.push(...lo.warnings);
+      add(5, 'two-player live gate', gateRec.verdict === 'pass' && lo.ok, `${gateLine}; ${lo.detail}`, { seconds: d.seconds.gate + d.seconds.loadouts });
+    } else if (lobbyOnly) {
+      // the profile keeps the lobby legs: a failure there fails the check; passing them is never a pass of check 5
+      const why = skipBy.get(5).reason;
+      add(5, 'two-player live gate', gateRec.verdict === 'pass' ? null : false, gateRec.verdict === 'pass'
+        ? `skipped by profile ${profile.name} after the lobby legs passed (${gateLine}): ${why}`
+        : `the lobby legs failed (${gateLine}); the in-round legs and the loadout leg were skipped by profile ${profile.name}`, { skippedBy: 'profile', reason: why, legs: 'lobby' });
+    }
+    if (want(25)) {
+      const fr = d.fr;
+      rec.friends = fr.record; if (fr.warnings?.length) rec.notes.push(...fr.warnings);
+      add(25, 'playing with friends', fr.ok, fr.detail, { seconds: d.seconds.friends });
+    }
+    if (want(34)) {
+      const wa = d.wa;
+      rec.watch = wa.record; if (wa.warnings?.length) rec.notes.push(...wa.warnings);
+      add(34, 'watch then play', wa.ok, wa.detail, { seconds: d.seconds.watch });
+    }
+  } else if (!live) {
+    for (const [n, name] of [[5, 'two-player live gate'], [25, 'playing with friends'], [34, 'watch then play']]) if (want(n) || (n === 5 && lobbyOnly)) add(n, name, false, NOT_LIVE, { seconds: 0 });
   }
 
   // ---- 6. a round to results and replay: alone and with two players ----
   const g = name => (gateRec?.checks ?? []).find(c => c.name === name)?.ok === true;
   const soloOk = !!(solo?.sr && solo.sr.phase === 'results' && solo.sr.results?.length && solo.replayed);
   const duoOk = g('both-see-the-same-results') && g('play-again-starts-a-new-round') && g('host-ends-the-round');
-  if (!checks.some(c => c.n === 6)) add(6, 'a round reaches results and replays', soloOk && duoOk, `alone with 3 bots: ${soloOk ? `results (${(solo.sr.results ?? []).map(r => `${r.name} ${r.value}`).join(', ')}), Play again → round 2` : 'did not reach results and a second round'}; two players: ${duoOk ? 'the same results on both, play again, the host ends round 2' : 'the gate did not show results, play again and end round'}`);
+  if (want(6) && !checks.some(c => c.n === 6)) add(6, 'a round reaches results and replays', soloOk && duoOk, `alone with 3 bots: ${soloOk ? `results (${(solo.sr.results ?? []).map(r => `${r.name} ${r.value}`).join(', ')}), Play again → round 2` : 'did not reach results and a second round'}; two players: ${duoOk ? 'the same results on both, play again, the host ends round 2' : 'the gate did not show results, play again and end round'}`, { seconds: soloSeconds, shares: 'the solo round, with 3 and 7, and the gate\'s results (check 5)' });
   // ---- 7. audio ----
-  if (!checks.some(c => c.n === 7)) {
+  if (want(7) && !checks.some(c => c.n === 7)) {
     const a = solo?.audio;
-    add(7, 'audio gate v4', !!(a && a.ok && a.heard), a ? `${a.heard ? 'heard' : 'nothing heard'}${a.mix ? `, ${a.mix.integratedLufs?.toFixed?.(1) ?? a.mix.integrated ?? '?'} LUFS integrated, peak ${a.mix.truePeakDb?.toFixed?.(1) ?? '?'} dBTP` : ''}; ${a.problems.length ? a.problems.join('; ') : 'within the targets'}` : 'not measured');
+    add(7, 'audio gate v4', !!(a && a.ok && a.heard), a ? `${a.heard ? 'heard' : 'nothing heard'}${a.mix ? `, ${a.mix.integratedLufs?.toFixed?.(1) ?? a.mix.integrated ?? '?'} LUFS integrated, peak ${a.mix.truePeakDb?.toFixed?.(1) ?? '?'} dBTP` : ''}; ${a.problems.length ? a.problems.join('; ') : 'within the targets'}` : 'not measured', { seconds: soloSeconds, shares: 'the solo round, with 3 and 6' });
   }
 
   // ---- 9. contact sheet and perf (track L's capture tool) ----
   const capture = join(GF3, 'lookdev/capture.mjs');
-  if (quick) add(9, 'contact sheet and perf', null, '--quick');
+  if (!want(9)) {}
+  else if (quick) add(9, 'contact sheet and perf', null, '--quick');
   else if (!existsSync(capture)) {
     // a checkout without the lookdev folder (a packaged copy of the tools): say so in the check and in the notes, so a
     // reader of the verdict never takes a full verify for one that measured the frame rate
@@ -458,7 +571,7 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     rec.notes.push(`check 9 ${absent}`);
   }
   else {
-    const t9 = Date.now();
+    const t9 = Date.now(); begin(9);
     const r = await run(process.execPath, [capture, dir, '--out', join(outDir, 'sheet'), '--query', 'bots=3&seed=7&gf-autoplay=1&gf-ui=0'], 600000);
     add(9, 'contact sheet and perf', r.code === 0, r.code === 0 ? `sheet in ${relative(dir, join(outDir, 'sheet'))}` : `capture.mjs exit ${r.code}: ${r.tail}`);
     lap('contact sheet', t9);
@@ -466,8 +579,8 @@ export async function verify(gameDir, { quick = false, out = null, log = console
 
   // ---- 23. looks like the references: the player's own view (and the contact sheet's wide shots) beside the creator's
   // pictures (the roguelike miss, 2026-10-08: a flat green yard shipped against three pictures of floating islands) ----
-  {
-    const t23 = Date.now();
+  if (want(23)) {
+    const t23 = Date.now(); begin(23);
     const own = ['first-look', 'mid-round', 'playing'].map(n => rec.shots.find(f => f.endsWith(`-${n}.jpg`))).filter(Boolean).map(f => join(outDir, f));
     const sheet = await sheetShots(join(outDir, 'sheet'));
     await likeness(dir, { rec, add, shots: [...own.slice(0, 2), ...sheet, ...own.slice(2)], refs });
@@ -475,11 +588,44 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   }
 
   checks.sort((a, b) => a.n - b.n);
-  rec.pass = passes(checks);   // the pass rule (tools/lib/verdict.mjs): REQUIRED lists 1–8 and 10–25; 9 counts only when it ran
+  // the pass rule (tools/lib/verdict.mjs): every check this kind of run requires ran and passed (a build's list, or a
+  // release's with 8, 31 and 34), nothing failed, and 9 counts only when it ran. A list (--check) passes when each
+  // check asked for passed.
+  rec.required = required;
+  rec.pass = list ? list.every(n => checks.some(c => c.n === n && (c.ok === true || (n === 9 && c.ok === null)))) && checks.every(c => c.ok !== false) : passes(checks, required);
+  if (profile) stampProfile(rec, profile, required);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
   rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
   return rec;
+}
+
+/**
+ * A profiled run's stamp: which profile, what it skipped and why, and whether everything that did run passed. `pass`
+ * is forced false while a required check is skipped, so no reader (Studio's worker, own-verify) takes it for a pass.
+ */
+function stampProfile(rec, profile, required) {
+  const skipped = rec.checks.filter(c => c.skippedBy === 'profile').map(c => ({ n: c.n, reason: c.reason ?? '', ...(c.legs ? { legs: c.legs } : {}) }));
+  rec.profile = { name: profile.name, file: profile.file ?? null, environment: profile.environment ?? {}, skipped };
+  rec.profilePass = profilePasses(rec.checks, required);
+  if (skipped.some(x => required.includes(x.n))) rec.pass = false;
+}
+
+// ---- 1. manifests ----
+async function check1(dir, { rec, add, mpm = null }) {
+  const v = await validateGame(dir);
+  mpm ??= await readManifest(dir);
+  const mv = mpm.error ? { ok: false, problems: [`multiplayer.json is ${mpm.error}`] } : validateMultiplayer(mpm.manifest);
+  const live = mpm.manifest?.mode === 'live';
+  add(1, 'manifests', v.ok && mv.ok && live, [v.ok ? `assets.json valid (${v.stats?.slots ?? '?'} slots, ${v.stats?.mainSlots ?? v.stats?.main ?? '?'} main)` : `assets.json: ${v.errors.slice(0, 4).join('; ')}`, mv.ok ? `multiplayer.json valid, mode ${mpm.manifest?.mode}` : `multiplayer.json: ${mv.problems.join('; ')}`].join(' · '));
+  if (v.warnings?.length) rec.notes.push(`assets.json warnings: ${v.warnings.slice(0, 5).join('; ')}`);
+}
+
+// ---- 2. kit copies ----
+async function check2(dir, { rec, add }) {
+  const kc = await checkKitCopies(dir);
+  add(2, 'kit copies unedited', kc.ok, kc.ok ? 'gf/three, gf/mp, audio, gf/gf-assets.js and vendor/ match their sources' : kc.problems.slice(0, 6).join('; '));
+  rec.notes.push(...kc.notes);
 }
 
 // ---- 17. the world is complete (static, fast; creator on "Hang Up On Them", 2026-10-07) ----
@@ -516,9 +662,12 @@ async function check19(dir, { rec, add }) {
   } catch (e) { add(19, 'bodies hold their shape', false, `the model judge could not run: ${e.message}`); }
 }
 
-/** --check 11 / 17 / 18 / 19 (or 11,17,18,19): the static checks alone, no browser. */
-const STATIC_ALONE = [11, 17, 18, 19];
+/** --check with any of the static checks (1, 2, 11, 14, 17, 18, 19; one or several): no browser. */
+const STATIC_ALONE = [1, 2, 11, 14, 17, 18, 19];
 async function staticOnly(dir, list, { rec, outDir, add, t0 }) {
+  if (list.includes(1)) await check1(dir, { rec, add });
+  if (list.includes(2)) await check2(dir, { rec, add });
+  if (list.includes(14)) await looks(dir, rec, add);
   if (list.includes(11)) {
     try { const dr = lintDressing(await loadSubject(dir)); add(11, 'set dressing', dr.errors === 0, dr.errors === 0 ? `clean: 0 errors, ${dr.warnings} warnings` : `${dr.errors} errors: ${dressingLines(dr).filter(l => l.startsWith('ERROR')).slice(0, 6).join(' | ')}`); }
     catch (e) { add(11, 'set dressing', false, `the lint could not run: ${e.message}`); }
@@ -526,6 +675,7 @@ async function staticOnly(dir, list, { rec, outDir, add, t0 }) {
   if (list.includes(17)) await check17(dir, { rec, add });
   if (list.includes(18)) await check18(dir, { rec, add });
   if (list.includes(19)) await check19(dir, { rec, add });
+  rec.checks.sort((a, b) => a.n - b.n);
   rec.pass = rec.checks.every(c => c.ok);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
   rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
@@ -616,16 +766,6 @@ async function looks(dir, rec, add) {
   try { const lk = await checkLooks(dir); rec.looks = lk.record; rec.notes.push(...lk.notes); add(14, 'looks honoured', lk.ok, lk.detail); }
   catch (e) { add(14, 'looks honoured', false, `the check could not run: ${e.message}`); }
 }
-/** --check 14: looks alone (no browser, under a second). */
-async function looksOnly(dir, { rec, outDir, add, t0 }) {
-  await looks(dir, rec, add);
-  rec.pass = rec.checks.every(c => c.ok);
-  rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
-  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
-  await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
-  return rec;
-}
-
 /** Check 13's evidence: a live screenshot, or a frame it already took (PNG bytes). */
 function controlsShot(shot, outDir, rec) {
   return async (page, name, buf = null) => {
@@ -839,24 +979,38 @@ async function pixelDiff(browser, a, b) {
 if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const opt = (k, d) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : d; };
-  const dir = a.find((x, i) => !x.startsWith('--') && !['--out', '--check', '--refs'].includes(a[i - 1]));
-  if (!dir) { console.error('usage: verify.mjs <game> [--quick] [--out <dir>] [--json] [--check 10|13|14|15|16|20|21|22|23|24|25|17|18|19|11,17,18,19] [--refs <folder with refs.json>]'); process.exit(2); }
+  const dir = a.find((x, i) => !x.startsWith('--') && !['--out', '--check', '--refs', '--profile'].includes(a[i - 1]));
+  if (!dir) { console.error('usage: verify.mjs <game> [--quick] [--all] [--release] [--profile <file>] [--check N[,N…]] [--out <dir>] [--json] [--refs <folder with refs.json>]'); process.exit(2); }
   const json = a.includes('--json');
   const ck = opt('--check', null);
-  const only = ck === null ? null : /^\d+(,\d+)+$/.test(ck) ? ck.split(',').map(Number) : Number(ck);
+  if (ck !== null && !/^\d+(,\d+)*$/.test(ck ?? '')) { console.error('--check takes a check number or a list of them (13 or 1,2 or 13,16)'); process.exit(2); }
+  const nums = ck === null ? null : [...new Set(ck.split(',').map(Number))];
+  const only = nums === null ? null : nums.length === 1 ? nums[0] : nums;
   // a world (CONTRACT §9) runs any of its checks alone or together: --check 26 or --check 13,26,30
   const worldGame = JSON.parse(await readFile(join(resolve(dir), 'config/game.json'), 'utf8').catch(() => '{}')).round?.mode === 'world';
   // a forge game (CONTRACT §8 forge) runs any of its checks alone or together, its own 32 and 33 among them
   const forgeGame = await engineOfGame(resolve(dir)) === 'forge';
-  if (forgeGame && only !== null && ![].concat(only).every(n => Number.isInteger(n) && n >= 1 && n <= 33)) { console.error('--check takes check numbers 1 to 33 (one, or several: 3,32,33)'); process.exit(2); }
-  if (worldGame && only !== null && ![].concat(only).every(n => Number.isInteger(n) && n >= 1 && n <= 34)) { console.error('--check takes check numbers 1 to 31 and 34 (one, or several: 13,26,30)'); process.exit(2); }
-  if (!worldGame && !forgeGame && only !== null && !(Array.isArray(only) ? only.every(n => STATIC_ALONE.includes(n)) : [10, 13, 14, 15, 16, 20, 21, 22, 23, 24, 25, 31, 34, ...STATIC_ALONE].includes(only))) { console.error('--check takes 10 (fair play), 13 (controls work), 14 (looks honoured), 15 (the loop is alive), 16 (hits read), 20 (the menu works), 21 (the HUD shows your state), 22 (the wallet in the menu), 23 (looks like the references), 24 (plays inside a post), 25 (playing with friends), 31 (sharp on every screen), 34 (watch then play), or the static checks 11, 17, 18, 19 (11,17,18,19 for several)'); process.exit(2); }
-  const rec = await verify(dir, { quick: a.includes('--quick'), out: opt('--out', null), log: json ? () => {} : console.log, only, refs: opt('--refs', null) });
+  if (forgeGame && nums && !nums.every(n => n >= 1 && n <= 33)) { console.error('--check takes check numbers 1 to 33 (one, or several: 3,32,33)'); process.exit(2); }
+  if (worldGame && nums && !nums.every(n => n >= 1 && n <= 34)) { console.error('--check takes check numbers 1 to 31 and 34 (one, or several: 13,26,30)'); process.exit(2); }
+  const roundChecks = [...requiredFor('round', { release: true }), 9];
+  if (!worldGame && !forgeGame && nums && !nums.every(n => roundChecks.includes(n))) { console.error(`--check takes the checks of a round game (1 to 25, 31 and 34), one or several: 13 or 1,2 or 13,16. Not one: ${nums.filter(n => !roundChecks.includes(n)).join(', ')}`); process.exit(2); }
+  let profile = null;
+  if (a.includes('--profile')) {
+    const pf = opt('--profile', null);
+    try { profile = { ...JSON.parse(await readFile(resolve(pf ?? ''), 'utf8')), file: basename(pf ?? '') }; } catch (e) { console.error(`--profile: cannot read ${pf}: ${e.message}`); process.exit(2); }
+    const bad = checkProfile(profile);
+    if (bad.length) { console.error(`--profile ${pf}: ${bad.join('; ')}`); process.exit(2); }
+  }
+  const rec = await verify(dir, { quick: a.includes('--quick'), out: opt('--out', null), log: json ? () => {} : console.log, only, refs: opt('--refs', null), release: a.includes('--release'), profile, all: a.includes('--all') || a.includes('--verbose') });
   if (json) process.stdout.write(JSON.stringify(rec, null, 2) + '\n');
   const passed = rec.checks.filter(c => c.ok === true).length, ran = rec.checks.filter(c => c.ok !== null).length;
-  const skipped = rec.checks.filter(c => c.ok === null && !c.notYet).map(c => c.n);
+  const byProfile = (rec.profile?.skipped ?? []).map(c => c.n);
+  const skipped = rec.checks.filter(c => c.ok === null && !c.notYet && !byProfile.includes(c.n)).map(c => c.n);
   const notYet = (rec.notYet ?? []).map(c => c.n);
   if (notYet.length) console.log(`not yet for forge: ${notYet.join(', ')} (each with its reason in verdict.json → notYet)`);
-  console.log(`verify ${relative(process.cwd(), resolve(dir)) || '.'}: ${rec.pass ? 'PASS' : 'FAIL'} ${passed}/${ran}${skipped.length ? ` (skipped ${skipped.join(', ')})` : ''}${rec.pass ? '' : ` failed: ${rec.checks.filter(c => c.ok === false).map(c => c.n).join(', ')}`} in ${rec.seconds} s → ${relPosix(process.cwd(), resolve(resolve(dir), rec.outDir, 'verdict.json'))}`);
-  process.exitCode = rec.pass ? 0 : 1;
+  if (rec.profile) console.log(`skipped by profile ${rec.profile.name}: ${byProfile.join(', ') || 'nothing'} (each with its reason in verdict.json → profile.skipped)`);
+  const profileOk = !!rec.profile && !rec.pass && rec.profilePass;
+  const word = rec.pass ? 'PASS' : profileOk ? `PROFILE ${rec.profile.name} OK (not a full pass)` : 'FAIL';
+  console.log(`verify ${relative(process.cwd(), resolve(dir)) || '.'}: ${word} ${passed}/${ran}${skipped.length ? ` (skipped ${skipped.join(', ')})` : ''}${rec.pass || profileOk ? '' : ` failed: ${rec.checks.filter(c => c.ok === false).map(c => c.n).join(', ')}`} in ${rec.seconds} s → ${relPosix(process.cwd(), resolve(resolve(dir), rec.outDir, 'verdict.json'))}`);
+  process.exitCode = rec.pass || profileOk ? 0 : 1;
 }

@@ -1,0 +1,458 @@
+{
+  "schema": "gf-homes/1",
+  "about": "Where every rule lives (research/open-builder/HANDOFF.md section 4): each verify check and each rule line of the build brief has exactly one home. invariant: true of every game whatever its kind. part: belongs to one mechanic, world, loop, panel or engine (`part` says which). game: a promise this one game makes. nowhere: taste, an accident, or something the kit now prevents. tests/h-homes.test.mjs fails when a check or a brief line has no home, when a tag is stale, and when the brief passes its budget. Read and checked by tools/lib/homes.mjs (node research/gf-three/tools/lib/homes.mjs --lines).",
+  "checks": {
+    "1": {
+      "name": "manifests",
+      "home": "invariant",
+      "run": "build",
+      "rule": "assets.json and multiplayer.json are valid, and the game is live multiplayer.",
+      "fix": "Run node research/gf-three/tools/slots.mjs <game> --write to rebuild assets.json from the slots; keep multiplayer.json mode \"live\" as create wrote it."
+    },
+    "2": {
+      "name": "kit copies unedited",
+      "home": "invariant",
+      "run": "build",
+      "rule": "The kit copies in the game (gf/, audio/, vendor/) are byte for byte the kit's.",
+      "fix": "Undo any edit under game/gf, game/audio or game/vendor (run create again without --force to refresh them). Put the game's own code in rules.js. An import of a three.js addon create did not vendor fails here too: use what vendor/ has."
+    },
+    "3": {
+      "name": "boots to play with no console errors",
+      "home": "invariant",
+      "run": "build",
+      "rule": "The game boots to play with no console errors, and the player moves on real keys.",
+      "fix": "Open the game and read the console: fix the first error in rules.js (a syntax error or a throw in setup, roundStart or update stops the whole page). If the player cannot walk, check that nothing in rules.js freezes or re-places the local player every frame.",
+      "also": [
+        {
+          "home": "part",
+          "part": "controller",
+          "what": "the walk test (W and D move the avatar): a game with no avatar has nothing to walk"
+        }
+      ]
+    },
+    "4": {
+      "name": "slot coverage 100%",
+      "home": "invariant",
+      "run": "build",
+      "rule": "Everything visible is a slot: every mesh on screen carries a slot id, in play and in every preview subject.",
+      "fix": "Do not build meshes in rules.js. Place a prop through config/world.json or a mechanic, and read colours and numbers through ctx.assets and ctx.config. The detail names the untagged meshes."
+    },
+    "5": {
+      "name": "two-player live gate",
+      "home": "invariant",
+      "run": "build",
+      "rule": "Two players over real WebRTC are in one game: each screen draws the other where they are, in their own look, and the shared state matches.",
+      "fix": "Keep shared state on the host (if (ctx.host)), send events on edges and never every frame, use ctx.rng() instead of Math.random, and read a player's colour or model per player: ctx.assets.value(slotId, fallback, { player: p }).",
+      "also": [
+        {
+          "home": "part",
+          "part": "character:loadout",
+          "what": "the loadout leg (each player drawn in their own body and shot colour on the other screen)"
+        }
+      ]
+    },
+    "6": {
+      "name": "a round reaches results and replays",
+      "home": "part",
+      "part": "loop:round",
+      "run": "build",
+      "rule": "A round ends in results and Play again starts round 2, alone with bots and with two players.",
+      "fix": "Let the kit end the round (the clock, or rules.check returning a result). Do not hold the phase in rules.js, and reset the game's own state in rules.roundStart so round 2 starts clean."
+    },
+    "7": {
+      "name": "audio gate v4",
+      "home": "invariant",
+      "run": "build",
+      "rule": "The round is heard, within the loudness targets, through the gf-audio kit.",
+      "fix": "Play sounds only through ctx.audio with ids listed in assets.json → sounds → sounds. Do not play a sound every frame, and do not raise the bus levels to pass."
+    },
+    "8": {
+      "name": "swap proof",
+      "home": "invariant",
+      "run": "release",
+      "rule": "A body and a prop slot replaced by an override, as Studio does it, show the new model on screen.",
+      "fix": "A kit test: no rules.js or config can fail it short of a load error. When it fails in a release run, fix the kit's preview page (kit/core/show.js) or the slot loader."
+    },
+    "9": {
+      "name": "contact sheet and perf",
+      "home": "invariant",
+      "run": "full",
+      "rule": "The contact sheet renders on the real graphics card and the frame rate holds (not run with --quick).",
+      "fix": "Read the sheet folder the detail names. Lower the prop count or the look's cost in config when the frame rate is under the target."
+    },
+    "10": {
+      "name": "fair play",
+      "home": "part",
+      "part": "fair",
+      "run": "build",
+      "rule": "A player is in control at least 85% of the time alive, is back up within fair.downSeconds, and is never knocked while protected.",
+      "fix": "Leave config/game.json → fair on. Never call p.knock(…, {force: true}) for ordinary hits, score only hits that counted (projectile.onHit and health.onDamage skip refused ones), and make bots pick foes with ctx.bots.target and fight with ctx.bots.attack."
+    },
+    "11": {
+      "name": "set dressing",
+      "home": "part",
+      "part": "world",
+      "run": "build",
+      "rule": "The world is clean: nothing overlapping, floating or out of scale, no litter, open floor, clear spawns.",
+      "fix": "Run node research/gf-three/tools/dressing.mjs <game>: it lists every problem with its fix in config/world.json (move, turn or remove the prop it names)."
+    },
+    "12": {
+      "name": "something happens",
+      "home": "part",
+      "part": "loop:round",
+      "run": "build",
+      "rule": "In three rounds with bots some score moves and builds up: a game in which nobody ever scores is dead.",
+      "fix": "Check the score code in rules.update against each mechanic's README, make rules.bot act (ctx.bots.target / attack, p.bot.seek), and do not make scoring depend on a score that starts at 0. Play ?bots=3&seed=1 and watch the scoreboard."
+    },
+    "13": {
+      "name": "controls work",
+      "home": "invariant",
+      "run": "build",
+      "rule": "Every control config/game.json lists does something the player sees on their own screen.",
+      "fix": "Make the control work in rules.js (for a shot: prj.fire(p) or prj.stream(p, on) with no direction lands on the crosshair). If it cannot work, take it out of config/game.json → controls so the HUD stops promising it."
+    },
+    "14": {
+      "name": "looks honoured",
+      "home": "invariant",
+      "run": "build",
+      "rule": "A character or prop the spec asks to be generated or made from a reference is not still a stand-in, and two roles described differently never share one body file.",
+      "fix": "Wait for the worker's generation (game/generated.json says how far it is). Give a role that is not generated its own body from library/bodies.json. Do not call Meshy or draw a stand-in in code."
+    },
+    "15": {
+      "name": "the loop is alive",
+      "home": "part",
+      "part": "mechanic:*",
+      "run": "build",
+      "rule": "Each mechanic in the spec does its job in a real round, and the thing to defend is readable on screen at round start with its health on the HUD.",
+      "fix": "The detail names the mechanic and the sign that was missing. Wire that mechanic's callbacks in rules.js as its README shows. A waves target is a zone name from config/world.json → zones, never a prop's name; stand the thing to defend in the centre zone."
+    },
+    "16": {
+      "name": "hits read",
+      "home": "part",
+      "part": "mechanic:waves",
+      "run": "build",
+      "rule": "A hit that does not kill changes the enemy on the player's own screen, and a basic enemy takes 2 to 4 hits.",
+      "fix": "Keep the projectile's damage (a stream's streamDamage) below waves hp. If shots do not land, fix the aim, the range or the firing in rules.js. Set waves oneHitKills only when the spec asks for it."
+    },
+    "17": {
+      "name": "the world is complete",
+      "home": "part",
+      "part": "world",
+      "run": "build",
+      "rule": "The play area matches the spec's size class, an indoor world is closed with real doorways, and enemies come in through doors or gates.",
+      "fix": "Run node research/gf-three/tools/world.mjs <game>. Do not remove walls, the ceiling, doors or the outside; to re-lay the world from its template run upgrade.mjs <game> --world."
+    },
+    "18": {
+      "name": "sounds play",
+      "home": "invariant",
+      "run": "build",
+      "rule": "One sound list: every listed file is there, every audio file is played by a sound, and every id the game's code plays is listed.",
+      "fix": "Put every sound in assets.json → sounds → sounds (never beside version), list each id rules.js plays, and remove or use any file in assets/audio/ that no sound plays."
+    },
+    "19": {
+      "name": "bodies hold their shape",
+      "home": "part",
+      "part": "character",
+      "run": "build",
+      "rule": "Every character body keeps its face, body, arms, hands, legs and feet through every clip.",
+      "fix": "Use another body from library/bodies.json for the role the detail names, or let the worker regenerate it. A build agent does not repair a rig by hand."
+    },
+    "20": {
+      "name": "the menu works",
+      "home": "invariant",
+      "run": "build",
+      "rule": "The game opens on the kit's home menu, Esc pauses, and How to play says the goal.",
+      "fix": "Do not build a start screen or a pause menu, and never click, skip, hide or cover the kit's. Say the goal in one short line (at least 6 characters) in config/game.json → text.goal."
+    },
+    "21": {
+      "name": "the HUD shows your state",
+      "home": "part",
+      "part": "panel:hud",
+      "run": "build",
+      "rule": "The kit's player card shows the player's health, knocked-down state and each mechanic's meter, with the goal line under the clock.",
+      "fix": "Do not hide #gf-hud or draw your own health bar. Add the game's own meters with ctx.ui.meter and change the goal line with ctx.ui.goal(text), never an empty or one-word line."
+    },
+    "22": {
+      "name": "the wallet in the menu",
+      "home": "part",
+      "part": "panel:wallet",
+      "run": "build",
+      "rule": "The home menu offers Connect wallet and a worn item shows on the player.",
+      "fix": "Do not hide #gf-wallet or recolour the local player for everyone. Read a player's look per player: ctx.assets.value(slotId, fallback, { player: p }).",
+      "note": "A kit test in practice: the only fixture is DOM sabotage. A candidate for the release profile once the creator agrees (not moved by M2-A)."
+    },
+    "23": {
+      "name": "looks like the references",
+      "home": "game",
+      "run": "build",
+      "rule": "The game's own screen matches the creator's reference pictures on camera, palette, light, shapes, proportions and vibe.",
+      "fix": "The detail names what to change. Move config/look.json values and slots toward the pictures (the preset id stays), then re-run --check 23."
+    },
+    "24": {
+      "name": "plays inside a post",
+      "home": "invariant",
+      "run": "build",
+      "rule": "Framed in a post that refuses the pointer lock, the camera stays the game's own, the full-screen button works, and in full screen a drag turns the camera and W moves.",
+      "fix": "Never call requestPointerLock, hide #gf-fullscreen or swap the camera in rules.js.",
+      "note": "A kit test in practice (the fixture is DOM sabotage; its walk leg repeats check 3). A candidate for the release profile once the creator agrees (not moved by M2-A)."
+    },
+    "25": {
+      "name": "playing with friends",
+      "home": "invariant",
+      "run": "build",
+      "rule": "Through the friends page two players name themselves, share one waiting room, play a round with no bots, and the results card shows each player the score the game counted for them.",
+      "fix": "Never add players in rules.js (ctx.players.add) and keep rules.bot for playing alone. The results card shows p.score from the host's copy, so count each player's score in p.score on the host."
+    },
+    "26": {
+      "name": "the world persists",
+      "home": "part",
+      "part": "loop:world",
+      "run": "build",
+      "rule": "What a player builds is still there after everyone leaves and comes back.",
+      "fix": "Change the world only through the build mechanic's calls, so the play host saves it; never keep world state in rules.js variables."
+    },
+    "27": {
+      "name": "the host leaves and the world is kept",
+      "home": "part",
+      "part": "loop:world",
+      "run": "build",
+      "rule": "When the host leaves, another player takes the world over and nothing is lost.",
+      "fix": "Keep nothing a world needs on one player's copy: shared state goes through the kit's world store."
+    },
+    "28": {
+      "name": "the spawn square holds",
+      "home": "part",
+      "part": "loop:world",
+      "run": "build",
+      "rule": "Nobody can build over or dig out the place new players arrive.",
+      "fix": "Leave the spawn protection in config on; do not place or remove blocks in the spawn square from rules.js."
+    },
+    "29": {
+      "name": "sign words are filtered",
+      "home": "part",
+      "part": "loop:world",
+      "run": "build",
+      "rule": "Text players write on signs and as names goes through the kit's word filter.",
+      "fix": "Show player text only through the kit's sign and name calls, never straight into the page."
+    },
+    "30": {
+      "name": "phones",
+      "home": "part",
+      "part": "loop:world",
+      "run": "build",
+      "rule": "The world plays on a phone: touch controls move, look, place and break.",
+      "fix": "Do not add key-only actions in rules.js; give each action a control in config/game.json → controls so the kit draws its touch button."
+    },
+    "31": {
+      "name": "sharp on every screen",
+      "home": "invariant",
+      "run": "release",
+      "rule": "The game draws at the screen's own pixel density on a phone, a laptop and a large display.",
+      "fix": "A kit test: do not resize the renderer or add a canvas in rules.js. When it fails in a release run, fix kit/core/boot.js."
+    },
+    "32": {
+      "name": "no WebGPU: the open-in-your-browser screen",
+      "home": "part",
+      "part": "engine:forge",
+      "run": "build",
+      "rule": "On a browser with no WebGPU the game shows the kit's \"open in your browser\" screen, never a blank canvas.",
+      "fix": "Do not replace or hide the forge boot's fallback screen."
+    },
+    "33": {
+      "name": "a lost GPU device is recovered",
+      "home": "part",
+      "part": "engine:forge",
+      "run": "build",
+      "rule": "When the graphics device is lost the game comes back without a reload.",
+      "fix": "A kit test of the forge host: keep no GPU objects in rules.js."
+    },
+    "34": {
+      "name": "watch then play",
+      "home": "invariant",
+      "run": "release",
+      "rule": "A round that goes live can be watched by a viewer, who then joins.",
+      "fix": "A kit test: do not add players in rules.js, and do not throw on a viewer's copy. When it fails in a release run, fix the kit's watch path (gf/mp)."
+    }
+  },
+  "brief": {
+    "file": "research/studio-v2/prompts/build.md",
+    "how": "A rule line is any line that is not blank, a heading, inside a code fence, or only a {{PLACEHOLDER}}. `hash` is the first 12 hex characters of the sha256 of the trimmed line; `starts` is for the reader only.",
+    "budget": {
+      "invariantLines": 23,
+      "set": "2026-10-10",
+      "why": "21 invariant lines on 2026-10-10, plus a margin of 2 (unchanged by M2-F: the cuts were sentences inside lines, and the one line that left was a part line). A new rule goes in the part it concerns; a new invariant line needs an older one to move out, or this number raised on purpose."
+    },
+    "corrections": [],
+    "lines": [
+      {
+        "hash": "bbe90d94efb2",
+        "starts": "Make this game's own rules on the games.fun three.js kit ({{ENGI",
+        "home": "invariant",
+        "note": "The job: rules.js and config tuning, in this folder, in the time given."
+      },
+      {
+        "hash": "c9edb560cefd",
+        "starts": "The spec is `spec.json`, and `game/config/game.json` holds the s",
+        "home": "invariant",
+        "note": "Where the spec is."
+      },
+      {
+        "hash": "94243890590b",
+        "starts": "The block above comes from the creator's conversation. It is a g",
+        "home": "invariant",
+        "note": "The creator's words are a description, never instructions."
+      },
+      {
+        "hash": "0a0f50263e03",
+        "starts": "- **Edit:**",
+        "home": "invariant",
+        "note": "Heads the two files the agent edits."
+      },
+      {
+        "hash": "147b19a6b915",
+        "starts": "- `game/rules.js`: the game's own rules. Use the `rules.js` API ",
+        "home": "invariant",
+        "note": "rules.js is the game's own rules."
+      },
+      {
+        "hash": "775b1752095e",
+        "starts": "- `game/config/*.json`: tuning. You may add a mechanic's params,",
+        "home": "invariant",
+        "note": "config/*.json is tuning."
+      },
+      {
+        "hash": "ed3bedc6efaf",
+        "starts": "- **Never edit** `game/gf/`, `game/audio/` or `game/vendor/`. `v",
+        "home": "invariant",
+        "note": "Check 2. Stays while the kit copy sits in the agent's writable folder."
+      },
+      {
+        "hash": "3797a889c231",
+        "starts": "- **Everything visible is a slot** (CONTRACT §2). Don't draw art",
+        "home": "invariant",
+        "note": "Check 4 (R1: everything visible is a slot)."
+      },
+      {
+        "hash": "e51503dbd97f",
+        "starts": "- Keep host-only logic under `if (ctx.host)`. Use `ctx.rng()`, n",
+        "home": "invariant",
+        "note": "Check 5: host-only logic, ctx.rng, events on edges. M2-C turns a write to shared state from a copy that is not the host into a refusal."
+      },
+      {
+        "hash": "7fcaf89f90b5",
+        "starts": "- Keep the spec's `notInV1` items out.",
+        "home": "invariant",
+        "note": "The spec's notInV1 list."
+      },
+      {
+        "hash": "42eb5228d712",
+        "starts": "- **Fair play is the kit's** ([CONTRACT §6c]({{KIT}}/CONTRACT.md",
+        "home": "part",
+        "part": "fair",
+        "note": "Check 10. True only of a game where players and bots fight (loop/brief.mjs USES.fair). M2-F cut \"Never turn fair off unless the creator asked\": tools/fix.mjs fair-on repairs it."
+      },
+      {
+        "hash": "d3406c2e7477",
+        "starts": "- **The home menu, the HUD and the wallet are the kit's** ([CONT",
+        "home": "invariant",
+        "note": "Checks 20, 21 and 22. The goal-line sentence can go once ctx.ui.goal refuses a short line (M2-C); the meter sentence belongs to panel:hud."
+      },
+      {
+        "hash": "a42116114598",
+        "starts": "- **The mouse and the camera are the kit's too** ([CONTRACT §6d]",
+        "home": "invariant",
+        "note": "Check 24."
+      },
+      {
+        "hash": "d5c1e57f9175",
+        "starts": "- **Playing with friends is the kit's** ([CONTRACT §6h]({{KIT}}/",
+        "home": "invariant",
+        "note": "Check 25. M2-F applied the check 25 correction (what the check can and cannot tell) and cut \"never add players in rules.js\": the kit refuses ctx.players.add in a friends round, and check 25 fails the refusal by its code."
+      },
+      {
+        "hash": "12c570d46750",
+        "starts": "- **Hits are the kit's** ([CONTRACT §6f]({{KIT}}/CONTRACT.md)): ",
+        "home": "part",
+        "part": "mechanic:waves",
+        "note": "Check 16. True only of a game with enemies (waves or boss). M2-F cut \"Set waves oneHitKills only when the spec does\": tools/fix.mjs one-hit-kills repairs it, and the waves manifest note says it."
+      },
+      {
+        "hash": "d27c8941f34e",
+        "starts": "- **The world is the kit's** ([CONTRACT §4.3]({{KIT}}/CONTRACT.m",
+        "home": "part",
+        "part": "world",
+        "note": "Checks 11 and 17. Belongs to the world template's note (indoor and outdoor say different things)."
+      },
+      {
+        "hash": "9221ebd60d4e",
+        "starts": "- **Cosmetics are the kit's** ([CONTRACT §6e]({{KIT}}/CONTRACT.m",
+        "home": "part",
+        "part": "character:loadout",
+        "note": "Check 5's loadout leg. True only of a game that draws players as characters."
+      },
+      {
+        "hash": "6eb711c6a5ad",
+        "starts": "- **Generated models are the worker's.** A body or prop the spec",
+        "home": "part",
+        "part": "assets:generated",
+        "note": "Check 14. Applies only when the spec asks for a generated or reference model."
+      },
+      {
+        "hash": "40560b365b37",
+        "starts": "1. Run `node {{KIT_TOOLS}}/verify.mjs game --quick` from this fo",
+        "home": "invariant",
+        "note": "Run verify --quick and fix until it passes; verify prints each failed check's rule and fix, and fix.mjs repairs what is mechanical. M2-F cut the sentences on checks 11 and 15 (verify prints them), the waves-target sentence (repaired by fix.mjs waves-target; in the waves manifest note) and \"never beside version\" (repaired by fix.mjs sound-stray). \"Every id rules.js plays is listed\" stays: it is refused only at run time."
+      },
+      {
+        "hash": "5cf8f3ab5b93",
+        "starts": "2. Clean the look: capture a contact sheet and answer the checks",
+        "home": "invariant",
+        "note": "The look rubric. Its check 23 sentence is a game promise (the creator's pictures) and applies only when the job has a look target."
+      },
+      {
+        "hash": "ac611e18a1f2",
+        "starts": "3. Play a round with bots yourself if you can, e.g. `?bots=3&see",
+        "home": "part",
+        "part": "loop:round",
+        "note": "Bots and a seed are a round game's; M2-D replaces it with the game's own tests."
+      },
+      {
+        "hash": "bf1fe68c7ab9",
+        "starts": "4. Write `out/delivery.json` **last**: `{\"summary\": \"...\", \"cont",
+        "home": "invariant",
+        "note": "The delivery file."
+      },
+      {
+        "hash": "a7e96a55df46",
+        "starts": "- `summary`: 2–4 sentences on what the creator will see, and any",
+        "home": "invariant",
+        "note": "The delivery summary."
+      },
+      {
+        "hash": "1d9508ac84d2",
+        "starts": "- `controls`: keys and touch, in one line.",
+        "home": "invariant",
+        "note": "The delivery controls line."
+      },
+      {
+        "hash": "0c241ec4e7ce",
+        "starts": "**The game is held to its promises.** `promises.json` (this fold",
+        "home": "invariant",
+        "note": "The promises and the play-tester."
+      },
+      {
+        "hash": "1bdd997f3abe",
+        "starts": "The worker then runs the full `verify` and the play-tester. If e",
+        "home": "invariant",
+        "note": "Repair rounds, always deliver, questions.json."
+      },
+      {
+        "hash": "b4c9faf8db73",
+        "starts": "**Keep the promises honest.** If you leave out anything the spec",
+        "home": "invariant",
+        "note": "An honest hook and summary."
+      }
+    ],
+    "source": "research/studio-v2/prompts/source/ (rules.json and build.frame.md): build.md is generated by research/gf-three/loop/brief.mjs --write, so a line is edited there and re-tagged here. A job's own brief carries a part line only when its spec uses the part (brief.mjs USES), and each mechanic's own guidance comes from its manifest.note at {{PARTS}}: the aim-and-interact line moved there (the projectile and pickup notes)."
+  }
+}

@@ -410,3 +410,49 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'A boss with phases and telegraphed attacks (slam, charge, volley, summon) and its health bar on the HUD',
+  rank: 130,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  // melee swings and projectile shots hurt it by themselves; waves gives it the volley's bolts and the minions it
+  // summons; levels brings it on the last level (without levels it comes startDelay s into the round)
+  uses: ['melee', 'projectile', 'waves', 'levels', 'health', 'loot'],
+  owns: () => [],
+  state: { key: 'boss', fields: { a: '[active, x, z, hp, max, phase, state, attack, yaw°, tx, tz, attack yaw°]' } },
+  events: [
+    { name: 'onPhase', on: 'host', args: '{ phase }', when: 'its hit points crossed a phase threshold' },
+    { name: 'onDown', on: 'host', args: '{ from, x, z }', when: 'it went down (from: the player who did it, or null)' },
+    { name: 'onHit', on: 'host', args: '{ amount, from, hp }', when: 'it was hurt' },
+  ],
+  sync: { owner: 'host', how: 'the host owns the boss; every copy draws it, its telegraphs and its bar from the shared row' },
+  note: [
+    'Give it its own body: a character role "boss" in the spec (else it wears the minions\' body, which the creator rejected).',
+    'Melee swings and shots hurt it by themselves, its name and health are a bar across the top of the HUD, and bringing it down already scores killPoints.',
+    'With the levels mechanic it comes on the last level; without one it comes startDelay s into the round.',
+  ],
+  stub: {
+    as: 'boss',
+    worked: 'boss.onDown(() => ctx.round.end(\'won\', ctx.players.list().map(p => p.id)));   // only without the levels mechanic, which ends the run itself',
+    traps: [
+      'a game with neither melee nor projectile has nothing that hurts it: the rules must call boss.damage(n, { from }) on the host',
+      'its attacks are telegraphed on the ground for a reason: do not shorten windups until nobody can step out',
+    ],
+  },
+  signs: {
+    sample: sh => { if (!sh.boss) return null; const a = sh.boss.a ?? []; return { boss: [a[0] ?? 0, a[3] ?? 0, a[4] ?? 0, a[5] ?? 0, a[6] ?? 0] }; },
+    judge: v => {
+      const a = v.action;
+      if (a.bossPhase >= 1) v.add('the boss comes and changes phase', 'ok', 'shared.boss.a (active, hp, max, phase)', `it came and reached phase ${a.bossPhase + 1} (hit points down to ${a.bossHpMin} of ${a.bossMax})`);
+      else v.add('the boss comes and changes phase', a.bossActive ? 'dead' : 'unmeasured', 'shared.boss.a (active, hp, max, phase)', a.bossActive ? `it came but never changed phase (hit points down to ${a.bossHpMin} of ${a.bossMax}) on the staged page (?gf-demo=boss.phase: it starts just above its first threshold) or any other` : 'the boss never came on any page (the staged page starts the run on the boss level)',
+        a.bossActive ? 'check the boss\'s phases (hit-point shares) and that melee and shots reach it (hittable, its radius)' : 'check that the levels mechanic\'s last level is the boss\'s (bossLevel "last") or boss auto, and startDelay');
+    },
+  },
+};

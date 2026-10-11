@@ -15,7 +15,10 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { fill as fillForgeTables } from '../../../gf-forge/kit/tables/index.js';
+import { FORGE_KIT, importPart } from './paths.mjs';
+// the forge engine's tables, when this checkout has the forge engine (the kit repository does not carry it)
+let fillForgeTables = null;
+if (existsSync(join(FORGE_KIT, 'tables/index.js'))) ({ fill: fillForgeTables } = await importPart(join(FORGE_KIT, 'tables/index.js'), 'the forge engine (research/gf-forge)'));
 
 export const SCHEMA = 'gf-three-promises/1';
 
@@ -40,6 +43,9 @@ export function hudLine(controls = {}, camera = 'third') {
 
 /** The kit's standing promises (CONTRACT §5 check numbers). verify proves them; 'play' adds what a new player sees. */
 export const KIT_PROMISES = [
+  // proved by verify alone (no 'play' proof: the play-tester is not asked). Since M2-C the kit refuses what the brief forbids at
+  // the call, with a code on console.error (kit/core/refusals.js), so check 3 is where a refused call shows up.
+  { id: 'kit.boots', text: 'The game opens and plays without errors: nothing in a round throws, and no call the kit refuses (a sound that is not listed, a slot that does not exist, a goal line that is too short) goes unnoticed.', proofs: ['verify:3'], check: 'boots with no console errors' },
   { id: 'kit.friends', text: 'With friends in the game, I see each of them as a character with a name, where they really are.', proofs: ['verify:5'], check: 'friends visible' },
   { id: 'kit.round', text: 'A round ends on a results screen that says who won, and I can play again.', proofs: ['verify:6', 'play'], check: 'a round to results and replay' },
   { id: 'kit.fair', text: 'When I get knocked down I am back up within a moment, and nobody can keep me on the floor.', proofs: ['verify:10', 'play'], check: 'fair play' },
@@ -91,7 +97,7 @@ export const MECHANIC_PROMISES = {
 export function forgePromises(tables = {}) {
   // filled first (the kit's own fill: a preset's magazine, an archetype's numbers), so a spec's raw rows
   // ({id, preset: "pistol"}) promise what the game made from them will have, the same as a game's filled config
-  let forge = tables; try { forge = fillForgeTables(tables ?? {}); } catch {}
+  let forge = tables; try { if (fillForgeTables) forge = fillForgeTables(tables ?? {}); } catch {}
   const out = [], W = forge.weapons ?? [], E = forge.enemies ?? [], waves = forge.waves ?? [];
   const names = W.map(w => w.name || w.id).filter(Boolean);
   out.push({ id: 'forge.slots', text: 'Everything the game draws is a piece Studio can show and swap: every model, picture and number is a slot, and nothing I see is built into the engine.', source: 'forge: slot coverage', proofs: ['verify:4'] });

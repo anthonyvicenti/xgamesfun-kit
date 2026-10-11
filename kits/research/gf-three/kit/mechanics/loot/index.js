@@ -398,3 +398,45 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Drops, chests, coins, potions and weapons with rarity; pick one of three upgrades between levels',
+  rank: 140,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  // kills drop loot through waves and the boss; potions heal through health; weapon drops and upgrade cards change the
+  // melee mechanic's weapon and moves; levels places chests and offers the cards between levels
+  uses: ['waves', 'boss', 'health', 'melee', 'levels'],
+  owns: () => [{ res: 'input.interact', shared: true, why: 'interact (E) opens a chest or takes a weapon in reach', free: 'chests and weapon drops are always taken with interact' }],
+  state: { key: 'loot', fields: { d: '[[id, kind, x, z, weapon, rarity]] drops on the ground', c: '{ playerId: coins }', u: '{ playerId: [upgrade ids] }', o: '[serial, [upgrade ids]] the offer', p: 'the last offer each player picked from', e: 'the last take, for its sound' } },
+  events: [],
+  sync: { owner: 'host', how: 'the host owns drops, coins, upgrades and offers; a copy asks to take what its player walks over or presses E at' },
+  note: [
+    'Kills and the boss drop coins, potions and weapons by themselves, coins count on the HUD, and bots walk over loot: nothing to wire.',
+    'loot.coinsOf(p) and loot.upgradesOf(p) are the same on every copy: put coins in results() when they are the score.',
+    'The host can add its own: loot.drop(\'coin\' | \'potion\' | \'weapon\' | \'chest\', x, z), loot.placeChests(n, zone), loot.offerUpgrades().',
+  ],
+  stub: {
+    as: 'loot',
+    worked: 'results(ctx) { return ctx.players.list().map(p => ({ id: p.id, name: p.name, value: loot.coinsOf(p) })); }',
+    traps: [
+      'coins are not the score: p.score moves only where the rules (or another mechanic\'s killPoints) move it',
+      'a potion heals through the health mechanic and a weapon drop needs the melee mechanic: without them those drops do nothing',
+    ],
+  },
+  signs: {
+    sample: sh => { if (!sh.loot) return null; const d = sh.loot.d ?? []; return { loot: [d.length, Object.values(sh.loot.c ?? {}).reduce((n, x) => n + (x || 0), 0), Object.values(sh.loot.u ?? {}).reduce((n, x) => n + (x?.length ?? 0), 0), d.filter(x => x[1] === 4).length] }; },
+    judge: v => {
+      const a = v.action, takes = a.coins + a.upgrades + a.chestsOpened;
+      if (a.drops > 0 && takes > 0) v.add('loot drops and is taken', 'ok', 'shared.loot (drops, coins, upgrades, opened chests)', `${a.drops} on the ground at once; ${a.coins} coins taken, ${a.chestsOpened} chest${a.chestsOpened === 1 ? '' : 's'} opened, ${a.upgrades} upgrade${a.upgrades === 1 ? '' : 's'} picked`);
+      else v.add('loot drops and is taken', a.drops > 0 ? 'dead' : 'unmeasured', 'shared.loot (drops, coins, upgrades, opened chests)', a.drops > 0 ? `drops lay on the ground and nobody took one on any page (${v.names})` : `nothing dropped on any page (${v.names})`,
+        'check loot touch and magnet, that kills drop coins (waves onKill), and that the kit\'s melee bots walk over loot when no enemy is near');
+    },
+  },
+};

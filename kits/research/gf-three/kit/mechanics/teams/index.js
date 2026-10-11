@@ -120,3 +120,41 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Team assignment, team score',
+  rank: 100,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: ['projectile', 'paint'],
+  owns: p => (p.scoreboard ? [{ res: 'hud.scoreboard', why: 'one row per team replaces the kit\'s scoreboard (params.scoreboard)', free: 'set teams params.scoreboard to false' }] : []),
+  state: { key: 'teams', fields: { a: '{ playerId: team index }', m: 'points added by hand, per team' } },
+  events: [],
+  sync: { owner: 'host', how: 'the host owns the assignment and hand-added points; team scores are summed on every copy from the players\' scores' },
+  note: [
+    'Players are put on teams at round start and wear their team\'s colour; a team\'s score is the sum of its players\' scores, so score players as usual.',
+    'teams.teamOf(p), teams.sameTeam(a, b) and teams.standings() are the same on every copy; projectile reads friendlyFire by itself.',
+    'The round ends on a team only when rules.check returns teams.check().',
+  ],
+  stub: {
+    as: 'teams',
+    worked: 'check(ctx) { return ctx.time.left <= 0 ? teams.check() : null; }   // { winners: [the leading team\'s player ids], reason }',
+    traps: [
+      'results() still returns one row per player: the team scoreboard is the kit\'s, from teams.standings()',
+      'teams.addScore(t, n) is for bonuses: with scoreMode "sum" a point given to a player already counts for their team',
+    ],
+  },
+  signs: {
+    sample: sh => (sh.teams ? { teams: sh.teams.a ?? {} } : null),
+    judge: v => {
+      const ok = v.others.teams >= 2;
+      v.add('two teams', ok ? 'ok' : 'dead', 'shared.teams.a', ok ? 'yes' : `players were on ${v.others.teams} team(s) on any page (${v.names})`, ok ? '' : 'check players.teams in config/game.json and that rules do not reassign everyone');
+    },
+  },
+};

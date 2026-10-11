@@ -190,3 +190,44 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Health, knockback, ragdoll and get-up, respawn',
+  rank: 40,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: [],
+  owns: () => [],
+  state: { key: 'hp', fields: { h: '{ playerId: hit points }' } },
+  events: [
+    { name: 'onDamage', on: 'host', args: '{ target, from, amount, hp, lethal, knocked, source }', when: 'a hit that counted (fair play let it through)' },
+    { name: 'onDown', on: 'host', args: '{ target, from }', when: 'a player ran out of hit points' },
+    { name: 'onRespawn', on: 'host', args: '{ player }', when: 'a player came back' },
+    { name: 'onHurt', on: 'every copy', args: '{ player, hp, delta }', when: 'a player\'s hit points changed' },
+  ],
+  sync: { owner: 'host', how: 'the host owns hit points, down and respawn timers and protection' },
+  note: [
+    'The kit\'s HUD already shows the local player\'s hit points, knocked-down state and protection: never draw them in rules.js.',
+    'Projectile, melee, waves and the boss call hp.damage themselves; rules.js calls it only for its own hazards.',
+    'hp 0 means no hit points: a hit only knocks over. respawnSeconds 0 means out for the round.',
+  ],
+  stub: {
+    as: 'hp',
+    worked: 'hp.onDamage(d => { if (d.from && d.knocked) d.from.score += 1; });',
+    traps: [
+      'hp.damage returns false and onDamage stays silent when fair play refuses the hit (the target is down or protected, or the round has just begun): do not score outside onDamage',
+      'a hit that repeats every frame (a hazard, contact) passes { push: true }, so it shoves and never knocks over',
+    ],
+  },
+  signs: {
+    sample: sh => (sh.hp ? { hp: sh.hp.h ?? {} } : null),
+    // reported, never failed on its own: a round where nobody is hurt is a round
+    judge: v => v.add('hit points', 'note', 'shared.hp.h', v.others.hpFell ? `hit points fell (lowest ${v.others.hpMin})` : 'nobody lost hit points on these pages'),
+  },
+};

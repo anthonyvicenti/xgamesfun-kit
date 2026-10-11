@@ -7,7 +7,9 @@ import { readFile, readdir } from 'node:fs/promises';
 
 export const REPO = resolve(fileURLToPath(new URL('../../../../', import.meta.url)));
 export const GF3 = join(REPO, 'research/gf-three');
-export const KIT = join(GF3, 'kit');
+// GF_KIT_DIR points every tool at another copy of the kit folder (a test that adds one throwaway mechanic folder and
+// runs catalog, create and verify on it: tests/h-throwaway.test.mjs). Unset, the tools use the repository's kit.
+export const KIT = process.env.GF_KIT_DIR ? resolve(process.env.GF_KIT_DIR) : join(GF3, 'kit');
 export const LIBRARY = join(GF3, 'library');
 export const TOOLS = join(GF3, 'tools');
 export const TOOLS_LIB = join(TOOLS, 'lib');

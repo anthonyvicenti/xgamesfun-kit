@@ -298,6 +298,12 @@ createController(ctx, { character, camera: 'third'|'first'|'top', speed, jump })
 
 **Pass rule.** verify passes when checks 1–8, 10–25, 31 and 34 pass (9, the contact sheet, counts only when it ran): `REQUIRED` in `tools/lib/verdict.mjs` lists them, so adding a check means adding it there and a row to the table above (`tests/r-regressions.test.mjs` compares the two, and holds the rule to its cases in `regressions/verdict-rule`).
 
+**A build's verify and a release's (2026-10-10).** Checks 8, 31 and 34 test the kit: no `rules.js` or config can fail them. A build's verify neither runs nor requires them (`RELEASE_ONLY` and `requiredFor` in `tools/lib/verdict.mjs`); `verify --release` does, and `regress.mjs --corpus` passes it. Checks 2 and 25 stay in every build. Each check also has a home in `tools/lib/homes.json` (invariant, part, game or nowhere), with its rule and its fix; `tests/h-homes.test.mjs` fails a check or a build-brief line that has none.
+
+**What verify prints.** Each failing check with its rule and its fix, then one summary line; `--all` prints every check and the progress lines. `verdict.json` records each check's `seconds`, and a failing check's `rule` and `fix`.
+
+**`--check`** takes one check or any list (`13`, `1,2`, `3,4,5`). **`--profile <file>`** is for a machine that cannot run everything (a CI runner with no graphics card): `{name, environment, skip: [{check, reason, legs?}]}`. The environment is set before any browser starts; a skipped check is recorded `ok: null` with its reason; check 5 with `"legs": "lobby"` runs the gate's lobby legs only. The verdict carries `profile` (name and the skipped list) and `profilePass`, and `pass` stays false while a required check is skipped: a profiled run is never a pass.
+
 ## 6. Studio preview subjects
 
 Kit games answer `?gf-show=<subject>` for:

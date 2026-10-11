@@ -25,6 +25,7 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import * as gf from '../../gf-assets.js';
+import { refuse } from '../core/refusals.js';
 import { assets as base, S, isUrl, slotOf } from './core.js';
 
 async function fetchBytes(url, max) {
@@ -173,6 +174,9 @@ export const assets = Object.assign(base, {
 
   /** Tag an object and every drawable under it with a slot id (R1: a kit primitive whose material is a slot). */
   tag(object3d, id) {
+    // an id assets.json does not declare can never be replaced in Studio and is not counted as covered: refused with a
+    // code (kit/core/refusals.js), tagged anyway so the object still draws
+    if (S.ready && !S.slots.has(id)) refuse('slot-unknown', `assets.tag(..., "${id}"): no slot with that id in assets.json (declare it, or tag with a slot that exists)`, String(id));
     object3d.userData.gfSlot = id;
     object3d.traverse(o => { if (DRAWABLE(o)) o.userData.gfSlot ??= id; });
     return object3d;

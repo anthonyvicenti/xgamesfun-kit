@@ -96,3 +96,41 @@ export function create(ctx, params = {}) {
     dispose() {},
   };
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'A key or a touch button pushes the nearest player in front of you a few blocks away; a push, never a knock-down',
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: [],
+  owns: p => [{ res: `input.key.${p.key ?? 'KeyF'}`, why: `the ${p.key ?? 'KeyF'} key shoves (params.key)`, free: 'set shove params.key to another key' }],
+  // it keeps no shared state: the push itself goes through the kit's routing to whoever owns the player pushed
+  state: { key: null, fields: {}, stats: 'window.__game.controls().mechanics[shove].stats: { shoves, missed, last: { target, d } } (this copy\'s own)' },
+  events: [],
+  sync: { owner: 'copy', how: 'each copy picks its own player\'s target where it draws them and asks that player\'s owner to push' },
+  note: [
+    'F (or the touch button) pushes the nearest player in front: nothing to wire, and fair play decides who can be pushed.',
+    'It is a nudge with a cooldown, not an attack: it never damages, knocks over or scores.',
+    'shove.shove() pushes as the local player would.',
+  ],
+  stub: {
+    as: 'shove',
+    worked: 'shove.shove();   // pushes as the local player would; the kit already reads the key and the touch button',
+    traps: ['a shove reaches only players this copy draws within reach and in front: do not use it to move bots or props'],
+  },
+  signs: {
+    // reported, never failed on its own: a round where nobody shoves is a round
+    reportOnly: true,
+    sample: (sh, stats) => { const s = stats('shove'); return s ? { shove: [s.shoves ?? 0, s.missed ?? 0] } : null; },
+    judge: v => {
+      let n = null;
+      for (const p of v.pages) for (const s of p.samples) { const x = s.sh?.shove; if (x) n = Math.max(n ?? 0, x[0]); }
+      v.add('a shove lands', n ? 'ok' : 'note', 'controls().mechanics[shove].stats.shoves (the local player\'s)', n === null ? 'the shove was not seen on these pages' : n ? `${n} landed` : 'the local player shoved nobody on these pages');
+    },
+  },
+};

@@ -182,6 +182,9 @@ export async function checkFriends({ dir, outDir = null, shots = [], log = () =>
   }
   const kitErrors = errors.filter(e => /gf\/mp\/|party\.js|gf\.js|net\.js/.test(e));
   if (kitErrors.length) ok = step('no-kit-errors', false, kitErrors.slice(0, 3).join(' | ')) && ok;
+  // a refusal at the call (kit/core/refusals.js) in a friends round: the misuse fails here, by its code
+  const refused = [...new Set(errors.flatMap(e => [...e.matchAll(/gf-three refused \[([a-z-]+)\]/g)].map(m => m[1])))];
+  if (refused.length) ok = step('no-kit-refusals', false, `the kit ${refused.map(c => `refused [${c}]`).join(', ')} (window.__game.snapshot().refusals lists each with its fix)`) && ok;
   if (errors.length > kitErrors.length) warnings.push(`friends: ${errors.length - kitErrors.length} console errors from the game: ${[...new Set(errors)].slice(0, 2).join(' | ')}`);
   const failed = record.steps.filter(s => !s.ok);
   return { ok: ok && failed.length === 0, record, warnings,

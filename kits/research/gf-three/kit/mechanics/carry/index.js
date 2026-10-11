@@ -327,3 +327,50 @@ export function create(ctx, params = {}) {
   }
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Grab, carry and throw props or players',
+  rank: 50,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  uses: ['pickup', 'projectile'],
+  owns: p => [
+    { res: `player.socket.${p.socket}`, why: `the held item sits on the ${p.socket} socket (params.socket)`, free: 'set carry params.socket to another socket (hand_l, head, back)' },
+    ...(p.grabAction ? [{ res: `input.${p.grabAction}`, shared: true, why: `${p.grabAction} grabs an item in reach (params.grabAction)`, free: 'set carry params.grabAction to "" and call carry.grab(p) from rules.js' }] : []),
+    ...(p.throwAction ? [{ res: `input.${p.throwAction}`, why: `${p.throwAction} throws what is held (params.throwAction)`, free: 'set carry params.throwAction to "" and call carry.throw(p) from rules.js' }] : []),
+    ...(p.grabPlayers ? [{ res: 'player.control', why: 'a carried friend\'s controls are held off (params.grabPlayers)', free: 'set carry params.grabPlayers to false' }] : []),
+  ],
+  state: { key: 'carry', fields: { i: '[[id, x, y, z, holderSeat | -1, flying, vx, vy, vz]] per item', cp: '{ carrierId: carriedPlayerId }' } },
+  events: [
+    { name: 'onGrab', on: 'host', args: '{ player, item: { id, prop } }', when: 'a player picked an item up (or was given one)' },
+    { name: 'onDrop', on: 'host', args: '{ player, item }', when: 'a player put an item down' },
+    { name: 'onThrow', on: 'host', args: '{ player, item }', when: 'a player threw what they held' },
+  ],
+  sync: { owner: 'host', how: 'the host owns every item and who holds it; a copy asks' },
+  note: [
+    'interact (E) grabs an item in reach and drops it when nothing is in reach; throwing is the rules\' unless throwAction is set.',
+    'carry.held(p) says what a player holds on every copy; the pickup mechanic (effect auto) hands out carried items.',
+    'To throw the held thing as a shot: prj.fire(p) then carry.consume(p).',
+  ],
+  stub: {
+    as: 'carry',
+    worked: 'update(ctx) { const me = ctx.me; if (me.actions.primary.pressed && carry.held(me)) carry.throw(me); }',
+    traps: [
+      'carry.throw(p) with no direction goes to the crosshair point: pass a direction only for bots and the top camera',
+      'bots grab only when the rules make them: in bot(ctx, p) seek carry.nearest(p.position) and call carry.grab(p)',
+    ],
+  },
+  signs: {
+    sample: sh => (sh.carry ? { carry: (sh.carry.i ?? []).map(e => e[4]) } : null),
+    judge: v => {
+      const ok = v.others.carried;
+      v.add('an item is held', ok ? 'ok' : 'dead', 'shared.carry.i[…][4]', ok ? 'yes' : `nobody picked an item up on any page (${v.names})`, ok ? '' : 'make bots grab items (rules.bot) and check carry grabAction and reach');
+    },
+  },
+};

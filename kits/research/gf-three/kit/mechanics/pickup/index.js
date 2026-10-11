@@ -257,3 +257,46 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'Consumables that refill or modify a player\'s meters; respawn',
+  rank: 30,
+  engines: ['party', 'scenic'],
+  // what a collect does by itself decides what else the game must have
+  needs: p => ({ parts: p.effect === 'heal' ? [{ id: 'health', why: 'effect "heal" calls health.heal' }] : p.effect === 'carry' ? [{ id: 'carry', why: 'effect "carry" hands the player a carried item' }] : [], world: [] }),
+  uses: ['carry', 'health'],
+  owns: p => (p.collect === 'touch' ? [] : [{ res: `input.${p.action}`, shared: true, why: `a press of ${p.action} within reach takes a spot (params.action, collect "${p.collect}")`, free: 'set pickup params.collect to "touch", or params.action to another input' }]),
+  state: { key: 'pk', fields: { p: '[[x, y, z, state]] per spot: state 1 = out, 0 = taken and waiting to come back' } },
+  events: [
+    { name: 'onCollect', on: 'host', args: '{ player, index, effect, value, point, how: \'touch\' | \'press\' | \'rules\' }', when: 'a player took a spot' },
+  ],
+  sync: { owner: 'host', how: 'the host owns the spots and who takes them; a guest\'s press goes to the host' },
+  note: [
+    'A spot is taken by walking into it or by a press of interact within reach; it comes back after respawnSeconds.',
+    'effect says what a collect does by itself: auto (hand a carried item when the game has carry, else +value score), heal, score, carry, or none (your onCollect alone).',
+    'Name the pickup\'s prop in the spec (a prop whose role says players pick it up): without one it is a stand-in gem, which the set-dressing lint fails.',
+  ],
+  stub: {
+    as: 'pk',
+    worked: 'pk.onCollect(({ player }) => { player.data.ammo = (player.data.ammo ?? 0) + 5; });',
+    traps: [
+      'with effect "score" (or auto without carry) a collect already adds value to the score: adding it again in onCollect counts it twice',
+      'bots take pickups only when the rules send them: in bot(ctx, p) use p.bot.seek(pk.nearest(p.position))',
+    ],
+  },
+  signs: {
+    sample: sh => (sh.pk ? { pk: (sh.pk.p ?? []).map(q => q[3]) } : null),
+    judge: v => {
+      const o = v.others;
+      if (!o.pkPresent) v.add('pickups are there', 'dead', 'shared.pk.p[i][3]', `no pickup was out on any page (${v.names})`, 'check mechanics[pickup].params count and zone');
+      else if (o.pkTaken) v.add('one is taken', 'ok', 'shared.pk.p[i][3] 1 → 0', `${o.pkTaken} taken`);
+      else v.add('one is taken', 'dead', 'shared.pk.p[i][3] 1 → 0', `${o.pkPresent} pickups were out and nobody took one on any page (${v.names})`, 'make bots go for them (rules.bot: p.bot.seek(pk.nearest(p.position))) and keep them where players walk; collect "both" lets E take them');
+    },
+  },
+};

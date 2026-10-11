@@ -264,3 +264,51 @@ export function create(ctx, params = {}) {
   };
   return api;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The part's manifest (tools/catalog.mjs MANIFEST lists the fields): what `create` composes and refuses by, what the
+// catalog tells a pitch, the handlers and traps of the rules.js stub, and verify check 15's sign of life. The tools
+// read it in Node; nothing in play does.
+// ---------------------------------------------------------------------------------------------------------------------
+export const manifest = {
+  id, examples, params,
+  describe: 'A run of levels (one island or room set each): clear every enemy, the portal or door opens, everyone moves to the next; the last is the boss',
+  rank: 120,
+  engines: ['party', 'scenic'],
+  needs: { parts: [], world: [] },
+  // waves gives each level its enemies (without it every level is clear at once); a world with levels (scenic isles,
+  // dungeon) gives each level its own place, any other world plays every level in its one arena
+  uses: ['waves', 'boss', 'loot', 'health'],
+  owns: p => (p.endRound ? [{ res: 'round.end', why: 'the run\'s end is the round\'s: won on the last level, lost when everyone is down at once (params.endRound)', free: 'set levels params.endRound to false and end the round in rules.check' }] : []),
+  state: { key: 'levels', fields: { l: 'the level being played (0-based)', ph: 'fight | open | travel | won | lost', t: 'the portal\'s wait', ip: 'players standing in the portal', c: 'levels cleared', v: 'moves through a portal' } },
+  events: [
+    { name: 'onLevel', on: 'every copy', args: '{ level }', when: 'a level begins' },
+    { name: 'onClear', on: 'host', args: '{ level }', when: 'the level\'s last enemy went down and its portal opened' },
+    { name: 'onWin', on: 'host', args: '{ level }', when: 'the last level was beaten' },
+    { name: 'onLose', on: 'host', args: '{ level }', when: 'everyone was down at once' },
+  ],
+  sync: { owner: 'host', how: 'the host owns the run; every copy applies a level change on its edge' },
+  note: [
+    'The run plays by itself: the waves mechanic gives each level its enemies, the portal opens when they are down, everyone steps in, and the last level is the boss\'s when the game has one.',
+    'It ends the round by itself (endRound): rules.check stays null unless the game has another way to end.',
+    'In a world with levels (scenic isles or dungeon) each level is its own island or room set; any other world plays them all in its one arena.',
+  ],
+  stub: {
+    as: 'levels',
+    worked: 'levels.onClear(({ level }) => { for (const p of ctx.players.list()) p.score += 10 * (level + 1); });',
+    traps: [
+      'returning a winner from rules.check while endRound is on ends the run early: one of the two ends the round, never both',
+      'a replay starts at level 1 again: reset the game\'s own per-run state in roundStart(ctx)',
+    ],
+  },
+  signs: {
+    sample: sh => (sh.levels ? { levels: [sh.levels.l ?? 0, sh.levels.ph ?? '', sh.levels.c ?? 0, sh.levels.v ?? 0] } : null),
+    judge: v => {
+      const a = v.action, d = v.page('demo-levels'), ds = d ? v.actionOn(d) : null;
+      if (a.movedOn) v.add('a cleared level opens its portal and everyone moves on', 'ok', 'shared.levels (level, phase, cleared, travels)', `${a.travels} move${a.travels === 1 ? '' : 's'} through a portal, ${a.cleared} level${a.cleared === 1 ? '' : 's'} cleared${ds?.movedOn ? '; on the staged page the player walked into the open portal' : ''}`);
+      else v.add('a cleared level opens its portal and everyone moves on', ds || a.opened ? 'dead' : 'unmeasured', 'shared.levels (level, phase, cleared, travels)',
+        ds ? (ds.opened ? 'the portal opened on the staged page (?gf-demo=levels.clear) but walking into it with real keys did not move the run on' : 'on the staged page (?gf-demo=levels.clear) the level was cleared and its portal never opened') : a.opened ? 'a portal opened but nobody moved on' : `no level was cleared on any page (${v.names})`,
+        'check config/world.json → levels (each with a portal zone), levels portalZone, and that nothing in rules.js holds the run');
+    },
+  },
+};

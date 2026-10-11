@@ -30,14 +30,15 @@ import { checkEmbed } from './lib/embed-check.mjs';
 import { checkScreens } from './lib/screens-check.mjs';
 import { checkWorldControls, checkWorldTouch, lintWorld, findBuildSpot, faces, actOn } from './lib/worlds-check.mjs';
 import { checkWorldPersist, checkSpawnHolds, checkSignFilter } from './lib/worlds-net-check.mjs';
-import { passes, REQUIRED_WORLD } from './lib/verdict.mjs';
+import { passes, requiredFor, runsHere } from './lib/verdict.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
 
-export async function verifyWorld(dir, { rec, outDir, add, log, t0, lap, quick = false, only = null, statics }) {
+export async function verifyWorld(dir, { rec, outDir, add, log, t0, lap, quick = false, only = null, release = false, statics }) {
   rec.mode = 'world';
-  const want = n => only === null || [].concat(only).includes(n);
+  // a build's verify leaves out the kit's own checks (8, 31, 34: verdict.mjs RELEASE_ONLY); a release run makes them
+  const want = n => (only === null ? runsHere(n, { release }) : [].concat(only).includes(n));
   const game = JSON.parse(await readFile(join(dir, 'config/game.json'), 'utf8'));
   const mpm = await readManifest(dir);
 
@@ -196,7 +197,8 @@ export async function verifyWorld(dir, { rec, outDir, add, log, t0, lap, quick =
   if (want(9)) add(9, 'contact sheet and perf', null, quick ? '--quick' : 'not run for a world yet');
   const checks = rec.checks;
   checks.sort((a, b) => a.n - b.n);
-  rec.pass = only === null ? passes(checks, REQUIRED_WORLD) : checks.every(c => c.ok !== false);
+  rec.required = requiredFor('world', { release });
+  rec.pass = only === null ? passes(checks, rec.required) : checks.every(c => c.ok !== false);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
   rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');

@@ -43,7 +43,10 @@ export async function checkEmbed({ newPage, url, game = {}, log = () => {}, shot
   const T = await newPage('post');
   const p = T.page, steps = [], fail = [], warnings = [];
   // the orbit camera (CONTRACT §9) never asks for the lock: the mouse stays free, a drag turns it, a click acts
-  const camera = game.camera ?? 'third', free = camera === 'orbit', looks = camera === 'third' || camera === 'first' || free;
+  // The follow camera (CONTRACT §8, scenic) never asks either: the cursor aims and nothing turns the camera
+  // (kit/core/input.js: input.cursorMode true). Until 2026-10-10 it was held to "the frame refused the lock", which a
+  // camera that never asks cannot show, so every game with the follow camera failed here on create's untouched output.
+  const camera = game.camera ?? 'third', orbit = camera === 'orbit', free = orbit || camera === 'follow', looks = camera === 'third' || camera === 'first' || orbit;
   const record = { camera, steps };
   const step = (name, ok, detail = '') => { steps.push({ name, ok: !!ok, detail }); if (!ok) fail.push(`${name}${detail ? ` (${detail})` : ''}`); return !!ok; };
   const F = p.frameLocator('#card');

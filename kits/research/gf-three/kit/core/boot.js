@@ -32,6 +32,7 @@ import { createBrain, createBots, defaultBot } from '../bots/bots.js';
 import { createFair } from './fair.js';
 import { rayCylinder, BODY_RADIUS } from './aim.js';
 import { sight } from './sight.js';
+import * as refusals from './refusals.js';
 import { net } from '../../mp/net.js';
 import { RIG_DEFAULTS } from '../controller/camera-rig.js';
 import { AIM_HEIGHT } from './aim.js';
@@ -149,7 +150,7 @@ export async function boot({ rules = {} } = {}) {
           o.gainDb = (o.gainDb ?? 0) - Math.min(18, Math.max(0, (d - 4) * 0.6));
           delete o.at;
         }
-        if (!audio.has(id)) { if (!o.optional) console.warn(`gf-three audio: no sound "${id}"`); return null; }
+        if (!audio.has(id)) { if (!o.optional) refusals.refuse('sound-unlisted', `ctx.audio.play("${id}"): no sound with that id in assets.json → sounds → sounds (list it there, or pass { optional: true })`, id); return null; }
         return audio.play(id, o);
       },
       has: id => audio.has(id), stop: id => audio.stop(id),
@@ -163,8 +164,8 @@ export async function boot({ rules = {} } = {}) {
     let menu = null;
     const openPause = () => { if (!menu || menu.view || !['playing', 'countdown'].includes(ctx.round?.phase)) return; menu.pause(); try { document.exitPointerLock?.(); } catch {} };
     const hud = createHud(ctx, ui, { onMenu: () => openPause() });
-    ctx.hud = hud; ui.goalTo = t => hud.goal(t);
-    hud.setGoal(game.text?.goal || game.round?.winBy || game.rules?.summary || game.text?.hook || game.hook || '');
+    ctx.hud = hud; ui.goalTo = t => { if (refusals.goalCall(t)) hud.goal(t); };
+    hud.setGoal(refusals.startGoal(game));
 
     // ---- mechanics: the real module when present, else its params alone (the rules read them) ----
     const list = [];
@@ -282,6 +283,7 @@ export async function boot({ rules = {} } = {}) {
       players: ctx.players.list().map(p => ({ id: p.id, name: p.name, score: p.score, alive: p.alive, bot: p.isBot, local: p.local, x: r2(p.position.x), y: r2(p.position.y), z: r2(p.position.z), anim: p.anim,
         color: p.color, ring: ringColor(p), ...ctx.fair.observe(p) })),
       fair: ctx.fair.summary(),
+      refusals: refusals.list(),
       winners: session.round.winners, reason: session.round.reason, results: session.round.rows,
       shared: ctx.shared.snapshot(),
       rules: (() => { try { return rules.observe?.(ctx) ?? null; } catch { return null; } })(),

@@ -16,6 +16,15 @@
 // terrainData(cfg) computes it from the levels' shapes, plazas, paths and water, the same way in Node and the browser.
 
 export const templates = ['island', 'isles', 'ruins', 'dungeon'];
+// Each template in its own words (its manifest; tools/catalog.mjs reads it): what a pitch is told, and what the world
+// provides to the mechanics. Every scenic world lays out levels (CONTRACT §8 "Levels"), each with an arena and a
+// portal zone; `levels` says whether a level is its own place.
+export const templateInfo = {
+  island: { label: 'Island', describe: 'one island in the sea: cliffs, grass, trees, paths and water round it', kind: 'outdoor', levels: 'one place', provides: ['levels', 'zone:centre', 'zone:arena', 'zone:portal'] },
+  isles: { label: 'Floating isles', describe: 'floating islands over a void, one per level, joined by portals; cliff skirts below', kind: 'outdoor', levels: 'one island or room set per level (the levels mechanic)', provides: ['levels', 'zone:centre', 'zone:arena', 'zone:portal'] },
+  ruins: { label: 'Ruins', describe: 'a stone arena among ruins and trees', kind: 'outdoor', levels: 'one place', provides: ['levels', 'zone:centre', 'zone:arena', 'zone:portal'] },
+  dungeon: { label: 'Dungeon', describe: 'rooms joined by doors, one room set per level', kind: 'outdoor', levels: 'one island or room set per level (the levels mechanic)', provides: ['levels', 'zone:centre', 'zone:arena', 'zone:portal'] },
+};
 // an island's outline radius at each size class (m)
 export const SIZE_RADIUS = { small: 15, medium: 19, large: 24 };
 
@@ -310,24 +319,41 @@ function dress(level, T, rng, out, pal, opts) {
 
 // ---------- dungeon rooms (KayKit Dungeon Remastered's 3 m modules, research/gf-scenic/library/props.json) ----------
 const M = 3;   // one wall or floor module
+// room sizes per size class (all multiples of one module, an odd count of modules so a doorway has a middle one); the
+// cell pitch keeps a one-module corridor between the hall and a side room. area = the class's range in m² (the same
+// numbers as kit/world/generate.js SIZE_CLASSES, which check 17 holds a dungeon to)
+const DUNGEON_SIZES = {
+  small: { hall: 15, side: 9, pitch: 15, area: [350, 950], step: 44 },
+  medium: { hall: 15, side: 9, pitch: 15, area: [1000, 1800], step: 44 },
+  large: { hall: 21, side: 15, pitch: 21, area: [1900, 3200], step: 64 },
+};
 function dungeonLevel(i, L, at, rng, opts) {
   const [cx, , cz] = at;
-  // the hall (15 x 15, the arena) in the middle of a 3 x 2 grid of 15 m cells, side rooms (9 x 9) round it; every edge
-  // sits on the 1.5 m half-module grid and every doorway in the middle module of its wall
-  // which side rooms: a seeded pick of the five cells round the hall (a back-row room needs the one in front of it)
+  // the hall (the arena) in the middle of a 3 x 2 grid of cells, side rooms round it; every edge sits on the 1.5 m
+  // half-module grid and every doorway in the middle module of its wall. The size class (small 350-950 m², medium
+  // 1000-1800, large 1900-3200: the rectangle round the room set) picks the room sizes, and then WHICH side rooms:
+  // a seeded pick among the sets (3 or 4 of the five cells round the hall; a back-row room needs the one in front of
+  // it) whose rectangle lands inside the class.
+  const sz = DUNGEON_SIZES[opts.size] ?? DUNGEON_SIZES.medium, H = sz.hall, S = sz.side, P = sz.pitch;
   const cand = [[0, 0], [2, 0], [1, 1], [0, 1], [2, 1]];
-  for (let k = cand.length - 1; k > 0; k--) { const j = Math.floor(rng() * (k + 1)); [cand[k], cand[j]] = [cand[j], cand[k]]; }
-  const want = 3 + Math.floor(rng() * 2), order = [[1, 0]];
-  for (let pass = 0; pass < 3 && order.length < want + 1; pass++) for (const c of cand) {
-    if (order.length >= want + 1 || order.some(o => o[0] === c[0] && o[1] === c[1])) continue;
-    if (c[1] === 1 && c[0] !== 1 && !order.some(o => o[0] === c[0] && o[1] === 0)) continue;
-    order.push(c);
+  const sets = [];
+  for (let m = 1; m < 32; m++) {
+    const pick = cand.filter((_, k) => m & (1 << k));
+    if (pick.length < 3 || pick.length > 4) continue;
+    if (pick.some(c => c[1] === 1 && c[0] !== 1 && !pick.some(o => o[0] === c[0] && o[1] === 0))) continue;
+    const left = Math.min(-H / 2, ...pick.map(c => (c[0] - 1) * P - S / 2)), right = Math.max(H / 2, ...pick.map(c => (c[0] - 1) * P + S / 2));
+    const front = Math.max(H / 2, ...pick.map(c => (c[1] === 0 ? 0 : P) + S / 2));
+    sets.push({ pick, area: (right - left) * (front + H / 2) });
   }
+  const inClass = sets.filter(s => s.area >= sz.area[0] && s.area <= sz.area[1]);
+  const pool = inClass.length ? inClass : [sets.reduce((b, s) => (Math.abs(s.area - (sz.area[0] + sz.area[1]) / 2) < Math.abs(b.area - (sz.area[0] + sz.area[1]) / 2) ? s : b))];
+  const chosen = pool[Math.floor(rng() * pool.length)];
+  const order = [[1, 0], ...chosen.pick];
   const count = order.length;
   const rooms = [];
   for (let k = 0; k < count; k++) {
-    const [gx, gz] = order[k], main = k === 0, w = main ? 15 : 9;
-    const x = cx + (gx - 1) * 15, z = cz + (gz === 0 ? 0 : 15);
+    const [gx, gz] = order[k], main = k === 0, w = main ? H : S;
+    const x = cx + (gx - 1) * P, z = cz + (gz === 0 ? 0 : P);
     rooms.push({ id: main ? 'hall' : `room-${k}`, main, grid: [gx, gz], rect: [x - w / 2, z - w / 2, x + w / 2, z + w / 2] });
   }
   const byGrid = (gx, gz) => rooms.find(r => r.grid[0] === gx && r.grid[1] === gz);
@@ -387,9 +413,15 @@ function dressDungeon(lv, rng, out) {
     }
     // the corners: a barrel, crates or a chest (not in the hall, where everyone fights)
     if (!r.main) {
-      const corners = [[x1 - 1.2, z1 - 1.2], [x0 + 1.4, z1 - 1.2], [x1 - 1.2, z0 + 1.6]];
-      const decor = ['dungeon-barrel', 'dungeon-crates', 'dungeon-keg', 'dungeon-crate', 'dungeon-barrels'];
-      corners.forEach(([x, z], k) => { if (rng() < 0.7) P(decor[Math.floor(rng() * decor.length)], x, z, Math.round(rng() * 4) * 90); });
+      // each piece is placed by its own footprint: the wall's face (a cracked wall is 0.945 m thick, so 0.48 m reaches in
+      // from the wall line) + the piece's half-extent (it may turn by a quarter) + 0.2 m, so no corner piece touches a wall
+      const decor = [['dungeon-barrel', 1.35], ['dungeon-crates', 1.687], ['dungeon-keg', 1.5], ['dungeon-crate', 1.125], ['dungeon-barrels', 1.388]];
+      const corners = [[1, 1], [-1, 1], [1, -1]];   // [x side, z side]: the three corners the camera does not look past
+      corners.forEach(([sx, sz]) => {
+        if (rng() >= 0.7) return;
+        const [prop, ext] = decor[Math.floor(rng() * decor.length)], inset = 0.48 + ext / 2 + 0.2;
+        P(prop, sx > 0 ? x1 - inset : x0 + inset, sz > 0 ? z1 - inset : z0 + inset, Math.round(rng() * 4) * 90);
+      });
     }
   }
   // corridors: floor tiles and side walls across the gap between two rooms
@@ -437,7 +469,7 @@ export function generate({ template = 'isles', size = 'medium', seed = 1, levels
   const pal = paletteFor(preset);
   // levels: the first at the origin, each next one on up the screen (+x+z) and a little to the side
   const gap = T === 'dungeon' ? 26 : 24;
-  const step = (T === 'dungeon' ? 44 : R * 2) + gap;
+  const step = (T === 'dungeon' ? (DUNGEON_SIZES[size] ?? DUNGEON_SIZES.medium).step : R * 2) + gap;
   const ats = Array.from({ length: L }, (_, i) => [r2(i * step * 0.82), 0, r2(i * step * 0.57)]);
   const out = {
     template: T, kind: T, size, seed, preset, void: isVoid, sizeClass: size,
@@ -453,7 +485,7 @@ export function generate({ template = 'isles', size = 'medium', seed = 1, levels
     vegetation: { trees: [], bushes: [], flowers: [] },
   };
   for (let i = 0; i < L; i++) {
-    const lv = T === 'dungeon' ? dungeonLevel(i, L, ats[i], rng, { players, depth }) : islandLevel(i, L, T, R, ats[i], rng, { next: ats[i + 1] ?? null, players, void: isVoid, depth, water: T !== 'ruins' || i % 2 === 0 });
+    const lv = T === 'dungeon' ? dungeonLevel(i, L, ats[i], rng, { players, depth, size }) : islandLevel(i, L, T, R, ats[i], rng, { next: ats[i + 1] ?? null, players, void: isVoid, depth, water: T !== 'ruins' || i % 2 === 0 });
     out.levels.push(lv);
     if (T !== 'dungeon') dress(lv, T, rng, out, pal, { void: isVoid, depth, runes: RUNES.has(preset) });
     else {
