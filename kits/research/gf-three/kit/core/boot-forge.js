@@ -28,6 +28,13 @@
 // (gf/forge/players.js, track S) give their bodies to the renderer that skins them; gf/forge/fight.js registers the
 // first-person arms and weapons, a kill's pieces, the coin and the effect pictures; the look is packed for the
 // quality tier.
+// The first view (wave 3, track M; research/rust-engine/PLAN.md §5: the arena behind a menu that works, under 5 s on
+// a phone). In the order things start: the page itself starts the wasm's download and compile and asks for every
+// module at once (index.html, written by create); the loading view asks for assets.json (ui/loading.js); here the
+// arena's files are asked for the moment the configs are in, while the core starts, and each file is fetched once
+// (eagerAssets below); nothing of a fight is fetched before the menu. Once the menu has been drawn the steps of
+// gf/forge/first.js run: `first` (the first wave's bodies, the starting weapon, a kill's pieces; the director waits for
+// it) and then `later` (later waves, the boss, the weapons cards give).
 import * as gf from '../../gf-assets.js';
 import { createAudio } from '../../../audio/audio.js';
 import audioPresets from '../../../audio/presets.json' with { type: 'json' };
@@ -35,7 +42,7 @@ import KIT from '../kit.js';
 import { assets } from '../assets/core.js';
 import { createRng, seedOf } from './rng.js';
 import { pickQuality, deviceFacts } from './quality.js';
-import { pixelRatioFor, watchPixelRatio, createGovernor, PIXEL_BUDGET } from './resolution.js';
+import { pixelRatioFor, watchPixelRatio, PIXEL_BUDGET } from './resolution.js';
 import { createInput } from './input.js';
 import { createUI } from '../ui/ui.js';
 import { createHud } from '../ui/hud.js';
@@ -57,6 +64,7 @@ import { createFeel } from '../../forge/feel.js';
 import { createRender } from '../../forge/render.js';
 import { loadFight } from '../../forge/fight.js';
 import { createCards } from '../../forge/cards.js';
+import { createGovernor, lookFor, QUALITY, loadChoice, saveChoice, settingsRow } from '../../forge/governor.js';
 
 export const VERSION = KIT.version;
 export const ENGINE = 'forge';
@@ -68,7 +76,7 @@ export async function boot({ rules = {} } = {}) {
   const params = new URLSearchParams(location.search);
   const subject = params.get('gf-show');
   const backdrop = params.get('gf-backdrop') === '1' && !net.active;
-  const ctx = { kit: { name: 'gf-three', engine: ENGINE, version: VERSION, forge: FORGE_VERSION }, onFrame: [], time: { now: 0, dt: 0, round: 0, left: 0 }, gf };
+  const ctx = { kit: { name: 'gf-three', engine: ENGINE, version: VERSION, forge: FORGE_VERSION }, onFrame: [], time: { now: 0, dt: 0, round: 0, left: 0 }, gf: eagerAssets(gf) };
   let ui = null;
   try {
     await assets.init({ configs: ['game', 'look', 'world', 'characters'] });
@@ -76,7 +84,15 @@ export async function boot({ rules = {} } = {}) {
     ctx.config = game; ctx.assets = assets;
     ctx.fair = createFair(ctx);
     document.title = game.text?.title ?? game.title ?? document.title;
-    await gf.applyCss();
+    // the css slots, from the configs already here (gf.applyCss asks for a slot's file again for every such slot: the
+    // same config/game.json five more times, one after another, before anything else could start)
+    for (const s of assets.manifest?.slots ?? []) {
+      if (!s.css || s.source?.pointer === undefined) continue;
+      let v; try { v = assets.value(s.id, null); } catch { v = null; }
+      if (v != null && typeof v !== 'object') document.documentElement.style.setProperty(s.css, s.type === 'text' ? JSON.stringify(String(v)) : String(v));
+    }
+    // the arena's files, asked for now: they come in while the core's wasm compiles and its device is made
+    if (!subject) ctx.gf.want(arenaFiles(assets, worldCfg, assets.config('characters')));
     const worldMode = game.round?.mode === 'world';
     const seed = seedOf(params.get('seed') ?? net.seed ?? params.get('gf_seed') ?? (globalThis.crypto?.getRandomValues(new Uint32Array(1))[0] ?? 1));
     const rng = createRng(seed);
@@ -90,13 +106,20 @@ export async function boot({ rules = {} } = {}) {
     document.body.append(canvas);
     // the pixels drawn (CONTRACT §6i): set before the engine starts, so its first frame is the screen's own size
     const budget = quality.pixelBudget ?? PIXEL_BUDGET[quality.name] ?? PIXEL_BUDGET.high;
-    const governor = params.get('gf-res') === 'fixed' ? null : createGovernor();
+    // The governor (gf/forge/governor.js; wave 3, track M): when frames stay short for a few seconds the game draws
+    // less (the scene's render scale, particles, a kill's pieces, shadowed fires) and takes it back when there is room.
+    // The canvas keeps its pixels (the HUD and the text stay sharp): the shared kit's guard, which sized the canvas
+    // down and never up, is not used here. The player's own toggle in Settings; ?gf-governor=1|0 for QA; and off
+    // under automation unless asked for, so a verify run's pictures do not change with the machine's load.
+    const choice = loadChoice(gameId);
+    const gov = createGovernor();
+    gov.on = params.get('gf-res') === 'fixed' ? false : params.get('gf-governor') !== null ? params.get('gf-governor') !== '0' : choice.governor !== false && !globalThis.navigator?.webdriver;
     const res = { target: 1, ratio: 1, budget };
     let forge = null;
     const size = () => {
       const dpr = globalThis.devicePixelRatio || 1;
       res.target = pixelRatioFor({ dpr, width: innerWidth, height: innerHeight, budget });
-      res.ratio = Math.max(Math.min(dpr, 1), res.target * (governor?.scale ?? 1));
+      res.ratio = Math.max(Math.min(dpr, 1), res.target);
       const max = forge?.maxDimension?.() ?? 8192;
       canvas.width = Math.max(1, Math.min(max, Math.round(innerWidth * res.ratio)));
       canvas.height = Math.max(1, Math.min(max, Math.round(innerHeight * res.ratio)));
@@ -105,12 +128,16 @@ export async function boot({ rules = {} } = {}) {
     size();
 
     // ---- the engine: the Rust core on WebGPU, or the kit's own screen when the browser has none ----
-    try { forge = await createHost(canvas); }
+    // the wasm the page began to download and compile with its first bytes (index.html), when it did
+    // (it is one build's: the loader takes it only when that is the build it picks for this device)
+    const earlyWasm = globalThis.__gfEarly?.wasm ?? null;
+    const early = await (earlyWasm?.module ?? Promise.resolve(null)).catch(() => null);
+    try { forge = await createHost(canvas, early ? { early: { backend: earlyWasm.backend ?? 'webgpu', module: early } } : undefined); }
     catch (e) { if (e?.name === 'NoWebGPU') return unsupported(ctx, game, e); throw e; }
     ctx.forge = forge;
     // the renderer from JS (track R): bodies, held items, the first-person layer, effects
     ctx.render = createRender(forge);
-    const resize = () => { governor?.reset(); size(); };
+    const resize = () => { size(); if (gov.level) applyLook(); };   // a governor's step is a share of this canvas
     addEventListener('resize', resize); watchPixelRatio(globalThis, resize); size();
     ctx.resolution = res;
     // the slot table: every slot an index the core draws with; coverage and sight read the indices back
@@ -122,8 +149,15 @@ export async function boot({ rules = {} } = {}) {
     forge.loadTables(forgeTables.pack(tables));
     const camCfg = game.controller?.camera?.first ?? {};
     // packed for the quality tier (look.js TIERS: a low tier's shadow map, lights a frame, AA and particle budget)
-    const applyLook = () => { forge.setLook(forgeLook.pack(lookCfg, quality.name)); forge.lens(Number(tables.player?.fov) || Number(camCfg.fov) || 68, 0.05, 200); };
+    // with the governor's step: the render scale never under one CSS pixel of this screen
+    const applyLook = () => {
+      const floor = Math.min(1, Math.min(globalThis.devicePixelRatio || 1, 1) / (res.ratio || 1));
+      forge.setLook(forgeLook.pack(lookFor(lookCfg, quality.name, gov.step, { TIERS: forgeLook.TIERS, floor, width: canvas.width }), quality.name));
+      forge.lens(Number(tables.player?.fov) || Number(camCfg.fov) || 68, 0.05, 200);
+    };
     applyLook();
+    /** The governor's level, everywhere it reaches: the look's values, and the pieces a kill leaves (forge-feel). */
+    const applyLevel = () => { applyLook(); forge.cmd.raw(QUALITY, [], [gov.step.rest, gov.step.flying]); };
     const torch = forgeLook.torch(lookCfg);
     const lightsAt = t => (ctx.world?.lights ?? []).map(l => ({ x: l.at[0], y: l.at[1], z: l.at[2], range: torch.range, color: torch.color, intensity: torch.intensity * forgeLook.flicker(t, l.seed ?? 1, torch.flicker) }));
 
@@ -131,6 +165,22 @@ export async function boot({ rules = {} } = {}) {
       if (pageLoadout().loadout != null) assets.setLoadout('show', pageLoadout().loadout);
       return await runForgeShow(ctx, subject, { worldCfg, lightsAt, observe: { coverage: () => coverageReport(), slots: () => slotsReport() } });
     }
+    // what waits for the menu (gf/forge/first.js): the kit's loaders hand their jobs over, `first` runs once the menu
+    // has been drawn and `later` after it (runSteps, from the frame loop)
+    const steps = { first: [], later: [] }, stepState = { started: false, first: false, later: false, ms: {} };
+    // QA (?gf-load=all): everything before the menu, as wave 2 loaded, to measure what the steps save
+    if (params.get('gf-load') !== 'all') ctx.after = (step, fn) => { (steps[step] ?? steps.later).push(fn); };
+    const runSteps = async () => {
+      if (stepState.started) return;
+      stepState.started = true;
+      const t0 = performance.now();
+      for (const k of ['first', 'later']) {
+        await Promise.all(steps[k].splice(0).map(fn => Promise.resolve().then(fn).catch(e => console.warn(`gf-forge: a ${k} load failed (${e?.message ?? e})`))));
+        stepState[k] = true; stepState.ms[k] = Math.round(performance.now() - t0);
+      }
+      // the downloads kept for whoever asks twice are let go (a later asker fetches its own)
+      setTimeout(() => ctx.gf.forget(), 15000);
+    };
     // the rules, for the world's AI (gf/forge/ai.js calls rules.bot and rules.reward; track A)
     ctx.rules = rules;
     ctx.world = await forgeWorld.loadWorld(ctx, worldCfg);
@@ -259,7 +309,8 @@ export async function boot({ rules = {} } = {}) {
 
     // ---- the observation (CONTRACT §5, §8 forge): the same names verify reads, from what the core drew ----
     const r2 = v => Math.round(v * 100) / 100;
-    const forgeState = () => ({ version: FORGE_VERSION, wasm: BUILD_SHA256, frames: forge.frames(), draws: forge.draws(), ticks: Number(forge.forge.ticks()),
+    // (track W: `backend` is the build that draws on this device, 'webgpu' | 'webgl2', and `wasm` that build's hash)
+    const forgeState = () => ({ version: FORGE_VERSION, backend: forge.backend ?? 'webgpu', wasm: forge.wasmSha256 ?? BUILD_SHA256, after: { ...stepState, ms: { ...stepState.ms } }, frames: forge.frames(), draws: forge.draws(), ticks: Number(forge.forge.ticks()),
       hz: forge.hz, steps: Number(forge.forge.steps()), droppedSeconds: Math.round(forge.forge.dropped_seconds() * 1000) / 1000, plugins: forge.plugins(), tables: forge.forge.tables_version(),
       recoveries: forge.recoveries(), lost: forge.lost(), timing: forge.timing, info: forge.info(), render: ctx.render.stats(), fight: ctx.fight?.observe?.() ?? null });
     const observe = () => ({
@@ -299,7 +350,7 @@ export async function boot({ rules = {} } = {}) {
         players: ctx.players.list().map(p => { const r = assets.loadout(p.id); return { id: p.id, name: p.name, bot: p.isBot, local: p.local, seat: p.seat, color: p.color, key: r?.key ?? '', advertised: r?.advertised ?? '', values: r?.loadout.values ?? {}, files: r?.loadout.files ?? {}, dropped: [...(r?.dropped ?? [])], drawn: players.api.drawnLook(p), shots: null }; }) })),
       camera: () => JSON.parse(JSON.stringify(cameraOf())),
       sight: ids => sightReport(ids),
-      screen: () => ({ dpr: globalThis.devicePixelRatio || 1, css: [innerWidth, innerHeight], buffer: [canvas.width, canvas.height], ratio: res.ratio, target: res.target, budget: res.budget, quality: quality.name, slow: governor?.last ?? null, guard: !!governor }),
+      screen: () => ({ dpr: globalThis.devicePixelRatio || 1, css: [innerWidth, innerHeight], buffer: [canvas.width, canvas.height], ratio: res.ratio, target: res.target, budget: res.budget, quality: quality.name, slow: gov.observe().last, guard: gov.on, governor: gov.observe() }),
       // the observation interface v2 (CONTRACT §8 forge): what the core holds, under names tracks R, F and A fill
       bodies: () => JSON.parse(JSON.stringify(bodiesReport())),
       enemies: () => JSON.parse(JSON.stringify(enemiesReport())),
@@ -323,6 +374,8 @@ export async function boot({ rules = {} } = {}) {
         down: () => JSON.parse(JSON.stringify(players.api.down?.() ?? null)),
         value: (path, player) => ctx.cards?.value(path, player) ?? null,
         counts: () => forge.entityCounts(),
+        // wave 3 (track M): the governor as it stands; QA: governor(level) goes to a level now
+        governor: level => { if (level !== undefined && level !== null) { gov.force(level); applyLevel(); } return JSON.parse(JSON.stringify(gov.observe())); },
         // QA only (like loseDevice): turn this copy's own player to look at a point, as a player would with the mouse
         face: (x, y, z) => { const e = forge.eye(), dx = x - e.x, dy = y - e.y, dz = z - e.z; forge.cmd.look(players.api.nid(me.id), Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz))); } }),
     });
@@ -352,18 +405,23 @@ export async function boot({ rules = {} } = {}) {
 
     // ---- the frame ----
     const forgeButtons = buttonMapper();
-    let last = null, recovering = false;
+    let last = null, recovering = false, drawn = 0;
     session.loop(t => {
       const raw = last === null ? 0 : Math.max(0, (t - last) / 1000);
       const dt = Math.min(0.1, raw); last = t;
+      // the menu has been drawn twice: now what a fight needs, then what later waves need (first.js)
+      if (++drawn === 3) runSteps();
       // device loss (a driver reset, a long background tab): a new device gets everything again; no frame meanwhile
       if (forge.lost()) {
         if (!recovering) { recovering = true; forge.recover().then(() => { size(); applyLook(); }).catch(e => console.error(`gf-forge: the device could not be recovered: ${e?.message ?? e}`)).finally(() => { recovering = false; }); }
         return;
       }
-      if (governor) {
-        const floor = Math.min(1, Math.min(globalThis.devicePixelRatio || 1, 1) / res.target);
-        if (governor.frame(raw, { active: session.round.phase === 'playing' && !document.hidden && !menu.view, floor })) size();
+      if (gov.frame(raw, { active: session.round.phase === 'playing' && !document.hidden && !menu.view })) applyLevel();
+      // Settings: the forge rows beside the kit's own (gf/forge/governor.js settingsRow; the panel is drawn afresh each
+      // time it opens)
+      if (menu.view === 'settings') {
+        settingsRow('gf-governor', 'Hold the frame rate (draw less when it drops)', { value: gov.on, set: v => { gov.on = v; saveChoice(gameId, { governor: v }); applyLevel(); } });
+        ctx.forgeHud?.settings?.(settingsRow, { choice: () => loadChoice(gameId), save: patch => saveChoice(gameId, patch) });
       }
       if (menu.paused && !session.live && ['playing', 'countdown'].includes(session.round.phase)) {
         input.enabled = false; input.update();
@@ -389,7 +447,8 @@ export async function boot({ rules = {} } = {}) {
       // the local player's input → the core (looking in radians; the menu's sensitivity is the input's lookScale)
       const n = players.api.nid(me.id), k = cam.sensitivity ?? 0.0024;
       const { held, pressed } = forgeButtons(input), tb = ctx.feel?.touch?.() ?? { held: 0, pressed: 0 };   // track U: the touch buttons' bits (gf/forge/hud.js)
-      forge.cmd.input(n, { mx: input.move.x, mz: input.move.y, dx: input.look.dx * k, dy: input.look.dy * k, held: held | tb.held, pressed: pressed | tb.pressed, enabled: !!me.controller?.enabled && input.enabled });
+      const gyro = ctx.forgeHud?.gyro?.() ?? { dx: 0, dy: 0 };   // wave 3: gyro aim (gf/forge/hud.js), radians, when the player turned it on
+      forge.cmd.input(n, { mx: input.move.x, mz: input.move.y, dx: input.look.dx * k + gyro.dx, dy: input.look.dy * k + gyro.dy, held: held | tb.held, pressed: pressed | tb.pressed, enabled: !!me.controller?.enabled && input.enabled });
       forge.tick(dt);
       players.api.fromCore();
       // a joiner: this frame's steps of its own player's input, to the host about 20 times a second
@@ -466,6 +525,43 @@ export async function boot({ rules = {} } = {}) {
 }
 
 /**
+ * gf-assets with every file's bytes fetched once. `want(files)` starts downloads before anyone asks (the arena's,
+ * while the core starts); bytes(file) hands a download to the first asker and a copy of it to any other (the clip
+ * file is asked for by the enemies, the players and the target dummy); forget() lets the kept downloads go.
+ */
+function eagerAssets(gf) {
+  const got = new Map();   // file → {p: Promise<ArrayBuffer>, taken}
+  // A request the network drops is asked for again, twice, a moment apart. A file fetched after the menu (a wave's
+  // bodies, a weapon a card gives) that failed once was never asked for again: its enemies had no body for the rest of
+  // the visit. An answer that is an error (a file that is not there) is not asked for again. (The wave 3 merge: a
+  // joiner's first-wave bodies failed to fetch once in verify's two-player check.)
+  const again = async f => { for (let k = 0; ; k++) { try { return await gf.bytes(f); } catch (e) { if (k >= 2 || !(e instanceof TypeError)) throw e; await new Promise(r => setTimeout(r, 400 * (k + 1))); } } };
+  const fetchOnce = f => { const e = { p: again(f), taken: false }; got.set(f, e); e.p.catch(() => { if (got.get(f) === e) got.delete(f); }); return e; };
+  return {
+    ...gf,
+    bytes(file) {
+      const f = String(file), e = got.get(f) ?? fetchOnce(f);
+      if (!e.taken) { e.taken = true; return e.p; }
+      return e.p.then(b => b.slice(0));
+    },
+    want(files) { for (const f of files ?? []) if (f && !got.has(f)) fetchOnce(String(f)); },
+    forget() { got.clear(); },
+  };
+}
+
+/** The files the arena is drawn from (config/world.json: the ground, the pieces, the props, the pictures over them) and
+ *  the effect pictures its fires use: what is on screen behind the menu. */
+function arenaFiles(assets, world, characters) {
+  const out = new Set(), add = slot => { if (slot && assets.has(slot)) { try { out.add(assets.file(slot)); } catch { /* a value slot */ } } };
+  add(world?.ground?.slot);
+  for (const p of world?.pieces ?? []) add(p.slot);
+  for (const p of world?.props ?? []) add(`prop.${p.prop}`);
+  for (const t of [world?.texture, ...(world?.textures ?? [])]) add(t?.slot);
+  for (const kind of Object.keys(characters?.forge?.fight?.fx ?? {})) add(`fx.${kind}`);
+  return [...out];
+}
+
+/**
  * The shared input → the core's buttons (gf/forge/host.js BTN; forge-core cmd::BTN_*): held this frame, and pressed
  * (went down) this frame. primary fires, secondary is the alternate fire, interact, jump; Shift evades (its press), R
  * reloads, V is a quick melee, 1-4 pick a weapon slot, the wheel the next or previous weapon.
@@ -498,7 +594,7 @@ function unsupported(ctx, game, e) {
   d.id = 'gf-forge-unsupported';
   d.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0b0e18;color:#fff;font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px;z-index:20;text-align:center';
   const link = location.href;
-  d.innerHTML = `<div style="max-width:440px"><h1 style="margin:0 0 10px;font-size:28px;font-weight:850"></h1><p style="margin:0 0 14px;opacity:.9">This game draws with WebGPU, which this browser does not offer here. Open it in Chrome or Edge on a computer, Chrome on Android, or Safari 26 or newer.</p><p style="margin:0 0 16px"><a id="gf-forge-open" style="color:#ffb27a;word-break:break-all"></a></p><button id="gf-forge-copy" style="font:700 16px system-ui;padding:12px 18px;border-radius:12px;border:0;background:#ff7a59;color:#fff;cursor:pointer">Copy the link</button></div>`;
+  d.innerHTML = `<div style="max-width:440px"><h1 style="margin:0 0 10px;font-size:28px;font-weight:850"></h1><p style="margin:0 0 14px;opacity:.9">This game draws with WebGPU or WebGL2, and this browser offers neither here. Open it in a current Chrome, Edge, Safari or Firefox.</p><p style="margin:0 0 16px"><a id="gf-forge-open" style="color:#ffb27a;word-break:break-all"></a></p><button id="gf-forge-copy" style="font:700 16px system-ui;padding:12px 18px;border-radius:12px;border:0;background:#ff7a59;color:#fff;cursor:pointer">Copy the link</button></div>`;
   d.querySelector('h1').textContent = title;
   const a = d.querySelector('#gf-forge-open'); a.href = link; a.textContent = link; a.target = '_blank'; a.rel = 'noopener';
   d.querySelector('#gf-forge-copy').onclick = () => navigator.clipboard?.writeText(link).catch(() => {});

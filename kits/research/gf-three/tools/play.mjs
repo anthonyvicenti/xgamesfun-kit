@@ -10,6 +10,9 @@
 // tools/lib/play-script.mjs (start, hold, press, move, look, wait, shot, snap, until, again, click). Prints one line per
 // step (the phase, the round clock, my score and state, the HUD meters and hints, any screenshot path) and writes
 // <out>/play.json (every step with its state, the console errors) and <out>/NN-<name>.jpg screenshots.
+// A friend (gf-forge wave 3): {"do":"start","friend":true} hosts the game on its own friends page (the kit's party server,
+// real WebRTC) and joins a second player from a second window; a step with "who":"friend" plays that player, and
+// {"do":"face"} turns both to look at each other, so a co-op picture has the friend in it. A game folder only.
 // A 60 s script takes about a minute. GF_PLAY_SOFTWARE=1 renders in software (slow; for a machine with no GPU). A scenic
 // game (CONTRACT §8) plays in WebGPU Chrome, a party game in WebGL Chrome; --gpu picks one.
 // Exit: 0 every step ran, 1 a step failed (play.json still written), 2 bad usage or a bad script.
@@ -18,7 +21,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseScript } from './lib/play-script.mjs';
+import { parseScript, judgeExpect } from './lib/play-script.mjs';
 import { launchChrome, GPU_TROUBLE } from '../../foundations/qa/browser.mjs';
 import { launchForGame, engineOfGame } from './lib/paths.mjs';
 import { POINTER_LOCK } from './lib/forge-feel-check.mjs';
@@ -120,7 +123,13 @@ export async function play(target, script, { out, log = console.log, size = '128
   let srv = null, browser = null;
   try {
     let url = target;
-    if (!isUrl) { const { serve } = await import('./serve.mjs'); srv = await serve(target, { port: 0 }); url = srv.url; }
+    // a friend (wave 3): the game's own friends page, hosted and joined over real WebRTC (the kit's party server, as
+    // verify's two-player checks use it); a round alone: the game served as it is
+    const friendly = parsed.steps[0]?.friend === true;
+    if (friendly && isUrl) throw new Error('a friend needs a game folder: a link is somebody else\'s room to host (play it alone, and say the friend could not be tried)');
+    let party = null;
+    if (friendly) { const { startParty } = await import('../../multiplayer/party/lib.mjs'); srv = party = await startParty({ dir: resolve(target), port: 0 }); url = party.url; }
+    else if (!isUrl) { const { serve } = await import('./serve.mjs'); srv = await serve(target, { port: 0 }); url = srv.url; }
     url = String(url).replace(/[?#].*$/, '');
     const software = process.env.GF_PLAY_SOFTWARE === '1';
     // the game's own renderer (CONTRACT §8): WebGPU for a scenic game, WebGL for a party game. A URL says which through
@@ -134,39 +143,53 @@ export async function play(target, script, { out, log = console.log, size = '128
     // a phone ({"do":"start","touch":true}): a touch screen at --size, fingers through CDP touch events
     const touch = parsed.steps[0]?.touch === true;
     const forge = (engine ?? (isUrl ? null : await engineOfGame(resolve(target)))) === 'forge';
-    const ctx = await browser.newContext({ viewport: { width: w, height: h }, ...(touch ? { hasTouch: true, isMobile: true, deviceScaleFactor: 2 } : {}) });
     // a forge game is first person, and headless Chrome grants no pointer lock: emulate it, so the mouse's real
     // relative motion turns the view (as every forge check does: tools/lib/forge-feel-check.mjs POINTER_LOCK)
     const emulatedLock = forge && !touch && !headed;
-    if (emulatedLock) await ctx.addInitScript(POINTER_LOCK);
-    const page = await ctx.newPage();
-    const cdp = touch ? await ctx.newCDPSession(page) : null;
-    if (touch) rec.touch = true;
-    page.on('pageerror', e => rec.errors.push(String(e.message).slice(0, 300)));
-    page.on('console', m => { if (m.type() === 'error' && !GPU_TROUBLE.test(m.text())) rec.errors.push(m.text().slice(0, 300)); });
     const center = { x: Math.round(w / 2), y: Math.round(h / 2) };
-    const cursor = { ...center };
-    const observe = () => page.evaluate(OBSERVE).catch(e => ({ phase: null, error: e.message.split('\n')[0] }));
-    const phase = () => page.evaluate(() => window.__game?.phase ?? null).catch(() => null);
+    /** A window with a player in it. `framed`: the game is in the friends page's frame (the page around it is the room's). */
+    const open = async (who, framed, round) => {
+      const ctx = await browser.newContext({ viewport: { width: w, height: h }, ...(touch ? { hasTouch: true, isMobile: true, deviceScaleFactor: 2 } : {}) });
+      if (emulatedLock) await ctx.addInitScript(POINTER_LOCK);
+      if (round) await ctx.addInitScript(o => { globalThis.__GF_ASSET_OVERRIDES = o; }, { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: round }] });
+      const page = await ctx.newPage();
+      page.on('pageerror', e => rec.errors.push(`${who === 'me' ? '' : `${who}: `}${String(e.message).slice(0, 300)}`));
+      page.on('console', m => { if (m.type() === 'error' && !GPU_TROUBLE.test(m.text())) rec.errors.push(`${who === 'me' ? '' : `${who}: `}${m.text().slice(0, 300)}`); });
+      const cursor = { ...center };
+      // where the game is: the page itself, or its frame inside the friends page
+      const G = () => (framed ? page.frames().find(f => f.parentFrame() === page.mainFrame()) ?? page : page);
+      const down = async k => { if (k === 'Mouse') await page.mouse.down({ button: 'left' }); else if (k === 'MouseRight') await page.mouse.down({ button: 'right' }); else await page.keyboard.down(k); };
+      const up = async k => { if (k === 'Mouse') await page.mouse.up({ button: 'left' }); else if (k === 'MouseRight') await page.mouse.up({ button: 'right' }); else await page.keyboard.up(k); };
+      // Turning: with the mouse taken (pointer lock) the game reads the movement between mouse events. Under the emulated
+      // lock the cursor is still a cursor: before it would leave the screen it goes back to the middle with the lock
+      // released, so a long turn never stops at an edge
+      const recentre = async () => {
+        await G().evaluate(() => document.exitPointerLock()).catch(() => {});
+        Object.assign(cursor, center); await page.mouse.move(cursor.x, cursor.y);
+        await G().evaluate(() => document.getElementById('gf-canvas')?.requestPointerLock()).catch(() => {});
+      };
+      const turn = async (dx, dy, ms = 0) => {
+        const n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 30)), each = ms / n;
+        for (let i = 1; i <= n; i++) {
+          if (emulatedLock && (cursor.x + dx / n < 60 || cursor.x + dx / n > w - 60 || cursor.y + dy / n < 60 || cursor.y + dy / n > h - 60)) await recentre();
+          cursor.x += dx / n; cursor.y += dy / n; await page.mouse.move(cursor.x, cursor.y); if (each) await sleep(each);
+        }
+      };
+      return {
+        who, ctx, page, cursor, G, down, up, turn,
+        observe: () => G().evaluate(OBSERVE).catch(e => ({ phase: null, error: e.message.split('\n')[0] })),
+        phase: () => G().evaluate(() => window.__game?.phase ?? null).catch(() => null),
+        takeMouse: async () => { await page.mouse.click(cursor.x, cursor.y); await sleep(250); return G().evaluate(() => document.pointerLockElement != null).catch(() => false); },
+      };
+    };
+    const me = await open('me', friendly, parsed.steps[0]?.round);
+    const friend = friendly ? await open('friend', true, parsed.steps[0]?.round) : null;
+    const page = me.page, cursor = me.cursor;
+    const cdp = touch ? await me.ctx.newCDPSession(page) : null;
+    if (touch) rec.touch = true;
+    const observe = me.observe, phase = me.phase;
     const until = async (want, seconds) => { const end = Date.now() + seconds * 1000; for (;;) { const p = await phase(); if (want.includes(p)) return p; if (Date.now() > end) throw new Error(`the game did not reach ${want.join(' or ')} within ${seconds} s (it is in ${p ?? 'no phase'})`); await sleep(200); } };
-    const shoot = async (n, name) => { const f = `${String(n).padStart(2, '0')}-${name}.jpg`; await page.screenshot({ path: join(outDir, f), type: 'jpeg', quality: 80 }); rec.shots.push(f); return join(outDir, f); };
-    const down = async k => { if (k === 'Mouse') await page.mouse.down({ button: 'left' }); else if (k === 'MouseRight') await page.mouse.down({ button: 'right' }); else await page.keyboard.down(k); };
-    const up = async k => { if (k === 'Mouse') await page.mouse.up({ button: 'left' }); else if (k === 'MouseRight') await page.mouse.up({ button: 'right' }); else await page.keyboard.up(k); };
-    // Turning: with the mouse taken (pointer lock) the game reads the movement between mouse events. Under the emulated
-    // lock the cursor is still a cursor: before it would leave the screen it goes back to the middle with the lock
-    // released, so a long turn never stops at an edge
-    const recentre = async () => {
-      await page.evaluate(() => document.exitPointerLock()).catch(() => {});
-      Object.assign(cursor, center); await page.mouse.move(cursor.x, cursor.y);
-      await page.evaluate(() => document.getElementById('gf-canvas')?.requestPointerLock()).catch(() => {});
-    };
-    const turn = async (dx, dy, ms = 0) => {
-      const n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 30)), each = ms / n;
-      for (let i = 1; i <= n; i++) {
-        if (emulatedLock && (cursor.x + dx / n < 60 || cursor.x + dx / n > w - 60 || cursor.y + dy / n < 60 || cursor.y + dy / n > h - 60)) await recentre();
-        cursor.x += dx / n; cursor.y += dy / n; await page.mouse.move(cursor.x, cursor.y); if (each) await sleep(each);
-      }
-    };
+    const shoot = async (n, name, A = me) => { const f = `${String(n).padStart(2, '0')}-${name}.jpg`; await A.page.screenshot({ path: join(outDir, f), type: 'jpeg', quality: 80 }); rec.shots.push(f); return join(outDir, f); };
     // Fingers (a phone): touch points through CDP, so two can be down at once (walk while looking or firing)
     const fingers = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map((p, id) => ({ x: Math.round(p[0]), y: Math.round(p[1]), id, radiusX: 8, radiusY: 8, force: 1 })) });
     const dragFor = async (st) => {
@@ -179,24 +202,53 @@ export async function play(target, script, { out, log = console.log, size = '128
         return st.shot ? await shoot(rec.steps.length + 1, st.shot) : null;
       } finally { await fingers('touchEnd', []).catch(() => {}); }
     };
-    const holdFor = async (st) => {
-      for (const k of st.keys) await down(k);
+    const holdFor = async (st, A = me) => {
+      for (const k of st.keys) await A.down(k);
       try {
-        if (st.look) await turn(st.look.dx, st.look.dy, st.seconds * 1000 * 0.9);
+        if (st.look) await A.turn(st.look.dx, st.look.dy, st.seconds * 1000 * 0.9);
         else await sleep(st.seconds * 1000);
-        return st.shot ? await shoot(rec.steps.length + 1, st.shot) : null;
-      } finally { for (const k of [...st.keys].reverse()) await up(k).catch(() => {}); }
+        return st.shot ? await shoot(rec.steps.length + 1, st.shot, A) : null;
+      } finally { for (const k of [...st.keys].reverse()) await A.up(k).catch(() => {}); }
     };
-    const takeMouse = async () => { await page.mouse.click(cursor.x, cursor.y); await sleep(250); return page.evaluate(() => document.pointerLockElement != null).catch(() => false); };
+    /** With a friend: host the room on the game's own friends page, join the friend with the invite, start the round. */
+    const startFriends = async () => {
+      const wait = async (fn, seconds, what) => { const end = Date.now() + seconds * 1000; for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() > end) throw new Error(`the friends page did not get to ${what} within ${seconds} s`); await sleep(200); } };
+      await me.page.goto(`${party.partyUrl}?max=300`, { waitUntil: 'load', timeout: 90000 });
+      await wait(() => me.page.locator('#gfp-host').isVisible(), 30, 'its home');
+      await me.page.fill('#gfp-name', 'Me'); await me.page.click('#gfp-host');
+      const invite = await wait(async () => (await me.page.locator('#mp-invite').isVisible()) && (await me.page.inputValue('#mp-invite')), 30, 'a room with an invite');
+      await friend.page.goto(invite, { waitUntil: 'load', timeout: 90000 });
+      await wait(() => friend.page.locator('#gfp-join').isVisible(), 30, 'the friend\'s join');
+      await friend.page.fill('#gfp-name', 'Friend'); await friend.page.click('#gfp-join');
+      await wait(() => me.page.locator('#mp-start').isEnabled(), 40, 'both players in the room');
+      await shoot(0, 'room');
+      await me.page.click('#mp-start');
+      await wait(async () => (await me.G().evaluate(() => window.__game?.snapshot?.()?.net?.started).catch(() => false)) && (await friend.G().evaluate(() => window.__game?.snapshot?.()?.net?.started).catch(() => false)), 120, 'both games started');
+      await until(['playing'], 30);
+      await sleep(1200);
+      // the keys go to each game's canvas (no click: each player looks where it spawned until a step turns it)
+      for (const A of [me, friend]) { await A.G().focus('#gf-canvas').catch(() => {}); await A.page.mouse.move(center.x, center.y); }
+    };
+    /** Both players turn to look at each other where they stand, as each would with the mouse (QA: the core's own look
+     *  command, window.__game.forge.face; a first-person forge game). */
+    const face = async () => {
+      const at = async A => A.G().evaluate(() => { const g = window.__game; const o = g?.forge?.players?.().find(p => !p.local) ?? null; if (!o || typeof g.forge.face !== 'function') return null; g.forge.face(o.x, o.y + 1.25, o.z); const m = g.forge.players().find(p => p.local); return { friend: [o.x, o.y, o.z].map(v => Math.round(v * 100) / 100), apart: Math.round(Math.hypot(o.x - m.x, o.z - m.z) * 100) / 100 }; }).catch(() => null);
+      const a = await at(me), b = await at(friend);
+      if (!a || !b) throw new Error('"face" turns two first-person players of a forge game; this game has no friend in it or no first-person look to turn');
+      await sleep(350);
+      return { apart: a.apart };
+    };
 
+    const snaps = new Map();       // the observation at each snap (and at the start), for an expect's "since"
     for (const [i, st] of parsed.steps.entries()) {
       const n = i + 1, ts = Date.now(), entry = { n, ...st };
+      const A = st.who === 'friend' ? friend : me;
       let shot = null;
       try {
         switch (st.do) {
           case 'start': {
+            if (friendly) { await startFriends(); entry.friend = true; entry.mouseTaken = false; rec.friend = true; rec.notes.push('two players in one game: every step plays me (the host) unless it says "who":"friend"; "face" turns both to look at each other'); break; }
             const q = new URLSearchParams({ seed: String(st.seed), bots: String(st.bots), ...(st.quality ? { quality: st.quality } : {}) });
-            if (st.round) await page.addInitScript(o => { globalThis.__GF_ASSET_OVERRIDES = o; }, { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: st.round }] });
             await page.goto(`${url}?${q}`, { waitUntil: 'load', timeout: 90000 });
             await until(['lobby', 'countdown', 'playing'], 90);
             shot = await shoot(0, 'lobby');
@@ -209,23 +261,35 @@ export async function play(target, script, { out, log = console.log, size = '128
             // a phone has no mouse to take: the fingers are the input from here on
             if (touch) { entry.mouseTaken = false; rec.notes.push('a phone: a touch screen, no mouse and no keys; use tap and drag'); break; }
             await page.mouse.move(center.x, center.y); Object.assign(cursor, center);
-            entry.mouseTaken = await takeMouse();
+            entry.mouseTaken = await me.takeMouse();
+            snaps.set('start', await me.G().evaluate(() => { try { return JSON.parse(JSON.stringify(window.__game?.snapshot?.() ?? null)); } catch { return null; } }).catch(() => null));
             // the follow camera (CONTRACT §8) never takes the mouse: the cursor itself aims, so `look` moves the aim point
             entry.cursorAims = !entry.mouseTaken && await page.evaluate(() => [...document.querySelectorAll('canvas')].some(c => c.style.cursor === 'crosshair')).catch(() => false);
             if (entry.cursorAims) rec.notes.push('the mouse cursor aims (a camera from above that follows the player): `look` moves the cursor, and so the aim, across the screen');
             else if (!entry.mouseTaken) rec.notes.push('the page did not take the mouse (no pointer lock): looking turns only while a button is held');
             break;
           }
-          case 'hold': case 'move': shot = await holdFor(st); break;
+          case 'hold': case 'move': shot = await holdFor(st, A); break;
           case 'press':
-            for (let k = 0; k < st.times; k++) { await down(st.key); await sleep(90); await up(st.key); await sleep(60); }
-            if (st.shot) { await sleep(250); shot = await shoot(n, st.shot); }
+            for (let k = 0; k < st.times; k++) { await A.down(st.key); await sleep(90); await A.up(st.key); await sleep(60); }
+            if (st.shot) { await sleep(250); shot = await shoot(n, st.shot, A); }
             break;
-          case 'look': await turn(st.dx, st.dy, 250); break;
-          case 'wait': await sleep(st.seconds * 1000); break;
-          case 'shot': shot = await shoot(n, st.name); break;
-          case 'snap': break;
+          case 'look': await A.turn(st.dx, st.dy, 250); break;
+          case 'wait': case 'step': await sleep(st.seconds * 1000); break;     // the play-tester plays in real time: a step is a wait here
+          case 'expect': {
+            const now = await me.G().evaluate(() => { try { return JSON.parse(JSON.stringify(window.__game?.snapshot?.() ?? null)); } catch { return null; } }).catch(() => null);
+            const j = judgeExpect(st, now, snaps.get(st.since ?? 'start') ?? null);
+            entry.expect = { ok: j.ok, line: j.line };
+            if (!j.ok) throw new Error(`expect: ${j.line}`);
+            break;
+          }
+          case 'shot': shot = await shoot(n, st.name, A); break;
+          case 'snap': snaps.set(st.name, await A.G().evaluate(() => { try { return JSON.parse(JSON.stringify(window.__game?.snapshot?.() ?? null)); } catch { return null; } }).catch(() => null)); break;
           case 'until': await until([st.phase], st.timeout); break;
+          case 'face':
+            if (st.walk) { await friend.down('KeyW'); await sleep(st.walk * 1000); await friend.up('KeyW'); await sleep(500); }
+            entry.faced = await face();
+            break;
           case 'again': {
             const b = await page.locator('#gf-again').boundingBox().catch(() => null);
             if (!b) throw new Error('no "Play again" button on screen (is the round over? this game may not replay)');
@@ -233,7 +297,7 @@ export async function play(target, script, { out, log = console.log, size = '128
             await until(['countdown', 'playing'], 15); await until(['playing'], 15);
             if (touch) { entry.mouseTaken = false; break; }
             await page.mouse.move(center.x, center.y); Object.assign(cursor, center);
-            entry.mouseTaken = await takeMouse();
+            entry.mouseTaken = await me.takeMouse();
             break;
           }
           case 'click': await page.mouse.click(st.x, st.y, { button: st.button }); Object.assign(cursor, { x: st.x, y: st.y }); break;
@@ -241,12 +305,13 @@ export async function play(target, script, { out, log = console.log, size = '128
           case 'drag': shot = await dragFor(st); break;
         }
       } catch (e) { entry.error = e.message.split('\n')[0]; rec.ok = false; }
-      const state = await observe();
+      const state = await A.observe();
       entry.state = st.do === 'snap' ? state : { phase: state.phase, t: state.t, left: state.left, me: state.me, hud: state.hud ? { meters: state.hud.meters, prompt: state.hud.prompt, banner: state.hud.banner, toasts: state.hud.toasts, card: state.hud.card } : null, ...(state.feel ? { feel: state.feel } : {}) };
       if (shot) entry.shot = shot;
       entry.took = r1((Date.now() - ts) / 1000);
       rec.steps.push(entry);
-      const what = st.do === 'hold' || st.do === 'move' ? `${st.do} ${st.keys.join('+')} ${st.seconds}s` : st.do === 'press' ? `press ${st.key}${st.times > 1 ? ` x${st.times}` : ''}` : st.do === 'look' ? `look ${st.dx},${st.dy}` : st.do === 'wait' ? `wait ${st.seconds}s` : st.do === 'until' ? `until ${st.phase}` : st.do === 'shot' || st.do === 'snap' ? `${st.do} ${st.name}` : st.do === 'tap' ? `tap ${st.x},${st.y} ${st.seconds}s` : st.do === 'drag' ? `drag ${st.from.join(',')}→${st.to.join(',')}${st.with ? ` with ${st.with.from.join(',')}→${st.with.to.join(',')}` : ''} ${st.seconds}s` : st.do;
+      const whose = st.who === 'friend' ? 'the friend: ' : '';
+      const what = whose + (st.do === 'hold' || st.do === 'move' ? `${st.do} ${st.keys.join('+')} ${st.seconds}s` : st.do === 'press' ? `press ${st.key}${st.times > 1 ? ` x${st.times}` : ''}` : st.do === 'look' ? `look ${st.dx},${st.dy}` : st.do === 'wait' ? `wait ${st.seconds}s` : st.do === 'until' ? `until ${st.phase}` : st.do === 'shot' || st.do === 'snap' ? `${st.do} ${st.name}` : st.do === 'tap' ? `tap ${st.x},${st.y} ${st.seconds}s` : st.do === 'drag' ? `drag ${st.from.join(',')}→${st.to.join(',')}${st.with ? ` with ${st.with.from.join(',')}→${st.with.to.join(',')}` : ''} ${st.seconds}s` : st.do === 'face' ? `face each other${entry.faced ? ` (${entry.faced.apart} m apart)` : ''}` : st.do);
       log(`#${n} ${what} → ${entry.error ? `FAILED: ${entry.error} | ` : ''}${stateLine(state)}${shot ? ` | shot ${shot}` : ''}`);
       if (st.do === 'snap') log(`   snap ${st.name}: ${JSON.stringify({ players: state.players?.map(p => `${p.you ? 'YOU' : p.name} ${p.score}${p.bot ? ' (bot)' : ''} ${p.anim ?? ''}${p.control === false ? ' not-in-control' : ''}`), hud: state.hud ? { help: state.hud.help, scores: state.hud.scores, crosshair: state.hud.crosshair } : null, results: state.results })}`);
       if (entry.error || (state.phase === null && st.do !== 'start')) { if (!entry.error) { entry.error = 'the game is gone from the page'; rec.ok = false; } break; }

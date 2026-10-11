@@ -64,13 +64,15 @@ node {{KIT_TOOLS}}/play.mjs {{GAME}} --size 844x390 --script {{DIR}}/scratch/pho
 
 Start with `{"do":"start","touch":true,"bots":0}`; from then on there are fingers, not keys: `{"do":"tap","x":760,"y":300,"shot":"fired"}` and `{"do":"drag","from":[110,300],"to":[110,220],"seconds":1.5,"with":{"from":[600,200],"to":[540,200]},"shot":"walk-and-look"}` (a finger pressed, slid and held; `with` is a second finger at the same time). Take a screenshot first and read where the buttons are before you tap: never guess a button's place.
 
-**A friend.** When `{{GAME}}` is a folder (not a link), two players in one game:
+**A friend.** When `{{GAME}}` is a folder (not a link), two players in one game, through the game's own friends page:
 
 ```
-node {{KIT_TOOLS}}/../../gf-forge/tools/coop-check.mjs {{GAME}} --players 2 --out {{DIR}}/runs/friend
+node {{KIT_TOOLS}}/play.mjs {{GAME}} --script {{DIR}}/scratch/friend.json --out {{DIR}}/runs/friend
 ```
 
-It hosts, joins a friend through the game's own friends page, walks both and saves one screenshot per player: each player's own view, straight ahead. Both start side by side facing the same way, so **a picture often does not have the friend in it at all**. Judge the pictures, not its PASS line (that line is about positions, not about what anyone saw): a friend promise passes only when a picture shows the other player as a character; when neither picture does, answer `"pass": null` and say the friend was never in view. The scoreboard listing two names is not seeing a friend. When `{{GAME}}` is a link you cannot run this at all: `null`, and say so.
+Start with `{"do":"start","friend":true,"round":120}`: the tool hosts a room, joins a second player (the friend) from a second window and starts the round. There are no bots. Every step then plays you, the host, unless it says `"who":"friend"`. The two of you start side by side facing the same way, so the next step is `{"do":"face","walk":0.5}`: the friend walks forward for half a second, then both turn to look at each other (the tool turns each view for you, as each player would with the mouse: it is staging, not a control you test). Then `{"do":"shot","name":"my-friend"}` is your screen and `{"do":"shot","name":"their-view","who":"friend"}` is theirs. The friend can `move`, `hold`, `press` and `look` too (`{"do":"hold","key":"Mouse","seconds":0.3,"who":"friend","shot":"friend-fires"}`); `face` again after either of you has moved. To try a revive: let the friend stand in the wave until your HUD's friend row says they are down, `face`, walk to them and hold `KeyE` for 3 s with a screenshot.
+
+Judge the pictures: a friend promise passes only when your picture shows the other player as a character (a body in their colour, their name over it, a weapon in its hand), and fails when you faced them with nothing between you and they are not there. The scoreboard listing two names is not seeing a friend. When `{{GAME}}` is a link you cannot run this at all: `"pass": null`, and say so.
 
 ## What to try (about seven runs; adapt the order to the game)
 

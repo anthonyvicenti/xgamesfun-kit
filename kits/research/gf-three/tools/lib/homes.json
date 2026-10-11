@@ -272,6 +272,13 @@
       "run": "release",
       "rule": "A round that goes live can be watched by a viewer, who then joins.",
       "fix": "A kit test: do not add players in rules.js, and do not throw on a viewer's copy. When it fails in a release run, fix the kit's watch path (gf/mp)."
+    },
+    "35": {
+      "name": "the game's own tests",
+      "home": "game",
+      "run": "build",
+      "rule": "Every test in the game's tests/ folder passes: each is one of this game's own promises (its loop, its scoring, a mechanic as this game has it, its hook, an accept item) as a play script with expect steps.",
+      "fix": "The detail names the test, the promise's words and the expect that did not hold. Fix the game so the promise holds (rules.js, config/game.json), or, when the promise itself changed, the test with it; then re-run --check 35 (a few seconds)."
     }
   },
   "brief": {

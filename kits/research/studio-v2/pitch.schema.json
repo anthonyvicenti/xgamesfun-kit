@@ -263,8 +263,7 @@
        "items": {
         "type": "object",
         "required": [
-         "name",
-         "urls"
+         "name"
         ],
         "additionalProperties": false,
         "properties": {
@@ -273,16 +272,22 @@
           "minLength": 1,
           "maxLength": 80
          },
+         "bank": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The id of the research bank entry that is our own study of this game (bank.json: \"study\": true). With it no url is needed: the checker takes the study as the source. Without it the checker asks for two sites."
+         },
          "urls": {
           "type": "array",
-          "minItems": 2,
+          "minItems": 0,
           "maxItems": 4,
           "items": {
            "type": "string",
            "maxLength": 300,
            "pattern": "^https?://"
           },
-          "description": "The store page and at least one gameplay description from another site."
+          "description": "The store page and at least one gameplay description from another site (two sites, checked), unless bank names our own study of the game."
          },
          "loop": {
           "type": "string",

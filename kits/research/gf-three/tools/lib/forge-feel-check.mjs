@@ -10,6 +10,18 @@
 // (the core's kill log: the median at least MIN_HITS), and for a hit that did not kill, from the player's own screen:
 // the core flashed the body (its FLASH event: the renderer draws it), a damage number popped within NEAR px of it, and
 // at least CHANGE_MIN of the pixels around it changed beyond the noise of the frames before. No weapon: passes (n/a).
+// Since wave 3 (track S3, 2026-10-10; regressions/forge-one-swing-kills) every weapon a player can hold in hand is
+// judged, not only the one in hand when the round starts: the wave 1b room's blade (40 against 30 hit points) killed in
+// one swing and its charged focus in one shot, and the check never drew either. A row can be held when it starts in
+// hand (`start`), a card gives it (spec.forge.cards[].weapon), or the rules arm players themselves (rules.js names
+// FEEL_OP.LOADOUT, GIVE or PICKUP: then any row may be). On the staged page each of them starts in the player's hands
+// (its `start` set true the way Studio overrides a value) and is brought up with its own key; a melee row walks in to
+// its reach first, a charge row holds the trigger its whole interval. Each row's median hits per kill must reach
+// MIN_HITS. The quick melee (V) swings the first melee row over the gun: a row that is only that is noted with its
+// arithmetic and not failed (feel target 11 has the quick melee kill on contact); held in hand, it is judged.
+// A weapon that fires several pellets a pull (a scattergun) is judged by one pellet: the core's kill log counts a
+// blast on a body as one hit, and a blast that fells a basic enemy at 6 m is what the weapon is for; it fails when a
+// single pellet's damage reaches the enemy's health (then every pellet kills, at any range).
 //
 // 10, the feel half of fair play. What takes control away from a forge player: the feel's own (an evade's dash, a
 // knock-down by a brute's slam, which the core holds to 0.8 s once in 3 s, death) and whatever the rules do (switching
@@ -19,11 +31,33 @@
 // ground). The samples go through fair-check's measure (control while alive: the longest stretch without it, the
 // share with it). Fails as fair play does: a stretch over downSeconds + 1 s, or under 85% of the time in control.
 // (Until 2026-10-10 only evading and dead were read: a knock-down and a stun by the rules both counted as control.)
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { measure as fairMeasure, FAIR_LIMITS } from './fair-check.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const r2 = v => Math.round(v * 100) / 100;
-export const FORGE_HIT_LIMITS = { KILLS: 3, MIN_HITS: 2, SECONDS: 30, NEAR: 120, CHANGE_MIN: 0.03, PIXEL_T: 60, AIM: 0.012, SENS: 0.0024 };
+export const FORGE_HIT_LIMITS = { KILLS: 3, MIN_HITS: 2, SECONDS: 30, NEAR: 120, CHANGE_MIN: 0.03, PIXEL_T: 60, AIM: 0.012, SENS: 0.0024, KEY_TRIES: 4 };
+
+/**
+ * The weapons rows a player can hold in hand (pure): a row that starts in hand, one a weapon card gives, or, when the
+ * rules arm players themselves (rules.js names FEEL_OP.LOADOUT, GIVE or PICKUP), any row. game: config/game.json (its
+ * forge.weapons are the filled rows). → [{row, id, name, kind, slot, why}]
+ */
+export function holdableWeapons(game, rulesText = '') {
+  const W = game?.forge?.weapons ?? [];
+  const given = new Set((game?.forge?.cards ?? []).filter(c => c?.kind === 'weapon' && c.weapon).map(c => c.weapon));
+  const armed = /FEEL_OP\s*\.\s*(LOADOUT|GIVE|PICKUP)\b/.test(String(rulesText));
+  const out = [];
+  W.forEach((w, row) => {
+    const why = w?.start !== false ? 'in hand at the start' : given.has(w.id) ? 'a card gives it' : armed ? 'the rules arm players' : null;
+    if (why) out.push({ row, id: w.id, name: w.name || w.id, kind: w.kind ?? 'projectile', slot: Number(w.slot) || 1, why });
+  });
+  return out;
+}
+/** The row the quick melee (V) swings: the table's first melee row (forge-feel config.rs), or -1. (pure) */
+export const quickMeleeRow = game => (game?.forge?.weapons ?? []).findIndex(w => w?.kind === 'melee');
+const median = list => { const s = [...list].sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) / 2)] : null; };
 export const FORGE_FAIR_SECONDS = 20;
 
 /** Headless Chrome grants no pointer lock: emulate it so real relative mouse motion reaches the look (the reference
@@ -88,16 +122,28 @@ async function change(browser, before, after, box, T) {
   } finally { await page.close(); }
 }
 
-/** The verdict from the measurements (pure). m: {applies, why, seconds, shots, hits, kills: [hits per kill], hit: {flash, number, change, noise} | null}. */
+/**
+ * The verdict from the measurements (pure). m: {applies, why, seconds, shots, hits, kills: [hits per kill], targets,
+ * hit: {flash, number, change, noise} | null, rows?: [{id, name, slot, kind, why, inHand, shots, hits, kills}] (every
+ * weapon a player can hold; without it the totals are one row; pellets and damage: a row with several pellets a pull is
+ * judged by one pellet against hp), hp (the staged target's hit points), quick?: {name, damage, hp, held} (the quick
+ * melee's row)}.
+ */
 export function judgeForgeHits(m, L = FORGE_HIT_LIMITS) {
   if (!m.applies) return { ok: true, detail: m.why };
+  const rows = m.rows?.length ? m.rows : [{ id: null, name: null, inHand: true, shots: m.shots ?? 0, hits: m.hits ?? 0, kills: m.kills ?? [] }];
+  const judged = rows.filter(r => r.inHand !== false), unheld = rows.filter(r => r.inHand === false);
+  const shots = judged.reduce((n, r) => n + (r.shots ?? 0), 0), hits = judged.reduce((n, r) => n + (r.hits ?? 0), 0);
   const fails = [];
-  const per = [...(m.kills ?? [])].sort((a, b) => a - b), med = per.length ? per[Math.floor((per.length - 1) / 2)] : null;
   if (!m.targets) fails.push(`no target stood in front of the player in ${m.seconds} s (?gf-demo=feel.hit: gf/forge/feel.js stages it)`);
-  else if (!m.hits) fails.push(`${m.shots} shots at the target under the crosshair and none hit it`);
-  if (per.length && med < L.MIN_HITS) fails.push(`${med} hit${med === 1 ? '' : 's'} per kill (${per.join('/')}): every hit kills, so nobody sees a hit land (the creator: "The zombies are instant killed to I couldn't even tell what was happened"). Keep the weapon's damage (spec.forge.weapons[].damage, times its crit multiplier on a head) below the enemies' health (spec.forge.enemies[].health) so a basic enemy takes 2-4 hits`);
+  else if (!hits) fails.push(`${shots} shots at the target under the crosshair and none hit it`);
+  const blast = r => (r.pellets ?? 1) > 1 && Number.isFinite(r.damage) && Number.isFinite(m.hp);
+  for (const r of judged.filter(r => blast(r) && r.damage >= m.hp)) fails.push(`one pellet of ${r.name} (key ${r.slot}; ${r.why}) does ${r.damage} against ${m.hp} hit points: every hit kills, so nobody sees a hit land`);
+  const oneHit = judged.filter(r => !blast(r) && r.kills.length && median(r.kills) < L.MIN_HITS);
+  for (const r of oneHit) { const med = median(r.kills); fails.push(`${med} hit${med === 1 ? '' : 's'} per kill (${r.kills.join('/')})${r.name ? ` with ${r.name} (key ${r.slot}; ${r.why})` : ''}: every hit kills, so nobody sees a hit land`); }
+  if (oneHit.length || judged.some(r => blast(r) && r.damage >= m.hp)) fails.push('the creator: "The zombies are instant killed to I couldn\'t even tell what was happened". Keep each weapon\'s damage (spec.forge.weapons[].damage, times its crit multiplier on a head; a charge weapon at its full charge) below the enemies\' health (spec.forge.enemies[].health) so a basic enemy takes 2-4 hits from any weapon a player can hold');
   const h = m.hit;
-  if (m.hits && (med ?? Infinity) >= L.MIN_HITS) {
+  if (hits && judged.some(r => !blast(r) && (median(r.kills) ?? Infinity) >= L.MIN_HITS)) {
     if (!h) fails.push('no hit that left the target standing was seen on the player\'s screen');
     else {
       const why = [];
@@ -107,24 +153,39 @@ export function judgeForgeHits(m, L = FORGE_HIT_LIMITS) {
       if (why.length) fails.push(`a hit that did not kill did not read: ${why.join('; ')}`);
     }
   }
-  const head = `${per.length} kill${per.length === 1 ? '' : 's'} in ${m.seconds} s, ${per.length ? `${per.join('/')} hits per kill (median ${med})` : 'no kill'}; ${m.hits} hit${m.hits === 1 ? '' : 's'} from ${m.shots} shot${m.shots === 1 ? '' : 's'}`;
+  const per = r => { const med = median(r.kills); return `${r.kills.length} kill${r.kills.length === 1 ? '' : 's'}${r.kills.length ? `, ${r.kills.join('/')} hits per kill (median ${med})` : ''}; ${r.hits} hit${r.hits === 1 ? '' : 's'} from ${r.shots} shot${r.shots === 1 ? '' : 's'}${blast(r) ? ` (${r.pellets} pellets a pull, ${r.damage} each against ${m.hp} hit points: judged by one pellet)` : ''}`; };
+  const head = judged.length === 1 && !judged[0].name
+    ? `${judged[0].kills.length} kill${judged[0].kills.length === 1 ? '' : 's'} in ${m.seconds} s, ${judged[0].kills.length ? `${judged[0].kills.join('/')} hits per kill (median ${median(judged[0].kills)})` : 'no kill'}; ${hits} hit${hits === 1 ? '' : 's'} from ${shots} shot${shots === 1 ? '' : 's'}`
+    : `${judged.length} weapon${judged.length === 1 ? '' : 's'} a player can hold, each in hand, in ${m.seconds} s: ${judged.map(r => `${r.name} ${per(r)}`).join(' · ') || 'none'}`;
+  const notHeld = unheld.length ? `; not judged (its key ${unheld.map(r => `${r.slot} never brought ${r.name} into the hand on the staged page`).join(', ')})` : '';
+  const q = m.quick, quick = q ? `; the quick melee (V) swings ${q.name}: ${q.damage} a hit against ${q.hp} hit points${q.held ? '' : `${q.damage >= q.hp ? ', one cut kills' : ''} (never held in hand: not judged; feel target 11 has a quick melee kill on contact)`}` : '';
   const seen = h ? `a hit that did not kill: the body's flash ${h.flash ? 'sent' : 'missing'}, a damage number ${h.number ? `"${h.number}" by it` : 'missing'}, ${r2(h.change * 100)}% of the pixels around it changed (noise ${r2(h.noise * 100)}%)` : 'no hit left the target standing';
-  return { ok: fails.length === 0, detail: fails.length ? `${fails.join('; ')}. Measured: ${head}; ${seen}` : `${head}; ${seen}` };
+  return { ok: fails.length === 0, detail: fails.length ? `${fails.join('; ')}. Measured: ${head}${notHeld}; ${seen}${quick}` : `${head}${notHeld}; ${seen}${quick}` };
 }
 
-/** Check 16 on forge. → {ok, detail, record, warnings} */
-export async function checkForgeHits({ newPage, browser, url, game, shot = async () => null, log = () => {} }) {
+/** Check 16 on forge. dir: the game folder (its rules.js says whether the rules arm players). → {ok, detail, record, warnings} */
+export async function checkForgeHits({ newPage, browser, url, game, dir = null, shot = async () => null, log = () => {} }) {
   const L = FORGE_HIT_LIMITS, warnings = [], t0 = Date.now();
   const weapons = game.forge?.weapons ?? [];
-  const m = { applies: weapons.length > 0, why: 'no weapon (spec.forge.weapons is empty): nothing to hit', seconds: 0, shots: 0, hits: 0, kills: [], hit: null, targets: 0 };
-  if (!m.applies) { const j = judgeForgeHits(m, L); return { ok: j.ok, detail: j.detail, warnings, record: { applies: false } }; }
-  const T = await newPage('forge hits', { overrides: { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: 180 }] } });
+  const m = { applies: weapons.length > 0, why: 'no weapon (spec.forge.weapons is empty): nothing to hit', seconds: 0, shots: 0, hits: 0, kills: [], hit: null, targets: 0, rows: [], quick: null, hp: null };
+  if (!m.applies) { const j = judgeForgeHits(m, L); return { ok: j.ok, detail: j.detail, warnings, record: { applies: false } };
+  }
+  const rulesText = dir ? await readFile(join(dir, 'rules.js'), 'utf8').catch(() => '') : '';
+  // every weapon a player can hold, guns first: for a melee row the player walks in to its reach and stays there
+  const hold = holdableWeapons(game, rulesText).sort((a, b) => (a.kind === 'melee') - (b.kind === 'melee'));
+  const hp = m.hp = Number(game.forge?.enemies?.[0]?.health) || 60;
+  const qr = quickMeleeRow(game);
+  if (qr >= 0) m.quick = { name: weapons[qr].name || weapons[qr].id, damage: Number(weapons[qr].damage) || 0, hp, held: hold.some(x => x.row === qr) };
+  // the staged page: every one of them starts in the player's hands (as Studio overrides a value), so its key brings it up
+  const patches = [{ file: 'config/game.json', pointer: '/round/seconds', value: 300 }, ...hold.filter(x => weapons[x.row].start === false).map(x => ({ file: 'config/game.json', pointer: `/forge/weapons/${x.row}/start`, value: true }))];
+  const T = await newPage('forge hits', { overrides: { patches } });
   const p = T.page;
   await p.addInitScript(POINTER_LOCK);
   const vp = p.viewportSize() ?? { width: 1280, height: 720 };
   const ms = mouse(p, vp);
   const png = () => p.screenshot({ type: 'png' });
-  const record = { url: '?seed=7&gf-demo=feel.hit', limits: L, shotsLog: [] };
+  const record = { url: '?seed=7&gf-demo=feel.hit', limits: L, holdable: hold, shotsLog: [] };
+  const mineOf = (f, local) => (f?.stats?.kills ?? []).filter(k => k.by === local);
   try {
     await p.goto(`${url}?seed=7&gf-demo=feel.hit`, { waitUntil: 'load' });
     for (let t = Date.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'lobby'; ) { if (Date.now() - t > 90000) throw new Error('no lobby in 90 s'); await sleep(200); }
@@ -132,49 +193,79 @@ export async function checkForgeHits({ newPage, browser, url, game, shot = async
     for (let t = Date.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'playing'; ) { if (Date.now() - t > 20000) throw new Error('the round did not start'); await sleep(120); }
     await sleep(1400);
     await p.mouse.move(ms.cur.x, ms.cur.y); await p.mouse.click(ms.cur.x, ms.cur.y); await sleep(300);
-    const start = Date.now();
     let local = 0;
-    while (Date.now() - start < L.SECONDS * 1000) {
+    for (const w of hold.length ? hold : [{ row: -1, id: null, name: null, kind: weapons[0]?.kind, slot: 1, why: 'in hand' }]) {
+      const d = weapons[w.row] ?? weapons[0] ?? {}, melee = w.kind === 'melee', reach = Number(d.melee?.reach) || 2.2;
+      const row = { ...w, pellets: Number(d.pellets) || 1, damage: Number(d.damage) || 0, inHand: w.row < 0, shots: 0, hits: 0, kills: [], seconds: 0 };
+      m.rows.push(row);
+      // its key until it is the one in hand (two rows can share a key: it takes turns)
+      for (let i = 0; i <= L.KEY_TRIES && !row.inHand; i++) {
+        const v = (await p.evaluate(FEEL))?.shown?.view;
+        if (v && (v.weapon | 0) === w.row) { row.inHand = true; break; }
+        if (i === L.KEY_TRIES) break;
+        await p.keyboard.press(`Digit${w.slot}`); await sleep(300 + (Number(d.raise) || 0.2) * 1000);
+      }
+      if (!row.inHand) { warnings.push(`forge hits: ${w.name} (${w.why}) never came into the hand on its key ${w.slot} on the staged page, so its hits were not judged`); continue; }
+      const start = Date.now();
+      let before0 = null, dropFirst = false;
+      while (Date.now() - start < L.SECONDS * 1000) {
+        const f = await p.evaluate(FEEL);
+        if (!f?.shown) { await sleep(150); continue; }
+        local = f.shown.view.player;
+        const mine = mineOf(f, local);
+        if (before0 === null) before0 = mine.length;
+        if (mine.length - before0 >= L.KILLS + (dropFirst ? 1 : 0)) break;
+        const tg = f.shown.targets.filter(t => t.hp > 0).sort((a, b) => (a.body ? Math.hypot(a.body.x - vp.width / 2, a.body.y - vp.height / 2) : 1e9) - (b.body ? Math.hypot(b.body.x - vp.width / 2, b.body.y - vp.height / 2) : 1e9))[0];
+        if (!tg) { await sleep(150); continue; }
+        m.targets = Math.max(m.targets, 1);
+        // a target the weapon before left hurt: its kill would count that weapon's hits too
+        if (!row.shots && tg.hp < 0.999) dropFirst = true;
+        await aimAt(p, ms, [tg.at[0], tg.at[1] + 1.15, tg.at[2]], L);
+        if (melee) {
+          // a blade: walk in to its reach, as a player does
+          for (let i = 0; i < 40; i++) {
+            const me = await p.evaluate(() => { const c = window.__game?.forge?.players?.().find(x => x.local); return c ? [c.x, c.z] : null; }).catch(() => null);
+            const far = me ? Math.hypot(tg.at[0] - me[0], tg.at[2] - me[1]) : 0;
+            if (!me || far <= reach * 0.72) break;
+            await p.keyboard.down('KeyW'); await sleep(far > reach + 1.2 ? 130 : 45); await p.keyboard.up('KeyW'); await sleep(90);
+            await aimAt(p, ms, [tg.at[0], tg.at[1] + 1.15, tg.at[2]], L);
+          }
+        }
+        const measuring = !m.hit;
+        const before = measuring ? [await png(), (await sleep(110), await png())] : [];
+        const hits0 = (f.stats?.hits ?? []).length, kills0 = mine.length, flashes0 = tg.flashes;
+        row.shots++;
+        // a charge weapon fires on release with the share of its interval it was held: the whole of it, its hardest shot
+        await p.mouse.down(); await sleep(w.kind === 'charge' ? (Number(d.fireInterval) || 0.8) * 1000 + 90 : w.kind === 'beam' ? 220 : 60); await p.mouse.up();
+        let outcome = 'miss', after = null, f2 = null;
+        for (let t = Date.now(); Date.now() - t < 900; ) {
+          f2 = await p.evaluate(FEEL);
+          const kills = mineOf(f2, local).length, hitsN = (f2?.stats?.hits ?? []).length;
+          if (kills > kills0) { outcome = 'kill'; break; }
+          if (hitsN > hits0) { outcome = 'hit'; if (measuring) after = [await png(), (await sleep(40), await png())]; break; }
+          await sleep(20);
+        }
+        record.shotsLog.push({ weapon: w.id, target: tg.net, hp: tg.hp, outcome });
+        if (outcome !== 'miss') row.hits++;
+        if (outcome === 'hit' && after && !m.hit) {
+          const g = await p.evaluate(FEEL);
+          const now = g.shown.targets.find(t => t.net === tg.net) ?? tg;
+          const head = now.head ?? tg.head, feet = now.feet ?? tg.feet;
+          const hgt = Math.max(40, (feet?.y ?? vp.height / 2) - (head?.y ?? vp.height / 2)), cx = ((head?.x ?? vp.width / 2) + (feet?.x ?? vp.width / 2)) / 2;
+          const box = { x0: cx - Math.max(50, hgt * 0.6), x1: cx + Math.max(50, hgt * 0.6), y0: (head?.y ?? 0) - 60, y1: (feet?.y ?? vp.height) + 10 };
+          const num = g.shown.numbers.find(n => !n.word && Math.hypot(n.x + n.w / 2 - cx, n.y + n.h - ((head?.y ?? 0) + (feet?.y ?? 0)) / 2) < L.NEAR + hgt / 2);
+          const c = await change(browser, before, after, box, L.PIXEL_T);
+          m.hit = { weapon: w.id, flash: (now.flashes ?? 0) > flashes0, number: num?.text ?? null, change: c.change, noise: c.noise, box: Object.fromEntries(Object.entries(box).map(([k, v]) => [k, Math.round(v)])) };
+          await shot(p, 'hits-hit', after[0]);
+        }
+        await sleep(Math.max(80, (Number(d.fireInterval) || 0.3) * 1000 - 40));
+      }
       const f = await p.evaluate(FEEL);
-      if (!f?.shown) { await sleep(150); continue; }
-      local = f.shown.view.player;
-      const mine = (f.stats?.kills ?? []).filter(k => k.by === local);
-      if (mine.length >= L.KILLS) break;
-      const tg = f.shown.targets.filter(t => t.hp > 0).sort((a, b) => (a.body ? Math.hypot(a.body.x - vp.width / 2, a.body.y - vp.height / 2) : 1e9) - (b.body ? Math.hypot(b.body.x - vp.width / 2, b.body.y - vp.height / 2) : 1e9))[0];
-      if (!tg) { await sleep(150); continue; }
-      m.targets = Math.max(m.targets, 1);
-      await aimAt(p, ms, [tg.at[0], tg.at[1] + 1.15, tg.at[2]], L);
-      const measuring = !m.hit;
-      const before = measuring ? [await png(), (await sleep(110), await png())] : [];
-      const hits0 = (f.stats?.hits ?? []).length, kills0 = mine.length, flashes0 = tg.flashes;
-      m.shots++;
-      await p.mouse.down(); await sleep(60); await p.mouse.up();
-      let outcome = 'miss', after = null, f2 = null;
-      for (let t = Date.now(); Date.now() - t < 900; ) {
-        f2 = await p.evaluate(FEEL);
-        const kills = (f2?.stats?.kills ?? []).filter(k => k.by === local).length, hits = (f2?.stats?.hits ?? []).length;
-        if (kills > kills0) { outcome = 'kill'; break; }
-        if (hits > hits0) { outcome = 'hit'; if (measuring) after = [await png(), (await sleep(40), await png())]; break; }
-        await sleep(20);
-      }
-      record.shotsLog.push({ target: tg.net, hp: tg.hp, outcome });
-      if (outcome !== 'miss') m.hits++;
-      if (outcome === 'hit' && after && !m.hit) {
-        const g = await p.evaluate(FEEL);
-        const now = g.shown.targets.find(t => t.net === tg.net) ?? tg;
-        const head = now.head ?? tg.head, feet = now.feet ?? tg.feet;
-        const hgt = Math.max(40, (feet?.y ?? vp.height / 2) - (head?.y ?? vp.height / 2)), cx = ((head?.x ?? vp.width / 2) + (feet?.x ?? vp.width / 2)) / 2;
-        const box = { x0: cx - Math.max(50, hgt * 0.6), x1: cx + Math.max(50, hgt * 0.6), y0: (head?.y ?? 0) - 60, y1: (feet?.y ?? vp.height) + 10 };
-        const num = g.shown.numbers.find(n => !n.word && Math.hypot(n.x + n.w / 2 - cx, n.y + n.h - ((head?.y ?? 0) + (feet?.y ?? 0)) / 2) < L.NEAR + hgt / 2);
-        const c = await change(browser, before, after, box, L.PIXEL_T);
-        m.hit = { flash: (now.flashes ?? 0) > flashes0, number: num?.text ?? null, change: c.change, noise: c.noise, box: Object.fromEntries(Object.entries(box).map(([k, v]) => [k, Math.round(v)])) };
-        await shot(p, 'hits-hit', after[0]);
-      }
-      const d = weapons[f.shown.view.weapon | 0];
-      await sleep(Math.max(80, (Number(d?.fireInterval) || 0.3) * 1000 - 40));
+      row.kills = mineOf(f, local).slice((before0 ?? 0) + (dropFirst ? 1 : 0)).map(k => k.hits);
+      row.seconds = Math.round((Date.now() - start) / 1000);
+      if (melee) await shot(p, `hits-${String(w.id ?? 'melee').replace(/[^a-z0-9]+/gi, '-')}`);
     }
     const f = await p.evaluate(FEEL);
-    m.kills = (f?.stats?.kills ?? []).filter(k => k.by === local).map(k => k.hits);
     record.kills = f?.stats?.kills ?? [];
   } catch (e) {
     warnings.push(`forge hits page stopped: ${e.message}`);
@@ -183,9 +274,12 @@ export async function checkForgeHits({ newPage, browser, url, game, shot = async
     if (T.errors.length) warnings.push(`forge hits page console errors: ${[...new Set(T.errors)].slice(0, 2).join(' | ')}`);
     await T.ctx.close().catch(() => {});
   }
+  // the totals, as before: every judged row's shots and hits, the first row's kills
+  m.shots = m.rows.reduce((n, r) => n + r.shots, 0); m.hits = m.rows.reduce((n, r) => n + r.hits, 0); m.kills = m.rows.find(r => r.inHand)?.kills ?? [];
+  if (m.rows.length === 1 && m.rows[0].row < 0) m.rows[0].name = null;
   const j = judgeForgeHits(m, L);
   record.measured = { ...m };
-  log(`  forge hits: ${j.ok ? 'ok' : 'FAIL'} ${j.detail.slice(0, 200)}`);
+  log(`  forge hits: ${j.ok ? 'ok' : 'FAIL'} ${j.detail.slice(0, 260)}`);
   return { ok: j.ok, detail: j.detail, warnings, record };
 }
 

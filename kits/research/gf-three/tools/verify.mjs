@@ -2,7 +2,7 @@
 // gf-three verify: is this game good? One command, one verdict (CONTRACT §5).
 //
 //   node research/gf-three/tools/verify.mjs <game> [--quick] [--all] [--release] [--profile <file>] [--check N[,N…]]
-//                                           [--out <dir>] [--json] [--refs <folder>]
+//                                           [--out <dir>] [--json] [--refs <folder>] [--own-tests require]
 //
 // What it prints: each FAILING check with its rule and its fix (tools/lib/homes.json), then one summary line. --all
 // (or --verbose) prints every check and the progress lines as well.
@@ -84,9 +84,19 @@
 //     or change name in a room before the game. Final scores seem to always be the same regardless. We really
 //     shouldn't have bots in multiplayer modes")
 //
+//  35 the game's own tests (tools/lib/game-tests.mjs; home "game"): every <game>/tests/*.test.json, a play script with
+//     "expect" steps that names one of the game's own promises (its loop, its scoring, a mechanic as this game has it,
+//     its hook, an accept item), runs alone on a page of its own on stepped time; a test that fails, cannot run or
+//     names no promise fails the check. No tests: passes with nothing to run, and the verdict lists the own promises
+//     no test names; --own-tests require makes that list a failure
+//
+// Time: checks 10, 13, 16 and 35 wait in the game's own time (tools/lib/stepped.mjs, kit/core/step.js ?gf-step=1) when
+// the game's kit offers it; the solo round (3, 6, 7: the audio gate measures real sound), the menu, HUD, wallet and
+// post pages, check 15's own pages and every two-player leg (real WebRTC) run on the wall clock.
+//
 // Engines (CONTRACT §8): a scenic game's pages run in WebGPU Chrome (its real renderer), a party game's in WebGL Chrome.
 //
-// --check takes one check or any list (1,2 or 13,16 or 3,4,5). One of 10, 13, 15, 16, 20, 21, 22, 23, 24, 25, 31, 34
+// --check takes one check or any list (1,2 or 13,16 or 3,4,5). One of 10, 13, 15, 16, 20, 21, 22, 23, 24, 25, 31, 34, 35
 // runs alone on a page of its own (a quick repair loop); a list of the static checks (1, 2, 11, 14, 17, 18, 19) runs
 // with no browser, in about a second; any other list runs the whole flow with every other check left out. Evidence:
 // <game>/evidence/verify-N/ (or --out): verdict.json (`timing`, seconds per step; each check's own `seconds`; a
@@ -118,18 +128,20 @@ import { checkHome } from './lib/homes.mjs';
 import { checkLooks } from './lib/looks-check.mjs';
 import { worldCheck } from './lib/world-check.mjs';
 import { checkSounds } from './lib/sounds-check.mjs';
-import { checkBodies } from './lib/bodies-check.mjs';
 import { checkMenu, checkHud, checkWallet } from './lib/menu-check.mjs';
 import { checkEmbed } from './lib/embed-check.mjs';
 import { checkScreens } from './lib/screens-check.mjs';
 import { checkFriends } from './lib/friends-check.mjs';
 import { checkFriendsWatch } from './lib/friends-watch-check.mjs';
 import { checkLikeness, likenessTargets } from './lib/likeness-check.mjs';
+import { STEP_PRE, STEP_POST } from './lib/stepped.mjs';
+import { lockFor } from './lib/lock.mjs';
+import { checkGameTests } from './lib/game-tests.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
 
-export async function verify(gameDir, { quick = false, out = null, log = console.log, only = null, refs = null, release = false, profile = null, all = false } = {}) {
+export async function verify(gameDir, { quick = false, out = null, log = console.log, only = null, refs = null, release = false, profile = null, all = false, ownTests = null } = {}) {
   const dir = resolve(gameDir);
   const t0 = Date.now();
   const checks = [];
@@ -183,7 +195,7 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     }
     return r;
   }
-  const A = { rec, outDir, add, log: say, t0, lap, refs };
+  const A = { rec, outDir, add, log: say, t0, lap, refs, ownTests };
   if (list && list.every(n => STATIC_ALONE.includes(n))) return staticOnly(dir, list, A);
   if (one === 10) return fairOnly(dir, A);
   if (one === 13) return controlsOnly(dir, A);
@@ -193,6 +205,7 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   if (one === 23) return likenessOnly(dir, A);
   if (one === 25) return friendsOnly(dir, A);
   if (one === 34) return watchOnly(dir, A);
+  if (one === 35) return ownTestsOnly(dir, A);
 
   // ---- which checks this run makes: a list (--check), else every check of a build (a release adds 8, 31 and 34);
   // a profile's skipped checks are recorded first, each with its reason, and never run ----
@@ -229,6 +242,14 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   if (want(17)) { begin(17); await check17(dir, { rec, add }); }
   if (want(18)) { begin(18); await check18(dir, { rec, add }); }
   if (want(19)) { begin(19); await check19(dir, { rec, add }); }
+  // ---- 35. the game's own tests: with no test files there is nothing to play, and the check is judged here, with no
+  // browser (what is untested is listed); with tests it runs in the solo session below ----
+  const ownTestFiles = existsSync(join(dir, 'tests')) && (await readdir(join(dir, 'tests'))).some(n => n.endsWith('.test.json'));
+  if (want(35) && !ownTestFiles) {
+    begin(35);
+    const gt = await checkGameTests({ dir, promises: await ownPromiseList(dir), requireTests: ownTests === 'require' });
+    rec.gameTests = gt.record; add(35, 'the game\'s own tests', gt.ok, gt.detail);
+  }
 
   // ---- 5. the two-player live gate and its loadout leg: their own server and browsers, beside the solo session ----
   // (they share nothing with it; run one after the other they were 80 of verify's 183 s with --quick, 2026-10-07)
@@ -268,7 +289,7 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   const refShots = want(23) && ((await likenessTargets(dir, { refs }).catch(() => null))?.targets?.length ?? 0) > 0;
   const needRound = [3, 4, 6, 7, 12, 15].some(want) || refShots;
   const needFair = [10, 12, 15].some(want);                       // check 10's two pages (12 and 15 read them too)
-  const needBrowser = needRound || needFair || [8, 13, 16, 20, 21, 22, 24, 31].some(want);
+  const needBrowser = needRound || needFair || [8, 13, 16, 20, 21, 22, 24, 31].some(want) || (want(35) && ownTestFiles);
   let solo = null, gateRec = null, soloSeconds = 0;
   if (needBrowser) {
   const assets = JSON.parse(await readFile(join(dir, 'assets.json'), 'utf8'));
@@ -287,15 +308,20 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   const shot = async (page, name) => { const f = `${String(rec.shots.length + 1).padStart(2, '0')}-${name}.jpg`; rec.shots.push(f); await page.screenshot({ path: join(outDir, f), type: 'jpeg', quality: 75 }).catch(() => {}); return f; };   // the name is taken before the await (shots run in parallel)
   // every page records the observation for check 15 (alive-check.mjs RECORDER) and hands it over when it closes
   const recordings = [];
-  const newPage = async (label, { overrides = null, audio = false } = {}) => {
+  const newPage = async (label, { overrides = null, audio = false, realLock = false } = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await ctx.newPage();
+    await lockFor(page, launched.gpu, { realLock });   // the WebGPU Chrome's pointer lock reports motion that never happened (tools/lib/lock.mjs)
     const errors = [];
     page.on('pageerror', e => errors.push(`${label}: ${e.message}`));
     page.on('console', m => { if (m.type() === 'error' && !GPU_TROUBLE.test(m.text())) errors.push(`${label}: ${m.text().slice(0, 300)}`); });
     if (overrides) await page.addInitScript(o => { globalThis.__GF_ASSET_OVERRIDES = o; }, overrides);
     if (audio) await installAudioTap(page);
+    // a page a check runs on stepped time (tools/lib/stepped.mjs: ?gf-step=1) has the recorder sample by the game's
+    // time; on any other page the two scripts round it do nothing
+    await page.addInitScript(STEP_PRE);
     await page.addInitScript(RECORDER);
+    await page.addInitScript(STEP_POST);
     const close = ctx.close.bind(ctx);
     ctx.close = async (...a) => { const r = await recordingOf(page); if (r?.samples?.length) recordings.push({ label, samples: r.samples }); return close(...a); };
     return { ctx, page, errors };
@@ -436,6 +462,14 @@ export async function verify(gameDir, { quick = false, out = null, log = console
       add(16, 'hits read', hc.ok, hc.detail);
     }
     lap('controls', tStep); tStep = Date.now();
+    if (want(35) && ownTestFiles) {
+      // ---- 35. the game's own tests: each of its own promises, as the steps its builder wrote (a page each, stepped time) ----
+      begin(35);
+      const gt = await checkGameTests({ dir, newPage, url: srv.url, promises: await ownPromiseList(dir), requireTests: ownTests === 'require', log: say });
+      rec.gameTests = gt.record; if (gt.warnings.length) rec.notes.push(...gt.warnings);
+      add(35, 'the game\'s own tests', gt.ok, gt.detail);
+      lap('own tests', tStep); tStep = Date.now();
+    }
     // ---- 20, 21, 22: the home menu, the HUD and the wallet in the menu (CONTRACT §6g; creator 2026-10-08: "our games are
     // all missing a home menu and a lot of user HUDs, especially for health ... wallet connect in the home menu") ----
     if (want(20)) {
@@ -507,7 +541,7 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     solo = { errors: S?.errors ?? [], sr, replayed, audio };
   } catch (e) {
     rec.notes.push(`solo session stopped: ${e.message}`);
-    for (const [n, name] of [[3, 'boots to play with no console errors'], [4, 'slot coverage 100%'], [8, 'swap proof'], [10, 'fair play'], [12, 'something happens'], [13, 'controls work'], [15, 'the loop is alive'], [16, 'hits read'], [20, 'the menu works'], [21, 'the HUD shows your state'], [22, 'the wallet in the menu'], [24, 'plays inside a post'], [31, 'sharp on every screen']]) if (want(n) && !checks.some(c => c.n === n)) add(n, name, false, `not reached: ${e.message}${solo?.errors?.length ? `; console: ${solo.errors.slice(0, 2).join(' | ')}` : ''}`);
+    for (const [n, name] of [[3, 'boots to play with no console errors'], [4, 'slot coverage 100%'], [8, 'swap proof'], [10, 'fair play'], [12, 'something happens'], [13, 'controls work'], [15, 'the loop is alive'], [16, 'hits read'], [20, 'the menu works'], [21, 'the HUD shows your state'], [22, 'the wallet in the menu'], [24, 'plays inside a post'], [31, 'sharp on every screen'], [35, 'the game\'s own tests']]) if (want(n) && !checks.some(c => c.n === n)) add(n, name, false, `not reached: ${e.message}${solo?.errors?.length ? `; console: ${solo.errors.slice(0, 2).join(' | ')}` : ''}`);
   } finally {
     await browser.close().catch(() => {});
     await srv.close().catch(() => {});
@@ -654,6 +688,9 @@ async function check18(dir, { rec, add }) {
 async function check19(dir, { rec, add }) {
   try {
     const t = Date.now();
+    // the body judge is loaded here, when check 19 runs: it needs the char-deps packages (tools/lib/char-deps), and a
+    // verify that does not judge bodies (--check 1,2 on a machine without them) must still load
+    const { checkBodies } = await import('./lib/bodies-check.mjs');
     const r = await checkBodies(dir);
     add(19, 'bodies hold their shape', r.ok, r.detail);
     if (r.notes.length) rec.notes.push(`body notes: ${r.notes.slice(0, 4).join(' | ')}`);
@@ -688,9 +725,10 @@ async function fairOnly(dir, { rec, outDir, add, log, t0 }) {
   const srv = await startParty({ dir, port: 0 });
   const { browser, gpu: usedGpu } = await launchForGame(launchChrome, dir); rec.renderer = usedGpu;
   rec.chrome = browser.version();
-  const newPage = async (label, { overrides = null } = {}) => {
+  const newPage = async (label, { overrides = null, realLock = false } = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await ctx.newPage(); const errors = [];
+    await lockFor(page, usedGpu, { realLock });
     page.on('pageerror', e => errors.push(`${label}: ${e.message}`));
     page.on('console', m => { if (m.type() === 'error' && !GPU_TROUBLE.test(m.text())) errors.push(`${label}: ${m.text().slice(0, 300)}`); });
     if (overrides) await page.addInitScript(o => { globalThis.__GF_ASSET_OVERRIDES = o; }, overrides);
@@ -781,9 +819,10 @@ async function controlsOnly(dir, { rec, outDir, add, log, t0 }) {
   const srv = await startParty({ dir, port: 0 });
   const { browser, gpu: usedGpu } = await launchForGame(launchChrome, dir); rec.renderer = usedGpu;
   rec.chrome = browser.version();
-  const newPage = async (label, { overrides = null } = {}) => {
+  const newPage = async (label, { overrides = null, realLock = false } = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await ctx.newPage(); const errors = [];
+    await lockFor(page, usedGpu, { realLock });
     page.on('pageerror', e => errors.push(`${label}: ${e.message}`));
     page.on('console', m => { if (m.type() === 'error' && !GPU_TROUBLE.test(m.text())) errors.push(`${label}: ${m.text().slice(0, 300)}`); });
     if (overrides) await page.addInitScript(o => { globalThis.__GF_ASSET_OVERRIDES = o; }, overrides);
@@ -813,9 +852,10 @@ async function aliveOnly(dir, { rec, outDir, add, log, t0, lap }) {
   const { browser, gpu: usedGpu } = await launchForGame(launchChrome, dir); rec.renderer = usedGpu;
   rec.chrome = browser.version();
   const recordings = [];
-  const newPage = async (label, { overrides = null } = {}) => {
+  const newPage = async (label, { overrides = null, realLock = false } = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await ctx.newPage(); const errors = [];
+    await lockFor(page, usedGpu, { realLock });
     page.on('pageerror', e => errors.push(`${label}: ${e.message}`));
     page.on('console', m => { if (m.type() === 'error' && !GPU_TROUBLE.test(m.text())) errors.push(`${label}: ${m.text().slice(0, 300)}`); });
     if (overrides) await page.addInitScript(o => { globalThis.__GF_ASSET_OVERRIDES = o; }, overrides);
@@ -867,9 +907,10 @@ async function hitsOnly(dir, { rec, outDir, add, log, t0 }) {
   const srv = await startParty({ dir, port: 0 });
   const { browser, gpu: usedGpu } = await launchForGame(launchChrome, dir); rec.renderer = usedGpu;
   rec.chrome = browser.version();
-  const newPage = async (label, { overrides = null } = {}) => {
+  const newPage = async (label, { overrides = null, realLock = false } = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await ctx.newPage(); const errors = [];
+    await lockFor(page, usedGpu, { realLock });
     page.on('pageerror', e => errors.push(`${label}: ${e.message}`));
     page.on('console', m => { if (m.type() === 'error' && !GPU_TROUBLE.test(m.text())) errors.push(`${label}: ${m.text().slice(0, 300)}`); });
     if (overrides) await page.addInitScript(o => { globalThis.__GF_ASSET_OVERRIDES = o; }, overrides);
@@ -911,6 +952,47 @@ async function menuOnly(dir, n, { rec, outDir, add, log, t0 }) {
     add(n, name, r.ok, r.detail);
   } catch (e) { add(n, name, false, `not reached: ${e.message}`); }
   finally { await browser.close().catch(() => {}); await srv.close().catch(() => {}); }
+  rec.pass = rec.checks.every(c => c.ok);
+  rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
+  rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
+  await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
+  return rec;
+}
+
+/** The game's promise list for check 35 (tools/lib/promises.mjs), or null when it cannot be derived here. */
+async function ownPromiseList(dir) {
+  try { return await (await import('./lib/promises.mjs')).promisesFor(dir); } catch { return null; }
+}
+
+/** --check 35: the game's own tests alone (its own browser and server; none when the game has no tests), for a repair loop. */
+async function ownTestsOnly(dir, { rec, outDir, add, log, t0, ownTests }) {
+  const promises = await ownPromiseList(dir), requireTests = ownTests === 'require';
+  let srv = null, browser = null;
+  try {
+    // a game with no test files is judged with no browser
+    const any = existsSync(join(dir, 'tests')) && (await readdir(join(dir, 'tests'))).some(n => n.endsWith('.test.json'));
+    if (!any) {
+      const dry = await checkGameTests({ dir, promises, requireTests });
+      rec.gameTests = dry.record; add(35, 'the game\'s own tests', dry.ok, dry.detail);
+    } else {
+      srv = await startParty({ dir, port: 0 });
+      const launched = await launchForGame(launchChrome, dir); browser = launched.browser; const usedGpu = launched.gpu; rec.renderer = usedGpu;
+      rec.chrome = browser.version();
+      const newPage = async (label, { overrides = null, realLock = false } = {}) => {
+            const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+            const page = await ctx.newPage(); const errors = [];
+        await lockFor(page, usedGpu, { realLock });
+        page.on('pageerror', e => errors.push(`${label}: ${e.message}`));
+        page.on('console', m => { if (m.type() === 'error' && !GPU_TROUBLE.test(m.text())) errors.push(`${label}: ${m.text().slice(0, 300)}`); });
+        if (overrides) await page.addInitScript(o => { globalThis.__GF_ASSET_OVERRIDES = o; }, overrides);
+        return { ctx, page, errors };
+      };
+      const gt = await checkGameTests({ dir, newPage, url: srv.url, promises, requireTests, log });
+      rec.gameTests = gt.record; if (gt.warnings.length) rec.notes.push(...gt.warnings);
+      add(35, 'the game\'s own tests', gt.ok, gt.detail);
+    }
+  } catch (e) { add(35, 'the game\'s own tests', false, `not reached: ${e.message}`); }
+  finally { await browser?.close().catch(() => {}); await srv?.close().catch(() => {}); }
   rec.pass = rec.checks.every(c => c.ok);
   rec.finished = new Date().toISOString(); rec.seconds = Math.round((Date.now() - t0) / 1000);
   rec.outDir = relPosix(dir, outDir);   // relative to the game, forward slashes
@@ -979,8 +1061,8 @@ async function pixelDiff(browser, a, b) {
 if (isMain(import.meta)) {
   const a = process.argv.slice(2);
   const opt = (k, d) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : d; };
-  const dir = a.find((x, i) => !x.startsWith('--') && !['--out', '--check', '--refs', '--profile'].includes(a[i - 1]));
-  if (!dir) { console.error('usage: verify.mjs <game> [--quick] [--all] [--release] [--profile <file>] [--check N[,N…]] [--out <dir>] [--json] [--refs <folder with refs.json>]'); process.exit(2); }
+  const dir = a.find((x, i) => !x.startsWith('--') && !['--out', '--check', '--refs', '--profile', '--own-tests'].includes(a[i - 1]));
+  if (!dir) { console.error('usage: verify.mjs <game> [--quick] [--all] [--release] [--profile <file>] [--check N[,N…]] [--out <dir>] [--json] [--refs <folder with refs.json>] [--own-tests require]'); process.exit(2); }
   const json = a.includes('--json');
   const ck = opt('--check', null);
   if (ck !== null && !/^\d+(,\d+)*$/.test(ck ?? '')) { console.error('--check takes a check number or a list of them (13 or 1,2 or 13,16)'); process.exit(2); }
@@ -993,7 +1075,7 @@ if (isMain(import.meta)) {
   if (forgeGame && nums && !nums.every(n => n >= 1 && n <= 33)) { console.error('--check takes check numbers 1 to 33 (one, or several: 3,32,33)'); process.exit(2); }
   if (worldGame && nums && !nums.every(n => n >= 1 && n <= 34)) { console.error('--check takes check numbers 1 to 31 and 34 (one, or several: 13,26,30)'); process.exit(2); }
   const roundChecks = [...requiredFor('round', { release: true }), 9];
-  if (!worldGame && !forgeGame && nums && !nums.every(n => roundChecks.includes(n))) { console.error(`--check takes the checks of a round game (1 to 25, 31 and 34), one or several: 13 or 1,2 or 13,16. Not one: ${nums.filter(n => !roundChecks.includes(n)).join(', ')}`); process.exit(2); }
+  if (!worldGame && !forgeGame && nums && !nums.every(n => roundChecks.includes(n))) { console.error(`--check takes the checks of a round game (1 to 25, 31, 34 and 35), one or several: 13 or 1,2 or 13,16. Not one: ${nums.filter(n => !roundChecks.includes(n)).join(', ')}`); process.exit(2); }
   let profile = null;
   if (a.includes('--profile')) {
     const pf = opt('--profile', null);
@@ -1001,7 +1083,7 @@ if (isMain(import.meta)) {
     const bad = checkProfile(profile);
     if (bad.length) { console.error(`--profile ${pf}: ${bad.join('; ')}`); process.exit(2); }
   }
-  const rec = await verify(dir, { quick: a.includes('--quick'), out: opt('--out', null), log: json ? () => {} : console.log, only, refs: opt('--refs', null), release: a.includes('--release'), profile, all: a.includes('--all') || a.includes('--verbose') });
+  const rec = await verify(dir, { quick: a.includes('--quick'), out: opt('--out', null), log: json ? () => {} : console.log, only, refs: opt('--refs', null), release: a.includes('--release'), profile, all: a.includes('--all') || a.includes('--verbose'), ownTests: opt('--own-tests', null) });
   if (json) process.stdout.write(JSON.stringify(rec, null, 2) + '\n');
   const passed = rec.checks.filter(c => c.ok === true).length, ran = rec.checks.filter(c => c.ok !== null).length;
   const byProfile = (rec.profile?.skipped ?? []).map(c => c.n);

@@ -65,6 +65,7 @@ describe('studio Token and Shop tabs on core’s dev server, in Chrome (fake cha
     chain = fakeChain();
     chain.put(F.accounts.poolConfig.address, F.accounts.poolConfig.owner, fromBase64(F.accounts.poolConfig.data));
     restore = useFakeChain(chain);
+    process.env.GAMESFUN_WEB3 = '1';      // the tabs are off unless asked for (tests/web3-switch.test.mjs)
     server = await startDevServer({ gameDir: game.gameDir, port: 0, log: () => {}, watch: false });
     page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await injectWallet(page, wallet, { log: signed });
@@ -74,6 +75,7 @@ describe('studio Token and Shop tabs on core’s dev server, in Chrome (fake cha
     await browser?.close();
     await server?.close();
     restore?.();
+    delete process.env.GAMESFUN_WEB3;
   });
 
   it('lists the tabs after core’s own and mounts them', async (t) => {

@@ -4,33 +4,39 @@ import { guard, parse, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { runTool } from '../lib/run-tool.mjs';
 
-const usage = `Usage: gamesfun verify [dir] [--quick] [--check <n>] [--out <dir>] [--json]
+const usage = `Usage: gamesfun verify [dir] [--quick] [--release] [--profile <file>] [--check <n>] [--out <dir>] [--json]
 
 Is this game good? gf-three's verify plays it in Chrome with real input (alone with bots, and two players over real
 WebRTC) and prints one verdict. Evidence goes to <game>/evidence/verify-N/ (verdict.json, screenshots).
   --quick        skip the contact sheet (check 9); about 2 minutes
-  --check <n>    run one check alone while you fix it: 10, 13, 14, 15, 16, or the static 11, 17, 11,17
+  --release      also run the checks that test the kit, not the game (8, 31, 34); about 3 minutes more
+  --profile <file>  a machine that cannot run everything (a CI runner): the file lists checks to leave out, each with its
+                 reason; they are recorded as skipped, never as passed, and the run is never a full pass (.github/ci-profile.json)
+  --check <n>    run one check alone while you fix it: 13 or 10, 14, 15, 16, or a list: 1,2,11,14,17 (the ones that only read files)
   --out <dir>    write the evidence somewhere else
 
 Chrome: CHROME_PATH, else an installed Chrome or Edge, else Playwright's Chromium (downloaded once, on demand).`;
 
-const STATIC = ['11', '14', '17', '11,17', '17,11'];
+const STATIC = new Set(['1', '2', '11', '14', '17']);   // checks that read files only: no browser needed
+const isStatic = list => !!list && list.split(',').every(n => STATIC.has(n));
 
 export default {
   name: 'verify',
   summary: 'run the checks every game must pass (real Chrome, real input)',
   usage,
   run: args => guard(async () => {
-    const { values, positionals } = parse(args, { quick: { type: 'boolean' }, check: { type: 'string' }, out: { type: 'string' } }, usage);
+    const { values, positionals } = parse(args, { quick: { type: 'boolean' }, release: { type: 'boolean' }, profile: { type: 'string' }, check: { type: 'string' }, out: { type: 'string' } }, usage);
     if (values.check && !/^\d+(,\d+)*$/.test(values.check)) throw new UsageError(`--check takes a check number, e.g. 13\n\n${usage}`);
     const dir = await resolveGame(positionals[0]);
-    if (!STATIC.includes(values.check ?? '')) {
+    if (!isStatic(values.check)) {
       const b = await ensureBrowser({ log: m => console.error(m) });
       if (!values.json) console.error(`verify: ${shown(dir)} in ${b.kind === 'edge' ? 'Microsoft Edge' : b.kind === 'chromium' ? 'Chromium' : 'Chrome'} (${b.path})`);
     }
     ensureCharDeps();   // verify reads every body's skeleton (check 19) with the 3D tools' packages; installed once
     const flags = [];
     if (values.quick) flags.push('--quick');
+    if (values.release) flags.push('--release');
+    if (values.profile) flags.push('--profile', values.profile);
     if (values.check) flags.push('--check', values.check);
     if (values.out) flags.push('--out', values.out);
     if (values.json) flags.push('--json');
