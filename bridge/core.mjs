@@ -10,6 +10,7 @@ export const LIMITS = {
   buildRefusals: 3,          // stops refused while the loop state does not change
   requestRefusals: 2,        // stops refused for one unanswered request
   permissionHoldMs: 240_000, // how long an approval waits for a click before the terminal decides
+  justHandedMs: 3000,        // a request the wait handed over this recently is on its way: the stop is not refused for it
   events: 500, requests: 200, permissions: 50,
   text: 8000, selection: 4096, cut: 2000,
 };
@@ -301,6 +302,9 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     // 2. requests handed and not reported
     const unanswered = [];
     for (const r of open(s.id)) {
+      // The Stop hook and the new wait start together at a turn end. When the wait took the request a moment ago, its
+      // wake is already bringing it: refusing the stop too would say it twice.
+      if (r.state === 'handed' && r.via === 'wake' && now() - r.handed < L.justHandedMs) continue;
       if (r.refusals < L.requestRefusals) { r.refusals++; change(r, {}); unanswered.push(r); }
       else change(r, { state: 'dropped', done: now(), note: `the session ended its turn ${L.requestRefusals + 1} times without reporting this request` });
     }

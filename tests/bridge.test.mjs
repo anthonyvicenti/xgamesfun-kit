@@ -76,12 +76,14 @@ test('a request with no session waits for the first one that connects', () => {
 });
 
 test('two sessions never cross: waits, the stop guard and the report are per session', async () => {
-  const b = mk();
+  let t = 1000;
+  const b = mk({ now: () => t });
   start(b, 'A'); start(b, 'B');
   const wa = waitHandle(), wb = waitHandle();
   b.openWait('A', wa); b.openWait('B', wb);
   const ra = b.addRequest({ text: 'for A', session: 'A' });
   assert.equal(wa.got.length, 1);
+  t += 5000;
   assert.equal(wb.got.length, 0, 'B\'s wait did not get A\'s request');
   assert.equal((await b.stop({ session: 'B' })).refuse, null, 'B may stop while A\'s request is open');
   const sa = await b.stop({ session: 'A' });
@@ -105,10 +107,12 @@ test('ids never repeat across restarts', () => {
 });
 
 test('stop guard: an unanswered request refuses the stop twice, then is dropped', async () => {
-  const b = mk();
+  let t = 1000;
+  const b = mk({ now: () => t });
   start(b, 'A');
   b.openWait('A', waitHandle());
   const r = b.addRequest({ text: 'do it' });
+  t += 5000;
   for (let i = 0; i < 2; i++) {
     const s = await b.stop({ session: 'A' });
     assert.match(s.refuse, /not reported yet/);
@@ -120,6 +124,17 @@ test('stop guard: an unanswered request refuses the stop twice, then is dropped'
   assert.equal(q.requests[0].refusals, 2);
   assert.equal(q.sessions[0].state, 'idle');
   assert.equal(r.id, q.requests[0].id);
+});
+
+test('stop guard: a request the wait handed over a moment ago is not also refused at the stop', async () => {
+  let t = 1000;
+  const b = mk({ now: () => t });
+  start(b, 'A');
+  b.openWait('A', waitHandle());
+  b.addRequest({ text: 'just now' });
+  assert.equal((await b.stop({ session: 'A' })).refuse, null, 'its wake is already on the way');
+  t += 5000;
+  assert.match((await b.stop({ session: 'A' })).refuse, /not reported yet/);
 });
 
 test('stop guard: requests that arrived during the turn are handed over at the stop, without a refusal', async () => {
@@ -476,6 +491,22 @@ test('scripts: the wait wakes with the request on stderr and exit code 2; a seco
   const r2 = await w2.exited;
   assert.equal(r2.code, 0); assert.equal(r2.err, ''); assert.equal(r2.out, '');
   await reportRequest({ cwd: game.dir, id: made.json.id, note: 'ok' });
+});
+
+test('scripts: with no studio running, a newer wait of the same session replaces the older one', async () => {
+  const empty = await tempDir();
+  try {
+    const copy = path.join(empty.dir, 'plugin', 'scripts');
+    await cp(SCRIPTS, copy, { recursive: true });
+    const go = () => { const c = spawn(process.execPath, [path.join(copy, 'wait.mjs'), '--max', '60'], { stdio: ['pipe', 'ignore', 'ignore'] }); c.stdin.end(JSON.stringify({ session_id: `lonely-${process.pid}`, cwd: empty.dir })); return c; };
+    const first = go();
+    await new Promise(r => setTimeout(r, 700));
+    const second = go();
+    const code = await new Promise(resolve => first.on('exit', resolve));
+    assert.equal(code, 0, 'the older wait ended quietly');
+    assert.equal(second.exitCode, null, 'the newer one keeps waiting for a studio');
+    second.kill();
+  } finally { await empty.cleanup(); }
 });
 
 test('scripts: the hook relay prints the studio\'s answer, and is silent with no studio', async () => {

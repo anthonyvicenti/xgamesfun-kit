@@ -8,7 +8,10 @@
 // it looks again every few seconds, so the order of starting things does not matter, and it reconnects by itself when
 // the studio restarts. It ends by itself when the session is gone, when a newer wait took over, or after --max
 // seconds (just before the hook's own timeout would kill it without a word).
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 import { alive, findRun, readInput, sleep } from './lib.mjs';
 
 const args = process.argv.slice(2);
@@ -24,7 +27,17 @@ const cwd = input.cwd ?? process.cwd();
 // stays, so ask whether that process still exists.
 const parent = process.ppid;
 const orphaned = () => process.ppid !== parent || !alive(parent);
-const over = () => (max > 0 && Date.now() - started > max * 1000) || orphaned();
+// One wait per session, also while no studio is running (the Stop hook starts a new one at every turn end, and with
+// no server there is nobody to tell the older one it was replaced): the newest writes its process id to a small file
+// in the system's temporary folder (os.tmpdir(): the same call on Windows, macOS and Linux), and an older one that
+// reads another id there ends.
+const mark = !monitor && session ? path.join(os.tmpdir(), `gamesfun-wait-${session.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80)}.pid`) : null;
+if (mark) { try { writeFileSync(mark, String(process.pid)); } catch { /* no temporary folder: the studio still replaces an older wait */ } }
+const replaced = () => { if (!mark) return false; try { return readFileSync(mark, 'utf8').trim() !== String(process.pid); } catch { return false; } };
+process.on('exit', () => { if (mark && !replaced()) { try { rmSync(mark, { force: true }); } catch { /* fine */ } } });
+// a stop from outside is an ordinary end (so the file above is removed). Windows knows SIGINT and SIGTERM only by name.
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) { try { process.on(sig, () => process.exit(0)); } catch { /* not on this system */ } }
+const over = () => (max > 0 && Date.now() - started > max * 1000) || orphaned() || replaced();
 setInterval(() => { if (over()) process.exit(0); }, 5000).unref();
 
 /** One connection. → 'again' (look for the studio again) or never returns (the process exits). */

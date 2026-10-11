@@ -274,7 +274,8 @@ instruction) in two cases, both bounded:
    When the state file carries a `session` field, only that session is held; otherwise every session whose working
    directory is the game folder, inside it or above it.
 2. **A request is unanswered.** A request this session was handed and has not reported. At most 2 refusals for each
-   request; then the request becomes `dropped`.
+   request; then the request becomes `dropped`. A request the wait handed over less than 3 seconds ago does not refuse
+   the stop: its wake is already bringing it.
 
 Requests that arrived while the session was busy are handed over at the same moment, in the same answer (state
 `handed`, via `"stop"`), so they do not wait for the next wake.

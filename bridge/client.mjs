@@ -1,7 +1,13 @@
 // What the session's tools call (mcp/tools: gamesfun_requests). The MCP server is its own process, so these find the
 // running dev server from the run file and talk to its routes; a tool needs no port, no token and no Bash.
 // Every function answers { ok: false, error } instead of throwing: a closed page never breaks a tool.
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { findRun } from './runfile.mjs';
+
+// The tools run from the kit, whatever folder the session is in: the kit's own .gamesfun/ is always looked in too.
+const KIT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
+const locate = options => options.run ?? findRun({ cwd: options.cwd, env: options.env, extra: options.extra ?? [KIT] });
 
 async function call(run, method, route, body) {
   const res = await fetch(new URL(route, run.url), {
@@ -17,14 +23,14 @@ async function call(run, method, route, body) {
   return { ok: true, ...json };
 }
 async function withRun(options, fn) {
-  const run = options.run ?? await findRun({ cwd: options.cwd, env: options.env, extra: options.extra });
+  const run = await locate(options);
   if (!run) return { ok: false, error: 'the studio is not running here (start it with: npx gamesfun dev)' };
   try { return await fn(run); } catch (e) { return { ok: false, error: `the studio did not answer at ${run.url}: ${e.message}` }; }
 }
 
 /** Is a studio running for this folder, and which sessions does it see? */
 export async function bridgeStatus(options = {}) {
-  const run = options.run ?? await findRun({ cwd: options.cwd, env: options.env, extra: options.extra });
+  const run = await locate(options);
   if (!run) return { running: false };
   try {
     const q = await call(run, 'GET', '/api/session/queue');
