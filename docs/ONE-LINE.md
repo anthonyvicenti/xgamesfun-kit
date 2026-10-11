@@ -122,6 +122,17 @@ own words (see `AGENTS.md`). Mention
 when the lockfile changed. A background check, at most once a day and never delaying a command, prints one line when a
 newer kit exists. `GAMESFUN_NO_UPDATE_CHECK=1` turns it off.
 
+## For a test machine
+
+Two pairs of environment variables, read only when the matching option is not given, let the line run unchanged
+without touching the machine's own setup: `GAMESFUN_CONNECT_SCOPE` and `GAMESFUN_CONNECT_DIR` (the scope and folder
+`connect` registers in) and `GAMESFUN_DEV_PORT` and `GAMESFUN_NO_OPEN=1` (the port `dev` takes, and no browser).
+
 ## What was and was not tested
 
-See `docs/DEVELOPING.md`, "The one line: what is tested".
+See `docs/DEVELOPING.md`, "The one line: what is tested", and `tests/e2e-live/README.md` for the whole line run in a
+real session from a fresh clone (Linux, 2026-10-11, Claude Code 2.1.296): `connect` added the server and the plugin,
+and `/reload-plugins` loaded both into the running session ("1 plugin · 7 agents · 13 hooks", the `gamesfun` server
+connected). Typed in the same second as the install, `/reload-plugins` ran before Claude Code had noticed the changed
+settings and loaded nothing; a second later it did. A person types it after the line has finished. Not run on
+Windows or macOS: the by-hand steps are in that README.
