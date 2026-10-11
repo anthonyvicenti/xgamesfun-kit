@@ -48,7 +48,7 @@ export async function lockedSpec(dir) {
 }
 
 /** One plain line for the verdict's notes. */
-export const repairLine = r => `fix ${r.fix}: ${r.file}${r.pointer ? ` ${r.pointer}` : ''} ${JSON.stringify(r.before)} → ${r.after === undefined ? '(removed)' : JSON.stringify(r.after)}. ${r.why}`;
+export const repairLine = r => `fix ${r.fix}: ${r.file}${r.pointer ? ` ${r.pointer}` : ''} ${r.before === undefined ? '(absent)' : JSON.stringify(r.before)} → ${r.after === undefined ? '(removed)' : JSON.stringify(r.after)}. ${r.why}`;
 
 /** Set a value at a JSON pointer ("/a/0/b"); the parents must exist. → the old value */
 export function setAt(doc, pointer, value) {

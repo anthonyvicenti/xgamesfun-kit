@@ -437,10 +437,13 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
   function gateBlock(covered) {
     if (!live) return null;
     const me = ctx.me;
-    const peers = players.humans().filter(p => !p.local).map(p => ({ id: p.id, name: p.name, x: p.drawn ? r2(p.position.x) : null, y: p.drawn ? r2(p.position.y) : null, z: p.drawn ? r2(p.position.z) : null, onScreen: players.visible(p, covered) }));
+    // where a player is: their body, or, when a part holds the body and gives them a mark (ctx.presenceOf: a board's
+    // cursor), the mark. `mark: true` says which, so a reader never takes one for the other
+    const at = p => { const q = ctx.presenceOf?.(p) ?? null; return q ? { x: r2(q.x), y: r2(q.y ?? 0), z: r2(q.z), mark: true } : { x: r2(p.position.x), y: r2(p.position.y), z: r2(p.position.z) }; };
+    const peers = players.humans().filter(p => !p.local).map(p => ({ id: p.id, name: p.name, ...(p.drawn ? at(p) : { x: null, y: null, z: null }), onScreen: players.visible(p, covered) }));
     return {
       you: net.you.id, host: net.host, started: net.started, watching: !!net.watching,
-      me: me ? { x: r2(me.position.x), y: r2(me.position.y), z: r2(me.position.z) } : null,
+      me: me ? at(me) : null,
       peers, over: net.over, clock: r2(hostTime), shared: digest(),
     };
   }

@@ -70,7 +70,7 @@ The mechanic does not own turn order. It asks `next(state, move)` after every mo
 - `play(player, move)` for a player this copy owns → `null`, or the reason. Host: `setTurn(seat)`.
 - Host callbacks: `onMove({ player, seat, move, state, auto })`, `onRefuse({ player, why, cell })`, `onEnd({ winners, seats, cells, reason, draw })`, `onTurn({ seat, player })`.
 - `bot(player, dt)` from `rules.bot`: the bot walks to its cell before it plays. Without it a bot still plays, from where it stands.
-- QA: `observe()` (give it to `rules.observe` and it is in `window.__game.snapshot().rules`), `screen()` (each cell's place on this screen in CSS pixels), `interactables()` (walking, `place` or `drop`: the local player's legal cells on their turn).
+- QA: `observe()` (give it to `rules.observe` and it is in `window.__game.snapshot().rules`), `screen()` (each cell's place on this screen in CSS pixels), `interactables()` (walking, `place` or `drop`: the local player's legal cells on their turn, each marked `turn: true` with its `verb`), `points()` (a cursor: what the local player may click now, in CSS pixels; with input `move` the pieces that can move, then where the picked one may go) and `presence(p)` (a cursor: where a player's mark is, so the kit's observation and the two-player gate read the mark as the player's place).
 
 ## Sounds
 

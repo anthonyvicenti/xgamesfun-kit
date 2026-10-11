@@ -6,18 +6,22 @@
 //
 // What it prints: each FAILING check with its rule and its fix (tools/lib/homes.json), then one summary line. --all
 // (or --verbose) prints every check and the progress lines as well.
-// A build's verify runs every check below except 8, 31 and 34: those test the kit, no game can fail them, and they run
-// per release (--release; regress.mjs --corpus passes it). tools/lib/verdict.mjs RELEASE_ONLY.
+// A build's verify runs every check below except 8, 22, 24, 31 and 34: those test the kit (a game fails them only by
+// sabotaging the kit's own page), and they run per release (--release; regress.mjs --corpus passes it).
+// tools/lib/verdict.mjs RELEASE_ONLY.
 // --profile <file>: a machine that cannot run everything (a CI runner with no graphics card). The file is
 // {name, environment: {VAR: value}, skip: [{check, reason, legs?}]}: the environment is set before any browser starts,
 // each skipped check is recorded ok: null with its reason, check 5 with "legs": "lobby" runs the gate's lobby legs only,
 // and the verdict carries profile (name, skipped) and profilePass. A profiled run is never a pass: `pass` stays false
 // while a required check is skipped. Exit 0 when everything that was not skipped passed.
 //
-//   1 assets.json valid (research/asset-manifest/validate.mjs) and multiplayer.json valid
+//   1 assets.json valid (research/asset-manifest/validate.mjs), its slot ids exactly the ones the declarations give
+//     (tools/lib/manifest-check.mjs; tools/fix.mjs puts a missing one back before verify), and multiplayer.json valid
 //   2 kit copies unedited (gf/three, gf/mp, audio, gf/gf-assets.js) and vendor/ the pinned libraries
 //   3 boots to play with no console errors (real mouse and keyboard, headless Chrome via qa/browser.mjs)
-//   4 slot coverage 100%: every visible mesh carries userData.gfSlot (in play and in every ?gf-show subject)
+//   4 slot coverage 100%: every visible mesh carries userData.gfSlot (in play and in every ?gf-show subject), and the
+//     game's own code builds nothing to draw (tools/lib/improvised-check.mjs: no geometry, mesh or sprite made in
+//     rules.js; what a game shows comes from a slot's file or a kit part)
 //   5 the two-player live gate (research/multiplayer/party/gate.mjs → gate-live.mjs): real WebRTC, each screen draws
 //     the other player where they are, the shared state matches, a round ends, replays, reloads, the host leaves; and
 //     the loadout leg (tools/lib/loadout-check.mjs, CONTRACT §6e): two players in different test loadouts each draw the
@@ -25,7 +29,10 @@
 //     reloaded copy follow
 //   6 a round runs to results and replays: alone with bots (here, a 25 s round through Studio's overrides) and with
 //     two players (the gate's results, play-again and end-round checks)
-//   7 audio gate v4 (research/audio/qa-gate-v4.mjs) over the solo round
+//   7 audio gate v5 (research/audio/qa-gate-v5.mjs) over the solo round: the loudest sound, while it sounds, is clearly
+//     audible (v4 read the loudest 400 ms, which a game of single short sounds never fills), sounds really start and
+//     reach the speakers, the game's own listed sounds are among them (the kit's count, window.__game.sounds()), and
+//     v4's ceilings (too loud, harsh, clipped, piled up, playing while hidden) unchanged. Worlds and forge games: v4
 //   8 swap proof: one body and one prop slot replaced by an override (as Studio does), the new model is on screen
 //   9 contact sheet on the real GPU and perf: research/gf-three/lookdev/capture.mjs when it exists (--quick skips it)
 //  10 fair play (tools/lib/fair-check.mjs): a scripted human vs 3 bots for 42 s, twice at once (stands and fights;
@@ -115,7 +122,7 @@ import { validateGame } from '../../asset-manifest/validate.mjs';
 import { readManifest, validateMultiplayer, startParty } from '../../multiplayer/party/lib.mjs';
 import { gate } from '../../multiplayer/party/gate.mjs';
 import { launchChrome, GPU_TROUBLE } from '../../foundations/qa/browser.mjs';
-import { installAudioTap, resetAudioTap, audioReport } from '../../audio/qa-gate-v4.mjs';
+import { installAudioTap, resetAudioTap, audioReport } from '../../audio/qa-gate-v5.mjs';
 import { checkFairPlay } from './lib/fair-check.mjs';
 import { checkControls } from './lib/controls-check.mjs';
 import { checkHits } from './lib/hits-check.mjs';
@@ -138,6 +145,10 @@ import { STEP_PRE, STEP_POST } from './lib/stepped.mjs';
 import { lockFor } from './lib/lock.mjs';
 import { checkGameTests } from './lib/game-tests.mjs';
 import { shortRound, flowPulse } from './lib/flow-signs.mjs';
+import { holdsBody, whereIs } from './lib/part-signs.mjs';
+import { turnPlayer, turnLine } from './lib/turn-player.mjs';
+import { manifestDiff, manifestLine } from './lib/manifest-check.mjs';
+import { improvised, improvisedLine } from './lib/improvised-check.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
@@ -352,10 +363,14 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     await p.mouse.click(640, 400);                                   // takes the mouse (pointer lock)
     // The walk test: the farthest the local player gets from its start while keys are held, sampled, so a bot knocking
     // it over mid-walk does not read as "input does nothing"; one retry after a pause if it still barely moved.
-    let moved = 0, s1 = null, walkTries = 0;
+    // A part that holds the body (it owns player.control by its own manifest: a board with a cursor) says where the
+    // player is instead, its mark (snapshot().players[].mark, tools/lib/part-signs.mjs): the same keys must move that.
+    // With no mark reported the body is read, as before, and a body held still fails as it always did.
+    let moved = 0, s1 = null, walkTries = 0, onMark = false;
+    const held = holdsBody(game);
     const walk = async () => {
-      const start = (await snap(p)).players.find(x => x.local);
-      const far = async () => { const m = (await snap(p))?.players.find(x => x.local); if (m) moved = Math.max(moved, Math.hypot(m.x - start.x, m.z - start.z)); };
+      const start = whereIs((await snap(p)).players.find(x => x.local));
+      const far = async () => { const m = whereIs((await snap(p))?.players.find(x => x.local)); if (m && held && m.mark) onMark = true; if (m && m.mark === start.mark) moved = Math.max(moved, Math.hypot(m.x - start.x, m.z - start.z)); };
       await p.keyboard.down('KeyW');
       for (let i = 0; i < 7; i++) { await sleep(200); await far(); }
       await p.mouse.move(700, 380, { steps: 6 }); await p.keyboard.up('KeyW');
@@ -369,9 +384,12 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     s1 = await snap(p);
     await shot(p, 'playing');
     // coverage while things move (balls flying, players knocked over): three samples
-    for (let i = 0; i < 3; i++) { cov.push(await p.evaluate(() => window.__game.coverage())); await sleep(2500); }
+    // the test player takes its own turn whenever a part says it has one (tools/lib/turn-player.mjs: a board's legal
+    // cells, by walking or by pointing); in a game with no turns it does nothing and these are the same waits as before
+    const tp = turnPlayer(p, { log: say });
+    for (let i = 0; i < 3; i++) { cov.push(await p.evaluate(() => window.__game.coverage())); await tp.idle(2500); }
     await shot(p, 'mid-round');
-    await until(async () => (await snap(p))?.phase === 'results', (roundSeconds + 20) * 1000, 'the results');
+    await until(async () => { if ((await snap(p))?.phase === 'results') return true; await tp.step(); return false; }, (roundSeconds + 20) * 1000, 'the results');
     sr = await snap(p);
     await shot(p, 'results');
     const again = await p.locator('#gf-again').boundingBox().catch(() => null);
@@ -380,10 +398,12 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     await until(async () => (await snap(p))?.phase === 'playing', 8000, 'round 2 to play').catch(() => {});
     await sleep(1500);
     await shot(p, 'round-2');
-    audio = await audioReport(p);
+    // the game's own list (assets.json → sounds) and the kit's own count of what played (window.__game.sounds(); an
+    // older kit copy has none, and the gate then judges what it can hear and says so)
+    audio = await audioReport(p, { listed: listedSounds(assets), played: pg => pg.evaluate(() => window.__game?.sounds?.()?.plays ?? null) });
     soloSeconds = (Date.now() - tStep) / 1000;
-    rec.solo = { moved: +moved.toFixed(2), results: sr.results, winners: sr.winners, coverage: cov.map(c => ({ meshes: c.meshes, tagged: c.tagged, exempt: c.exempt, untagged: c.untagged.length, unknownSlots: c.unknownSlots })), audio: { ok: audio.ok, heard: audio.heard, problems: audio.problems, mix: audio.mix, maxSoundsPer100ms: audio.maxSoundsPer100ms, hidden: audio.hidden } };
-    if (want(3)) add(3, 'boots to play with no console errors', S.errors.length === 0 && moved > 0.5, `${S.errors.length ? `console errors: ${[...new Set(S.errors)].slice(0, 3).join(' | ')}` : 'no console errors'}; the player walked ${moved.toFixed(2)} m on real keys${walkTries > 1 ? ' (second try)' : ''}; ${s1.players.length} players`, { seconds: soloSeconds, shares: 'the solo round, with 6 and 7' });
+    rec.solo = { moved: +moved.toFixed(2), ...(held ? { held: { by: held.id, mark: onMark } } : {}), turns: tp.record, results: sr.results, winners: sr.winners, coverage: cov.map(c => ({ meshes: c.meshes, tagged: c.tagged, exempt: c.exempt, untagged: c.untagged.length, unknownSlots: c.unknownSlots })), audio: { gate: audio.gate, ok: audio.ok, heard: audio.heard, problems: audio.problems, mix: audio.mix, soundMaxLufs: audio.soundMaxLufs, activeLufs: audio.activeLufs, sounds: audio.sounds, listed: audio.listed ?? null, floor: audio.floor, maxSoundsPer100ms: audio.maxSoundsPer100ms, hidden: audio.hidden } };
+    if (want(3)) add(3, 'boots to play with no console errors', S.errors.length === 0 && moved > 0.5, `${S.errors.length ? `console errors: ${[...new Set(S.errors)].slice(0, 3).join(' | ')}` : 'no console errors'}; ${held && onMark ? `the player's mark moved ${moved.toFixed(2)} m on real keys and the mouse (the ${held.id} holds the body: it owns player.control)` : held && moved <= 0.5 ? `the ${held.id} holds the body (it owns player.control) and reports no mark for the player (presence(p), window.__game.controls().mark): the body moved ${moved.toFixed(2)} m` : `the player walked ${moved.toFixed(2)} m on real keys`}${walkTries > 1 ? ' (second try)' : ''}; ${s1.players.length} players${tp.record.listed ? `; ${turnLine(tp.record)}` : ''}`, { seconds: soloSeconds, shares: 'the solo round, with 6 and 7' });
     lap('solo round', tStep); tStep = Date.now();
     }
     if (want(4)) {
@@ -403,7 +423,11 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     const untagged = allCov.flatMap(c => c?.untagged ?? [{ name: 'no coverage report' }]);
     const unknown = [...new Set(allCov.flatMap(c => c?.unknownSlots ?? []))];
     const showErrors = subjectCov.flatMap(x => x.errors);
-    add(4, 'slot coverage 100%', untagged.length === 0 && showErrors.length === 0, `${cov.map(c => `${c.tagged}/${c.meshes}`).join(', ')} tagged in play; ${subjectCov.map(x => `${x.q.replace('?gf-show=', '')} ${x.c ? `${x.c.tagged}/${x.c.meshes}` : 'no report'}`).join(', ')}${untagged.length ? `; untagged: ${untagged.slice(0, 4).map(u => u.path ?? u.name).join(', ')}` : ''}${showErrors.length ? `; errors: ${showErrors.slice(0, 2).join(' | ')}` : ''}`);
+    // and nothing the game's own code draws is built in code (tools/lib/improvised-check.mjs): a cone made in
+    // rules.js carries a slot id and has no file to replace (X1: four of nine builds, 100% coverage each)
+    const built = await improvised(dir).catch(() => []);
+    rec.improvised = built;
+    add(4, 'slot coverage 100%', untagged.length === 0 && showErrors.length === 0 && built.length === 0, `${built.length ? `${improvisedLine(built)}. Coverage: ` : ''}${cov.map(c => `${c.tagged}/${c.meshes}`).join(', ')} tagged in play; ${subjectCov.map(x => `${x.q.replace('?gf-show=', '')} ${x.c ? `${x.c.tagged}/${x.c.meshes}` : 'no report'}`).join(', ')}${untagged.length ? `; untagged: ${untagged.slice(0, 4).map(u => u.path ?? u.name).join(', ')}` : ''}${showErrors.length ? `; errors: ${showErrors.slice(0, 2).join(' | ')}` : ''}`);
     if (unknown.length) rec.notes.push(`meshes tagged with ids assets.json lacks (not counted against coverage; the module should use a declared slot id): ${unknown.join(', ')}`);
     rec.solo.subjects = subjectCov.map(x => ({ q: x.q, meshes: x.c?.meshes, tagged: x.c?.tagged, untagged: x.c?.untagged?.length }));
     lap('coverage subjects', tStep); tStep = Date.now();
@@ -599,7 +623,7 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   // ---- 7. audio ----
   if (want(7) && !checks.some(c => c.n === 7)) {
     const a = solo?.audio;
-    add(7, 'audio gate v4', !!(a && a.ok && a.heard), a ? `${a.heard ? 'heard' : 'nothing heard'}${a.mix ? `, ${a.mix.integratedLufs?.toFixed?.(1) ?? a.mix.integrated ?? '?'} LUFS integrated, peak ${a.mix.truePeakDb?.toFixed?.(1) ?? '?'} dBTP` : ''}; ${a.problems.length ? a.problems.join('; ') : 'within the targets'}` : 'not measured', { seconds: soloSeconds, shares: 'the solo round, with 3 and 6' });
+    add(7, 'audio gate v5', !!(a && a.ok && a.heard), a ? `${a.heard ? 'heard' : 'nothing heard'}${a.mix ? `, the loudest sound ${a.soundMaxLufs ?? '?'} LUFS over its 100 ms (floor ${a.floor?.min}; the loudest 400 ms ${a.mix.momentaryMaxLufs ?? '?'}), ${a.mix.integratedLufs?.toFixed?.(1) ?? '?'} LUFS integrated, peak ${a.mix.truePeakDb?.toFixed?.(1) ?? '?'} dBTP` : ''}; ${a.sounds ? `${a.sounds.started} sounds of ${a.sounds.distinct} kinds started, ${a.sounds.audible} reached the speakers` : ''}${a.listed?.played ? `; of the ${a.listed.ids} listed, ${a.listed.played.length} played (${a.listed.played.slice(0, 8).join(', ') || 'none'})` : ''}; ${a.problems.length ? a.problems.join('; ') : 'within the targets'}` : 'not measured', { seconds: soloSeconds, shares: 'the solo round, with 3 and 6' });
   }
 
   // ---- 9. contact sheet and perf (track L's capture tool) ----
@@ -660,7 +684,13 @@ async function check1(dir, { rec, add, mpm = null }) {
   mpm ??= await readManifest(dir);
   const mv = mpm.error ? { ok: false, problems: [`multiplayer.json is ${mpm.error}`] } : validateMultiplayer(mpm.manifest);
   const live = mpm.manifest?.mode === 'live';
-  add(1, 'manifests', v.ok && mv.ok && live, [v.ok ? `assets.json valid (${v.stats?.slots ?? '?'} slots, ${v.stats?.mainSlots ?? v.stats?.main ?? '?'} main)` : `assets.json: ${v.errors.slice(0, 4).join('; ')}`, mv.ok ? `multiplayer.json valid, mode ${mpm.manifest?.mode}` : `multiplayer.json: ${mv.problems.join('; ')}`].join(' · '));
+  // assets.json is held to the declarations (tools/lib/manifest-check.mjs): a slot the kit modules, config or the
+  // asset files declare and the file lacks, or one in the file that nothing declares. verify writes nothing: the
+  // loop's fix step (tools/fix.mjs, "manifest-slots") puts a missing slot back before this runs, and notes it.
+  const md = v.ok ? await manifestDiff(dir) : null;
+  add(1, 'manifests', v.ok && mv.ok && live && (md?.ok ?? true), [v.ok ? `assets.json valid (${v.stats?.slots ?? '?'} slots, ${v.stats?.mainSlots ?? v.stats?.main ?? '?'} main)` : `assets.json: ${v.errors.slice(0, 4).join('; ')}`, ...(md ? [manifestLine(md, relPosix(REPO, dir))] : []), mv.ok ? `multiplayer.json valid, mode ${mpm.manifest?.mode}` : `multiplayer.json: ${mv.problems.join('; ')}`].join(' · '));
+  if (md && !md.error) rec.manifest = { ok: md.ok, slots: md.have, declared: md.want, missing: md.missing, extra: md.extra };
+  if (md?.error) rec.notes.push(`check 1: ${manifestLine(md)}`);
   if (v.warnings?.length) rec.notes.push(`assets.json warnings: ${v.warnings.slice(0, 5).join('; ')}`);
 }
 
@@ -892,7 +922,9 @@ async function aliveOnly(dir, { rec, outDir, add, log, t0, lap }) {
         look = await firstLook(T.page, game, world);
         await shot(T.page, 'first-look');
         await T.page.mouse.click(640, 400);
-        await until(async () => (await phase(T.page)) === 'results', (roundSeconds + 20) * 1000, 'the results').catch(() => {});
+        const tp = turnPlayer(T.page, { log });      // the solo round's player takes its turn (tools/lib/turn-player.mjs)
+        await until(async () => { if ((await phase(T.page)) === 'results') return true; await tp.step(); return false; }, (roundSeconds + 20) * 1000, 'the results').catch(() => {});
+        rec.turns = tp.record;
         await shot(T.page, 'results');
       } finally { await T.ctx.close().catch(() => {}); lap('round with bots', t); }
     })();
@@ -1036,6 +1068,9 @@ async function friendsOnly(dir, { rec, outDir, add, log, t0 }) {
   await writeFile(join(outDir, 'verdict.json'), JSON.stringify(rec, null, 2) + '\n');
   return rec;
 }
+
+/** The sounds a game lists (assets.json → sounds → sounds), each with its bus: what check 7 expects to hear some of. */
+function listedSounds(assets) { return Object.entries(assets?.sounds?.sounds ?? {}).map(([id, s]) => ({ id, bus: s?.bus ?? 'sfx' })); }
 
 /** Map over items, at most n at a time, keeping the order. */
 async function pool(items, n, fn) {

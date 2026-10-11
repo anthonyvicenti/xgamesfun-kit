@@ -18,6 +18,7 @@
 //   - no console errors but the browser's own refusal of the lock.
 import { createServer } from 'node:http';
 import { findBuildSpot, faces, actOn } from './worlds-check.mjs';
+import { holdsBody, whereIs } from './part-signs.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
@@ -87,9 +88,12 @@ export async function checkEmbed({ newPage, url, game = {}, log = () => {}, shot
           const turned = Number.isFinite(y0) && Number.isFinite(y1) ? Math.abs(y1 - y0) : 0;
           step('in full screen a drag turns the camera', turned > 0.2, `yaw ${Number.isFinite(y0) ? y0.toFixed(2) : y0} → ${Number.isFinite(y1) ? y1.toFixed(2) : y1}`);
         } else warnings.push(`plays inside a post: the ${camera} camera does not look with the mouse; the drag step is skipped`);
-        const a = await me(); await p.keyboard.down('KeyW'); await sleep(1200); await p.keyboard.up('KeyW'); await sleep(200); const z = await me();
-        const moved = a && z ? Math.hypot(z.x - a.x, z.z - a.z) : 0;
-        step('in full screen W moves the player', moved > 1, `${Math.round(moved * 10) / 10} m`);
+        // a part that holds the body (it owns player.control by its manifest: a board with a cursor) reports the
+        // player's mark instead (players[].mark, tools/lib/part-signs.mjs): W must move that
+        const held = holdsBody(game);
+        const a = whereIs(await me()); await p.keyboard.down('KeyW'); await sleep(1200); await p.keyboard.up('KeyW'); await sleep(200); const z = whereIs(await me());
+        const moved = a && z && a.mark === z.mark ? Math.hypot(z.x - a.x, z.z - a.z) : 0;
+        step(held && z?.mark ? `in full screen W moves the player's mark (the ${held.id} holds the body)` : 'in full screen W moves the player', moved > 1, `${Math.round(moved * 10) / 10} m${held && !z?.mark ? `; the ${held.id} owns player.control and reports no mark (presence(p))` : ''}`);
         if (game.round?.mode === 'world' && camera === 'first') {
           // the game's frame as a page: its own reading, the post's keyboard and mouse moved by the frame's offset
           const fr = frame(), box = async () => (await (await fr.frameElement()).boundingBox()) ?? { x: 0, y: 0 };

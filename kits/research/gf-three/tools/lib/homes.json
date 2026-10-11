@@ -6,8 +6,8 @@
       "name": "manifests",
       "home": "invariant",
       "run": "build",
-      "rule": "assets.json and multiplayer.json are valid, and the game is live multiplayer.",
-      "fix": "Run node research/gf-three/tools/slots.mjs <game> --write to rebuild assets.json from the slots; keep multiplayer.json mode \"live\" as create wrote it."
+      "rule": "assets.json and multiplayer.json are valid, assets.json holds exactly the slots the game's declarations give, and the game is live multiplayer.",
+      "fix": "Run node research/gf-three/tools/fix.mjs <game>: it puts back a slot the declarations give and assets.json lacks, and says so (slots.mjs <game> --write rebuilds the whole file). A slot nothing declares: declare it (a rules number in config/game.json → rules.params, a prop in config/world.json) or delete it. Keep multiplayer.json mode \"live\" as create wrote it."
     },
     "2": {
       "name": "kit copies unedited",
@@ -27,6 +27,11 @@
           "home": "part",
           "part": "controller",
           "what": "the walk test (W and D move the avatar): a game with no avatar has nothing to walk"
+        },
+        {
+          "home": "part",
+          "part": "mechanic:*",
+          "what": "when a part of the game owns player.control by its own manifest (a board with a cursor), the walk test reads the part's own sign of the player moving, their mark (snapshot().players[].mark from the part's presence(p)); a part that holds the body and reports no mark fails as a body that cannot walk does"
         }
       ]
     },
@@ -34,8 +39,9 @@
       "name": "slot coverage 100%",
       "home": "invariant",
       "run": "build",
-      "rule": "Everything visible is a slot: every mesh on screen carries a slot id, in play and in every preview subject.",
-      "fix": "Do not build meshes in rules.js. Place a prop through config/world.json or a mechanic, and read colours and numbers through ctx.assets and ctx.config. The detail names the untagged meshes."
+      "rule": "Everything visible is a slot: every mesh on screen carries a slot id, in play and in every preview subject, and the game's own code builds nothing to draw.",
+      "fix": "Do not build meshes in rules.js: no new geometry, mesh or sprite in the game's own code, whatever slot id it is given. Place a prop through config/world.json or a mechanic, show state through the kit part that draws it (a mechanic's own marker, ctx.vfx, ctx.ui and the nameplate), and read colours and numbers through ctx.assets and ctx.config. The detail names the untagged meshes and the lines that build one.",
+      "note": "Second half since 2026-10-11 (tools/lib/improvised-check.mjs, the creator's question 19): a reading of the game's own scripts for constructed geometry. X1 built one spec nine times and four builds drew a cone in code with 100% coverage. A round game's flow only."
     },
     "5": {
       "name": "two-player live gate",
@@ -48,6 +54,11 @@
           "home": "part",
           "part": "character:loadout",
           "what": "the loadout leg (each player drawn in their own body and shot colour on the other screen)"
+        },
+        {
+          "home": "part",
+          "part": "mechanic:*",
+          "what": "a part that holds the body says where the player is (presence(p)): the kit's gate block reports the mark as the player's place, with mark: true, so the gate's 'movement shows on the other screen' is judged on what the friend sees move"
         }
       ]
     },
@@ -60,18 +71,19 @@
       "fix": "Let the kit end the round (the clock, or rules.check returning a result). Do not hold the phase in rules.js, and reset the game's own state in rules.roundStart so round 2 starts clean."
     },
     "7": {
-      "name": "audio gate v4",
+      "name": "audio gate v5",
       "home": "invariant",
       "run": "build",
-      "rule": "The round is heard, within the loudness targets, through the gf-audio kit.",
-      "fix": "Play sounds only through ctx.audio with ids listed in assets.json → sounds → sounds. Do not play a sound every frame, and do not raise the bus levels to pass.",
+      "rule": "The round is heard through the gf-audio kit: the loudest sound is clearly audible while it sounds, sounds really start and reach the speakers, the game's own listed sounds are among them, and nothing is too loud, harsh, clipped or piled up.",
+      "fix": "Play sounds only through ctx.audio with ids listed in assets.json → sounds → sounds, and make sure the round reaches them (a mechanic's sound param, a ctx.audio.play in the rules where the thing happens). A sound that is too quiet has too low a gainDb of its own. Do not play a sound every frame, and do not raise the bus levels to pass.",
       "also": [
         {
           "home": "part",
           "part": "loop:*",
           "what": "the solo round the gate listens to is cut to 25 s through round.seconds and what the flow's signs.short adds (a turn clock of 4 s, so pieces land inside the window); the targets and the kit's levels are the same for every flow"
         }
-      ]
+      ],
+      "note": "v5 (research/audio/qa-gate-v5.mjs, 2026-10-11) for a round game; a world and a forge game still run v4 in their own flows. v4 read the loudest 400 ms, which a game of single short sounds never fills; v5 reads the loudest 100 ms against the same -32 LUFS, and holds that at least 2 sounds of 2 kinds started, that 8 in 10 of them reached the speakers, and, when the game lists two or more sounds of its own (not on the ui bus), that one of them played. Measurements: research/open-builder/findings/audio-gate-v5-2026-10-11.md."
     },
     "8": {
       "name": "swap proof",
@@ -109,19 +121,31 @@
       "part": "loop:*",
       "run": "build",
       "rule": "Something happens, by the loop's own sign (kit/loops/<id> → signs.pulse). A timed round, a level run and an endless session: in three rounds with bots some score moves and builds up. Taking turns: moves are played in turn in the solo round. A match: a round of it ends with somebody ahead.",
-      "fix": "A timed round: check the score code in rules.update against each mechanic's README, make rules.bot act (ctx.bots.target / attack, p.bot.seek), and do not make scoring depend on a score that starts at 0. Play ?bots=3&seed=1 and watch the scoreboard. A turn-taking game: the detail says what the flow counted; rules.botMove must return a move rules.move accepts."
+      "fix": "A timed round: check the score code in rules.update against each mechanic's README, make rules.bot act (ctx.bots.target / attack, p.bot.seek), and do not make scoring depend on a score that starts at 0. Play ?bots=3&seed=1 and watch the scoreboard. A turn-taking game: the detail says what the flow counted; rules.botMove must return a move rules.move accepts.",
+      "also": [
+        {
+          "home": "part",
+          "part": "mechanic:*",
+          "what": "the solo round's test player takes its own turn when a part lists one (controls().points or interactables marked turn: true), so an untimed turn shows moves; it presses nothing a part did not list"
+        }
+      ]
     },
     "13": {
       "name": "controls work",
       "home": "invariant",
       "run": "build",
-      "rule": "Every control config/game.json lists does something the player sees on their own screen.",
-      "fix": "Make the control work in rules.js (for a shot: prj.fire(p) or prj.stream(p, on) with no direction lands on the crosshair). If it cannot work, take it out of config/game.json → controls so the HUD stops promising it.",
+      "rule": "Every control config/game.json lists does something the player sees on their own screen. On a phone (a first-person forge game), the touch buttons there at rest cover at most 5% of the screen, none sits over the middle, a readout or the menu button, each is at least 44 px across, every action is under a thumb when it applies, and How to play keeps what each control does on the screen.",
+      "fix": "Make the control work in rules.js (for a shot: prj.fire(p) or prj.stream(p, on) with no direction lands on the crosshair). If it cannot work, take it out of config/game.json → controls so the HUD stops promising it. A phone's buttons are the kit's, laid out from config/game.json → forge.feel.touch (size, fire, gap, edge, lift, always): keep the kit's values, never hide or cover its touch layer, take a control the game does not need out of controls, and keep a touch name in controls.more to a word or two (\"Load button\").",
       "also": [
         {
           "home": "part",
           "part": "loop:turns",
           "what": "when no mechanic exposes anything to walk to, a press of interact counts when it reached the flow (a move played, or refused with a reason on screen: signs.pressed), never because the turn clock ran"
+        },
+        {
+          "home": "part",
+          "part": "mechanic:*",
+          "what": "point and click: when a part lists what may be clicked now (window.__game.controls().points, CSS pixels, on the player's turn), primary and secondary are judged by moving the real mouse to a listed point and clicking; the point must be taken and the shared state must change. An interactable may carry its own verb"
         }
       ]
     },
@@ -197,10 +221,10 @@
       "name": "the wallet in the menu",
       "home": "part",
       "part": "panel:wallet",
-      "run": "build",
+      "run": "release",
       "rule": "The home menu offers Connect wallet and a worn item shows on the player.",
       "fix": "Do not hide #gf-wallet or recolour the local player for everyone. Read a player's look per player: ctx.assets.value(slotId, fallback, { player: p }).",
-      "note": "A kit test in practice: the only fixture is DOM sabotage. A candidate for the release profile once the creator agrees (not moved by M2-A)."
+      "note": "A kit test in practice (the only way a game fails it is by sabotaging the kit's own page). Moved to the release run on 2026-10-11 (the creator's question 18, on the parent's recommendation): a build's verify neither runs nor requires it; verify --release and regress.mjs --corpus do."
     },
     "23": {
       "name": "looks like the references",
@@ -212,10 +236,17 @@
     "24": {
       "name": "plays inside a post",
       "home": "invariant",
-      "run": "build",
+      "run": "release",
       "rule": "Framed in a post that refuses the pointer lock, the camera stays the game's own, the full-screen button works, and in full screen a drag turns the camera and W moves.",
       "fix": "Never call requestPointerLock, hide #gf-fullscreen or swap the camera in rules.js.",
-      "note": "A kit test in practice (the fixture is DOM sabotage; its walk leg repeats check 3). A candidate for the release profile once the creator agrees (not moved by M2-A)."
+      "note": "A kit test in practice (the only way a game fails it is by sabotaging the kit's own page). Moved to the release run on 2026-10-11 (the creator's question 18, on the parent's recommendation): a build's verify neither runs nor requires it; verify --release and regress.mjs --corpus do.",
+      "also": [
+        {
+          "home": "part",
+          "part": "mechanic:*",
+          "what": "in full screen W moves the player's mark when a part owns player.control and reports one"
+        }
+      ]
     },
     "25": {
       "name": "playing with friends",

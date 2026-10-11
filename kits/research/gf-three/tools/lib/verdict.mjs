@@ -47,9 +47,13 @@ export function passesForge(checks, required = REQUIRED_FORGE) {
  * (research/game-templates/ai-studios-2026-10-10/findings/verify-our-numbers.md, claim 2: 8 the swap proof, 31 sharp
  * on every screen, 34 watch then play). They run per release (verify --release, which regress.mjs --corpus passes),
  * and a build's own verify neither runs nor requires them. 2 and 25 stay in every build: a game can fail both.
- * Their home in tools/lib/homes.json is "invariant" with run "release".
+ * Their home in tools/lib/homes.json has run "release".
+ * Since 2026-10-11 (the creator's question 18, on the parent's recommendation) also 22 (the wallet in the menu) and
+ * 24 (plays inside a post): kit tests in practice. The only fixtures that fail them sabotage the kit's own page
+ * (regressions/no-wallet-in-menu, escaping-mouse: both still run, alone, `--check 22` and `--check 24`), and 24's
+ * walk leg repeats check 3. Each cost every build about 10 to 15 s and could tell it nothing about its own game.
  */
-export const RELEASE_ONLY = [8, 31, 34];
+export const RELEASE_ONLY = [8, 22, 24, 31, 34];
 const LISTS = { round: REQUIRED, world: REQUIRED_WORLD, forge: REQUIRED_FORGE };
 /** The checks a verify of this kind of game must run and pass: a build's (the list less RELEASE_ONLY) or a release's. */
 export function requiredFor(kind = 'round', { release = false } = {}) {

@@ -90,6 +90,12 @@ export function create(ctx, params = {}) {
     notIt: () => list().filter(p => !itIds().includes(p.id)),
     /** Every copy: seconds a player has spent as "it" (updated about twice a second). */
     itTime(p) { return (ctx.host ? roles.time.get(p.id) : S?.ti?.[p.id]) ?? 0; },
+    /**
+     * Every copy: whole seconds a player has spent as "it", for a score shown while the round runs. A score is the
+     * host's and travels to the other copies a few times a second: a fraction that moves every frame is never the
+     * same number on two screens at once (the two-player gate compares them), a whole second is.
+     */
+    itSeconds(p) { return Math.floor(api.itTime(p) + 1e-6); },
     /** Every copy: the hide head start is still running. */
     hiding: () => (ctx.host ? hideLeft > 0 : (S?.h ?? 0) > 0),
     /** Host: make someone "it", or not. */
@@ -183,13 +189,14 @@ export const manifest = {
   sync: { owner: 'host', how: 'the host decides every tag, the cooldowns and the hide timer' },
   note: [
     'The kit picks who is it at round start, judges contact, and draws the marker over them: mode "swap" passes it on, "infect" adds to the its.',
-    'tag.isIt(p), tag.its(), tag.notIt() and tag.itTime(p) are the same on every copy: score from itTime in results().',
+    'tag.isIt(p), tag.its() and tag.notIt() are the same on every copy. A score in time as it: p.score = tag.itSeconds(p) (whole seconds, set on the host in update), never tag.itTime(p), a fraction that differs on every screen.',
     'hideSeconds > 0 is hide and seek: the it waits that long before chasing.',
   ],
   stub: {
     as: 'tag',
-    worked: 'results(ctx) { return ctx.players.list().map(p => ({ id: p.id, name: p.name, value: Math.round(tag.itTime(p)) })); }',
+    worked: 'update(ctx) { if (ctx.host) for (const p of ctx.players.list()) p.score = tag.itSeconds(p); }',
     traps: [
+      'a score that is a running time must be whole seconds (tag.itSeconds): with tag.itTime(p) as the score the two screens never show the same number and verify check 5 fails on "the-shared-world-matches"',
       'bots neither chase nor flee unless the rules steer them: in bot(ctx, p) call tag.botStep(p)',
       'with mode "infect", end the round in check(ctx) when tag.notIt().length === 0, or the last runner is chased until the clock runs out',
     ],

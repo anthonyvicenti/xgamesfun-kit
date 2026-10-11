@@ -51,7 +51,7 @@ import audioPresets from '../../../audio/presets.json' with { type: 'json' };
 import KIT from '../kit.js';
 import { assets } from '../assets/core.js';
 import { createRng, seedOf } from './rng.js';
-import { pickQuality, deviceFacts } from './quality.js';
+import { pickQuality, deviceFacts, drawsOnCard } from './quality.js';
 import { pixelRatioFor, watchPixelRatio, PIXEL_BUDGET } from './resolution.js';
 import { createInput } from './input.js';
 import { createUI } from '../ui/ui.js';
@@ -59,7 +59,7 @@ import { createHud } from '../ui/hud.js';
 import { createMenu, loadSettings } from '../ui/menu.js';
 import { startLoading } from '../ui/loading.js';
 import { listenForHost, host as pageHost } from '../net/host.js';
-import { createSession } from '../net/session.js';
+import { createSession, seatPalette } from '../net/session.js';
 import { listenForLoadout, pageLoadout } from '../net/looks.js';
 import { createFair } from './fair.js';
 import * as refusals from './refusals.js';
@@ -99,6 +99,16 @@ export async function boot({ rules = {} } = {}) {
   let ui = null;
   try {
     await assets.init({ configs: ['game', 'look', 'world', 'characters'] });
+    // The lobby's backdrop (the waiting room draws the world behind it) is left out on a machine that draws on its
+    // processor, as boot.js leaves it out (the first CI runs of gamesfun-kit, 2026-10-11: two pages drawing a world in
+    // software took both processors of a runner and a friend's join ran into the kit's 20 s limit). The lobby keeps
+    // its seat colours. A round is never a backdrop, and the forge loader shows its own screen for a round that has
+    // only software to draw with.
+    if (backdrop && !drawsOnCard()) {
+      net.describe?.({ colors: seatPalette(assets).slice(0, 8).map(String) });
+      document.documentElement.dataset.gfBackdrop = 'off';
+      return;
+    }
     const game = assets.config('game'), lookCfg = assets.config('look'), worldCfg = assets.config('world');
     ctx.config = game; ctx.assets = assets;
     ctx.fair = createFair(ctx);

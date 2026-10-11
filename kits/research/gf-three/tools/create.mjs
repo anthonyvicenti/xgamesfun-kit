@@ -41,8 +41,22 @@ export const AUDIO_FILES = ['audio.js', 'zzfx.mjs', 'sounds.mjs', 'meter.mjs', '
 
 /** Which real modules to use: present in the kit source AND importable with the contract's exports.
  *  engine 'scenic' (CONTRACT §8): the look and world are research/gf-scenic/kit's, never stand-ins. */
-export async function decideModules({ standins = false, standinMechanics = false, engine = 'party', kit = KIT } = {}) {
+export async function decideModules({ standins = false, standinMechanics = false, engine = 'party', kit = KIT, flat = null } = {}) {
   const found = await kitModuleFiles(), out = { look: false, world: false, character: false, mechanics: [] }, why = [];
+  // a flat (2D) game (spec.engine "flat", spec.plane) is the party kit with the flat look, world, body and controller
+  // (kit/flat/) and every mechanic the kit has; which of them run on its plane is the flat part's to say (manifest.runs)
+  if (flat) {
+    out.flat = flat;
+    const mods = { flat: await importKitModule(join(KIT, 'flat/index.js')), mechanics: {} };
+    if (mods.flat.error) throw new Error(`flat: kit/flat/index.js does not import (${mods.flat.error.message.split('\n')[0]})`);
+    why.push(`look, world, character, controller: the flat (2D) parts, plane ${flat} (kit/flat)`);
+    for (const id of found.mechanics) {
+      const m = await importKitModule(join(kit, `mechanics/${id}/index.js`));
+      if (m.error || typeof m.create !== 'function' || m.id !== id) continue;
+      out.mechanics.push(id); mods.mechanics[id] = m;
+    }
+    return { modules: out, why, mods };
+  }
   const scenic = engine === 'scenic';
   if (scenic) out.engine = 'scenic';
   // the forge engine (CONTRACT §8 forge): its look and world are research/gf-forge/kit's; no three.js character, and no
@@ -108,7 +122,7 @@ export async function create(specPath, outDir, { force = false, newRules = false
   const schema = JSON.parse(await readFile(SPEC_SCHEMA, 'utf8'));
   // which mechanics exist is the kit's to say (its folders), not a list to keep in step with it
   const kitIds = await mechanicIds(kitDir), idSchema = schema.properties?.mechanics?.items?.properties?.id;
-  if (idSchema?.enum && kitIds.length) idSchema.enum = kitIds;
+  if (idSchema && kitIds.length) idSchema.enum = kitIds;      // the schema keeps no list of its own
   const problems = check(schema, spec);
   // the flow that plays this spec's loop (kit/loops/<id>, open builder M4-C): the timed round unless the loop has its own
   const flows = await flowParts({ kit: kitDir });
@@ -130,8 +144,18 @@ export async function create(specPath, outDir, { force = false, newRules = false
   if (problems.length) return { ok: false, code: 2, problems: problems.map(p => `spec ${p}`) };
 
   const engine = engineOf(spec);
+  // a flat (2D) game: "engine": "flat" in the spec, the party kit inside (engineOf gives 'party'), with the flat parts.
+  // What a flat spec may name (its plane's world, look and camera, picture bodies, a map every jump of which is in
+  // reach, mechanics run on its plane) and what no other spec may, are the flat part's own to say (kit/flat/index.js).
+  const flatPart = await importKitModule(join(KIT, 'flat/index.js'));
+  const flat = spec.engine === 'flat' ? spec.plane ?? null : null;
+  if (spec.engine === 'flat' && flatPart.error) return { ok: false, code: 1, problems: [`flat: kit/flat/index.js does not import (${flatPart.error.message.split('\n')[0]})`] };
+  if (!flatPart.error) {
+    const bad = spec.engine === 'flat' ? [...flatPart.refuse(spec), ...(flat ? flatPart.mechanicsOn(spec).problems : [])] : flatPart.refuseNotFlat(spec);
+    if (bad.length) return { ok: false, code: 2, problems: bad.map(b => `spec ${b}`) };
+  }
   let decided;
-  try { decided = await decideModules({ ...options, engine, kit: kitDir }); } catch (e) { return { ok: false, code: 1, problems: [e.message] }; }
+  try { decided = await decideModules({ ...options, engine, kit: kitDir, flat }); } catch (e) { return { ok: false, code: 1, problems: [e.message] }; }
   const { modules, why, mods } = decided;
   // the spec's world and look must be ones its engine has (CONTRACT §8)
   if (engine === 'scenic' || engine === 'forge') {
@@ -161,6 +185,8 @@ export async function create(specPath, outDir, { force = false, newRules = false
     for (const p of check(mod.params, m.params ?? {})) warnings.push(`mechanic ${m.id}: params ${p}`);
     mechanicDefaults[m.id] = withDefaults(mod.params, {});
   }
+  // what a mechanic needs to sit on a flat plane (kit/flat manifest.runs), laid under the spec's own params
+  if (flat) for (const [id, p] of Object.entries(flatPart.mechanicsOn(spec).params)) mechanicDefaults[id] = { ...(mechanicDefaults[id] ?? {}), ...p };
   // do the spec's mechanics compose? Each part's manifest says what it needs and what it owns; a set that cannot work
   // is refused here, with the cause and the way out, before anything is written. A mechanic whose module is not in
   // this game (a forge game, --standin-mechanics) is not judged.
@@ -172,14 +198,15 @@ export async function create(specPath, outDir, { force = false, newRules = false
   const standinLook = await importKitModule(join(KIT, 'core/standins/look.js'));
   const lookPreset = lookMod ? (id, time) => { const v = lookMod.presetValues?.(id, time) ?? lookMod.presets?.[id]; return v ? JSON.parse(JSON.stringify(v)) : null; } : null;
   // the real look's config/look.json is its whole preset (lookConfig), id dropped: every value a look.* slot
-  const lookConfig = lookMod?.lookConfig ? (id, time) => { const c = JSON.parse(JSON.stringify(lookMod.lookConfig(id, { time }))); delete c.id; return c; } : null;
+  const lookConfig = flat ? id => flatPart.lookConfig(id, { plane: flat }) : lookMod?.lookConfig ? (id, time) => { const c = JSON.parse(JSON.stringify(lookMod.lookConfig(id, { time }))); delete c.id; return c; } : null;
   // the forge world reads no file itself: its library (the curated KayKit pieces and their licences) is passed in
   const forgeLib = engine === 'forge' ? await (await importPart(join(FORGE, 'tools/library.mjs'), 'the forge engine (research/gf-forge)')).forgeLibrary() : null;
-  const worldConfig = engine === 'scenic' ? (s, o) => mods.world.worldConfig(s, o) : engine === 'forge' ? (s, o) => mods.world.worldConfig(s, { ...o, library: forgeLib }) : null;
+  const flatFile = f => join(REPO, 'research/gf-three', f);      // the flat stand-in pictures (tools/lib/standin-assets/flat)
+  const worldConfig = flat ? (s, o) => flatPart.worldConfig(s, { ...o, repoFile: flatFile }) : engine === 'scenic' ? (s, o) => mods.world.worldConfig(s, o) : engine === 'forge' ? (s, o) => mods.world.worldConfig(s, { ...o, library: forgeLib }) : null;
   const flowUse = flow && flow.id !== 'round' && spec.round?.mode !== 'world' ? { id: flow.id, params: withDefaults(flow.manifest.params ?? {}, spec.round?.params ?? {}), sounds: flow.module?.sounds ?? {} } : null;
   // a mechanic's own sounds (its module's `sounds`: id → [label, preset, bus]) are listed with the game's, like its slots
   const mechanicSounds = Object.fromEntries(Object.entries(mods.mechanics ?? {}).filter(([, m]) => m.sounds && typeof m.sounds === 'object').map(([id, m]) => [id, m.sounds]));
-  const C = await specToConfig(spec, { modules, lookPreset, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults, mechanicSounds, worldConfig, flow: flowUse });
+  const C = await specToConfig(spec, { modules, lookPreset, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults, mechanicSounds, worldConfig, flow: flowUse, flat: flat ? { part: flatPart, plane: flat, style: flatPart.presets[spec.look?.preset]?.style ?? 'pixel', repoFile: flatFile } : null });
   C.notes.push(...forgeNotes);
   // optional kit modules (a kit folder with a module.js; kit/vfx/module.js documents the contract): one the spec (or the
   // rules.js already there) needs gets its config block, its stand-in files and its folder in gf/three. A module added
@@ -214,7 +241,7 @@ export async function create(specPath, outDir, { force = false, newRules = false
   for (const a of C.assets) await own(a.to, await readFile(a.from));
   for (const f of extraFiles) await own(f.to, await readFile(f.from));
   await own('multiplayer.json', json(C.multiplayer));
-  await own('rules.js', rulesStub(spec, parts, flowUse ? flow : null));
+  await own('rules.js', rulesStub(spec, parts, flowUse ? flow : null, flat ? { plane: flat, note: flatPart.manifest.note(flat), controls: flatPart.manifest.planes[flat].controls } : null));
   if (engine !== 'forge') await gen('index.html', indexHtml(spec.title, engine));
   await gen('main.js', mainJs(engine));
 
@@ -453,7 +480,7 @@ function stubBlock(part, as, spec) {
 
 /** rules.js for a new game: the spec's rules as comments, the six hooks, and in setup() the stub of each mechanic the
  *  spec uses (from its manifest). Nothing in it does anything yet: every handler is empty. */
-export function rulesStub(spec, parts = [], flow = null) {
+export function rulesStub(spec, parts = [], flow = null, flat = null) {
   if (spec.engine === 'forge') return forgeRulesStub(spec);
   // a flow that has its own hooks (kit/loops/<id> → manifest.stub and events): its note, a worked line and its traps
   // above the hooks, and each hook it calls as an empty one. The timed round's six hooks are the ones below.
@@ -486,7 +513,7 @@ ${mech}
 ${controls}
 // Not in v1: ${(spec.notInV1 ?? []).join('; ') || '—'}
 // The creator will judge: ${(spec.accept ?? []).join('; ') || '—'}
-${flowHead}
+${flat ? `// Flat (2D), plane ${flat.plane} (kit/flat). ${flat.controls}\n${flat.note.map(n => `//   ${n}`).join('\n')}\n` : ''}${flowHead}
 export default {
   // Once on every copy, after the world, players and mechanics exist: register shared state, UI, listeners.
   ${setup}
