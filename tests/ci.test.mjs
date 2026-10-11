@@ -11,6 +11,8 @@ test('.github/ci-profile.json is a valid verify --profile file, and skips only c
   const profile = JSON.parse(await readFile(at('.github/ci-profile.json'), 'utf8'));
   assert.deepEqual(checkProfile(profile), []);
   assert.equal(profile.environment.GF_VERIFY_SOFTWARE, '1');
+  // requiredFor('round') leaves out the release-only checks (8, 22, 24, 31, 34: games.fun's RELEASE_ONLY). A build's verify does
+  // not run them, so the profile must not list them; 22 and 24 were taken out at the sync of ed6c86ffa.
   const build = requiredFor('round');
   for (const s of profile.skip) assert.ok(build.includes(s.check), `check ${s.check} is not one a build's verify runs`);
   assert.deepEqual(profile.skip.filter(s => s.legs).map(s => [s.check, s.legs]), [[5, 'lobby']], 'check 5 keeps its lobby legs');

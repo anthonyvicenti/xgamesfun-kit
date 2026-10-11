@@ -74,8 +74,8 @@
   "secrets": "no .env files; text files are scanned for key-shaped strings and the sync fails on any hit"
  },
  "totals": {
-  "files": 1157,
-  "bytes": 36715307,
+  "files": 1158,
+  "bytes": 36718406,
   "excluded": 152,
   "excludedBy": {
    "Meshy-generated (licence tier unconfirmed)": 3,
@@ -97,6 +97,7 @@
   "research/gf-three/tools/verify.mjs",
   "research/gf-three/tools/dressing.mjs",
   "research/gf-three/tools/world.mjs",
+  "research/gf-three/tools/flat-map.mjs",
   "research/multiplayer/p2p/signal-server.mjs",
   "research/multiplayer/p2p/serve-signal.mjs",
   "research/gf-three/loop/index.mjs"
@@ -195,8 +196,8 @@
   "research/multiplayer/p2p/vendor"
  ],
  "closure": {
-  "files": 129,
-  "bytes": 2170061,
+  "files": 130,
+  "bytes": 2173160,
   "modules": [
    "creator-studio/lib/asset-kinds.mjs",
    "creator-studio/lib/code-literals.mjs",
@@ -237,6 +238,7 @@
    "research/gf-three/tools/catalog.mjs",
    "research/gf-three/tools/create.mjs",
    "research/gf-three/tools/dressing.mjs",
+   "research/gf-three/tools/flat-map.mjs",
    "research/gf-three/tools/lib/alive-check.mjs",
    "research/gf-three/tools/lib/bodies-check.mjs",
    "research/gf-three/tools/lib/body-judge.mjs",
@@ -1304,6 +1306,7 @@
   "research/gf-three/tools/catalog.mjs": "fc4b397fbf19e60300ad30b5bba2d4112dca3650877544c34c9a202d20599c75",
   "research/gf-three/tools/create.mjs": "4548d3bec5faa6592d063b87917e2426829263b2af1e239f02fbce836515f702",
   "research/gf-three/tools/dressing.mjs": "03786506c2d2f320ab2a81fe7dd0123b5357e82ec6d1d9519ead943615e20b07",
+  "research/gf-three/tools/flat-map.mjs": "c5b36a5e6254c0185c85db702a9651d899cdbadf4cb0b4b7c2e6e52762f2c0fd",
   "research/gf-three/tools/lib/alive-check.mjs": "1eb1524b00309078394b8161b84c2170abd23e1163e026d04f9945f2ed438bdb",
   "research/gf-three/tools/lib/bodies-check.mjs": "9794390f19c4ea49bb41ed48d956a4cc6380bf53563eb3f6b0cbac8ec10458f2",
   "research/gf-three/tools/lib/body-judge.mjs": "44bd7fe0cb857e728cb6d557ccadee641305531d7a020ad748f52971f5d7aa56",
