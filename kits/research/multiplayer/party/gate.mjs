@@ -44,7 +44,7 @@ import { launchChrome, manifestGpu } from '../../foundations/qa/browser.mjs';
 import { fuzz, reachPlay, runSteps } from '../../asset-manifest/play-driver.mjs';
 import { KIT_DIR, KIT_VERSION, MANIFEST, WORLD_SINCE, checkKitReleased, compareVersions, kitFiles, kitHasSignal, readManifest, repo, sha256, startParty, validateMultiplayer } from './lib.mjs';
 
-import { checkTransport, graphicsOf, inFrame, p2p, sleep, snap, until } from './gate-lib.mjs';
+import { WEBRTC_VARIANTS, checkTransport, graphicsOf, inFrame, p2p, sleep, snap, until, webrtcProbe } from './gate-lib.mjs';
 import { gateLive } from './gate-live.mjs';
 
 export async function gate(gameDir, { out = null, seconds = 75, draft = null, devKit = false, record = true, port = 0, signal = null, legs = null, log = console.log } = {}) {
@@ -140,7 +140,14 @@ export async function gate(gameDir, { out = null, seconds = 75, draft = null, de
   // the gate ignored it and asked for the graphics card, so a "software" run on a machine with a card proved nothing
   // about a machine without one (gamesfun-kit's first CI run: the lobby legs passed here and failed on every runner).
   const software = !!process.env.GF_VERIFY_SOFTWARE;
-  const browser = await launchChrome(software ? {} : { gpu: manifestGpu(assets) ?? 'webgl' });
+  const launch = (args = []) => launchChrome(software ? { args } : { gpu: manifestGpu(assets) ?? 'webgl', args });
+  const browser = await launch();
+  // after a join that failed: does WebRTC work on this machine at all, as the gate's Chrome runs and with other flags?
+  const diagnose = async () => {
+    const out = { 'as the gate ran': await webrtcProbe(browser) };
+    for (const [name, args] of WEBRTC_VARIANTS) { const b = await launch(args).catch(() => null); if (!b) continue; out[name] = await webrtcProbe(b); await b.close().catch(() => {}); }
+    return out;
+  };
   rec.chrome = browser.version(); rec.renderer = software ? 'software' : manifestGpu(assets) ?? 'webgl';
   rec.graphics = await graphicsOf(browser);
   const errors = [];
@@ -169,7 +176,7 @@ export async function gate(gameDir, { out = null, seconds = 75, draft = null, de
 
     if (manifest.mode === 'live') {
       if (legs) rec.legs = legs;
-      await gateLive({ manifest, live: manifest.live, assets, dir, srv, player, check, notes, shot, rec, errors, seconds, browser, signal, legs });
+      await gateLive({ manifest, live: manifest.live, assets, dir, srv, player, check, notes, shot, rec, errors, seconds, browser, signal, legs, diagnose });
       return finish();
     }
 

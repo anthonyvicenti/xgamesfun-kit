@@ -27,6 +27,40 @@ export async function graphicsOf(browser) {
   finally { await page.close().catch(() => {}); }
 }
 /**
+ * Can two connections in one page of this Chrome reach each other over WebRTC on this machine? The gate's two players
+ * are two pages of one browser, so their only route is a host candidate. → {connected, seconds, candidates: {kind: n},
+ * state}. Addresses are never recorded, only their kind: an mDNS name (Chrome hides a machine's addresses behind
+ * <uuid>.local names, which the other side must look up by multicast), an IPv4 or IPv6 address, loopback.
+ */
+export async function webrtcProbe(browser, ms = 8000) {
+  const page = await browser.newPage();
+  try {
+    await page.route('http://127.0.0.1/__gf-webrtc-probe', r => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>WebRTC probe</title>' }));
+    await page.goto('http://127.0.0.1/__gf-webrtc-probe');
+    return await page.evaluate(async ms => {
+      const a = new RTCPeerConnection(), b = new RTCPeerConnection(), candidates = {};
+      const kind = c => { const p = c.candidate.split(' '), addr = p[4] ?? ''; return `${p[7] ?? '?'}, ${/\.local$/i.test(addr) ? 'mDNS name' : /^127\.|^::1$/.test(addr) ? 'loopback' : addr.includes(':') ? 'IPv6 address' : 'IPv4 address'}`; };
+      a.onicecandidate = e => { if (e.candidate?.candidate) { const k = kind(e.candidate); candidates[k] = (candidates[k] ?? 0) + 1; b.addIceCandidate(e.candidate).catch(() => {}); } };
+      b.onicecandidate = e => { if (e.candidate?.candidate) a.addIceCandidate(e.candidate).catch(() => {}); };
+      const ch = a.createDataChannel('probe'), t0 = performance.now();
+      const open = new Promise(ok => { ch.onopen = () => ok(true); setTimeout(() => ok(false), ms); });
+      await a.setLocalDescription(await a.createOffer()); await b.setRemoteDescription(a.localDescription);
+      await b.setLocalDescription(await b.createAnswer()); await a.setRemoteDescription(b.localDescription);
+      const connected = await open, seconds = Math.round((performance.now() - t0) / 100) / 10;
+      const out = { connected, seconds, candidates, state: a.connectionState };
+      a.close(); b.close();
+      return out;
+    }, ms);
+  } catch (e) { return { connected: false, error: String(e?.message ?? e).split('\n')[0].slice(0, 200) }; }
+  finally { await page.close().catch(() => {}); }
+}
+/** Launch flags the probe is tried with after a join failed, to say what this machine's WebRTC needs. */
+export const WEBRTC_VARIANTS = [
+  ['real addresses in place of mDNS names', ['--disable-features=WebRtcHideLocalIpsWithMdns']],
+  ['loopback candidates allowed', ['--allow-loopback-in-peer-connection']],
+];
+
+/**
  * The WebRTC connection states of a join, as the kit's own observation gives them (window.__p2p: the host's peers, the
  * joiner's connection and channel). `watch()` is called on each turn of a wait and keeps the changes, so a join that
  * failed says how far it got: no state at all (the offer never arrived: signaling, or a page that stopped answering),

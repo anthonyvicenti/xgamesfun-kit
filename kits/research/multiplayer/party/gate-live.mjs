@@ -21,7 +21,7 @@ import { checkTransport, connectionTrace, endRound, inFrame, joinState, p2p, sle
 
 const dist = (a, b) => Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0), (a.z ?? 0) - (b.z ?? 0));
 
-export async function gateLive({ manifest, live, assets, dir, srv, player, check, notes, shot, rec, errors, seconds, signal = null, legs = null }) {
+export async function gateLive({ manifest, live, assets, dir, srv, player, check, notes, shot, rec, errors, seconds, signal = null, legs = null, diagnose = null }) {
   const frameOf = page => page.frames().find(f => f.parentFrame() === page.mainFrame());
   const game = page => frameOf(page)?.evaluate(() => window.__game?.snapshot() ?? null).catch(() => null) ?? null;
   const net = async page => (await game(page))?.net ?? null;
@@ -51,9 +51,15 @@ export async function gateLive({ manifest, live, assets, dir, srv, player, check
   await J.page.click('#gfp-join');
   const joining = connectionTrace(H, J);
   await until(async () => { await joining.watch(); const a = await snap(H.page), b = await snap(J.page); return a?.racers.length === 2 && b?.racers.length === 2 && b.phase === 'room'; }, 30000, 'both players in the room')
-    .catch(async e => { throw new Error(`${e.message} (${await joinState(H, J)}; ${joining.text()})`); });
+    .catch(async e => {
+      const where = `${await joinState(H, J)}; ${joining.text()}`;
+      // the join failed: is it this game, or WebRTC on this machine? (record.webrtc; gate-lib webrtcProbe)
+      if (diagnose) { rec.signaling = srv.sig.stats(); rec.webrtc = await diagnose().catch(x => ({ error: String(x?.message ?? x).slice(0, 200) })); }
+      throw new Error(`${e.message} (${where})`);
+    });
   const j0 = await snap(J.page), h0 = await snap(H.page);
   const joined = j0.you && j0.you !== h0.you && !j0.host && (await p2p(J.page))?.connected === true;
+  if (!joined && diagnose) rec.webrtc = await diagnose().catch(x => ({ error: String(x?.message ?? x).slice(0, 200) }));
   check('joiner-joins-over-webrtc', joined, `host ${h0.you} "${h0.names[h0.you]}", joiner ${j0.you} "${j0.names[j0.you]}"${joined ? '' : ` (${await joinState(H, J)}; ${joining.text()})`}`);
   await checkTransport({ H, J, srv, signal, check, rec });
   await shot(H.page, 'host-lobby');
