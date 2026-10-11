@@ -11,9 +11,11 @@
 //   --check    change nothing: exit 1 when kits/ differs from what the recorded commit (KITS.json) gives
 //   --dry-run  print what would change and exit
 //
-// What is copied and why: SOURCES below. What is never copied: regressions, sandbox, lookdev, evidence, node_modules,
-// caches, .env files and anything key-shaped (the copied text is scanned and the sync fails on a hit), and library
-// assets whose licence is not CC0 or permissive or that Meshy generated (the Meshy licence tier is unconfirmed).
+// What is copied: the import closure of the tools the CLI runs (ENTRIES), the parts those tools load by path when a game
+// needs them (found in the code, see partTargets), and a short list of folders that hold data, not Node modules (DATA).
+// What is never copied: LEFT_OUT parts, regressions, sandbox, lookdev, evidence, node_modules, caches, .env files and
+// anything key-shaped (the copied text is scanned and the sync fails on a hit), and library assets whose licence is
+// not CC0 or permissive or that Meshy generated.
 // Never edit kits/ by hand: fix the kit in games.fun and run this again.
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -26,56 +28,83 @@ import { isMain } from '../lib/main.mjs';
 const KIT_ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 const KITS = path.join(KIT_ROOT, 'kits');
 
-export const SCHEMA = 'gamesfun-kits/1';
-const LIB = 'research/gf-three/library';
+export const SCHEMA = 'gamesfun-kits/2';
+const GF3 = 'research/gf-three';
+const TOOLS = `${GF3}/tools`;
+const PATHS = `${TOOLS}/lib/paths.mjs`;
+const MP_MANIFEST = 'research/multiplayer/party/manifest.mjs';
+/** Libraries the licence rule reads, file by file (each has its own LICENSES.json). */
+export const LIBRARIES = [`${GF3}/library`, 'research/gf-scenic/library'];
 
-/** What a game, create, verify, dev and slots need from games.fun. Paths are games.fun-relative (files or folders). */
-export const SOURCES = [
-  { path: 'research/gf-three/README.md', why: 'gf-three overview' },
-  { path: 'research/gf-three/CONTRACT.md', why: 'gf-three API: what rules.js and config are written against' },
-  { path: 'research/gf-three/kit', why: 'gf-three kit, vendored into each game as gf/three/' },
-  { path: 'research/gf-three/tools', why: 'gf-three tools: create, verify, slots, catalog, serve, upgrade, play, promises, meshy-*' },
-  { path: LIB, why: 'props, bodies, clips and textures (CC0 or permissive only; no Meshy output)', filter: 'library' },
-  { path: 'research/foundations/kits/gf-audio/1.5.0', why: 'gf-audio 1.5.0, vendored into each game as audio/' },
-  { path: 'research/foundations/kits/gf-audio/1.2.0/source/meter.mjs', why: 'the loudness meter the audio gate v4 imports (its frozen targets)' },
-  { path: 'research/foundations/kits/gf-multiplayer/1.3.0', why: 'gf-multiplayer 1.3.0, vendored into each game as gf/mp/' },
-  { path: 'research/foundations/kits/gf-assets/1.3.0', why: 'gf-assets 1.3.0 (gf/gf-assets.js; verify checks its SHA256SUMS)' },
-  { path: 'research/foundations/qa/browser.mjs', why: 'how verify launches Chrome' },
-  { path: 'research/foundations/trials/fps-arena/source/vendor/three', why: 'three.js 0.186.0 build (pinned)' },
-  { path: 'research/foundations/trials/fps-arena/source/vendor/postprocessing', why: 'pmndrs postprocessing (pinned)' },
-  { path: 'research/foundations/trials/fps-arena/source/vendor/n8ao', why: 'N8AO (pinned)' },
-  { path: 'research/foundations/trials/third-person-adventure/source/vendor/rapier', why: 'Rapier 0.19.2 (pinned)' },
+/**
+ * The Node programs this package starts (games.fun-relative). Everything they import, however deep, is copied; nothing
+ * else in a tools folder is. tests/sync-kits.test.mjs fails when the CLI runs a tool that is not listed here.
+ */
+export const TOOL_ENTRIES = ['catalog', 'create', 'meshy-character', 'meshy-prop', 'play', 'promises', 'rig-check', 'slots', 'upgrade', 'verify'];
+/** Tools a check's own message tells the person to run for the full list of problems (verify checks 11 and 17). */
+export const NAMED_IN_MESSAGES = ['dressing', 'world'];
+export const ENTRIES = [
+  ...[...TOOL_ENTRIES, ...NAMED_IN_MESSAGES].map(t => `${TOOLS}/${t}.mjs`),
+  'research/multiplayer/p2p/signal-server.mjs',   // the dev server's signaling (server/index.mjs)
+];
+
+/**
+ * Folders and files that are data to the tools (copied into a game, served to a page, or read as a document), so no
+ * import leads to them. `{mp}`, `{audio}` and `{assets}` are the kit versions the tools at that commit name
+ * (kitVersions), never a version written here. `browser: true`: the modules inside run in a page with a game's own
+ * layout, so their imports are not followed.
+ */
+export const DATA = [
+  { path: `${GF3}/README.md`, why: 'gf-three overview' },
+  { path: `${GF3}/CONTRACT.md`, why: 'gf-three API: what rules.js and config are written against' },
+  { path: `${GF3}/kit`, why: 'gf-three kit, vendored into each game as gf/three/', browser: true },
+  { path: `${GF3}/library`, why: 'props, bodies, clips and textures (CC0 or permissive only; no Meshy output)', browser: true },
+  { path: `${TOOLS}/lib/standin-assets`, why: 'the stand-in body and texture create starts a game with' },
+  { path: `${TOOLS}/lib/vendor`, why: 'three.js addons (curated copy, pinned), vendored into each game', browser: true },
+  { path: `${TOOLS}/lib/char-deps`, why: 'the 3D tools\' own package list (installed on first use)' },
+  { path: `${GF3}/character-bench`, why: 'the page a body\'s pose sheet is drawn on (verify check 19)', browser: true },
+  { path: 'research/gf-scenic/README.md', why: 'the scenic engine: overview' },
+  { path: 'research/gf-scenic/kit', why: 'the scenic engine\'s look and world, vendored into a scenic game as gf/scenic/', browser: true },
+  { path: 'research/gf-scenic/library', why: 'the scenic engine\'s bodies and props (CC0 or permissive only)', browser: true },
+  { path: 'research/gf-scenic/tools/lib/vendor', why: 'three.js WebGPU addons (pinned), vendored into a scenic game', browser: true },
+  { path: 'research/gf-scenic/specs', why: 'the scenic engine\'s development specs (example specs)' },
+  { path: 'research/foundations/kits/gf-audio/{audio}', why: 'gf-audio, vendored into each game as audio/', browser: true },
+  { path: 'research/foundations/kits/gf-multiplayer/{mp}', why: 'gf-multiplayer, vendored into each game as gf/mp/', browser: true },
+  { path: 'research/foundations/kits/gf-assets/{assets}', why: 'gf-assets (gf/gf-assets.js; verify checks its SHA256SUMS)', browser: true },
+  { path: 'research/foundations/trials/fps-arena/source/vendor/three', why: 'three.js build (pinned)', browser: true },
+  { path: 'research/foundations/trials/fps-arena/source/vendor/postprocessing', why: 'pmndrs postprocessing (pinned)', browser: true },
+  { path: 'research/foundations/trials/fps-arena/source/vendor/n8ao', why: 'N8AO (pinned)', browser: true },
+  { path: 'research/foundations/trials/third-person-adventure/source/vendor/rapier', why: 'Rapier (pinned)', browser: true },
+  { path: 'research/foundations/trials/third-person-adventure/source/vendor/three', why: 'three.js WebGPU build (pinned; the scenic engine)', browser: true },
   { path: 'research/multiplayer/STANDARD.md', why: 'the multiplayer bar every game meets' },
   { path: 'research/multiplayer/party/LIVE_HANDBOOK.md', why: 'how a live game shares its world' },
-  { path: 'research/multiplayer/party/lib.mjs', why: 'local game server with signaling (verify, play)' },
-  { path: 'research/multiplayer/party/manifest.mjs', why: 'multiplayer.json validation and the kit file list' },
-  { path: 'research/multiplayer/party/adopt.mjs', why: 'vendors gf-multiplayer into a game (create)' },
-  { path: 'research/multiplayer/party/gate.mjs', why: 'the two-player gate (verify check 5)' },
-  { path: 'research/multiplayer/party/gate-lib.mjs', why: 'the two-player gate (verify check 5)' },
-  { path: 'research/multiplayer/party/gate-live.mjs', why: 'the two-player gate for live games (verify check 5)' },
-  { path: 'research/multiplayer/party/serve.mjs', why: 'gf-multiplayer serve tool' },
-  { path: 'research/multiplayer/party/kit', why: 'gf-multiplayer dev sources (tools read declarations through them)' },
-  { path: 'research/multiplayer/p2p/signal-server.mjs', why: 'local signaling: WebSocket /signal and HTTP /signal/v1' },
-  { path: 'research/multiplayer/p2p/vendor', why: 'ws 8.21.3, vendored by the signal server' },
-  { path: 'creator-studio/lib/signal-core.mjs', why: 'the HTTP signaling protocol (shared with the play host)' },
-  { path: 'creator-studio/lib/asset-kinds.mjs', why: 'asset manifest validation (verify check 1)' },
-  { path: 'creator-studio/lib/code-literals.mjs', why: 'asset manifest validation (verify check 1)' },
-  { path: 'creator-studio/lib/image-size.mjs', why: 'asset manifest validation (verify check 1)' },
-  { path: 'creator-studio/lib/manifest-normalize.mjs', why: 'asset manifest validation (verify check 1)' },
-  { path: 'creator-studio/lib/manifest.mjs', why: 'asset manifest validation (verify check 1)' },
-  { path: 'creator-studio/lib/source-record.mjs', why: 'asset manifest validation (verify check 1)' },
-  { path: 'creator-studio/vendor/gf-audio-1.5.0/sounds.mjs', why: 'sound list validation (verify check 1)' },
-  { path: 'research/asset-manifest/validate.mjs', why: 'asset manifest validation (verify check 1)' },
-  { path: 'research/asset-manifest/play-driver.mjs', why: 'real input for the gate (verify check 5)' },
-  { path: 'research/asset-manifest/runtime/gf-assets.js', why: 'asset manifest runtime (validation)' },
-  { path: 'research/audio/qa-gate-v4.mjs', why: 'the audio gate (verify check 7)' },
+  { path: 'research/multiplayer/party/kit', why: 'gf-multiplayer dev sources (tools read declarations through them)', browser: true },
+  { path: 'research/multiplayer/p2p/vendor', why: 'ws, vendored by the signal server', browser: true },
+  { path: 'research/watch/relay/README.md', why: 'the watch relay: what the local stream relay does (verify check 34)' },
   { path: 'research/studio-v2/game-spec.schema.json', why: 'the game spec schema create validates' },
   { path: 'research/studio-v2/pitch.schema.json', why: 'the pitch schema (playbook)' },
   { path: 'research/studio-v2/specs/dev-dodgeball.spec.json', why: 'the kit development spec (an example spec)' },
 ];
 
+/** Parts of games.fun this package does not carry. The tools load them by path only when a game needs them (importPart). */
+export const LEFT_OUT = [
+  { path: 'research/gf-forge', why: 'the forge engine (closed to creators; its core is a prebuilt wasm this package does not ship yet)' },
+  { path: `${GF3}/lookdev`, why: 'the contact-sheet tool (verify check 9; --quick skips it and a full verify says it is absent)' },
+  { path: 'research/pipeline', why: 'games.fun\'s own Playwright install (this package pins playwright-core)' },
+  { path: 'research/pipeline-v2', why: 'games.fun\'s Meshy key file (here the key comes from the environment)' },
+];
+/**
+ * Tool faults worked around here until games.fun fixes them: a static import into a LEFT_OUT part. The named file and
+ * what it imports are copied, and nothing else of the part. An entry the tools no longer need fails the sync, so it
+ * is deleted as soon as the fix lands. docs/DEVELOPING.md lists the request for each.
+ */
+export const TOOL_FAULTS = [
+  { from: `${TOOLS}/lib/promises.mjs`, imports: 'research/gf-forge/kit/tables/index.js', why: 'promises.mjs imports the forge data tables at load time (every other forge import is importPart); only the tables are copied' },
+];
+const leftOut = rel => LEFT_OUT.find(p => rel === p.path || rel.startsWith(p.path + '/')) ?? null;
+
 /** Never copied, anywhere in a source path. */
-export const EXCLUDED_DIRS = ['node_modules', 'evidence', '.cache', 'regressions', 'sandbox', 'lookdev', 'character-bench', '.git'];
+export const EXCLUDED_DIRS = ['node_modules', 'evidence', '.cache', 'regressions', 'sandbox', 'lookdev', '.git'];
 const EXCLUDED_FILE = [
   [/(^|\/)\.env(\.[^/]*)?$/, 'a .env file (secrets live there)'],
   [/(^|\/)meshy-ledger\.jsonl$/, 'the Meshy credit ledger (internal spend records)'],
@@ -87,15 +116,16 @@ const EXCLUDED_FILE = [
 export const ALLOWED_LICENCES = ['CC0-1.0', 'CC-BY-3.0', 'CC-BY-4.0', 'MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'Zlib', 'Unlicense', '0BSD'];
 /** Library index files at the library root: metadata games.fun wrote, kept whole (entries for files we leave out are
  *  ignored by the tools, which check each file exists). */
-const LIBRARY_INDEX = new Set(['LICENSES.json', 'props.json', 'bodies.json', 'kits.json', 'sources.json', 'body-sources.json']);
+const LIBRARY_INDEX = new Set(['LICENSES.json', 'props.json', 'bodies.json', 'kits.json', 'sources.json', 'body-sources.json', 'props-folio.json', 'sources.lock.json']);
 
 export const isMeshy = (rel, rec) => /(^|\/)meshy-/.test(rel) || /meshy/i.test([rec?.author, rec?.title, rec?.from, rec?.page, rec?.kind].filter(Boolean).join(' '));
 
 /**
  * Decide each library file. rel: path under the library folder. licences: LICENSES.json → files. sidecar(rel): the
- * parsed body sidecar JSON for bodies/<id>.json, or null. → { keep, why }
+ * parsed body sidecar JSON for bodies/<id>.json, or null. licenceFile(rel): the SPDX id of the LICENSE text in that
+ * file's own folder (licenceOfText), or null. → { keep, why }
  */
-export function libraryDecision(rel, licences, sidecar = () => null) {
+export function libraryDecision(rel, licences, sidecar = () => null, licenceFile = () => null) {
   if (!rel.includes('/')) {
     if (LIBRARY_INDEX.has(rel)) return { keep: true, why: 'library index' };
     return { keep: false, why: 'not a library index or asset' };
@@ -103,22 +133,36 @@ export function libraryDecision(rel, licences, sidecar = () => null) {
   const rec = licences[rel];
   const side = /^bodies\/[^/]+\.json$/.test(rel) ? rel.replace(/\.json$/, '.glb') : null;
   if (side) {
-    const body = libraryDecision(side, licences, sidecar);
+    const body = libraryDecision(side, licences, sidecar, licenceFile);
     const meta = sidecar(rel);
     if (meta && isMeshy(rel, meta)) return { keep: false, why: 'Meshy-generated (licence tier unconfirmed)' };
     return body.keep ? { keep: true, why: `sidecar of ${side}` } : { keep: false, why: `sidecar of a left-out body (${body.why})` };
   }
-  if (!rec) return { keep: false, why: 'no LICENSES.json record' };
+  if (!rec) {
+    // a folder that carries its upstream's own licence text (LICENSE beside the files) and no Meshy output
+    const spdx = isMeshy(rel, null) ? null : licenceFile(rel);
+    if (spdx && ALLOWED_LICENCES.includes(spdx)) return { keep: true, why: `${spdx} (LICENSE beside it)` };
+    return { keep: false, why: 'no LICENSES.json record' };
+  }
   if (isMeshy(rel, rec)) return { keep: false, why: 'Meshy-generated (licence tier unconfirmed)' };
   if (rec.spdx == null) {
     if (rec.generated && /^games\.fun/i.test(rec.author ?? '')) {
-      if (rec.of) { const of = libraryDecision(rec.of, licences, sidecar); if (!of.keep) return { keep: false, why: `made from a left-out file (${of.why})` }; }
+      if (rec.of) { const of = libraryDecision(rec.of, licences, sidecar, licenceFile); if (!of.keep) return { keep: false, why: `made from a left-out file (${of.why})` }; }
       return { keep: true, why: 'generated by games.fun' };
     }
     return { keep: false, why: 'no licence' };
   }
   if (!ALLOWED_LICENCES.includes(rec.spdx)) return { keep: false, why: `licence ${rec.spdx} is not CC0 or permissive` };
   return { keep: true, why: rec.spdx };
+}
+
+/** The SPDX id of a licence text, for the few whole texts a library folder carries beside its files. Unknown → null. */
+export function licenceOfText(text) {
+  const t = String(text ?? '').replace(/\s+/g, ' ');
+  if (/Permission is hereby granted, free of charge, to any person obtaining a copy of this software/.test(t) && /THE SOFTWARE IS PROVIDED "AS IS"/.test(t)) return 'MIT';
+  if (/Apache License,? Version 2\.0/.test(t)) return 'Apache-2.0';
+  if (/CC0 1\.0 Universal/.test(t)) return 'CC0-1.0';
+  return null;
 }
 
 /** Key-shaped strings. A hit fails the sync (the snapshot is public to anyone who can read this repository). */
@@ -219,34 +263,129 @@ export function findSource(explicit = null) {
   return null;
 }
 
-// Relative imports in Node-side tooling must resolve inside the snapshot. These are shimmed instead (lib/kit-hooks.mjs).
-export const SHIMMED_IMPORTS = [/\/pipeline\/node_modules\/playwright\/index\.mjs$/];
-const CLOSURE_ENTRIES = [
-  ...['create', 'verify', 'serve', 'slots', 'catalog', 'upgrade', 'world', 'dressing', 'loadouts', 'promises', 'play', 'meshy-prop', 'meshy-character', 'rig-check', 'optimize'].map(t => `research/gf-three/tools/${t}.mjs`),
-  'research/multiplayer/p2p/signal-server.mjs', 'research/multiplayer/party/gate.mjs', 'research/multiplayer/party/adopt.mjs', 'research/multiplayer/party/serve.mjs',
-];
+// ---------------- what the tools reach ----------------
 const IMPORT_RE = /(?:^|[;\s}])(?:import|export)\s*(?:[^'"`;]*?\sfrom\s*)?['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-const stripComments = t => t.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(l => l.replace(/(^|[^:'"`\\])\/\/.*$/, '$1')).join('\n');
+// a file named beside the module: new URL('./x', import.meta.url). The tools use it for files they read or load only
+// when present (the watch relay, a package list), so a target that games.fun does not track is not a problem.
+const URL_RE = /new URL\(\s*['"](\.{1,2}\/[^'"]*[^'"/])['"]\s*,\s*(?:import\.meta\.url|here)\s*\)/g;
+// a resolution hook a module installs for itself: register('./x.mjs', import.meta.url)
+const REGISTER_RE = /\bregister\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g;
+const PART_RE = /importPart\(\s*join\(\s*([A-Z0-9_]+)\s*,\s*'([^']+)'\s*\)/g;
+/**
+ * JavaScript source without its comments. A small scanner, because a pattern cannot tell a slash and a star inside a
+ * string, a line comment or a regular expression from the start of a block comment: strings, template literals and
+ * regular expressions are kept as they are; a comment becomes nothing (line breaks stay, so line numbers hold).
+ */
+export function stripComments(t) {
+  let out = '', i = 0, last = '';   // last: the last character of code that is not white space
+  const n = t.length;
+  const quoted = q => { let j = i + 1; while (j < n && t[j] !== q) { if (t[j] === '\\') j++; else if (q !== '`' && t[j] === '\n') break; j++; } return Math.min(j + 1, n); };
+  while (i < n) {
+    const c = t[i], d = t[i + 1];
+    if (c === '/' && d === '/') { while (i < n && t[i] !== '\n') i++; continue; }
+    if (c === '/' && d === '*') { const e = t.indexOf('*/', i + 2), end = e < 0 ? n : e + 2; out += t.slice(i, end).replace(/[^\n]/g, ''); i = end; continue; }
+    if (c === '\'' || c === '"' || c === '`') { const e = quoted(c); out += t.slice(i, e); i = e; last = c; continue; }
+    if (c === '/' && (last === '' || '(,=:[!&|?{};+-*%<>~^'.includes(last) || /(?:^|[^\w$.])(?:return|typeof|case|of|in|do|else|void|delete|throw|yield|await)\s*$/.test(out.slice(-12)))) {
+      let j = i + 1, cls = false;   // a regular expression literal
+      while (j < n && t[j] !== '\n' && (cls || t[j] !== '/')) { if (t[j] === '\\') j++; else if (t[j] === '[') cls = true; else if (t[j] === ']') cls = false; j++; }
+      out += t.slice(i, j + 1); i = j + 1; last = '/'; continue;
+    }
+    out += c; if (!/\s/.test(c)) last = c; i++;
+  }
+  return out;
+}
+const isModule = f => /\.m?js$/.test(f);
 
-/** Every relative import reachable from the Node tooling, resolved against the selected file set. → problems[] */
-export function closureProblems(files) {
-  const problems = [], seen = new Set(), queue = CLOSURE_ENTRIES.filter(f => files.has(f));
-  for (const f of CLOSURE_ENTRIES) if (!files.has(f)) problems.push(`entry ${f} is not in the snapshot`);
-  while (queue.length) {
-    const f = queue.shift();
-    if (seen.has(f)) continue; seen.add(f);
-    if (f.startsWith('research/gf-three/kit/')) continue;   // browser modules: tools import them through kit-import's hooks
-    if (!/\.m?js$/.test(f)) continue;
-    for (const m of stripComments(files.get(f).toString('utf8')).matchAll(IMPORT_RE)) {
-      const spec = m[1] ?? m[2];
-      if (!spec || !spec.startsWith('.')) continue;
-      const target = path.posix.normalize(path.posix.join(path.posix.dirname(f), spec));
-      if (SHIMMED_IMPORTS.some(re => re.test(target))) continue;
-      if (files.has(target)) queue.push(target);
-      else problems.push(`${f} imports ${spec} (${target}), which is not in the snapshot`);
+/**
+ * The folder constants of tools/lib/paths.mjs (REPO, GF3, FORGE_KIT, …) as games.fun-relative paths, read from its
+ * text: `export const NAME = join(BASE, 'rel')`. → Map(name → rel)
+ */
+export function pathConstants(text) {
+  const out = new Map([['REPO', '']]);
+  for (let pass = 0; pass < 4; pass++) {
+    for (const m of text.matchAll(/export const ([A-Z0-9_]+) = join\(([A-Z0-9_]+), '([^']+)'\)/g)) {
+      if (out.has(m[2]) && !out.has(m[1])) out.set(m[1], path.posix.join(out.get(m[2]), m[3]));
     }
   }
-  return problems;
+  return out;
+}
+
+/** Every games.fun path tools/lib/paths.mjs names as a literal ('research/…', or `${T}/…` with T's value). → [rel] */
+export function namedPaths(text) {
+  const code = stripComments(text), out = new Set();
+  const T = /const T = '([^']+)'/.exec(code)?.[1];
+  for (const m of code.matchAll(/'((?:research|creator-studio)\/[^'*${}]+)'/g)) out.add(m[1].replace(/\/$/, ''));
+  if (T) for (const m of code.matchAll(/`\$\{T\}\/([^`${}]+)`/g)) out.add(`${T}/${m[1]}`);
+  if (T) out.delete(T);
+  for (const [, rel] of pathConstants(code)) if (rel) out.add(rel);
+  return [...out].sort();
+}
+
+/** The kit versions the tools at this commit use: read from the code, so a sync never copies a version the tools do not ask for. */
+export function kitVersions(read) {
+  const paths = read(PATHS) ?? '', mp = read(MP_MANIFEST) ?? '';
+  return {
+    mp: /export const KIT_VERSION = '([^']+)'/.exec(mp)?.[1] ?? null,
+    audio: /kits\/gf-audio\/(\d+\.\d+\.\d+)/.exec(paths)?.[1] ?? null,
+    assets: /kits\/gf-assets\/(\d+\.\d+\.\d+)/.exec(paths)?.[1] ?? null,
+    gf3: /export const KIT_VERSION = '([^']+)'/.exec(paths)?.[1] ?? null,
+    scenic: /export const SCENIC_VERSION = '([^']+)'/.exec(paths)?.[1] ?? null,
+  };
+}
+
+/**
+ * Walk the Node tooling from ENTRIES. `has(rel)`: is this a file games.fun tracks; `read(rel)`: its text;
+ * `browser(rel)`: a page module (its imports follow a game's layout, so they are not followed).
+ * Follows relative imports (static and import('…')), register('…', import.meta.url), files named with
+ * new URL('…', import.meta.url), and the parts
+ * loaded by path with importPart(join(CONST, '…')). An import that leaves the tracked files, or a static import into a
+ * LEFT_OUT part, is a problem; an importPart or import('…') into a LEFT_OUT part is recorded and skipped.
+ * → { modules: Set(rel), parts: [{ path, from, taken, why }], problems }
+ */
+export function closure({ entries = ENTRIES, has, read, browser = () => false, faults = TOOL_FAULTS, soft = () => true }) {
+  const problems = [], modules = new Set(), parts = [], excused = new Set(), usedFaults = new Set();
+  const consts = pathConstants(stripComments(read(PATHS) ?? ''));
+  const queue = [];
+  for (const f of entries) { if (has(f)) queue.push(f); else problems.push(`entry ${f} is not in games.fun at this commit`); }
+  while (queue.length) {
+    const f = queue.shift();
+    if (modules.has(f)) continue;
+    modules.add(f);
+    if (!isModule(f) || browser(f)) continue;
+    const code = stripComments(read(f));
+    const rel = spec => path.posix.normalize(path.posix.join(path.posix.dirname(f), spec));
+    for (const m of code.matchAll(IMPORT_RE)) {
+      const spec = m[1] ?? m[2];
+      if (!spec || !spec.startsWith('.')) continue;
+      const target = rel(spec), fault = faults.find(x => x.from === f && x.imports === target);
+      if (fault || excused.has(f)) { if (fault) usedFaults.add(fault); if (has(target)) { excused.add(target); queue.push(target); } else problems.push(`${f} imports ${spec} (${target}), which games.fun does not track at this commit`); continue; }
+      const out = leftOut(target);
+      // import('…') runs only when its line is reached: into a left-out part it is that part's lazy load, as importPart is
+      if (out && m[2]) { if (!parts.some(p => p.path === target && p.from === f)) parts.push({ path: target, from: f, taken: false, why: out.why }); }
+      else if (out) problems.push(`${f} imports ${spec} (${target}), which is left out: ${out.why}. It must be loaded with importPart, when a game needs it`);
+      else if (has(target)) queue.push(target);
+      else problems.push(`${f} imports ${spec} (${target}), which games.fun does not track at this commit`);
+    }
+    for (const m of code.matchAll(REGISTER_RE)) { const target = rel(m[1]); if (has(target)) queue.push(target); else problems.push(`${f} registers ${m[1]} (${target}), which games.fun does not track at this commit`); }
+    for (const m of code.matchAll(URL_RE)) { const target = rel(m[1]); if (has(target) && !leftOut(target) && soft(target)) queue.push(target); }
+    for (const m of code.matchAll(PART_RE)) {
+      if (!consts.has(m[1])) { problems.push(`${f} loads a part from ${m[1]}, which ${PATHS} does not define as a folder`); continue; }
+      const target = path.posix.join(consts.get(m[1]), m[2]), out = leftOut(target);
+      if (parts.some(p => p.path === target && p.from === f)) continue;
+      if (out) parts.push({ path: target, from: f, taken: false, why: out.why });
+      else if (has(target)) { parts.push({ path: target, from: f, taken: true, why: 'loaded when a game needs it' }); queue.push(target); }
+      else problems.push(`${f} loads ${target} with importPart, which games.fun does not track at this commit`);
+    }
+  }
+  for (const x of faults) if (!usedFaults.has(x) && modules.has(x.from)) problems.push(`TOOL_FAULTS: ${x.from} no longer imports ${x.imports}; delete the entry in scripts/sync-kits.mjs`);
+  return { modules, parts: parts.sort((a, b) => (a.path + a.from).localeCompare(b.path + b.from)), problems };
+}
+
+/** kits/ on its own (no games.fun): every import of the Node tooling resolves to a file that is there. → problems[] */
+export function closureProblems(files, browserRoots = []) {
+  const text = rel => files.get(rel)?.toString('utf8') ?? null;
+  const r = closure({ has: rel => files.has(rel), read: text, browser: rel => browserRoots.some(b => rel.startsWith(b + '/')) });
+  return r.problems;
 }
 
 const WIN_DEVICE = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
@@ -272,51 +411,117 @@ export function portabilityProblems(rels, { prefix = 'kits/', maxLength = 170 } 
   return problems;
 }
 
-/** Build the snapshot in memory from games.fun at `commit`. → { commit, date, files: Map(rel → Buffer), excluded, sources } */
+/** Read blobs as they are asked for, a batch at a time. */
+function blobReader(repo, tree) {
+  const cache = new Map();
+  return {
+    async load(rels) {
+      const need = rels.filter(r => tree.has(r) && !cache.has(r));
+      if (!need.length) return;
+      const blobs = await readBlobs(repo, need.map(r => tree.get(r).object));
+      for (const r of need) cache.set(r, blobs.get(tree.get(r).object));
+    },
+    get: rel => cache.get(rel) ?? null,
+  };
+}
+
+/** Build the snapshot in memory from games.fun at `commit`. → { commit, date, files: Map(rel → Buffer), excluded, sources, parts, versions, problems } */
 export async function buildSnapshot(repo, commit = 'HEAD') {
   const full = git(repo, ['rev-parse', '--verify', `${commit}^{commit}`]).trim();
   const date = git(repo, ['show', '-s', '--format=%cI', full]).trim();
-  const entries = lsTree(repo, full, SOURCES.map(s => s.path));
   const problems = [], excluded = [];
-  for (const s of SOURCES) if (!entries.some(e => e.path === s.path || e.path.startsWith(s.path + '/'))) problems.push(`${s.path}: not in games.fun at ${full.slice(0, 12)}`);
-  const pick = [];
-  for (const e of entries) {
-    if (e.mode === '120000') { problems.push(`${e.path}: a symlink (kits must hold plain files only)`); continue; }
-    if (e.type !== 'blob') { excluded.push({ path: e.path, why: `a ${e.type}` }); continue; }
-    const why = excludedByName(e.path);
-    if (why) { excluded.push({ path: e.path, why }); continue; }
-    pick.push(e);
-  }
-  const blobs = await readBlobs(repo, pick.map(e => e.object));
-  // the library: licence by licence
-  const licRec = pick.find(e => e.path === `${LIB}/LICENSES.json`);
-  const licences = licRec ? JSON.parse(blobs.get(licRec.object).toString('utf8')).files ?? {} : {};
-  const byPath = new Map(pick.map(e => [e.path, e]));
-  const sidecar = rel => { const e = byPath.get(`${LIB}/${rel}`); try { return e ? JSON.parse(blobs.get(e.object).toString('utf8')) : null; } catch { return null; } };
-  const files = new Map();
-  for (const e of pick) {
-    if (e.path.startsWith(LIB + '/')) {
-      const d = libraryDecision(e.path.slice(LIB.length + 1), licences, sidecar);
-      if (!d.keep) { excluded.push({ path: e.path, why: d.why }); continue; }
+  const tree = new Map(lsTree(repo, full, ['research', 'creator-studio']).map(e => [e.path, e]));
+  const blobs = blobReader(repo, tree);
+  const isFile = rel => tree.get(rel)?.type === 'blob' && tree.get(rel).mode !== '120000';
+  const under = dir => [...tree.keys()].filter(p => p === dir || p.startsWith(dir + '/'));
+
+  // 1. the kit versions the tools name, then the data folders
+  await blobs.load([PATHS, MP_MANIFEST]);
+  const text = rel => blobs.get(rel)?.toString('utf8') ?? null;
+  const versions = kitVersions(text);
+  for (const [k, v] of Object.entries(versions)) if (!v) problems.push(`could not read the ${k} version from the tools at ${full.slice(0, 12)}`);
+  const data = DATA.map(d => ({ ...d, path: d.path.replace(/\{(\w+)\}/g, (m, k) => versions[k] ?? m) }));
+  const browserRoots = data.filter(d => d.browser).map(d => d.path);
+  const isBrowser = rel => browserRoots.some(b => rel === b || rel.startsWith(b + '/'));
+  const chosen = new Map();   // rel → 'data' | 'closure'
+  for (const d of data) {
+    const mine = under(d.path);
+    if (!mine.length) { problems.push(`${d.path}: not in games.fun at ${full.slice(0, 12)}`); continue; }
+    for (const rel of mine) {
+      const why = excludedByName(rel);
+      if (why) { excluded.push({ path: rel, why }); continue; }
+      chosen.set(rel, 'data');
     }
-    files.set(e.path, blobs.get(e.object));
   }
-  // secrets
+
+  // 2. the import closure of the tools the CLI runs. Modules are read a round at a time (the walk needs their text).
+  let walked;
+  for (let round = 0; round < 64; round++) {
+    const missing = new Set();
+    walked = closure({
+      has: isFile, browser: isBrowser, soft: rel => !excludedByName(rel),
+      read: rel => { const b = blobs.get(rel); if (b == null) { missing.add(rel); return ''; } return b.toString('utf8'); },
+    });
+    if (!missing.size) break;
+    await blobs.load([...missing]);
+  }
+  problems.push(...walked.problems);
+  for (const rel of walked.modules) {
+    const why = excludedByName(rel);
+    // a module a tool imports is needed wherever it lives; only a file that must never ship stops the sync
+    if (why && !/^inside a /.test(why)) { problems.push(`${rel}: the tools import it, but it is ${why}`); continue; }
+    if (!chosen.has(rel)) chosen.set(rel, 'closure');
+  }
+
+  // 3. every folder the tools name by path is in the snapshot, or is a part this package leaves out
+  for (const rel of namedPaths(text(PATHS) ?? '')) {
+    if (leftOut(rel) || !under(rel).length && !tree.has(rel)) { if (!leftOut(rel)) problems.push(`${PATHS} names ${rel}, which is not in games.fun at ${full.slice(0, 12)}`); continue; }
+    if (![...chosen.keys()].some(p => p === rel || p.startsWith(rel + '/'))) problems.push(`${PATHS} names ${rel}, and nothing under it is in the snapshot (add it to DATA or LEFT_OUT in scripts/sync-kits.mjs)`);
+  }
+
+  // 4. symlinks, then the libraries licence by licence
+  const pick = [];
+  for (const rel of [...chosen.keys()].sort()) {
+    const e = tree.get(rel);
+    if (e.mode === '120000') { problems.push(`${rel}: a symlink (kits must hold plain files only)`); continue; }
+    if (e.type !== 'blob') { excluded.push({ path: rel, why: `a ${e.type}` }); continue; }
+    pick.push(rel);
+  }
+  await blobs.load(pick);
+  const files = new Map();
+  const libOf = rel => LIBRARIES.find(l => rel.startsWith(l + '/')) ?? null;
+  const licences = Object.fromEntries(LIBRARIES.map(l => { try { return [l, JSON.parse(text(`${l}/LICENSES.json`)).files ?? {}]; } catch { return [l, {}]; } }));
+  for (const rel of pick) {
+    const lib = libOf(rel);
+    if (lib) {
+      const sidecar = r => { try { return JSON.parse(text(`${lib}/${r}`)); } catch { return null; } };
+      const licenceFile = r => licenceOfText(text(`${lib}/${path.posix.dirname(r)}/LICENSE`));
+      const inLib = rel.slice(lib.length + 1);
+      const d = /(^|\/)LICENSE$/.test(inLib) && inLib.includes('/') ? { keep: true, why: 'licence text' } : libraryDecision(inLib, licences[lib], sidecar, licenceFile);
+      if (!d.keep) { excluded.push({ path: rel, why: d.why }); continue; }
+    }
+    files.set(rel, blobs.get(rel));
+  }
+  // a module the tools import that a rule above dropped
+  for (const rel of walked.modules) if (!files.has(rel) && !problems.some(p => p.startsWith(rel + ':'))) problems.push(`${rel}: the tools import it, but the library licence rule leaves it out`);
+
+  // 5. secrets and portability
   for (const [rel, buf] of files) for (const h of scanSecrets(rel, buf)) problems.push(`${rel}:${h.at}: looks like a ${h.kind}`);
-  problems.push(...closureProblems(files));
   problems.push(...portabilityProblems([...files.keys()]));
-  const sources = SOURCES.map(s => {
-    const mine = [...files].filter(([p]) => p === s.path || p.startsWith(s.path + '/'));
-    return { path: s.path, why: s.why, files: mine.length, bytes: mine.reduce((n, [, b]) => n + b.length, 0) };
-  });
-  return { commit: full, date, files, excluded: excluded.sort((a, b) => a.path.localeCompare(b.path)), sources, problems };
+
+  const size = list => ({ files: list.length, bytes: list.reduce((n, p) => n + files.get(p).length, 0) });
+  const kept = [...files.keys()];
+  const sources = data.map(d => ({ path: d.path, why: d.why, ...size(kept.filter(p => p === d.path || p.startsWith(d.path + '/'))) }));
+  const modules = kept.filter(p => chosen.get(p) === 'closure').sort();
+  return {
+    commit: full, date, files, versions, sources, modules, parts: walked.parts, browserRoots,
+    closure: size(modules), excluded: excluded.sort((a, b) => a.path.localeCompare(b.path)), problems,
+  };
 }
 
 /** KITS.json for a snapshot: deterministic (the same commit gives the same bytes). */
 export function kitsRecord(snap) {
-  const text = rel => snap.files.get(rel)?.toString('utf8') ?? '';
-  const gf3Version = /KIT_VERSION\s*=\s*'([^']+)'/.exec(text('research/gf-three/tools/lib/paths.mjs'))?.[1] ?? null;
-  const mpVersion = /KIT_VERSION\s*=\s*'([^']+)'/.exec(text('research/multiplayer/party/manifest.mjs'))?.[1] ?? null;
+  const v = snap.versions;
   const files = Object.fromEntries([...snap.files.keys()].sort().map(k => [k, sha256(snap.files.get(k))]));
   const bytes = [...snap.files.values()].reduce((n, b) => n + b.length, 0);
   const why = {};
@@ -326,21 +531,27 @@ export function kitsRecord(snap) {
     about: 'A sparse mirror of the games.fun repository at one commit: the kits games are built on and the tools that create and verify them. Written by scripts/sync-kits.mjs; never edited by hand (fix the kit in games.fun and sync again). tests/kits.test.mjs checks kits/ against this file.',
     source: { repo: 'games.fun', commit: snap.commit, date: snap.date },
     kits: {
-      'gf-three': { version: gf3Version, path: 'research/gf-three' },
-      'gf-multiplayer': { version: mpVersion, path: 'research/foundations/kits/gf-multiplayer/1.3.0' },
-      'gf-audio': { version: '1.5.0', path: 'research/foundations/kits/gf-audio/1.5.0' },
-      'gf-assets': { version: '1.3.0', path: 'research/foundations/kits/gf-assets/1.3.0' },
+      'gf-three': { version: v.gf3, path: 'research/gf-three' },
+      'gf-scenic': { version: v.scenic, path: 'research/gf-scenic' },
+      'gf-multiplayer': { version: v.mp, path: `research/foundations/kits/gf-multiplayer/${v.mp}` },
+      'gf-audio': { version: v.audio, path: `research/foundations/kits/gf-audio/${v.audio}` },
+      'gf-assets': { version: v.assets, path: `research/foundations/kits/gf-assets/${v.assets}` },
     },
     policy: {
+      how: 'the import closure of `entries`, the parts they load by path (`parts`), and the data folders in `sources`',
       excludedDirs: EXCLUDED_DIRS,
+      leftOut: LEFT_OUT,
       libraryLicences: ALLOWED_LICENCES,
-      libraryRule: 'a library file ships when its LICENSES.json record is CC0 or a permissive licence, or it is generated by games.fun; never Meshy output (licence tier unconfirmed) or a file without a record',
+      libraryRule: 'a library file ships when its LICENSES.json record is CC0 or a permissive licence, or it is generated by games.fun, or its folder carries a permissive LICENSE text; never Meshy output or a file without a licence',
       secrets: 'no .env files; text files are scanned for key-shaped strings and the sync fails on any hit',
-      shimmed: 'research/pipeline/node_modules/playwright/index.mjs (browser.mjs) resolves to playwright-core through lib/kit-hooks.mjs',
     },
     totals: { files: snap.files.size, bytes, excluded: snap.excluded.length, excludedBy: Object.fromEntries(Object.entries(why).sort()) },
+    entries: ENTRIES,
+    parts: snap.parts,
+    browserRoots: snap.browserRoots,
+    closure: { ...snap.closure, modules: snap.modules },
     sources: snap.sources,
-    excluded: snap.excluded.filter(e => e.path.startsWith(LIB + '/')),
+    excluded: snap.excluded.filter(e => LIBRARIES.some(l => e.path.startsWith(l + '/'))),
     files,
   };
 }
