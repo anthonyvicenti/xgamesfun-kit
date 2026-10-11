@@ -48,6 +48,7 @@ export const NAMED_IN_MESSAGES = ['dressing', 'world'];
 export const ENTRIES = [
   ...[...TOOL_ENTRIES, ...NAMED_IN_MESSAGES].map(t => `${TOOLS}/${t}.mjs`),
   'research/multiplayer/p2p/signal-server.mjs',   // the dev server's signaling (server/index.mjs)
+  'research/multiplayer/p2p/serve-signal.mjs',    // a person's own signaling server (docs/ONLINE.md names it; never started for them)
   LOOP,                                           // the build loop as a library (mcp/tools/loop.mjs calls it)
 ];
 
@@ -73,6 +74,7 @@ export const DATA = [
   { path: 'research/gf-scenic/specs', why: 'the scenic engine\'s development specs (example specs)' },
   { path: 'research/foundations/kits/gf-audio/{audio}', why: 'gf-audio, vendored into each game as audio/', browser: true },
   { path: 'research/foundations/kits/gf-multiplayer/{mp}', why: 'gf-multiplayer, vendored into each game as gf/mp/', browser: true },
+  { path: 'research/foundations/kits/gf-multiplayer/{mpDev}', why: 'the newest frozen gf-multiplayer, when it runs ahead of the one create vendors (a game on it passes verify check 2; online signaling needs 1.6.4)', browser: true },
   { path: 'research/foundations/kits/gf-assets/{assets}', why: 'gf-assets (gf/gf-assets.js; verify checks its SHA256SUMS)', browser: true },
   { path: 'research/foundations/trials/fps-arena/source/vendor/three', why: 'three.js build (pinned)', browser: true },
   { path: 'research/foundations/trials/fps-arena/source/vendor/postprocessing', why: 'pmndrs postprocessing (pinned)', browser: true },
@@ -83,6 +85,7 @@ export const DATA = [
   { path: 'research/multiplayer/party/LIVE_HANDBOOK.md', why: 'how a live game shares its world' },
   { path: 'research/multiplayer/party/kit', why: 'gf-multiplayer dev sources (tools read declarations through them)', browser: true },
   { path: 'research/multiplayer/p2p/vendor', why: 'ws, vendored by the signal server', browser: true },
+  { path: 'research/multiplayer/p2p/SELF_HOST.md', why: 'online play: our host\'s limits and refusals, and hosting your own signaling (docs/ONLINE.md is a copy)' },
   { path: 'research/watch/relay/README.md', why: 'the watch relay: what the local stream relay does (verify check 34)' },
   { path: 'research/studio-v2/game-spec.schema.json', why: 'the game spec schema create validates' },
   { path: 'research/studio-v2/prompts', why: 'the prompts, once: the source of the build brief and of AGENTS.md\'s game-building part, the play-tester\'s brief, the look rubrics' },
@@ -352,6 +355,8 @@ export function kitVersions(read) {
   const paths = read(PATHS) ?? '', mp = read(MP_MANIFEST) ?? '';
   return {
     mp: /export const KIT_VERSION = '([^']+)'/.exec(mp)?.[1] ?? null,
+    // the newest frozen version (the manifest's DEV_VERSION). It is KIT_VERSION again once games.fun promotes it.
+    mpDev: /export const DEV_VERSION = '([^']+)'/.exec(mp)?.[1] ?? /export const KIT_VERSION = '([^']+)'/.exec(mp)?.[1] ?? null,
     audio: /kits\/gf-audio\/(\d+\.\d+\.\d+)/.exec(paths)?.[1] ?? null,
     assets: /kits\/gf-assets\/(\d+\.\d+\.\d+)/.exec(paths)?.[1] ?? null,
     gf3: /export const KIT_VERSION = '([^']+)'/.exec(paths)?.[1] ?? null,
@@ -466,7 +471,8 @@ export async function buildSnapshot(repo, commit = 'HEAD') {
   const text = rel => blobs.get(rel)?.toString('utf8') ?? null;
   const versions = kitVersions(text);
   for (const [k, v] of Object.entries(versions)) if (!v) problems.push(`could not read the ${k} version from the tools at ${full.slice(0, 12)}`);
-  const data = DATA.map(d => ({ ...d, path: d.path.replace(/\{(\w+)\}/g, (m, k) => versions[k] ?? m) }));
+  // a version named twice (the newest frozen multiplayer kit is the one create vendors) is one folder, listed once
+  const data = DATA.map(d => ({ ...d, path: d.path.replace(/\{(\w+)\}/g, (m, k) => versions[k] ?? m) })).filter((d, i, all) => all.findIndex(x => x.path === d.path) === i);
   const browserRoots = data.filter(d => d.browser).map(d => d.path);
   const isBrowser = rel => browserRoots.some(b => rel === b || rel.startsWith(b + '/'));
   const chosen = new Map();   // rel → 'data' | 'closure'
@@ -559,7 +565,7 @@ export function kitsRecord(snap) {
     kits: {
       'gf-three': { version: v.gf3, path: 'research/gf-three' },
       'gf-scenic': { version: v.scenic, path: 'research/gf-scenic' },
-      'gf-multiplayer': { version: v.mp, path: `research/foundations/kits/gf-multiplayer/${v.mp}` },
+      'gf-multiplayer': { version: v.mp, path: `research/foundations/kits/gf-multiplayer/${v.mp}`, ...(v.mpDev && v.mpDev !== v.mp ? { newest: v.mpDev, newestPath: `research/foundations/kits/gf-multiplayer/${v.mpDev}` } : {}) },
       'gf-audio': { version: v.audio, path: `research/foundations/kits/gf-audio/${v.audio}` },
       'gf-assets': { version: v.assets, path: `research/foundations/kits/gf-assets/${v.assets}` },
     },

@@ -155,7 +155,31 @@ test('paths.mjs is read for its folders, the paths it names and the kit versions
   for (const p of ['research/gf-three/kit', 'research/foundations/trials/fps/vendor/three', 'research/foundations/kits/gf-audio/1.5.0']) assert.ok(named.includes(p), p);
   assert.ok(!named.includes('research/foundations/trials'), 'the prefix alone is not a path the tools read');
   const v = kitVersions(f => ({ [P]: PATHS_SRC, 'research/multiplayer/party/manifest.mjs': 'export const KIT_VERSION = \'1.6.3\';   // note' })[f]);
-  assert.deepEqual(v, { mp: '1.6.3', audio: '1.5.0', assets: '1.3.0', gf3: '0.9.0', scenic: '0.2.0' });
+  assert.deepEqual(v, { mp: '1.6.3', mpDev: '1.6.3', audio: '1.5.0', assets: '1.3.0', gf3: '0.9.0', scenic: '0.2.0' });
+  // the newest frozen multiplayer kit runs ahead of the one create vendors until games.fun promotes it
+  const ahead = kitVersions(f => ({ [P]: PATHS_SRC, 'research/multiplayer/party/manifest.mjs': 'export const KIT_VERSION = \'1.6.3\';\nexport const DEV_VERSION = \'1.6.4\';   // not yet KIT_VERSION' })[f]);
+  assert.equal(ahead.mp, '1.6.3');
+  assert.equal(ahead.mpDev, '1.6.4');
+});
+
+test('online play: the self-host signaling server, its guide and the newest frozen multiplayer kit are carried', async () => {
+  assert.ok(ENTRIES.includes('research/multiplayer/p2p/serve-signal.mjs'), 'serve-signal.mjs is an entry, so what it imports comes with it');
+  assert.ok(DATA.some(d => d.path === 'research/multiplayer/p2p/SELF_HOST.md'));
+  assert.ok(DATA.some(d => d.path === 'research/foundations/kits/gf-multiplayer/{mpDev}'));
+  const record = JSON.parse(await readFile(path.join(KITS, 'KITS.json'), 'utf8'));
+  const mp = record.kits['gf-multiplayer'];
+  // one folder listed once when the two versions are the same; both folders, whole, when the newest runs ahead
+  const roots = record.sources.filter(s => /kits\/gf-multiplayer\//.test(s.path)).map(s => s.path);
+  assert.equal(new Set(roots).size, roots.length, 'no multiplayer kit folder is listed twice');
+  assert.ok(roots.includes(mp.path));
+  if (mp.newest) {
+    assert.notEqual(mp.newest, mp.version);
+    assert.ok(roots.includes(mp.newestPath));
+    assert.ok(existsSync(path.join(KITS, ...mp.newestPath.split('/'), 'source', 'kit.json')));
+    assert.equal(JSON.parse(await readFile(path.join(KITS, ...mp.newestPath.split('/'), 'source', 'kit.json'), 'utf8')).version, mp.newest);
+  }
+  // docs/ONLINE.md is the guide, byte for byte
+  assert.equal(await readFile(path.join(KIT_ROOT, 'docs', 'ONLINE.md'), 'utf8'), await readFile(path.join(KITS, 'research', 'multiplayer', 'p2p', 'SELF_HOST.md'), 'utf8'));
 });
 
 test('the walk follows static imports, import(), register() and new URL(), and stops at page modules', () => {
