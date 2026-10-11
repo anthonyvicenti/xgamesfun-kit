@@ -148,6 +148,11 @@ test('connect reports a refused add, a missing agent, an unknown scope, and a dr
   assert.match(r.results[0].note, /refused: boom/);
   r = await connect({ agent: 'codex', scope: 'project', runner: f.runner, detected: f.detected, listTools: okServer, data });
   assert.match(r.results[0].note, /no "project" scope/);
+  assert.equal(r.ok, false);
+  const h = fakeAgents();
+  r = await connect({ scope: 'project', runner: h.runner, detected: h.detected, listTools: okServer, data });
+  assert.deepEqual(r.results.map(x => x.status), ['registered', 'skipped'], 'an agent without that scope is skipped when no agent was named');
+  assert.equal(r.ok, true);
   await assert.rejects(() => connect({ agent: 'zed', detected: f.detected, listTools: okServer, data }), /no agent "zed"/);
   const missing = f.detected.map(d => ({ ...d, found: false }));
   r = await connect({ runner: f.runner, detected: missing, listTools: okServer, data });
