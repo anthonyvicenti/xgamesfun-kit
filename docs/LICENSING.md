@@ -49,7 +49,7 @@ what it makes. The kit does not ship Meshy output.
 
 **DRAFT. Not reviewed by a lawyer. Proposed wording for the creator to decide.**
 
-The MIT licence covers the code. It does not give anyone the right to use the names "games.fun" or "XGames.fun" or the
+The MIT licence covers the code. It does not give anyone the right to use the name "games.fun" or the
 games.fun logo, which belong to their owner. You may say, in plain words, that your game or fork "is made with the
 games.fun kit" or "is a fork of the games.fun kit". Please do not name a product so that it could be mistaken for ours
 or looks endorsed by us, and do not use our logo. A fork should pick its own name.

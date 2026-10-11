@@ -26,8 +26,9 @@ one of these files must keep its credit line.**
 
 The kit's library lists a "Cyborg gecko" body generated with Meshy, recorded as CC BY 4.0 with Meshy AI credited because
 the plan it was made on is unconfirmed. Its file is left out of this kit by the sync, so no game made here carries it
-today. If it is ever shipped, the credit line is: "Cyborg gecko (Meshy)" by Meshy AI (generated for games.fun), CC BY 4.0
-(https://www.meshy.ai).
+today. If it is ever shipped, the credit line is:
+
+- "Cyborg gecko (Meshy)" by Meshy AI (generated for games.fun), CC BY 4.0 (https://www.meshy.ai)
 
 ## Art and sound given freely (CC0, credit not required, given anyway)
 

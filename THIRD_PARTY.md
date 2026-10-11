@@ -86,6 +86,10 @@ material and meshopt-compressed (gltf-transform), which counts as a change:
 - "Reel W/ Hose" by J-Toastie, CC BY 3.0 (https://poly.pizza/m/qXBsZPAaYQ)
 - "Water Cooler" by J-Toastie, CC BY 3.0 (https://poly.pizza/m/zWi9p5FSxD)
 
+The Meshy gecko's credit line, kept for the day it ships:
+
+- "Cyborg gecko (Meshy)" by Meshy AI (generated for games.fun), CC BY 4.0 (https://www.meshy.ai)
+
 The creator's count of 11 (2026-10-11, "keep them for now") is these ten plus the Meshy gecko record (A8), which is
 CC-BY-4.0 and credits Meshy AI; its file is not in this kit.
 
