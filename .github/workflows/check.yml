@@ -17,7 +17,7 @@ on:
         description: Which system to run on
         type: choice
         default: all
-        options: [all, linux, windows, macos]
+        options: [all, linux, windows, macos, linux-windows]
       job:
         description: Which job to run
         type: choice
@@ -48,6 +48,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest","windows-latest"]'
           || inputs.system == 'linux' && '["ubuntu-latest"]' || inputs.system == 'windows' && '["windows-latest"]' || inputs.system == 'macos' && '["macos-latest"]'
+          || inputs.system == 'linux-windows' && '["ubuntu-latest","windows-latest"]'
           || '["ubuntu-latest","windows-latest","macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
@@ -106,6 +107,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest","windows-latest"]'
           || inputs.system == 'linux' && '["ubuntu-latest"]' || inputs.system == 'windows' && '["windows-latest"]' || inputs.system == 'macos' && '["macos-latest"]'
+          || inputs.system == 'linux-windows' && '["ubuntu-latest","windows-latest"]'
           || '["ubuntu-latest","windows-latest","macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
