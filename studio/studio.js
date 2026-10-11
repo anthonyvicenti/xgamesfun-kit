@@ -8,7 +8,8 @@
 //   wallet               the Wallet Standard connection the studio owns (studio/wallet.js): list(), connect(name?),
 //                        disconnect(), account, address, feature(name), onChange(fn)
 //   toast(msg, kind?)    a short message; kind 'ok' | 'error'
-//   preview              { reload(), show(path), frame } the game frame on the left ("/game/?gf-show=prop.ball")
+//   preview              { reload(), show(path), overlay(node|null), frame } the game frame on the left ("/game/?gf-show=prop.ball");
+//                        overlay lays an editor's own view over the game (one at a time)
 //   selection            { get(), set(sel|null), onChange(fn) } what the person picked (a slot or object, {id, label}); it travels
 //                        with their next change request. A game frame may post { gf: 'select', id, label } to pick one.
 //   on(event, fn)        dev-server events: 'game' (the game's files changed: { files }), 'verify' (a run finished)
@@ -50,6 +51,8 @@ const preview = {
   path: store.get('preview') || '/game/',
   show(path) { this.path = path; frame.src = path; const opt = [...$('#preview-mode').options].find(o => o.value === path); $('#preview-mode').value = opt ? path : $('#preview-mode').value; },
   reload() { try { frame.contentWindow.location.reload(); } catch { frame.src = this.path; } },
+  // an editor's own view laid over the game (the map painter, the layout's top view); null takes it away
+  overlay(node) { const wrap = frame.parentElement; wrap.querySelector(':scope > .preview-overlay')?.remove(); if (node) { node.classList.add('preview-overlay'); wrap.append(node); } },
 };
 $('#preview-mode').addEventListener('change', e => { store.set('preview', e.target.value); preview.show(e.target.value); });
 $('#preview-reload').addEventListener('click', () => preview.reload());
