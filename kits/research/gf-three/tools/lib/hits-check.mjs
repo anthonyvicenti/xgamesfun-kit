@@ -32,6 +32,8 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { median } from '../../kit/mechanics/waves/logic.js';
 import { normalizeWeapons } from '../../kit/mechanics/melee/logic.js';
+import { prepareStepped, stepUrl, clockFor, wallClock, mouseTaken } from './stepped.mjs';
+import { turnBy } from './lock.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const r2 = v => Math.round(v * 100) / 100;
@@ -146,7 +148,7 @@ async function analyse(browser, before, after, box, bar) {
  * served game; game: config/game.json; dir: the game folder (its spec.json); shot(page, name, buf?): evidence.
  * → {ok, detail, record, warnings}
  */
-export async function checkHits({ newPage, browser, url, game, dir, shot = async () => null, log = () => {} }) {
+export async function checkHits({ newPage, browser, url, game, dir, shot = async () => null, log = () => {}, stepped = true }) {
   const L = HIT_LIMITS, t0 = Date.now(), warnings = [];
   const mech = game.mechanics ?? [];
   const waves = mech.find(m => m.id === 'waves'), prj = mech.find(m => m.id === 'projectile'), melee = mech.find(m => m.id === 'melee');
@@ -167,21 +169,26 @@ export async function checkHits({ newPage, browser, url, game, dir, shot = async
   const obs = () => p.evaluate(OBS);
   const png = () => p.screenshot({ type: 'png' });
   const vp = p.viewportSize() ?? { width: 1280, height: 720 }, cursor = { x: Math.round(vp.width / 2), y: Math.round(vp.height * 0.55) };
-  const look = async (dx, dy) => { const n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 30)); for (let i = 1; i <= n; i++) { cursor.x += dx / n; cursor.y += dy / n; await p.mouse.move(cursor.x, cursor.y); } };
+  // (under an emulated lock the cursor goes back to the middle before it would leave the screen: tools/lib/lock.mjs)
+  const look = (dx, dy) => turnBy(p, cursor, dx, dy);
   const record = { url: `?seed=7&bots=0&gf-demo=waves.hit`, limits: L, camera: mode, stream, cooldown, melee: useMelee ? { weapon: WPN.id, reach } : null, shotsLog: [], measured: [] };
   let F = null, R = null;                                          // camera-relative W and D on the ground (melee walks)
-  let me = null;
+  let me = null, clock = null;
   try {
-    await p.goto(`${url}?seed=7&bots=0&gf-demo=waves.hit`, { waitUntil: 'load' });
+    // stepped time when the game's kit offers it (tools/lib/stepped.mjs): every wait below is the game's time
+    if (stepped) await prepareStepped(p);
+    await p.goto(stepped ? stepUrl(`${url}?seed=7&bots=0&gf-demo=waves.hit`) : `${url}?seed=7&bots=0&gf-demo=waves.hit`, { waitUntil: 'load' });
     for (let t = Date.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'lobby'; ) { if (Date.now() - t > 90000) throw new Error('no lobby in 90 s'); await sleep(200); }
     const play = await p.locator('#gf-play').boundingBox().catch(() => null);
     if (play) await p.mouse.click(play.x + play.width / 2, play.y + play.height / 2); else await p.keyboard.press('Enter');
-    for (let t = Date.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'playing'; ) { if (Date.now() - t > 20000) throw new Error('the round did not start'); await sleep(120); }
-    await sleep(1400);                                              // the "Go!" banner
-    await p.mouse.move(cursor.x, cursor.y); await p.mouse.click(cursor.x, cursor.y); await sleep(350);   // takes the mouse
-    const tStart = Date.now();
+    clock = await clockFor(p, { real: !stepped });
+    record.clock = clock.stepped ? 'stepped' : 'wall';
+    for (let t = clock.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'playing'; ) { if (clock.now() - t > 20000) throw new Error('the round did not start'); await clock.wait(120); }
+    await clock.wait(1400);                                         // the "Go!" banner
+    await p.mouse.move(cursor.x, cursor.y); await p.mouse.click(cursor.x, cursor.y); await mouseTaken(p); await clock.wait(350);   // takes the mouse
+    const tStart = clock.now();
     let aimTries = 0;
-    while (Date.now() - tStart < L.SECONDS * 1000) {
+    while (clock.now() - tStart < L.SECONDS * 1000) {
       const o = await obs();
       if (!o || o.phase !== 'playing') { warnings.push(`hits: the round left play (${o?.phase ?? 'no observation'})`); break; }
       me = o.me;
@@ -189,17 +196,18 @@ export async function checkHits({ newPage, browser, url, game, dir, shot = async
       const mine = (o.w?.kills ?? []).filter(k => k.from === me.id);
       if (mine.length >= L.KILLS) break;
       const e = (o.w?.enemies ?? []).filter(x => x.hp > 0 && x.body).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
-      if (!e) { await sleep(150); continue; }
+      if (!e) { await clock.wait(150); continue; }
       m.enemies = Math.max(m.enemies, 1);
       // aim: the follow camera aims with the cursor itself (CONTRACT §8): the mouse goes onto the enemy's body; else the
       // enemy's body under the crosshair (the mouse turns the camera; pointer lock reads the movement)
       const f = (H / 2) / Math.tan((cam.fov * Math.PI / 180) / 2), off = [e.body.x - W / 2, e.body.y - H / 2];
-      if (mode === 'follow') { if (e.body.front) { cursor.x = e.body.x; cursor.y = e.body.y; await p.mouse.move(cursor.x, cursor.y); } }
+      // (orbit, CONTRACT §9: the cursor aims there too, and the camera turns only on a drag, so it is never turned here)
+      if (mode === 'follow' || mode === 'orbit') { if (e.body.front) { cursor.x = e.body.x; cursor.y = e.body.y; await p.mouse.move(cursor.x, cursor.y); } }
       // (a swing covers an arc: it needs the enemy roughly ahead, not under the crosshair to the pixel)
       else if (mode !== 'top' && cam.sensitivity > 0 && (!e.body.front || Math.hypot(off[0], useMelee ? 0 : off[1]) > (useMelee ? 48 : L.AIM_PX)) && aimTries < 40) {
         aimTries++;
         const dx = e.body.front ? Math.atan(off[0] / f) / cam.sensitivity : 600, dy = e.body.front ? Math.atan(off[1] / f) / cam.sensitivity : 0;
-        await look(dx * 0.9, dy * 0.9); await sleep(90);
+        await look(dx * 0.9, dy * 0.9); await clock.wait(90);
         F = null;                                                  // the camera turned: W and D point elsewhere now
         continue;
       }
@@ -208,28 +216,28 @@ export async function checkHits({ newPage, browser, url, game, dir, shot = async
       if (useMelee) {
         const d = Math.hypot(e.x - me.x, e.z - me.z);
         if (d > reach * 0.78) {
-          if (mode !== 'follow' && mode !== 'top') { await p.keyboard.down('KeyW'); await sleep(Math.min(260, 60 + (d - reach * 0.7) * 90)); await p.keyboard.up('KeyW'); await sleep(60); continue; }
-          if (!F) { const k = await calibrate(p, obs); if (!k) { warnings.push('hits: the player did not move on W or D'); break; } F = k.F; R = k.R; continue; }
-          await walkToward(p, F, R, e.x - me.x, e.z - me.z, Math.min(260, 60 + (d - reach * 0.7) * 90)); await sleep(60);
+          if (mode !== 'follow' && mode !== 'top' && mode !== 'orbit') { await p.keyboard.down('KeyW'); await clock.wait(Math.min(260, 60 + (d - reach * 0.7) * 90)); await p.keyboard.up('KeyW'); await clock.wait(60); continue; }
+          if (!F) { const k = await calibrate(p, obs, clock); if (!k) { warnings.push('hits: the player did not move on W or D'); break; } F = k.F; R = k.R; continue; }
+          await walkToward(p, F, R, e.x - me.x, e.z - me.z, Math.min(260, 60 + (d - reach * 0.7) * 90), clock); await clock.wait(60);
           continue;
         }
       }
       // a hit to measure from the player's own screen: frames before, the shot, frames after
       const measure = !m.hit;
-      const before = measure ? [await png(), (await sleep(120), await png())] : [];
+      const before = measure ? [await png(), (await clock.wait(120), await png())] : [];
       const hp0 = e.hp, id = e.id;
       m.shots++;
       if (stream) await p.mouse.down();
-      else { await p.mouse.down(); await sleep(70); await p.mouse.up(); }
+      else { await p.mouse.down(); await clock.wait(70); await p.mouse.up(); }
       // a swing hits in its active frames, after its windup
       // wait for the hit: the enemy's hit points drop (it stands: a hit to measure) or it is gone (a kill)
       let after = null, outcome = 'miss', o2 = null;
-      for (let t = Date.now(); Date.now() - t < (stream ? 1600 : useMelee ? 1100 : 900); ) {
+      for (let t = clock.now(); clock.now() - t < (stream ? 1600 : useMelee ? 1100 : 900); ) {
         o2 = await obs();
         const now = (o2?.w?.enemies ?? []).find(x => x.id === id);
-        if (now && now.hp < hp0 - 1e-6) { outcome = 'hit'; if (measure) after = [await png(), await png(), (await sleep(60), await png())]; break; }
+        if (now && now.hp < hp0 - 1e-6) { outcome = 'hit'; if (measure) after = [await png(), (await clock.pass(70), await png()), (await clock.wait(60), await clock.pass(70), await png())]; break; }
         if (!now) { outcome = (o2?.w?.kills ?? []).some(k => k.id === id) ? 'kill' : 'gone'; break; }
-        await sleep(25);
+        await clock.wait(25);
       }
       if (stream) await p.mouse.up();
       record.shotsLog.push({ enemy: id, hp: hp0, outcome });
@@ -249,14 +257,14 @@ export async function checkHits({ newPage, browser, url, game, dir, shot = async
         await shot(p, 'hits-hit', after[0]);
       }
       if (outcome === 'kill' && !m.death) {
-        await sleep(450); const img = await png(); await shot(p, 'hits-death', img);
+        await clock.wait(450); const img = await png(); await shot(p, 'hits-death', img);
         const o3 = await obs();
         m.death = `a kill went down where it stood (${o3?.w?.dying ?? 0} body falling 0.45 s after; deathSeconds ${waves.params?.deathSeconds ?? 1.6})`;
       }
-      await sleep(Math.max(0, cooldown * 1000 - 40));
+      await clock.wait(Math.max(0, cooldown * 1000 - 40));
     }
     const o = await obs();
-    m.seconds = Math.round((Date.now() - tStart) / 1000);
+    m.seconds = Math.round((clock.now() - tStart) / 1000);
     const mine = (o?.w?.kills ?? []).filter(k => k.from === (me?.id ?? o?.me?.id));
     m.kills = mine.map(k => k.hits);
     record.kills = mine; record.lastHit = o?.w?.lastHit ?? null;
@@ -282,19 +290,19 @@ export async function checkHits({ newPage, browser, url, game, dir, shot = async
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** Which way W and D move the local player on the ground now (the camera does not turn while measuring): {F, R} or null. */
-export async function calibrate(p, obs) {
+export async function calibrate(p, obs, clock = wallClock()) {
   const at = async () => { const o = await obs(); return o?.me ?? null; };
-  const step = async k => { const a = await at(); await p.keyboard.down(k); await sleep(200); await p.keyboard.up(k); await sleep(220); const b = await at(); if (!a || !b) return null; const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz); return l > 0.05 ? [dx / l, dz / l] : null; };
+  const step = async k => { const a = await at(); await p.keyboard.down(k); await clock.wait(200); await p.keyboard.up(k); await clock.wait(220); const b = await at(); if (!a || !b) return null; const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz); return l > 0.05 ? [dx / l, dz / l] : null; };
   const F = await step('KeyW'), R = await step('KeyD');
   return F && R ? { F, R } : null;
 }
 /** Hold the keys that move the player toward (dx, dz) for `ms`. */
-export async function walkToward(p, F, R, dx, dz, ms = 160) {
+export async function walkToward(p, F, R, dx, dz, ms = 160, clock = wallClock()) {
   const l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
   const pf = ux * F[0] + uz * F[1], pr = ux * R[0] + uz * R[1], keys = [];
   if (pf > 0.38) keys.push('KeyW'); if (pf < -0.38) keys.push('KeyS'); if (pr > 0.38) keys.push('KeyD'); if (pr < -0.38) keys.push('KeyA');
   for (const k of keys) await p.keyboard.down(k);
-  await sleep(ms);
+  await clock.wait(ms);
   for (const k of keys) await p.keyboard.up(k);
   return keys;
 }

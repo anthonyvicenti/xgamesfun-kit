@@ -36,6 +36,7 @@ import * as refusals from './refusals.js';
 import { net } from '../../mp/net.js';
 import { RIG_DEFAULTS } from '../controller/camera-rig.js';
 import { AIM_HEIGHT } from './aim.js';
+import { stepAsked, createStepper, fixedCameraPlace } from './step.js';
 
 export const VERSION = KIT.version;
 const H = 1 / 60;
@@ -252,7 +253,8 @@ export async function boot({ rules = {} } = {}) {
     });
     ctx.menu = menu;
     if (session.live) net.live?.onChange?.(() => menu.redraw?.());
-    // QA and capture only (never in real play): ?gf-autoplay=1 skips the menu alone; ?gf-ui=0 hides the HUD; ?gf-calm=N stills bots for N s
+    // QA and capture only (never in real play): ?gf-autoplay=1 skips the menu alone; ?gf-ui=0 hides the HUD; ?gf-calm=N stills bots for N s;
+    // ?gf-step=1 (alone only) stops the clock until window.__game.step(ms) (kit/core/step.js)
     if (params.get('gf-ui') === '0' || backdrop) ui.root.style.display = 'none';
     if (backdrop) { input.enabled = false; canvas.tabIndex = -1; }
     // a world with friends: the party page's world card is the home menu; the game shows its world behind it
@@ -293,6 +295,9 @@ export async function boot({ rules = {} } = {}) {
       watch: session.watching ? { follow: session.watch?.follow ?? null, live: !!session.watch?.live, target: watchCam.target, camera: camMode } : null,
       world: worldMode ? { status: net.status ?? null, voxel: ctx.world.voxel?.stats?.() ?? null } : null,
     });
+    // stepped time (QA only, kit/core/step.js): asked for in the address, alone; never in a live round or a backdrop
+    const stepped = stepAsked(params, { live: session.live, backdrop });
+    const stepper = stepped ? createStepper({ frame: f => frame(0, f) }) : null;
     window.__game = Object.freeze({
       kit: 'gf-three', version: VERSION, seed, quality: quality.name,
       get phase() { return session.round.phase; },
@@ -329,6 +334,8 @@ export async function boot({ rules = {} } = {}) {
         world: () => JSON.parse(JSON.stringify(ctx.world.voxel.stats())),
         project: (x, y, z) => screenOf({ x, y, z }),
       } : {}),
+      // stepped time (QA only, kit/core/step.js): present only when the address carries ?gf-step=1 and the round is not live
+      ...(stepped ? { stepped: true, step: (ms, opts) => JSON.parse(JSON.stringify({ ...stepper.step(ms, opts), now: ctx.time.now, round: ctx.time.round, phase: session.round.phase })) } : {}),
     });
 
     // ---- the looks observation (CONTRACT §6e; verify check 5's loadout leg): what this copy draws each player in ----
@@ -378,11 +385,15 @@ export async function boot({ rules = {} } = {}) {
 
     // ---- the frame ----
     let last = null, acc = 0;
+    const draw = () => { if (look.render) look.render(camera); else renderer.render(scene, camera); };
     const plate = new THREE.Vector3();
     const orbit = { a: 0, v: new THREE.Vector3(), at: new THREE.Vector3(), dir: new THREE.Vector3(), right: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0) };
-    session.loop(t => {
-      const raw = last === null ? 0 : Math.max(0, (t - last) / 1000);
-      const dt = Math.min(0.1, raw); last = t;
+    // one frame. In play `t` is the browser's frame time; a stepped frame (kit/core/step.js) brings its own dt, exactly
+    // one fixed step, and says whether it is drawn (the frames inside a step are not: they cost no drawing)
+    const frame = (t, fixed = null) => {
+      const raw = fixed ? fixed.dt : last === null ? 0 : Math.max(0, (t - last) / 1000);
+      const dt = Math.min(0.1, raw); if (!fixed) last = t;
+      const drawn = !fixed || fixed.draw;
       // the frame-rate guard: sampled while playing in view; it lowers the ratio, never under one CSS pixel
       if (governor) {
         const floor = Math.min(1, Math.min(globalThis.devicePixelRatio || 1, 1) / res.target);
@@ -395,7 +406,7 @@ export async function boot({ rules = {} } = {}) {
         input.enabled = false; input.update();
         hud.update(0, { phase: session.round.phase, covered: true });
         ui.update(0, { left: session.round.phase === 'playing' ? ctx.time.left : null, players: ctx.players.list(), plates: [] });
-        if (look.render) look.render(camera); else renderer.render(scene, camera);
+        if (drawn) draw();
         return;
       }
       ctx.time.now += dt; ctx.time.dt = dt;
@@ -458,8 +469,16 @@ export async function boot({ rules = {} } = {}) {
         if (phase === 'lobby' && worldMode) worldCamera(dt);
         else if (phase === 'lobby' && menu.view && !session.live && (game.camera ?? 'third') !== 'first') homeCamera(dt);
       }
-      if (look.render) look.render(camera); else renderer.render(scene, camera);
-    });
+      // an undrawn stepped frame still leaves every matrix as a drawn one does (the renderer updates them when it
+      // draws): the next frame's aim, sounds and observation read the scene and the camera where they are now
+      if (drawn) draw(); else { scene.updateMatrixWorld(); camera.updateMatrixWorld(); }
+    };
+    // Stepped time (QA only): the browser's frames only redraw what is there, and time moves when step(ms) is called.
+    // The loop still goes through net.loop (gf/mp is not ours to change); alone it is requestAnimationFrame.
+    // (the first of them runs one frame of no time, so the menu's camera and the HUD are placed)
+    let primed = false;
+    if (stepped) session.loop(() => { if (primed) draw(); else { primed = true; frame(0, { dt: 0, draw: true }); } });
+    else session.loop(frame);
     // Watch then play (gf-multiplayer 1.6.0): a viewer sees the stream as the streamer does, from their pose: their eyes
     // in first person, behind them along their aim in third, the game's fixed angle in follow or top. Its own player
     // stays hidden. Until the streamer is drawn, the world drifts (a world) or the camera circles the arena.
@@ -495,9 +514,11 @@ export async function boot({ rules = {} } = {}) {
         camera.position.copy(watchCam.pos);
         camera.lookAt(watchCam.pos.x + watchCam.dir.x, watchCam.pos.y + watchCam.dir.y, watchCam.pos.z + watchCam.dir.z);
       } else if (camMode === 'follow' || camMode === 'top') {
-        const yaw = (C.yawDeg ?? 0) * Math.PI / 180, pitch = (C.pitchDeg ?? 50) * Math.PI / 180, d = C.distance ?? 20;
+        // the rig's own place (kit/controller/camera-rig.js): opposite its heading, raised by its pitch. Until
+        // 2026-10-10 this stood on the heading's side, so a viewer of a follow game looked from the far side of the
+        // streamer (check 34 on every scenic game: 45 m and 84 degrees off)
         watchCam.pivot.set(p.position.x, p.position.y + (C.height ?? 0.9), p.position.z);
-        watchCam.want.set(watchCam.pivot.x + Math.sin(yaw) * Math.cos(pitch) * d, watchCam.pivot.y + Math.sin(pitch) * d, watchCam.pivot.z + Math.cos(yaw) * Math.cos(pitch) * d);
+        fixedCameraPlace(C, watchCam.pivot, watchCam.want);
         watchCam.pos.lerp(watchCam.want, k);
         camera.position.copy(watchCam.pos); camera.lookAt(watchCam.pivot);
       } else if (camMode === 'third' && pointed) {

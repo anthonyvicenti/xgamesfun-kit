@@ -46,7 +46,7 @@ import { specToConfig, libraryPicture, specParams, enemyToughness, FORGE_GATE_QU
 import { assembleManifest } from './lib/slots-lib.mjs';
 import { withDefaults, check } from './lib/schema.mjs';
 import { loadWorldSubject, checkWorld } from './lib/world-check.mjs';
-import { decideModules, AUDIO_FILES, indexHtml, mainJs, attribution } from './create.mjs';
+import { decideModules, AUDIO_FILES, indexHtml, mainJs, attribution, forgeModules } from './create.mjs';
 import { adopt } from '../../multiplayer/party/adopt.mjs';
 import { checkKitReleased } from '../../multiplayer/party/manifest.mjs';
 
@@ -351,8 +351,9 @@ async function upgradeForge(dir, { src, out, record, t0 }) {
   const rulesText = await readFile(join(dir, 'rules.js'), 'utf8').catch(() => '');
   changes.vendor.push(...(await vendorLibraries(dir, [...kit.sourceTexts, rulesText], { engine: 'forge' })).wrote);
   const title = spec?.title ?? (await readJson('config/game.json').catch(() => ({}))).title ?? 'A forge game';
-  await put(join(dir, 'index.html'), indexHtml(title, 'forge'), changes.vendor, 'index.html');
   await put(join(dir, 'main.js'), mainJs('forge'), changes.vendor, 'main.js');
+  // the page after main.js and the kit's copies are in place: its preload list is read from them (as create does)
+  await put(join(dir, 'index.html'), indexHtml(title, 'forge', { preload: await forgeModules(dir) }), changes.vendor, 'index.html');
   // the build record and assets.json (the sound list kept; the sounds the current tables name added)
   const oldRecord = clone(record);
   const slotsBefore = await slotIds(dir);

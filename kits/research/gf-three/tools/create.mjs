@@ -25,7 +25,7 @@
 import { isMain } from './lib/main.mjs';
 import { readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, resolve, relative } from 'node:path';
+import { join, resolve, relative, posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { REPO, KIT, SCENIC_KIT, FORGE, FORGE_KIT, importPart, LIBRARY, KIT_VERSION, SCENIC_VERSION, FORGE_VERSION, SPEC_SCHEMA, GF_AUDIO, json, sha256, engineOf, walk } from './lib/paths.mjs';
 import { check, withDefaults } from './lib/schema.mjs';
@@ -181,7 +181,7 @@ export async function create(specPath, outDir, { force = false, newRules = false
   for (const a of C.assets) await own(a.to, await readFile(a.from));
   await own('multiplayer.json', json(C.multiplayer));
   await own('rules.js', rulesStub(spec, parts));
-  await gen('index.html', indexHtml(spec.title, engine));
+  if (engine !== 'forge') await gen('index.html', indexHtml(spec.title, engine));
   await gen('main.js', mainJs(engine));
 
   // the kit and everything vendored
@@ -198,6 +198,8 @@ export async function create(specPath, outDir, { force = false, newRules = false
   wrote.push(...ad.wrote);
   const rulesText = await readFile(join(dir, 'rules.js'), 'utf8').catch(() => '');
   const libs = await vendorLibraries(dir, [...kit.sourceTexts, rulesText], { engine }); wrote.push(...libs.wrote);
+  // forge: the page, once everything it names is in place (it asks for every module of the game at once)
+  if (engine === 'forge') await gen('index.html', indexHtml(spec.title, engine, { preload: await forgeModules(dir) }));
 
   // the build record, then assets.json from the declarations (keeping the sound list a game already has)
   const record = {
@@ -232,8 +234,43 @@ export function mainJs(engine = 'party') {
   return `import { boot } from './gf/three/core/${boot}';\nimport rules from './rules.js';\nboot({ rules });\n`;
 }
 
-export function indexHtml(title, engine = 'party') {
-  // forge (CONTRACT §8 forge): every import is relative (no three.js, no Rapier), so there is no import map
+/**
+ * A forge game's modules, as the page will ask for them (wave 3, track M): every file main.js reaches through static
+ * imports in the game folder, the loading view's first. The page preloads them all at once; without the list a
+ * browser finds each only when the one importing it has arrived (53 files, one round trip after another: 3 s of a
+ * phone's first view). JSON modules are left to their importers (no browser preloads them as modules everywhere).
+ */
+export async function forgeModules(dir, entries = ['gf/three/ui/loading.js', 'main.js']) {
+  const seen = new Set(), order = [];
+  const visit = async rel => {
+    if (seen.has(rel)) return;
+    seen.add(rel);
+    const text = await readFile(join(dir, rel), 'utf8').catch(() => null);
+    if (text === null) return;
+    order.push(rel);
+    // static imports and re-exports at the start of a statement (a commented example does not start one)
+    for (const m of text.matchAll(/(?:^|[;\n])[ \t]*(?:import|export)\b(?:[^'"();]*?\bfrom\b)?[ \t]*['"](\.{1,2}\/[^'"]+)['"]([^;\n]*)/g)) {
+      if (/\btype\s*:\s*['"]json['"]/.test(m[2]) || !/\.m?js$/.test(m[1])) continue;
+      const to = posix.normalize(posix.join(posix.dirname(rel), m[1]));
+      if (!to.startsWith('..')) await visit(to);
+    }
+  };
+  for (const e of entries) await visit(e);
+  return order;
+}
+
+/** The inline script of a forge page: the core's wasm, downloading and compiling from the page's first bytes (the
+ *  boot takes the compiled module: window.__gfEarly.wasm.module; .bytes is what has come in, for the loading bar).
+ *  The WebGPU build where the browser has WebGPU, else the WebGL2 build (wave 3, track W), and ?gf-forge-backend= as the
+ *  loader reads it; `.backend` says which, and the loader takes the module only for the build it picks (a browser
+ *  with WebGPU and no adapter downloads its WebGL2 build after all). The build's glue module is asked for with it: the
+ *  loader imports it by name once it has picked, so it is not in the page's own preload list. */
+const FORGE_EARLY = `(function(){if(!WebAssembly.compileStreaming||!window.ReadableStream)return;var q=/[?&]gf-forge-backend=(webgpu|webgl2?)(?:&|$)/.exec(location.search),b=q?(q[1]==='webgpu'?'webgpu':'webgl2'):(navigator.gpu?'webgpu':'webgl2'),E=window.__gfEarly={bytes:0,wasm:null},d=b==='webgpu'?'gf/forge/wasm/':'gf/forge/wasm-webgl2/',u=d+'forge_web_bg.wasm';try{var l=document.createElement('link');l.rel='modulepreload';l.href=d+'forge_web.js';document.head.appendChild(l)}catch(e){}try{var m=fetch(u).then(function(r){if(!r.ok||!r.body)throw new Error('HTTP '+r.status);var d=r.body.getReader();return WebAssembly.compileStreaming(new Response(new ReadableStream({pull:function(c){return d.read().then(function(x){if(x.done){c.close();return}E.bytes+=x.value.byteLength;c.enqueue(x.value)})},cancel:function(w){return d.cancel(w)}}),{headers:{'Content-Type':'application/wasm'}}))});m.catch(function(){});E.wasm={url:u,module:m,backend:b}}catch(e){}})();`;
+
+export function indexHtml(title, engine = 'party', { preload = null } = {}) {
+  // forge (CONTRACT §8 forge): every import is relative (no three.js, no Rapier), so there is no import map.
+  // Wave 3 (track M): the wasm starts with the page, and every module is asked for at once (forgeModules); a page
+  // written without the list (preload null) still loads, one import after another
   if (engine === 'forge') return `<!doctype html>
 <html lang="en">
 <head>
@@ -242,7 +279,8 @@ export function indexHtml(title, engine = 'party') {
 <title>${escHtml(title)}</title>
 <link rel="icon" href="data:,">
 <style>html,body{margin:0;background:#07080a}</style>
-<link rel="modulepreload" href="gf/forge/host.js">
+<script>${FORGE_EARLY}</script>
+${(preload?.length ? preload : ['gf/forge/host.js']).map(f => `<link rel="modulepreload" href="${escHtml(f)}">`).join('\n')}
 <script type="module">import { startLoading } from './gf/three/ui/loading.js'; startLoading({ theme: 'grim' });</script>
 <script type="module" src="main.js"></script>
 </head>
@@ -272,6 +310,90 @@ ${JSON.stringify(map, null, 2)}
 
 const comment = (s, w = 110) => String(s ?? '').split(/\n/).flatMap(line => { const out = []; let cur = ''; for (const word of line.split(/\s+/)) { if ((cur + ' ' + word).trim().length > w) { out.push(cur); cur = word; } else cur = (cur + ' ' + word).trim(); } out.push(cur); return out; }).map(l => `//   ${l}`.trimEnd()).join('\n');
 
+/**
+ * The rules.js create writes for a forge game (wave 3, track S3). The kit plays the tables by itself (the fight, the
+ * waves, the reward, down and revive, the HUD); four things only the rules can say, and they are the same for every
+ * wave game, so the stub says them and the build agent starts from a game that scores, can be won and can be lost
+ * (prompts/build-forge.md; verify check 6 fells a player alone and waits for the results). A forge game with no waves
+ * gets the hooks and the comments only.
+ */
+function forgeRulesStub(spec) {
+  const controls = Object.entries(spec.controls ?? {}).map(([k, v]) => `//   ${k}: ${v}`).join('\n') || '//   (none named)';
+  const waves = (spec.forge?.waves ?? []).length > 0 && (spec.forge?.enemies ?? []).length > 0;
+  const head = `// rules.js: THE GAME AGENT'S FILE. ${spec.title}: what makes this game this game, on the forge engine (research/gf-three/CONTRACT.md §8 forge).
+// Written by create.mjs from the spec. The kit already plays the data tables (config/game.json → forge): the fight, the
+// waves, the three-card reward of a wave marked reward, down and revive, the HUD, the menu, friends. Tune numbers there.
+//
+// Hook: ${spec.hook ?? ''}
+// Rules:
+${comment(spec.rules.summary)}
+// Scoring: ${spec.rules.scoring ?? '(see the rules)'}
+// Win: ${spec.round.winBy ?? 'the last wave is cleared'}${spec.round.loseBy ? `\n// Lose: ${spec.round.loseBy}` : ''}
+// Round: at most ${spec.round.seconds} s · players ${spec.players.min}–${spec.players.max}, co-op
+// Tuning numbers (config/game.json → rules.params, each a rules.* slot): ${JSON.stringify(spec.rules.params ?? {})}
+// Controls (the core's own: fire, jump, Shift evades, R reloads, V is a quick melee, the number keys pick a weapon):
+${controls}
+// Not in v1: ${(spec.notInV1 ?? []).join('; ') || '—'}
+// The creator will judge: ${(spec.accept ?? []).join('; ') || '—'}
+//
+// The core's rule events reach event(ctx, name, d): d = {entity, a, b, c, d}. Players are named by their core id
+// (ctx.players.nid(p.id) → n, ctx.players.byNid(n) → p). Commands go in through ctx.forge.cmd, on the host only.
+`;
+  if (!waves) return `${head}
+export default {
+  // Once on every copy, after the world and the players exist.
+  setup(ctx) {},
+  // Every copy, when the round starts. Keep commands and scoring under \`if (ctx.host)\`.
+  roundStart(ctx) { for (const p of ctx.players.list()) p.score = 0; },
+  // Every frame on every copy.
+  update(ctx, dt) {},
+  // A rule event from the core (or a message another copy sent with ctx.net.send).
+  event(ctx, name, d) {},
+  // Host only: is the round over? null, or { winners: [playerId], reason }.
+  check(ctx) { return null; },
+  // Every copy, at round end: the rows of the results card.
+  results(ctx) { return ctx.players.list().map(p => ({ id: p.id, name: p.name, value: p.score })); },
+};
+`;
+  return `${head}import { FEEL_OP } from './gf/forge/feel.js';
+
+export default {
+  // Once on every copy, after the world and the players exist.
+  setup(ctx) {},
+  // Every copy, when the round starts.
+  roundStart(ctx) {
+    for (const p of ctx.players.list()) p.score = 0;
+    if (!ctx.host) return;
+    // start over: health and armour from the tables, last run's cards gone, weapons refilled; old pieces and coins cleared
+    for (const p of ctx.players.list()) { const n = ctx.players.nid(p.id); if (n != null) ctx.forge.cmd.raw(FEEL_OP.RESET, [n]); }
+    ctx.forge.cmd.raw(FEEL_OP.CLEAR, []);
+  },
+  // A rule event from the core. Score on events, never every frame; the host's word counts.
+  event(ctx, name, d) {
+    const host = ctx.host && ctx.round.phase === 'playing';
+    // score: a kill's points to whoever landed it (d.d: the killer's core id), a coin's value to whoever it reaches
+    if (name === 'enemy-down') { const p = ctx.players.byNid(d.d); if (p && host) p.score += Math.max(1, Math.round(d.b || 1)); }
+    else if (name === 'coin') { const p = ctx.players.byNid(d.entity); if (p && host) p.score += Math.max(0, Math.round(d.a || 0)); }
+    // win: the last wave is cleared, whoever still stands wins
+    else if (name === 'waves-done' && host) ctx.round.end('cleared', ctx.players.list().filter(p => p.alive !== false).map(p => p.id));
+  },
+  // Every frame on every copy.
+  update(ctx, dt) {
+    if (!ctx.host || ctx.round.phase !== 'playing') return;
+    // lose: nobody stands (with friends a fallen player is down until one of them brings them back)
+    const all = ctx.players.list();
+    if (all.length && all.every(p => p.alive === false)) { ctx.round.end('lost', []); return; }
+    // the clock: a run the clock ends is not won (left to itself the kit would name the top scorer the winner)
+    if (ctx.time.left <= 0.5) ctx.round.end('time', []);
+  },
+  // Host only: is the round over for another reason? null, or { winners: [playerId], reason }.
+  check(ctx) { return null; },
+  // Every copy, at round end: the rows of the results card.
+  results(ctx) { return ctx.players.list().map(p => ({ id: p.id, name: p.name, value: p.score })); },
+};
+`;
+}
+
 /** A mechanic's block of setup(): what it is, its note, a worked line, its traps, then each callback it offers as an
  *  empty named handler (the manifest's `stub` and `events`). */
 function stubBlock(part, as, spec) {
@@ -290,6 +412,7 @@ function stubBlock(part, as, spec) {
 /** rules.js for a new game: the spec's rules as comments, the six hooks, and in setup() the stub of each mechanic the
  *  spec uses (from its manifest). Nothing in it does anything yet: every handler is empty. */
 export function rulesStub(spec, parts = []) {
+  if (spec.engine === 'forge') return forgeRulesStub(spec);
   const mech = spec.mechanics.map(m => `//   ${m.id}${m.as ? ` — "${m.as}"` : ''} ${JSON.stringify(m.params ?? {})}`).join('\n');
   const controls = Object.entries(spec.controls ?? {}).map(([k, v]) => `//   ${k}: ${v}`).join('\n') || '//   (none named)';
   const byId = new Map(parts.filter(p => p.manifest?.stub && Array.isArray(p.manifest.events)).map(p => [p.id, p]));
