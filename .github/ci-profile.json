@@ -1,0 +1,19 @@
+{
+  "name": "ci-software",
+  "about": "Checks verify leaves out on a GitHub runner, which has no graphics card (Chrome renders with SwiftShader). Read by `gamesfun verify --profile .github/ci-profile.json` (not implemented yet: see docs/CI.md, request to M1-A). A skipped check is reported as skipped with its reason, never as passed.",
+  "environment": { "GF_VERIFY_SOFTWARE": "1" },
+  "run": [1, 2, 11, 14, 17],
+  "skip": [
+    { "check": 3,  "reason": "needs the game to reach a round under SwiftShader; measured 2026-10-10: the round never started in 1500 s on 4 pinned CPUs" },
+    { "check": 4,  "reason": "same: it plays the game and loads every ?gf-show subject" },
+    { "check": 5,  "reason": "the lobby and WebRTC legs pass under software rendering; the in-round legs and the loadout leg wait for a round that never starts" },
+    { "check": 6,  "reason": "needs a round to reach results" },
+    { "check": 7,  "reason": "records the audio of the solo round" },
+    { "check": 8,  "reason": "loads the game twice with overrides" },
+    { "check": 10, "reason": "42 s of scripted play against bots, needs a real frame rate" },
+    { "check": 12, "reason": "needs scores to move in a running round" },
+    { "check": 13, "reason": "real input on a running game, pixel differences near the crosshair" },
+    { "check": 15, "reason": "reads the kit's state of a running round" },
+    { "check": 16, "reason": "shoots enemies in a staged moment on real clicks" }
+  ]
+}

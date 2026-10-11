@@ -1,5 +1,7 @@
-# Tests, then a real game: create from the example and quick-verify it in Chrome, on all three platforms.
-# Actions are disabled for this repository on purpose (the owner's billing decision); this runs once they are enabled.
+# Tests, then a real game: create from the example and verify it in real Chrome, on all three systems.
+# Actions are disabled for this repository on purpose (the owner's billing decision, gate G1); this runs once they
+# are enabled. Nothing here has run on GitHub yet. Read docs/CI.md first: what a runner cannot check, the profile,
+# the cost per run.
 name: check
 
 on:
@@ -11,34 +13,106 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: "0"
+  GF_VERIFY_SOFTWARE: "1"   # runners have no graphics card: Chrome draws with SwiftShader (docs/CI.md)
+
 jobs:
-  check:
+  # Every system: install, tests, a game created from the party example, its static checks.
+  party:
+    name: party (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - { os: ubuntu-latest,  chrome: /usr/bin/google-chrome }
+          - { os: windows-latest, chrome: 'C:\Program Files\Google\Chrome\Application\chrome.exe' }
+          - { os: macos-latest,   chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 20
+    env:
+      CHROME_PATH: ${{ matrix.chrome }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - name: Install
-        run: npm ci
-      - name: Tests
+      - run: npm ci
+      - name: Tests (no browser)
         run: npm test
       - name: Skills mirrors in sync
         run: node scripts/sync-skills.mjs --check
-      - name: Create a game from the example
-        run: npx gamesfun create games/ci --from soak-squad
-      - name: Quick verify (real Chrome, real input; software rendering on these runners)
-        run: npx gamesfun verify games/ci --quick
+      - name: Chrome is where the matrix says
+        shell: node {0}
+        run: |
+          const { existsSync } = require('node:fs');
+          if (!existsSync(process.env.CHROME_PATH)) { console.error('no Chrome at ' + process.env.CHROME_PATH); process.exit(1); }
+          console.log('Chrome at ' + process.env.CHROME_PATH);
+      - name: Catalog
+        run: node bin/gamesfun.mjs catalog --all
+      - name: Create a party game from the example
+        run: node bin/gamesfun.mjs create games/ci --from soak-squad
+      - name: Verify, the checks a runner can run (profile ci-software; docs/CI.md)
+        run: node bin/gamesfun.mjs verify games/ci --check 11,17
+      - name: Verify, looks honoured
+        run: node bin/gamesfun.mjs verify games/ci --check 14
+      # Needs `verify --profile` (request to M1-A, docs/CI.md section 4). Off until then.
+      - name: Verify --quick under the CI profile
+        if: ${{ vars.GF_VERIFY_PROFILE == '1' }}   # set the repository variable once verify has --profile (docs/CI.md). Without it verify ignores the flag and runs the full quick verify, which never ends under SwiftShader.
+        continue-on-error: true
+        timeout-minutes: 12
+        run: node bin/gamesfun.mjs verify games/ci --quick --profile .github/ci-profile.json
       - name: Keep the verify evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: verify-${{ matrix.os }}
+          name: verify-party-${{ matrix.os }}
           path: games/ci/evidence/
           if-no-files-found: ignore
+          retention-days: 14
+
+  # A scenic game. The kit's snapshot has no scenic engine yet (track M1-B): the job stays off until the repository
+  # variable GF_SCENIC_EXAMPLE names an example under templates/examples/ that has "engine": "scenic" in its spec.
+  scenic:
+    name: scenic (${{ matrix.os }})
+    if: ${{ vars.GF_SCENIC_EXAMPLE != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  chrome: /usr/bin/google-chrome }
+          - { os: windows-latest, chrome: 'C:\Program Files\Google\Chrome\Application\chrome.exe' }
+          - { os: macos-latest,   chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      CHROME_PATH: ${{ matrix.chrome }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Create a scenic game from the example
+        run: node bin/gamesfun.mjs create games/ci-scenic --from ${{ vars.GF_SCENIC_EXAMPLE }}
+      - name: Verify, the checks a runner can run
+        run: node bin/gamesfun.mjs verify games/ci-scenic --check 11,17
+      - name: Verify --quick under the CI profile (no WebGPU on a runner, so WebGL2 inside WebGPURenderer)
+        if: ${{ vars.GF_VERIFY_PROFILE == '1' }}
+        continue-on-error: true
+        timeout-minutes: 12
+        run: node bin/gamesfun.mjs verify games/ci-scenic --quick --profile .github/ci-profile.json
+      - name: Keep the verify evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-scenic-${{ matrix.os }}
+          path: games/ci-scenic/evidence/
+          if-no-files-found: ignore
+          retention-days: 14
