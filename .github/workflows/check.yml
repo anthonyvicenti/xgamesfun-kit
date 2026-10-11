@@ -1,9 +1,10 @@
 # Tests, then a real game of each engine: create from the example and verify it in real Chrome with the CI profile.
-# Actions are disabled for this repository on purpose (the owner's billing decision, gate G1); this runs once they
-# are enabled. Nothing here has run on GitHub yet. Read docs/CI.md first: what a runner cannot check, the profile,
-# the cost per run.
+# Read docs/CI.md first: what a runner cannot check, the profile, the cost per run, and what the first runs on
+# Windows and macOS found (2026-10-11).
 #
 # Pull requests run Linux and Windows. macOS (ten times the minutes) runs on pushes to main and by hand.
+# By hand, one system or one job can run alone, so a fix for Windows does not pay for macOS:
+#   gh workflow run check.yml --ref <branch> -f system=windows -f job=scenic
 name: check
 
 on:
@@ -11,12 +12,24 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      system:
+        description: Which system to run on
+        type: choice
+        default: all
+        options: [all, linux, windows, macos]
+      job:
+        description: Which job to run
+        type: choice
+        default: all
+        options: [all, party, scenic]
 
 permissions:
   contents: read
 
+# A newer push replaces the run of an older one; runs started by hand never cancel each other.
 concurrency:
-  group: check-${{ github.ref }}
+  group: check-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'push' }}
   cancel-in-progress: true
 
 env:
@@ -29,15 +42,18 @@ jobs:
   # A party (WebGL) game: install, tests, create from the example, the checks a runner can run.
   party:
     name: party (${{ matrix.os }})
+    if: github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'party'
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(github.event_name == 'pull_request'
-        && '{"include":[{"os":"ubuntu-latest","chrome":"/usr/bin/google-chrome"},{"os":"windows-latest","chrome":"C:/Program Files/Google/Chrome/Application/chrome.exe"}]}'
-        || '{"include":[{"os":"ubuntu-latest","chrome":"/usr/bin/google-chrome"},{"os":"windows-latest","chrome":"C:/Program Files/Google/Chrome/Application/chrome.exe"},{"os":"macos-latest","chrome":"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}]}') }}
+      matrix:
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest","windows-latest"]'
+          || inputs.system == 'linux' && '["ubuntu-latest"]' || inputs.system == 'windows' && '["windows-latest"]' || inputs.system == 'macos' && '["macos-latest"]'
+          || '["ubuntu-latest","windows-latest","macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     env:
-      CHROME_PATH: ${{ matrix.chrome }}
+      # where each image keeps Google Chrome
+      CHROME_PATH: ${{ fromJSON('{"ubuntu-latest":"/usr/bin/google-chrome","windows-latest":"C:/Program Files/Google/Chrome/Application/chrome.exe","macos-latest":"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}')[matrix.os] }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,16 +61,20 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Runner facts (processors, memory, Chrome; docs/CI.md reads them)
+        shell: node {0}
+        run: |
+          const os = require('node:os'), { existsSync } = require('node:fs'), { execFileSync } = require('node:child_process');
+          const chrome = process.env.CHROME_PATH;
+          console.log(`${os.platform()} ${os.release()} ${os.arch()}, ${os.cpus().length} x ${os.cpus()[0]?.model}, ${(os.totalmem() / 2 ** 30).toFixed(1)} GB, node ${process.version}`);
+          if (!existsSync(chrome)) { console.error('no Chrome at ' + chrome); process.exit(1); }
+          // Chrome on Windows opens a window for --version instead of printing it; its folder holds the version as a name
+          const version = process.platform === 'win32' ? require('node:fs').readdirSync(require('node:path').dirname(chrome)).filter(n => /^\d+\./.test(n)).join(' ') : execFileSync(chrome, ['--version'], { encoding: 'utf8' }).trim();
+          console.log(`Chrome at ${chrome}: ${version}`);
       - name: Tests (no browser)
         run: npm test
       - name: Skills mirrors in sync
         run: node scripts/sync-skills.mjs --check
-      - name: Chrome is where the matrix says
-        shell: node {0}
-        run: |
-          const { existsSync } = require('node:fs');
-          if (!existsSync(process.env.CHROME_PATH)) { console.error('no Chrome at ' + process.env.CHROME_PATH); process.exit(1); }
-          console.log('Chrome at ' + process.env.CHROME_PATH);
       - name: Doctor (everything but the graphics probe; agents are only notes)
         run: node bin/gamesfun.mjs doctor --skip-graphics
       - name: Examples and catalog
@@ -80,15 +100,18 @@ jobs:
   # A scenic (WebGPU) game. A runner has no WebGPU adapter, so the engine runs on WebGL2 inside WebGPURenderer.
   scenic:
     name: scenic (${{ matrix.os }})
+    if: github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'scenic'
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(github.event_name == 'pull_request'
-        && '{"include":[{"os":"ubuntu-latest","chrome":"/usr/bin/google-chrome"},{"os":"windows-latest","chrome":"C:/Program Files/Google/Chrome/Application/chrome.exe"}]}'
-        || '{"include":[{"os":"ubuntu-latest","chrome":"/usr/bin/google-chrome"},{"os":"windows-latest","chrome":"C:/Program Files/Google/Chrome/Application/chrome.exe"},{"os":"macos-latest","chrome":"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}]}') }}
+      matrix:
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest","windows-latest"]'
+          || inputs.system == 'linux' && '["ubuntu-latest"]' || inputs.system == 'windows' && '["windows-latest"]' || inputs.system == 'macos' && '["macos-latest"]'
+          || '["ubuntu-latest","windows-latest","macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     env:
-      CHROME_PATH: ${{ matrix.chrome }}
+      # where each image keeps Google Chrome
+      CHROME_PATH: ${{ fromJSON('{"ubuntu-latest":"/usr/bin/google-chrome","windows-latest":"C:/Program Files/Google/Chrome/Application/chrome.exe","macos-latest":"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}')[matrix.os] }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -96,6 +119,16 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Runner facts (processors, memory, Chrome; docs/CI.md reads them)
+        shell: node {0}
+        run: |
+          const os = require('node:os'), { existsSync } = require('node:fs'), { execFileSync } = require('node:child_process');
+          const chrome = process.env.CHROME_PATH;
+          console.log(`${os.platform()} ${os.release()} ${os.arch()}, ${os.cpus().length} x ${os.cpus()[0]?.model}, ${(os.totalmem() / 2 ** 30).toFixed(1)} GB, node ${process.version}`);
+          if (!existsSync(chrome)) { console.error('no Chrome at ' + chrome); process.exit(1); }
+          // Chrome on Windows opens a window for --version instead of printing it; its folder holds the version as a name
+          const version = process.platform === 'win32' ? require('node:fs').readdirSync(require('node:path').dirname(chrome)).filter(n => /^\d+\./.test(n)).join(' ') : execFileSync(chrome, ['--version'], { encoding: 'utf8' }).trim();
+          console.log(`Chrome at ${chrome}: ${version}`);
       - name: Create a scenic game from the example
         run: node bin/gamesfun.mjs create games/ci-scenic --from isle-run
       - name: Verify --quick under the CI profile (software rendering; no WebGPU, so WebGL2 inside WebGPURenderer)
