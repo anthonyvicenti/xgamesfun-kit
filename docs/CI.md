@@ -241,6 +241,40 @@ machine as check 25 of a full verify of the same example with twenty-eight proce
 again, and ten runs of the profile passed in a row there). Asked of games.fun; until it is found, a red `party` job
 with exactly this line is run again before anything else is suspected.
 
+### The run of branch `ci/integration` (2026-10-11, kits at games.fun f70f94e13)
+
+The branch is `ci/release-try` with the licence files, the art makers, the kits synced again (the frozen
+gf-multiplayer 1.6.4, the self-host signaling server, the loop's second reader and `delivered-with-issues`), online play
+in the dev server and the second reader's tool round.
+
+| Run | Asked for | Result |
+|---|---|---|
+| 38167016234 | every job on every system, on f9f150e | green: all six jobs (party and scenic on Linux, Windows and macOS; the party game and the board game under the profile) |
+
+Fault 7 did not happen in this run (one Linux party job), so there is no new record of it. Two things about it and the
+new kit, from the code and not from a run that showed it:
+
+- **A game the runner makes is still on gf-multiplayer 1.6.3.** `create` vendors the version games.fun's tools name
+  (`KIT_VERSION`, 1.6.3 at f70f94e13); 1.6.4 is in `kits/` as the newest frozen version only. So nothing 1.6.4 changes
+  is exercised by this workflow yet.
+- **1.6.4 is not a fix for fault 7.** Its change to the join is that a host stops sending ICE candidates over
+  *signaling* once the friend's channel is open (the `400 no such peer` calls on the play host, which come from late
+  reflexive and relay candidates over HTTP signaling). In fault 7 the gate runs over this machine's WebSocket
+  signaling, a direct connection has no late candidates, the channel was open on both sides, and what was missing was
+  the host's answer to the friend's first message *on the data channel*. Track M's cause is at the end of the
+  handshake on signaling; fault 7 is after it, on the channel. It stays open and asked of games.fun.
+
+By hand on Linux with a graphics card, the same day and the same commit: `tests/two-hosts.mjs --case soak-squad`
+(SAME: both hosts pass every check and deliver), `GAMESFUN_SMOKE=1 node --test tests/smoke.test.mjs` (3 of 3: the party
+example and the scenic example pass every check, the board example fails check 7 only, as its `example.json` says), and
+`tests/online-e2e.mjs` (13 of 13: two pages on two origins through the self-host signaling server on a third; a host
+that refuses, and one a page cannot read, both leave the game playing on this machine with the reason shown). None of
+the three has run on Windows or macOS.
+
+**Asked of games.fun:** make 1.6.4 the version `create` vendors (`KIT_VERSION` in
+`research/multiplayer/party/manifest.mjs`), then sync. Until then a game made with this kit plays with friends on this
+machine only, whatever the play host's switch says, and `doctor` and `dev` say so.
+
 ## 8. What a person on a real Windows machine or a Mac still has to try by hand
 
 A runner is a virtual machine without a real graphics card, and it ran the profile only. None of this has been done on
