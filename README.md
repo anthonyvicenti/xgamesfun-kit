@@ -7,7 +7,24 @@ in the game. Every model, texture and number is a slot you can swap without code
 
 Windows, macOS and Linux. No desktop app and no build step: Node 24 and Chrome. For advanced users.
 
-## Quick start
+## The one line
+
+Open your coding agent (Claude Code or Codex) in a terminal and paste this:
+
+```text
+Set up the games.fun game-building kit on this machine: git clone https://github.com/anthonyvicenti/gamesfun-kit.git (skip the clone if a gamesfun-kit folder is already here), then in that folder run these, one at a time, with Node 24: npm ci, then node bin/gamesfun.mjs doctor, then node bin/gamesfun.mjs connect, then node bin/gamesfun.mjs create games/first --from soak-squad, then start node bin/gamesfun.mjs dev games/first in the background and give me the studio address it prints (it opens my browser too). Tell me what each step printed in one line. If a step fails, do what its "If it fails" section in gamesfun-kit/docs/ONE-LINE.md says, and if that doesn't fix it, stop and tell me exactly what failed. Never ask me for a password, token or key.
+```
+
+Your agent clones this repository, installs it, checks your machine (`doctor`), adds our tools to itself through its own
+command (`claude mcp add`, `codex mcp add`: `connect`), makes a first game from an example and opens the studio page. It
+talks to the model the way it always does, under your own login; nothing here signs you in or sends anything to a
+model. What each step does and what the agent does when one fails: [docs/ONE-LINE.md](docs/ONE-LINE.md). The line
+names the address the repository has today; it changes when the repository is public.
+
+Stay current with `node bin/gamesfun.mjs update` (fast-forward only; a once-a-day background check prints one line when
+there is a newer kit, and `GAMESFUN_NO_UPDATE_CHECK=1` turns it off).
+
+## Quick start by hand
 
 You need **Node 24** (`node --version`) and **Google Chrome** or **Microsoft Edge** (without either, the kit downloads
 Playwright's Chromium the first time it needs a browser). Clone this repository, then in its folder:
@@ -51,6 +68,9 @@ playbook) and the skills in `skills/`.
 | `npx gamesfun upgrade [dir]` | move a game onto newer kits, keeping its rules and config |
 | `npx gamesfun rig-check <body.glb>` | does a model work as a character body? |
 | `npx gamesfun meshy prop\|character …` | optional: generate a model with your own Meshy key |
+| `npx gamesfun doctor` | is this machine ready? One line per check, with the one command that fixes each problem on your system (`--json`) |
+| `npx gamesfun connect` | add our MCP server to Claude Code and Codex through their own commands, and check it works (`--remove` undoes it) |
+| `npx gamesfun update` | fetch and fast-forward the kit; `npm ci` only if the lockfile changed |
 
 `npx gamesfun <command> --help` gives each one's options. If `npx` can't find the command (an older npm), run
 `node bin/gamesfun.mjs <command>` instead: it is the same program.
@@ -58,7 +78,7 @@ playbook) and the skills in `skills/`.
 ## Your agent
 
 - **Claude Code**: open this folder. `CLAUDE.md` imports `AGENTS.md`, the skills are in `.claude/skills/`, and
-  `.mcp.json` offers the `gamesfun` MCP server (approve it when asked).
+  `.mcp.json` offers the `gamesfun` MCP server (approve it when asked). `connect` adds it for every folder instead.
 - **Codex, Cursor, opencode, Cline**: open this folder; they read `AGENTS.md` (Codex also `.agents/skills/`). The MCP
   server is optional (the agent can run `npx gamesfun …` in a terminal); to add it, see [docs/MCP.md](docs/MCP.md).
 

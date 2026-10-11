@@ -18,7 +18,8 @@ detailed steps (mirrored for your agent in `.claude/skills/` and `.agents/skills
 | The tools | `npx gamesfun <command>` in a terminal, or the MCP tools `gamesfun_*` | same operations either way |
 
 Commands: `catalog`, `examples`, `create`, `dev`, `verify`, `slots`, `play`, `promises`, `upgrade`, `rig-check`,
-`meshy` (optional), plus whatever else `npx gamesfun help` lists. Use Node 24.
+`doctor` (is this machine ready; the fix for each problem), `connect` (add the MCP tools to Claude Code or Codex),
+`update` (fetch the newest kit), `meshy` (optional), plus whatever else `npx gamesfun help` lists. Use Node 24.
 
 ## The loop
 
@@ -86,14 +87,24 @@ Its evidence (verdict, screenshots) is in `games/<name>/evidence/verify-N/`. The
 
 | # | Check | # | Check |
 |---|---|---|---|
-| 1 | `assets.json` and `multiplayer.json` valid | 10 | fair play: nobody is stun-locked |
-| 2 | kit copies unedited | 11 | set dressing: nothing overlapping, floating, out of scale |
-| 3 | boots to play, no console errors | 12 | something happens: scores move |
-| 4 | every visible mesh is a slot (100%) | 13 | every listed control does something you can see |
-| 5 | two players over real WebRTC see each other | 14 | generated looks are not stand-ins; roles don't share a body |
-| 6 | a round reaches results and replays | 15 | each mechanic shows signs of life; the goal is readable |
-| 7 | audio within the loudness targets | 16 | hits read: health bars, 2+ hits per kill |
-| 8 | swapping a body and a prop shows on screen | 17 | the world is complete (size, rooms, doors, walls) |
+| 1 | `assets.json` and `multiplayer.json` valid | 14 | generated looks are not stand-ins; roles don't share a body |
+| 2 | kit copies unedited | 15 | each mechanic shows signs of life; the goal is readable |
+| 3 | boots to play, no console errors | 16 | hits read: health bars, 2+ hits per kill |
+| 4 | every visible mesh is a slot (100%) | 17 | the world is complete (size, rooms, doors, walls) |
+| 5 | two players over real WebRTC see each other | 18 | every sound the rules play exists and is heard |
+| 6 | a round reaches results and replays | 19 | bodies hold their shape (the model judge) |
+| 7 | audio within the loudness targets | 20 | the home menu works |
+| 8 | swapping a body and a prop shows on screen | 21 | the HUD shows the player's state |
+| 10 | fair play: nobody is stun-locked | 22 | the wallet in the menu (kit-owned) |
+| 11 | set dressing: nothing overlapping, floating, out of scale | 23 | looks like the references (when the spec has some) |
+| 12 | something happens: scores move | 24 | plays inside a post (full-screen button; a `follow` camera never asks for the pointer lock) |
+| 13 | every listed control does something you can see | 25 | friends: no bots, names before joining, each player sees their own score |
+| | | 31 | sharp on every screen |
+| | | 34 | watch then play: a viewer can join, start a room or play solo |
+
+The list is verify's own (`kits/research/gf-three/tools/verify.mjs`); it grows as games.fun adds checks, and a failing
+line names its rule and the fix. On `--quick` a scenic example records its two known kit faults in `example.json`
+(`knownFailing`; see `docs/DEVELOPING.md`).
 
 Check 9 (a contact sheet on the GPU) is skipped here: the look tooling is not part of this kit.
 

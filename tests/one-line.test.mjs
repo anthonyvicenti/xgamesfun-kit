@@ -326,3 +326,18 @@ test('update: a changed lockfile runs npm ci', async () => {
     assert.equal(r.installed, true);
   } finally { await c.cleanup(); }
 });
+
+test('the one line is the same in README.md and docs/ONE-LINE.md, and every command in it exists', async () => {
+  const fence = text => text.match(/```text\n([^\n]+)\n```/)?.[1];
+  const readme = fence(await readFile(new URL('../README.md', import.meta.url), 'utf8'));
+  const doc = fence(await readFile(new URL('../docs/ONE-LINE.md', import.meta.url), 'utf8'));
+  assert.ok(readme && readme === doc, 'one line, identical in both files');
+  for (const must of ['git clone https://', 'npm ci', 'bin/gamesfun.mjs doctor', 'bin/gamesfun.mjs connect', 'create games/first --from soak-squad', 'bin/gamesfun.mjs dev games/first', 'docs/ONE-LINE.md', 'Never ask me for a password, token or key']) assert.ok(doc.includes(must), must);
+  assert.ok(!/claude\.ai|anthropic|logo/i.test(doc), 'no vendor name or logo in the line itself beyond what the README says in plain text');
+  const { readdir } = await import('node:fs/promises');
+  const files = await readdir(new URL('../commands/', import.meta.url));
+  for (const c of ['doctor', 'connect', 'update', 'create', 'dev']) assert.ok(files.includes(`${c}.mjs`), c);
+  const guide = await readFile(new URL('../docs/ONE-LINE.md', import.meta.url), 'utf8');
+  for (const step of ['### 1. Clone', '### 2. `npm ci`', '### 3.', '### 4.', '### 5.']) assert.ok(guide.includes(step), step);
+  assert.ok((guide.match(/^If it fails/gm) ?? []).length >= 4, 'each step says what to do when it fails');
+});

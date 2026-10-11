@@ -35,10 +35,11 @@ Node 24 and Chrome. No desktop app, no build step, and no bash.
 
 `kits/` mirrors the games.fun paths the tools expect (`kits/research/gf-three/tools/create.mjs` finds
 `kits/research/foundations/kits/gf-audio/1.5.0/` exactly as in games.fun), so they run byte for byte as games.fun ships
-them. Each tool runs as a child process: `node --import lib/kit-hooks.mjs kits/…/tools/<tool>.mjs …`
-(`lib/run-tool.mjs`). The hooks rewrite import paths the snapshot can't satisfy (games.fun's Playwright install →
-this package's `playwright-core`); nothing inside `kits/` is changed. Commands then add what the kit doesn't have:
-finding Chrome on each OS, examples, the game's agent guide, game-folder resolution.
+them. Each tool runs as a child process: `node kits/…/tools/<tool>.mjs …` (`lib/run-tool.mjs`), with the environment the
+tools read their settings from (`GF_MANIFEST_IGNORE` names this kit's own ignore list). No module hooks and no import
+rewriting: the tools find their packages (Playwright, the 3D tools' packages) through their own search order, and nothing
+inside `kits/` is changed. Commands then add what the kit doesn't have: finding Chrome on each OS, examples, the game's
+agent guide, game-folder resolution.
 
 ## Seams
 

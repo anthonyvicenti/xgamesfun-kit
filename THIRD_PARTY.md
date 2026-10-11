@@ -14,7 +14,8 @@ and this kit have the same owner.
 | Kit | Version | In `kits/` | Licence |
 |---|---|---|---|
 | gf-three (the three.js game kit and its tools) | 0.1.0-dev | `research/gf-three/` | games.fun |
-| gf-multiplayer | 1.3.0 | `research/foundations/kits/gf-multiplayer/1.3.0/` | MIT (its `kit.json`) |
+| gf-scenic (the scenic engine: WebGPU, generated islands and dungeons) | 0.1.0-dev | `research/gf-scenic/` | games.fun; the world code taken from folio carries its upstream's permissive LICENSE beside it |
+| gf-multiplayer | 1.6.3 | `research/foundations/kits/gf-multiplayer/1.6.3/` | MIT (its `kit.json`) |
 | gf-audio | 1.5.0 | `research/foundations/kits/gf-audio/1.5.0/` | games.fun; ZzFX inside is MIT |
 | gf-assets | 1.3.0 | `research/foundations/kits/gf-assets/1.3.0/` | games.fun |
 | local signaling, validators, QA (signal server, asset-manifest validator, audio gate, Chrome launcher) | as synced | `research/multiplayer/`, `research/asset-manifest/`, `research/audio/`, `research/foundations/qa/`, `creator-studio/lib/` | games.fun |

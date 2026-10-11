@@ -137,6 +137,53 @@ renames, no POSIX-only paths: build paths with `path.join`, show them with forwa
 Windows path rules with `path.win32` so they run everywhere. `.gitattributes` makes text LF everywhere and keeps
 `kits/` byte-exact.
 
+## The one line: agents, doctor, connect, update
+
+Code: `lib/agents.json` (the rows) and `lib/agents.mjs` (its reader), `lib/connect.mjs`, `lib/doctor.mjs`,
+`lib/update.mjs`, `lib/proc.mjs` (programs started without a shell, trees stopped), `lib/mcp-check.mjs` (starts our
+server and lists its tools), the three commands, `tests/one-line.test.mjs`. The text a person pastes and what the agent does
+at each step: `docs/ONE-LINE.md`.
+
+**A new agent is a row.** Copy a row in `lib/agents.json`: `binaries` per system, `install` per system, `mcp.add`,
+`get`, `list`, `remove` as argument lists (`{name}`, `{scope}`, `{command}`, and the element `{...args}`), `scopes` and
+`defaultScope`. `tests/one-line.test.mjs` validates every row. We never edit an agent's own configuration file; if an agent
+has no command for adding a server, it does not get a row (document the manual step in `docs/MCP.md` instead).
+
+**What the vendors document (fetched 2026-10-10; re-read before changing a row).**
+- Claude Code, https://code.claude.com/docs/en/mcp: "claude mcp add [options] <name> -- <command> [args...]";
+  "the `--` (double dash) separates Claude's own options, such as `--transport`, `--env`, and `--scope`, from the command
+  and arguments that run the server"; scopes "`local` (default): available only to you in the current project",
+  "`project`: shared with everyone in the project via the `.mcp.json` file", "`user`: available to you across all
+  projects"; `claude mcp list`, `claude mcp get <name>`, `claude mcp remove <name>` (with `--scope <scope>` for a
+  duplicate); "Claude Code prompts for approval in interactive sessions before using project-scoped servers from
+  `.mcp.json` files" (until then `list` shows "Pending approval").
+- Codex, https://learn.chatgpt.com/docs/extend/mcp?surface=cli (developers.openai.com/codex/mcp redirects there):
+  "codex mcp add <server-name> --env VAR1=VALUE1 --env VAR2=VALUE2 -- <stdio server-command>"; "codex mcp list" shows
+  configured servers; "By default this is `~/.codex/config.toml`"; project scope is `.codex/config.toml` ("trusted
+  projects only"). `get`, `remove`, `list --json` and `CODEX_HOME` are not on that page; they are in `codex mcp --help`
+  of codex-cli 0.160.0 (`CODEX_HOME` moved the config file in the run below).
+
+**What is tested, and where.**
+- Unit tests (`npm test`, any system): the rows; the agents' commands for both agents; Windows PATHEXT lookup and the
+  `.cmd` shim through cmd.exe (with `path.win32`, a fake platform, and refusal of cmd.exe syntax characters); the
+  `taskkill`/process-group choice; `connect` against a recording stand-in for the agents (register, already
+  registered, replace, remove, a server that does not start, a refused add, dry run); `doctor` with injected probes
+  (old Node, missing packages, software graphics, busy ports, a missing optional agent, per-system fixes); `update`
+  against real git repositories made in a temporary folder (up to date, fast-forward, diverged, dirty, no upstream,
+  `npm ci` only when the lockfile changed); the daily check's switches; the one line is identical in README and
+  `docs/ONE-LINE.md`.
+- Real runs on Linux (2026-10-10): `connect` against the installed Claude Code 2.1.296 in a scratch folder (project
+  scope, then local scope, where `claude mcp list` shows "Connected"), and against codex-cli 0.160.0 with `CODEX_HOME`
+  pointed at a scratch folder; each registration was removed afterwards.
+- **Not run:** anything on Windows or macOS (no machine). Untested there: the `cmd.exe` call for `codex.cmd`, `taskkill`,
+  `winget`/`brew` fix lines, Chrome and Edge lookup (covered by the kit's own tests), a real `claude.exe`.
+  Codex's `.cmd` shim is the likeliest first failure on Windows.
+
+**The daily update check** starts a detached `node bin/gamesfun.mjs update --refresh-cache` (stdio ignored, never awaited)
+when `.gamesfun/update-check.json` is over a day old, and prints its cached note after a command that talks to a person.
+Off with `GAMESFUN_NO_UPDATE_CHECK=1`, in CI, under `node --test`, for `--json` output and for `dev`.
+git is started with `GIT_TERMINAL_PROMPT=0` so a private remote fails instead of asking a question.
+
 ## CI
 
 `.github/workflows/check.yml` runs `npm ci`, the tests, and create plus quick verify of the example on Ubuntu, Windows
