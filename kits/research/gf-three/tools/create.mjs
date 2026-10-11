@@ -29,11 +29,11 @@ import { join, resolve, relative, posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { REPO, KIT, SCENIC_KIT, FORGE, FORGE_KIT, importPart, LIBRARY, KIT_VERSION, SCENIC_VERSION, FORGE_VERSION, SPEC_SCHEMA, GF_AUDIO, json, sha256, engineOf, walk } from './lib/paths.mjs';
 import { check, withDefaults } from './lib/schema.mjs';
-import { put, vendorLibraries, vendorKit, vendorGfAssets, kitModuleFiles } from './lib/vendor.mjs';
+import { put, vendorLibraries, vendorKit, vendorGfAssets, kitModuleFiles, optionalModuleDirs } from './lib/vendor.mjs';
 import { importKitModule } from './lib/kit-import.mjs';
 import { specToConfig, libraryPicture } from './lib/spec-config.mjs';
 import { assembleManifest } from './lib/slots-lib.mjs';
-import { mechanicIds, mechanicParts, composeProblems, worldParts } from './catalog.mjs';
+import { mechanicIds, mechanicParts, composeProblems, worldParts, loopParts, loopProblems, loopOf, flowOf, flowParts } from './catalog.mjs';
 import { adopt } from '../../multiplayer/party/adopt.mjs';
 import { KIT_VERSION as MP_KIT_VERSION } from '../../multiplayer/party/manifest.mjs';
 
@@ -99,7 +99,8 @@ export async function create(specPath, outDir, { force = false, newRules = false
   const t0 = performance.now();
   const dir = resolve(outDir);
   // a re-run makes the choices the first run made, unless told otherwise
-  const prev = JSON.parse(await readFile(join(dir, 'gf-three.json'), 'utf8').catch(() => '{}')).options ?? {};
+  const prevRecord = JSON.parse(await readFile(join(dir, 'gf-three.json'), 'utf8').catch(() => '{}'));
+  const prev = prevRecord.options ?? {}; prev.extras = prevRecord.modules?.extras;
   const options = { standins: standins ?? prev.standins ?? false, standinMechanics: standinMechanics ?? prev.standinMechanics ?? false };
   const specBytes = await readFile(resolve(specPath));
   let spec;
@@ -109,11 +110,23 @@ export async function create(specPath, outDir, { force = false, newRules = false
   const kitIds = await mechanicIds(kitDir), idSchema = schema.properties?.mechanics?.items?.properties?.id;
   if (idSchema?.enum && kitIds.length) idSchema.enum = kitIds;
   const problems = check(schema, spec);
-  // a round needs its length; a world (round.mode 'world', CONTRACT §9) has none, and needs the voxel world
-  if (spec.round?.mode !== 'world' && !Number.isInteger(spec.round?.seconds)) problems.push('round.seconds: required (unless round.mode is world)');
+  // the flow that plays this spec's loop (kit/loops/<id>, open builder M4-C): the timed round unless the loop has its own
+  const flows = await flowParts({ kit: kitDir });
+  const flowId = flowOf(loopOf(spec)), flow = flowId ? flows.find(f => f.id === flowId && f.manifest) ?? null : null;
+  // a round needs its length; a world (round.mode 'world', CONTRACT §9) has none, and needs the voxel world; a flow
+  // whose manifest says round.seconds is a cap (turns, endless) may go without
+  if (spec.round?.mode !== 'world' && flow?.manifest.seconds !== 'cap' && !Number.isInteger(spec.round?.seconds)) problems.push(`round.seconds: required (unless round.mode is world${flow && flow.id !== 'round' ? `; in the loop "${flow.id}" it is the length of one round` : ', or the loop has no round clock: turns, endless'})`);
+  if (flow?.manifest.refuse && !problems.length) { try { problems.push(...(flow.manifest.refuse(spec) ?? [])); } catch (e) { problems.push(`loop "${flow.id}": its manifest's refuse threw: ${e.message}`); } }
+  // round.params are the flow's own (its params schema), as a mechanic's params are the mechanic's
+  if (spec.round?.params !== undefined) {
+    if (!flow?.manifest.params) problems.push('round.params: this spec\'s loop has no flow of its own to give params to');
+    else for (const p of check(flow.manifest.params, spec.round.params)) problems.push(`round.params (loop "${flow.id}"): ${p}`);
+  }
   if (spec.round?.mode === 'world' && spec.world?.template !== 'voxel') problems.push('round.mode world: needs world.template voxel');
   // every game has a mechanic, except a forge game in wave 0, where none runs yet (CONTRACT §8 forge)
   if (engineOf(spec) !== 'forge' && !(spec.mechanics?.length >= 1)) problems.push('mechanics: at least 1 items');
+  // a spec that names its loop (how the game is played, M4-B) names one this kit can run, with that loop's shape
+  if (spec.loop != null && !problems.length) problems.push(...loopProblems(spec, await loopParts({ kit: kitDir })));
   if (problems.length) return { ok: false, code: 2, problems: problems.map(p => `spec ${p}`) };
 
   const engine = engineOf(spec);
@@ -163,8 +176,28 @@ export async function create(specPath, outDir, { force = false, newRules = false
   // the forge world reads no file itself: its library (the curated KayKit pieces and their licences) is passed in
   const forgeLib = engine === 'forge' ? await (await importPart(join(FORGE, 'tools/library.mjs'), 'the forge engine (research/gf-forge)')).forgeLibrary() : null;
   const worldConfig = engine === 'scenic' ? (s, o) => mods.world.worldConfig(s, o) : engine === 'forge' ? (s, o) => mods.world.worldConfig(s, { ...o, library: forgeLib }) : null;
-  const C = await specToConfig(spec, { modules, lookPreset, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults, worldConfig });
+  const flowUse = flow && flow.id !== 'round' && spec.round?.mode !== 'world' ? { id: flow.id, params: withDefaults(flow.manifest.params ?? {}, spec.round?.params ?? {}), sounds: flow.module?.sounds ?? {} } : null;
+  // a mechanic's own sounds (its module's `sounds`: id → [label, preset, bus]) are listed with the game's, like its slots
+  const mechanicSounds = Object.fromEntries(Object.entries(mods.mechanics ?? {}).filter(([, m]) => m.sounds && typeof m.sounds === 'object').map(([id, m]) => [id, m.sounds]));
+  const C = await specToConfig(spec, { modules, lookPreset, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults, mechanicSounds, worldConfig, flow: flowUse });
   C.notes.push(...forgeNotes);
+  // optional kit modules (a kit folder with a module.js; kit/vfx/module.js documents the contract): one the spec (or the
+  // rules.js already there) needs gets its config block, its stand-in files and its folder in gf/three. A module added
+  // to the kit later needs no line here. A game that needs none is unchanged.
+  const extraFiles = [], extras = new Set(prev.extras ?? []);
+  if (engine !== 'forge') {
+    const rules = await readFile(join(dir, 'rules.js'), 'utf8').catch(() => '');
+    for (const id of await optionalModuleDirs()) {
+      const m = await importKitModule(join(KIT, id, 'module.js'));
+      if (m.error) { warnings.push(`kit module ${id}: ${m.error.message.split('\n')[0]}`); continue; }
+      if (!extras.has(id) && !m.uses?.(spec, { rules })) continue;
+      extras.add(id);
+      const frag = m.configFor?.(spec, { rules });
+      if (frag?.game) C.game = mergeMissing(C.game, frag.game);
+      for (const f of m.files?.(C.game) ?? []) extraFiles.push({ from: join(KIT, f.from), to: f.to });
+    }
+    if (extras.size) modules.extras = [...extras].sort();
+  }
 
   const wrote = [], kept = [];
   const own = async (rel, buf) => {     // a file the game agent or Studio owns: kept when it exists, unless --force
@@ -179,8 +212,9 @@ export async function create(specPath, outDir, { force = false, newRules = false
   for (const n of ['game', 'look', 'world', 'characters']) await own(`config/${n}.json`, json(C[n]));
   if (C.props) await own('config/props.json', json(C.props));
   for (const a of C.assets) await own(a.to, await readFile(a.from));
+  for (const f of extraFiles) await own(f.to, await readFile(f.from));
   await own('multiplayer.json', json(C.multiplayer));
-  await own('rules.js', rulesStub(spec, parts));
+  await own('rules.js', rulesStub(spec, parts, flowUse ? flow : null));
   if (engine !== 'forge') await gen('index.html', indexHtml(spec.title, engine));
   await gen('main.js', mainJs(engine));
 
@@ -223,6 +257,14 @@ export async function create(specPath, outDir, { force = false, newRules = false
   await gen('assets.json', json(A.manifest));
   await gen('ATTRIBUTION.md', attribution(spec, record));
   return { ok: true, code: 0, dir, ms: Math.round(performance.now() - t0), wrote, kept, warnings, notes: C.notes, modules, why, slots: A.slotCount, main: A.mainCount };
+}
+
+/** Fill `into` with what `from` has and it lacks (deep): a value the spec or a creator already set wins. */
+function mergeMissing(into, from) {
+  if (!into || typeof into !== 'object' || Array.isArray(into)) return into ?? from;
+  const out = { ...into };
+  for (const [k, v] of Object.entries(from ?? {})) out[k] = k in out ? (v && typeof v === 'object' && !Array.isArray(v) ? mergeMissing(out[k], v) : out[k]) : v;
+  return out;
 }
 
 const slugOf = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'game';
@@ -411,8 +453,15 @@ function stubBlock(part, as, spec) {
 
 /** rules.js for a new game: the spec's rules as comments, the six hooks, and in setup() the stub of each mechanic the
  *  spec uses (from its manifest). Nothing in it does anything yet: every handler is empty. */
-export function rulesStub(spec, parts = []) {
+export function rulesStub(spec, parts = [], flow = null) {
   if (spec.engine === 'forge') return forgeRulesStub(spec);
+  // a flow that has its own hooks (kit/loops/<id> → manifest.stub and events): its note, a worked line and its traps
+  // above the hooks, and each hook it calls as an empty one. The timed round's six hooks are the ones below.
+  const F = flow?.manifest?.stub ? flow.manifest : null;
+  const own = new Set(['setup', 'roundStart', 'update', 'event', 'check', 'results']);
+  const joined = F?.stub.joined && (F.uses ?? []).some(u => spec.mechanics.some(m => m.id === u)) ? F.stub.joined : null;
+  const flowHead = joined ? `// Loop: ${flow.id} — ${F.describe} (ctx.${F.stub.as}; config/game.json → round.params ${JSON.stringify(spec.round?.params ?? {})})\n//   ${joined}\n` : F ? `// Loop: ${flow.id} — ${F.describe} (ctx.${F.stub.as}; config/game.json → round.params ${JSON.stringify(spec.round?.params ?? {})})\n${F.note.map(n => `//   ${n}`).join('\n')}\n${F.state?.key ? `//   state: window.__game.snapshot().shared.${F.state.key} (what a test reads; the rules read it through ctx.${F.stub.as}) → ${Object.entries(F.state.fields ?? {}).map(([k, d]) => `${k}: ${d}`).join('; ')}\n` : ''}//   worked: ${F.stub.worked}\n${F.stub.traps.map(t => `//   trap: ${t}`).join('\n')}\n` : '';
+  const flowHooks = F && !joined ? F.events.filter(e => !own.has(e.name)).map(e => `  // ${flow.id}, ${e.on}: ${e.when ?? ''} · ${e.args}\n  ${e.name}(${(/^\(([^)]*)\)/.exec(e.args)?.[1] ?? 'ctx')}) {},\n`).join('') : '';
   const mech = spec.mechanics.map(m => `//   ${m.id}${m.as ? ` — "${m.as}"` : ''} ${JSON.stringify(m.params ?? {})}`).join('\n');
   const controls = Object.entries(spec.controls ?? {}).map(([k, v]) => `//   ${k}: ${v}`).join('\n') || '//   (none named)';
   const byId = new Map(parts.filter(p => p.manifest?.stub && Array.isArray(p.manifest.events)).map(p => [p.id, p]));
@@ -429,7 +478,7 @@ export function rulesStub(spec, parts = []) {
 ${comment(spec.rules.summary)}
 // Scoring: ${spec.rules.scoring ?? '(see the rules)'}
 // Win: ${spec.round.winBy ?? 'most points when time runs out'}${spec.round.loseBy ? `\n// Lose: ${spec.round.loseBy}` : ''}
-// Round: ${spec.round.mode === 'world' ? 'none (a world: players drop in and out)' : `${spec.round.seconds} s`} · players ${spec.players.min}–${spec.players.max}${spec.players.bots !== false ? ', bots fill empty seats' : ''}
+// Round: ${spec.round.mode === 'world' ? 'none (a world: players drop in and out)' : Number.isInteger(spec.round.seconds) ? `${spec.round.seconds} s` : 'no clock'} · players ${spec.players.min}–${spec.players.max}${spec.players.bots !== false ? ', bots fill empty seats' : ''}
 // Tuning numbers (config/game.json → rules.params, each a rules.* slot): ${JSON.stringify(spec.rules.params ?? {})}
 // Mechanics (ctx.mechanics.get(id); params in config/game.json → mechanics${blocks.length ? '; what each offers is in setup() below' : ''}):
 ${mech}
@@ -437,7 +486,7 @@ ${mech}
 ${controls}
 // Not in v1: ${(spec.notInV1 ?? []).join('; ') || '—'}
 // The creator will judge: ${(spec.accept ?? []).join('; ') || '—'}
-
+${flowHead}
 export default {
   // Once on every copy, after the world, players and mechanics exist: register shared state, UI, listeners.
   ${setup}
@@ -451,7 +500,7 @@ export default {
   check(ctx) { return null; },
   // Every copy, at round end: the rows of the results card.
   results(ctx) { return ctx.players.list().map(p => ({ id: p.id, name: p.name, value: p.score })); },
-};
+${flowHooks}};
 `;
 }
 

@@ -138,7 +138,7 @@ export function enemyToughness(mechanics) {
   return `waves: hp ${hp} → ${to}, so an enemy takes 3 hits from the ${stream ? 'stream' : 'shot'} (damage ${dmg}) and each one shows (a health bar, a flash); set waves oneHitKills only when the creator asks for one-hit kills`;
 }
 
-export async function specToConfig(spec, { modules, lookPreset = null, lookConfig = null, standinPresetValues, mechanicDefaults = {}, worldConfig = null }) {
+export async function specToConfig(spec, { modules, lookPreset = null, lookConfig = null, standinPresetValues, mechanicDefaults = {}, mechanicSounds = {}, worldConfig = null, flow = null }) {
   const notes = [];
   const rng = createRng(hashString(`${spec.title}|layout`));
   const P = spec.players ?? { min: 1, max: 4 };
@@ -250,7 +250,9 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
     hook: spec.hook ?? '',
     text: { title: spec.title, hook: spec.hook ?? '', goal: goalLine(spec), play: 'Play', again: 'Play again', waiting: 'Waiting for everyone…', you: 'You', wins: '{name} wins!', draw: 'Round over: nobody scored', lost: 'Defeated' },
     players: { min: P.min ?? 1, max: P.max ?? 4, bots: P.bots !== false, teams: P.teams ?? 0, mode: P.mode ?? 'versus', botNames: ['Pip', 'Bo', 'Moss', 'Juno', 'Rex', 'Ivy', 'Tam'] },
-    round: { seconds: spec.round?.seconds ?? 120, countdown: 3, replay: spec.round?.replay !== false, ...(spec.round?.winBy ? { winBy: spec.round.winBy } : {}), ...(spec.round?.loseBy ? { loseBy: spec.round.loseBy } : {}) },
+    // a flow other than the timed round (kit/loops/<id>, open builder M4-C) is named with its params; one with no
+    // round clock (turns, endless) gets round.seconds only when the spec gives it (a cap)
+    round: { ...(flow && !Number.isInteger(spec.round?.seconds) ? {} : { seconds: spec.round?.seconds ?? 120 }), countdown: 3, replay: spec.round?.replay !== false, ...(spec.round?.winBy ? { winBy: spec.round.winBy } : {}), ...(spec.round?.loseBy ? { loseBy: spec.round.loseBy } : {}), ...(flow ? { flow: flow.id, params: flow.params } : {}) },
     camera: spec.camera ?? 'third',
     // forge (CONTRACT §8 forge): the walk, the jump and the field of view are the data tables' (game.forge.player), so
     // the controller keeps only the mouse's sensitivity
@@ -305,8 +307,11 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
     for (const s of forgeTables.soundsOf(game.forge)) kitSounds[s.id] ??= [s.label, s.preset, 'sfx'];
     kitSounds['round-end'] ??= ['The round ends', 'lose', 'sfx'];
   }
+  // the flow's own sounds (kit/loops/<id> → sounds: a turn passing), in games that flow plays
+  for (const [id, v] of Object.entries(flow?.sounds ?? {})) kitSounds[id] ??= v;
   // the action mechanics' own sounds (melee, levels, boss, loot: each plays these ids, optional; CONTRACT §8)
-  for (const m of mechanics) for (const [id, v] of Object.entries(MECHANIC_SOUNDS[m.id] ?? {})) kitSounds[id] ??= v;
+  // (a mechanic folder that exports `sounds` brings its own: create hands them in as mechanicSounds)
+  for (const m of mechanics) for (const [id, v] of Object.entries({ ...(MECHANIC_SOUNDS[m.id] ?? {}), ...(mechanicSounds[m.id] ?? {}) })) kitSounds[id] ??= v;
   // a kit sound is a preset id, or a full source (layers: one sound made of several presets played together)
   for (const [id, [label, preset, bus]] of Object.entries(kitSounds)) if (!sounds.sounds[id]) sounds.sounds[id] = { label, src: typeof preset === 'string' ? { preset } : preset, ...(bus !== 'sfx' ? { bus } : {}) };
 
@@ -322,7 +327,7 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
   } : {
     schemaVersion: 2, mode: 'live', title: spec.title.slice(0, 60), players: { min: 1, max: Math.min(8, P.max ?? 4) },
     live: {
-      entry: 'index.html', seedParam: null, team: P.mode === 'coop' || forge, metric: 'score', direction: 'higher', unit: 'pts', maxSeconds: Math.min(3600, (spec.round?.seconds ?? 120) + 30),
+      entry: 'index.html', seedParam: null, team: P.mode === 'coop' || forge, metric: 'score', direction: 'higher', unit: 'pts', maxSeconds: flow ? flowMaxSeconds(spec, flow) : Math.min(3600, (spec.round?.seconds ?? 120) + 30),
       // forge (CONTRACT §8 forge "Live co-op"): co-op for 2–4, the host's core owns the world (research/rust-engine/PLAN.md §9)
       sees: forge ? 'Each player sees the others as a hooded body in their own colour, holding the weapon they hold, with their name above, where the host\'s core has them.'
         : 'Each player sees the others as their character, in their seat colour, with a ring at their feet and their name above.',
@@ -417,6 +422,13 @@ const r2 = v => Math.round(v * 100) / 100;
 const cap = s => String(s).replace(/^./, c => c.toUpperCase()).slice(0, 60);
 
 /** The HUD's goal line and How to play's (CONTRACT §6g): the spec's win line, else its rules summary, else its hook. */
+/** The party page's time cap for a game a flow plays: a capped session's cap, a match's rounds and pauses, else the
+ *  room's longest (an hour): a game with no clock is not cut short by the page. */
+function flowMaxSeconds(spec, flow) {
+  const s = spec.round?.seconds, P = flow.params ?? {};
+  if (Number.isInteger(P.rounds)) return Math.min(3600, P.rounds * ((s ?? 120) + (P.between ?? 3)) + 30);
+  return Number.isInteger(s) ? Math.min(3600, s + 30) : 3600;
+}
 export function goalLine(spec) {
   const t = String(spec.round?.winBy || spec.rules?.summary || spec.hook || '').replace(/\s+/g, ' ').trim();
   if (t.length <= 120) return t;

@@ -29,6 +29,12 @@
 // home menu (kit/ui/menu.js) and the countdown;
 // in a live round the party page does (it counts everyone in and starts them together through net.onStart), and
 // Play again loads a fresh page, so the in-game replay is for playing alone.
+//
+// The flow is a part (open builder M4-C; kit/loops/<id>/index.js, kit/loops/README.md): what happens while the phase is
+// 'playing' (whose clock, who may act, what ends it) is the flow's, named by config/game.json → round.flow and handed
+// in by the boot. A game that names none runs the timed round (kit/loops/round), which is what this file did itself
+// before. The lobby, the countdown, the results, the replay, the players and the net stay here for every flow. A world
+// (round.mode "world") is not a flow: it changes who the players are and who hosts (below), and stays a mode.
 import { net as mpNet } from '../../mp/net.js';
 import { createShared } from './shared.js';
 // the players module comes from the boot (kit/net/players.js for three.js engines, gf/forge/players.js for forge,
@@ -36,6 +42,7 @@ import { createShared } from './shared.js';
 import { createLooks } from './looks.js';
 import { spawnOf } from '../core/util.js';
 import { refuse } from '../core/refusals.js';
+import * as roundFlow from '../loops/round/index.js';
 
 const r2 = v => Math.round(v * 100) / 100;
 
@@ -70,7 +77,7 @@ export function worldNet(net) {
 /** The seat colours: character.tint.<role> (config/characters.json → palette), else the look's player palette. */
 export const seatPalette = assets => assets.config('characters').palette ?? assets.config('look').palette?.players ?? ['#4f7cff', '#ff5ea8', '#3ddc84', '#ffd166'];
 
-export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, botCount, onPhase = () => {}, createPlayers, engineWorld = null, engineWatch = null }) {
+export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, botCount, onPhase = () => {}, createPlayers, engineWorld = null, engineWatch = null, flow: flowModule = null }) {
   const cfg = ctx.config;
   const R = cfg.round ?? {};
   const worldMode = R.mode === 'world';
@@ -90,6 +97,8 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
   function dispatch(name, data, from) {
     const i = name.indexOf(':');
     if (i > 0) { const m = ctx.mechanics?.get(name.slice(0, i)); if (m?.event) { try { m.event(name.slice(i + 1), data, from); } catch (e) { console.error(e); } return; } }
+    // the flow's own messages ('turns:move'): a mechanic of the same name comes first, as above
+    if (i > 0 && flow?.event && name.slice(0, i) === flow.id) { try { flow.event(name.slice(i + 1), data, from); } catch (e) { console.error(e); } return; }
     for (const fn of listeners.get(name) ?? []) { try { fn(data, from); } catch (e) { console.error(e); } }
     try { rules.event?.(ctx, name, data, from); } catch (e) { console.error(e); }
   }
@@ -280,6 +289,7 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     // (alone, Quit to menu and Play again carries on where the player stood)
     if (worldMode && (live || !ctx.me?._spawnAt)) { enterSpawn(); if (live) setTimeout(() => { if (round.phase === 'playing') enterSpawn(true); }, 700); }
     setPhase('playing');
+    if (flow.begin) { try { flow.begin(); } catch (e) { console.error(e); } }
     try { rules.roundStart?.(ctx); } catch (e) { console.error(e); }
   }
   function topScorers() {
@@ -303,14 +313,32 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
       }, 450);
     }
   }
-  /** Host: end the round now ({winners, reason} as check() returns, or a reason string). */
-  function end(reason = 'ended', winners = null) { if (ctx.host && round.phase === 'playing' && !worldMode) enterResults(winners, reason); }
+  /** Host: end the round now ({winners, reason} as check() returns, or a reason string). A flow with rounds inside it
+   *  (a match) takes the call as the end of one of them, unless it is `final` (the host's End round in the menu). */
+  function end(reason = 'ended', winners = null, final = false) {
+    if (!ctx.host || round.phase !== 'playing' || worldMode) return;
+    if (flow.end && !final) flow.end(reason, winners); else enterResults(winners, reason);
+  }
+  /** A flow with rounds inside it: the next one starts where the last ended. Every copy: the mechanics and the players
+   *  go back to a round's start and rules.roundStart runs; the host also puts the shared state back, but for `keep`. */
+  function restart({ keep = [] } = {}) {
+    if (ctx.host) {
+      const held = keep.map(k => [k, JSON.parse(JSON.stringify(shared.outgoing()[k] ?? null))]);
+      shared.reset();
+      for (const [k, v] of held) if (v) shared.outgoing()[k] = v;
+    }
+    for (const m of ctx.mechanicsList ?? []) { try { m.reset?.(); } catch (e) { console.error(e); } }
+    resetPlayers();
+    round.clock = 0;
+    try { rules.roundStart?.(ctx); } catch (e) { console.error(e); }
+  }
   /** Alone: play again in the same page. */
   function replay() {
     if (live || round.phase !== 'results') return false;
     round.number++;
     shared.reset();
     for (const m of ctx.mechanicsList ?? []) { try { m.reset?.(); } catch (e) { console.error(e); } }
+    if (flow.reset) { try { flow.reset(); } catch (e) { console.error(e); } }
     resetPlayers();
     beginCountdown();
     return true;
@@ -325,27 +353,19 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     round.winners = null; round.reason = null; round.rows = null; round.clock = 0; round.countdown = 0;
     shared.reset();
     for (const m of ctx.mechanicsList ?? []) { try { m.reset?.(); } catch (e) { console.error(e); } }
+    if (flow.reset) { try { flow.reset(); } catch (e) { console.error(e); } }
     resetPlayers();
     setPhase('lobby');
     return true;
   }
 
-  let checkAcc = 0;
   /** Every frame, before the physics steps: the round clock and, on other copies, the host's world. */
   function tick(dt) {
     hostTime += dt;
     if (ctx.host) {
       if (round.phase === 'countdown') { round.countdown -= dt; if (round.countdown <= 0) beginPlaying(); }
       else if (round.phase === 'playing' && worldMode) round.clock += dt;    // a world has no end
-      else if (round.phase === 'playing') {
-        round.clock += dt;
-        if ((R.seconds ?? 120) - round.clock <= 0) enterResults(null, 'time');
-        else if ((checkAcc += dt) >= 0.1) {
-          checkAcc = 0;
-          let r = null; try { r = rules.check?.(ctx) ?? null; } catch (e) { console.error(e); }
-          if (r) enterResults(Array.isArray(r.winners) ? r.winners : null, r.reason ?? 'won');
-        }
-      }
+      else if (round.phase === 'playing') flow.hostTick(dt);     // the flow's: its clock, who may act, what ends it
     } else {
       const w = net.shared();
       if (w) {
@@ -376,6 +396,8 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     // looks: ask for a friend's loadout their pose says this copy lacks; put on whatever arrived or changed
     looks.tick(dt);
     players.updateLooks();
+    // the flow, on every copy: what it shows and plays when its state changes (a turn passed, a round of a match ended)
+    if (flow.frame) { try { flow.frame(dt); } catch (e) { console.error(e); } }
   }
   const remoteBotSeen = new Set();
   function syncRemoteBots(list, dt) {
@@ -429,5 +451,10 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
     return `${round.phase}|${round.number}|${sc}${extra ? `|${extra}` : ''}`;
   }
 
-  return { live, worldMode, net, round, get watching() { return live && !!net.watching; }, get watch() { return live ? net.watch ?? null : null; }, start, arm, ready, tick, send, beginCountdown, end, replay, toLobby, gateBlock, digest, onHost, get hostTime() { return hostTime; }, loop: fn => net.loop(fn), get over() { return net.over; } };
+  // the flow is made last: it is handed what it may call (kit/loops/README.md) and registers its own shared state
+  const flowMod = flowModule ?? roundFlow;
+  const flow = flowMod.create(ctx, { ...(R.params ?? {}) }, { round, R, rules, live, worldMode, players, shared, enterResults, restart, topScorers, max });
+  ctx.flow = flow;
+
+  return { live, worldMode, net, round, flow, get watching() { return live && !!net.watching; }, get watch() { return live ? net.watch ?? null : null; }, start, arm, ready, tick, send, beginCountdown, end, replay, toLobby, gateBlock, digest, onHost, get hostTime() { return hostTime; }, loop: fn => net.loop(fn), get over() { return net.over; } };
 }

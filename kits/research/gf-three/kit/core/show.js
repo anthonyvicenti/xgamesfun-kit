@@ -2,6 +2,7 @@
 // the rules, and shows one thing in the world, framed, with no UI:
 //   character.<role>   a turntable of that role's body          prop.<name>   that prop alone, turning
 //   world              a wide shot                              look          four characters and the props, 3/4 view
+//   vfx.<preset>       an effect preset firing over the ground (kit/vfx/show.js)
 //   anything else      the mechanic whose module exports show(ctx, subject), else the world
 // Without the parameter none of this runs. window.__game.ready turns true once the subject is framed.
 import * as THREE from 'three';
@@ -41,6 +42,9 @@ export async function runShow(ctx, subject, { spawnCharacter, characterFor, mech
     state.radius = 7; state.height = 1.1; state.spin = 0; state.angle = 0.45; state.pitch = 0.22;
   } else if (subject === 'world') {
     state.radius = half * 2.1; state.height = 0; state.spin = 0.05; state.angle = 0.8; state.pitch = 0.62;
+  } else if (subject.startsWith('vfx.')) {
+    // an effect preset (kit/vfx): loaded on demand, so a game that carries no vfx never asks for the file
+    await (await import('../vfx/show.js')).showVfx(ctx, subject.slice(4), state, hideLayout);
   } else {
     const m = [...mechanics.values()].find(x => typeof x.show === 'function' && x.handles?.(subject) !== false);
     if (m) await m.show(ctx, subject, state);

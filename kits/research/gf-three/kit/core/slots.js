@@ -28,14 +28,18 @@ function numberRange(v) {
 export function slotsFor(cfg) {
   const g = cfg.game ?? {}, out = [];
   const G = 'config/game.json';
-  // a world (CONTRACT §9) has no rounds: no length to tune
-  if (g.round?.mode !== 'world') out.push({ id: 'round.seconds', group: 'rules', label: 'Round length', type: 'integer', source: { file: G, pointer: '/round/seconds' }, constraints: { min: 30, max: 900, unit: 's' }, tier: 'main', facet: 'gameplay', rank: 88, description: 'How long a round lasts, in seconds' });
+  // a world (CONTRACT §9) has no rounds: no length to tune; nor has a flow with no round clock (turns, endless) unless capped
+  if (g.round?.mode !== 'world' && !(g.round?.flow && g.round?.seconds == null)) out.push({ id: 'round.seconds', group: 'rules', label: 'Round length', type: 'integer', source: { file: G, pointer: '/round/seconds' }, constraints: { min: 30, max: 900, unit: 's' }, tier: 'main', facet: 'gameplay', rank: 88, description: 'How long a round lasts, in seconds' });
   out.push({ id: 'round.countdown', group: 'rules', label: 'Countdown before a round', type: 'integer', source: { file: G, pointer: '/round/countdown' }, constraints: { min: 0, max: 10, unit: 's' }, tier: 'advanced', facet: 'gameplay', rank: 20 });
   out.push({ id: 'players.max', group: 'rules', label: 'Players in a round', type: 'integer', source: { file: G, pointer: '/players/max' }, constraints: { min: 1, max: 8 }, tier: 'main', facet: 'gameplay', rank: 80, description: 'Seats in a round; bots fill the empty ones' });
   out.push({ id: 'players.bots', group: 'rules', label: 'Fill empty seats with bots', type: 'boolean', source: { file: G, pointer: '/players/bots' }, tier: 'advanced', facet: 'gameplay', rank: 30 });
   out.push({ id: 'players.bot-names', group: 'text', label: 'Bot names', type: 'json', source: { file: G, pointer: '/players/botNames' }, tier: 'advanced', facet: 'text', rank: 10 });
   for (const [k, v] of Object.entries(g.rules?.params ?? {})) {
     out.push(valueSlot({ id: `rules.${slug(k)}`, label: humanize(k), group: 'rules', file: G, pointer: `/rules/params/${esc(k)}`, value: v, rank: 86, description: g.rules?.scoring ? `Scoring: ${g.rules.scoring}` : undefined }));
+  }
+  // the flow's own numbers and words (kit/loops/<id> → params; config/game.json → round.params): each a round.* slot
+  for (const [k, v] of Object.entries(g.round?.params ?? {})) {
+    out.push(valueSlot({ id: `round.${slug(k)}`, label: humanize(k), group: 'rules', file: G, pointer: `/round/params/${esc(k)}`, value: v, rank: 84 }));
   }
   // fair play (kit/core/fair.js, CONTRACT §6c): kit-owned, on by default; create writes config/game.json → fair
   if (g.fair && typeof g.fair === 'object') {

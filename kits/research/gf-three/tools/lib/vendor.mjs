@@ -121,7 +121,15 @@ export async function kitModuleFiles() {
   for (const rel of await walk(join(KIT, 'mechanics'), { skip: r => /(^|\/)(fixture|tests?)(\/|$)/.test(r) })) {
     const m = /^([a-z0-9-]+)\/index\.js$/.exec(rel); if (m) mechanics.push(m[1]);
   }
-  return { look: has('look/look.js'), world: has('world/world.js'), character: has('character/character.js'), mechanics: mechanics.sort() };
+  return { look: has('look/look.js'), world: has('world/world.js'), character: has('character/character.js'), mechanics: mechanics.sort(), extras: await optionalModuleDirs() };
+}
+
+/** The kit's optional modules: every top-level folder with a module.js beside its code (vfx/module.js documents the
+ *  contract). A game carries one only when create listed it in gf-three.json → modules.extras. */
+export async function optionalModuleDirs() {
+  const out = [];
+  for (const rel of await walk(KIT, { skip: r => r.split('/').length > 2 })) { const m = /^([a-z0-9-]+)\/module\.js$/.exec(rel); if (m) out.push(m[1]); }
+  return out.sort();
 }
 
 // What a game's gf/three/ holds: the kit's code and licences, never its docs, tests or the mechanics' fixtures.
@@ -129,14 +137,15 @@ const kitSkip = rel => /(^|\/)(fixture|fixtures|tests?|evidence)(\/|$)/.test(rel
 
 // a scenic game's look and world are gf/scenic's, so gf/three/ leaves this kit's own out (CONTRACT §8)
 // a forge game's gf/three/ is the forge closure alone (forgeKitClosure); a three.js game never carries the forge boot
-const dropModule = (modules, rel, closure = null) => (modules.engine === 'forge' ? !closure?.includes(rel) : rel === 'core/boot-forge.js')
+const dropModule = (modules, rel, closure = null, optional = new Set()) => (modules.engine === 'forge' ? !closure?.includes(rel) : rel === 'core/boot-forge.js')
   || ((!modules.look || modules.engine === 'scenic') && rel.startsWith('look/')) || ((!modules.world || modules.engine === 'scenic') && rel.startsWith('world/')) || (!modules.character && rel.startsWith('character/'))
-  || (rel.startsWith('mechanics/') && !(modules.mechanics ?? []).includes(rel.split('/')[1]));
+  || (rel.startsWith('mechanics/') && !(modules.mechanics ?? []).includes(rel.split('/')[1]))
+  || (optional.has(rel.split('/')[0]) && !(modules.extras ?? []).includes(rel.split('/')[0]));
 
 /** What vendorKit would put in gf/three/ for these modules, without writing: { rel: sha256 } (kit.js aside). */
 export async function kitFiles(modules) {
-  const files = {}, closure = modules.engine === 'forge' ? await forgeKitClosure() : null;
-  for (const rel of (await walk(KIT, { skip: kitSkip })).filter(r => r !== 'kit.js')) if (!dropModule(modules, rel, closure)) files[rel] = sha256(await readFile(join(KIT, rel)));
+  const files = {}, closure = modules.engine === 'forge' ? await forgeKitClosure() : null, optional = new Set(await optionalModuleDirs());
+  for (const rel of (await walk(KIT, { skip: kitSkip })).filter(r => r !== 'kit.js')) if (!dropModule(modules, rel, closure, optional)) files[rel] = sha256(await readFile(join(KIT, rel)));
   return files;
 }
 
@@ -147,9 +156,9 @@ export async function kitFiles(modules) {
 export async function vendorKit(gameDir, modules) {
   const wrote = [], files = {};
   const rels = (await walk(KIT, { skip: kitSkip })).filter(r => r !== 'kit.js');
-  const closure = modules.engine === 'forge' ? await forgeKitClosure() : null;
+  const closure = modules.engine === 'forge' ? await forgeKitClosure() : null, optional = new Set(await optionalModuleDirs());
   for (const rel of rels) {
-    if (dropModule(modules, rel, closure)) continue;
+    if (dropModule(modules, rel, closure, optional)) continue;
     const buf = await readFile(join(KIT, rel));
     files[rel] = sha256(buf);
     await put(join(gameDir, 'gf/three', rel), buf, wrote, `gf/three/${rel}`);

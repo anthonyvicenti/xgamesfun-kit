@@ -60,6 +60,7 @@ export const params = {
     fireAnim: { type: 'string', default: D.fireAnim, description: 'Animation word the shooter holds for a moment' },
     soundFire: { type: 'string', default: D.soundFire, description: 'Sound id played at the muzzle' },
     soundHit: { type: 'string', default: D.soundHit, description: 'Sound id played where a shot hits' },
+    hitFx: { type: 'string', description: 'Name of a vfx preset (kit/vfx: spark-burst, impact-flash, smoke-puff, dust-kick, confetti, ...) drawn where a shot hits; unset: none. create copies the preset into config/game.json → vfx, where its colour, sprite and numbers are slots' },
     streamSpeed: { ...num('Stream speed in m/s', 3, 40), default: D.streamSpeed },
     streamGravity: { ...num('Gravity on the stream (its arc)', 0, 30), default: D.streamGravity },
     streamReach: { ...num('Longest stream in metres', 1, 30), default: D.streamReach },
@@ -127,6 +128,9 @@ export function create(ctx, params = {}) {
   const targetProviders = [];
   const cool = cooldownGate(V('cooldown'));
   const root = new THREE.Group(); root.name = 'gf-projectiles'; ctx.scene.add(root);
+  // a hit effect (the hitFx param): the vfx module is loaded only by a game that asks for it (it is not in every game's gf/three)
+  let vfx = null;
+  if (P.hitFx) import('../../vfx/index.js').then(m => { vfx = m.vfxOf(ctx); }).catch(e => console.warn(`gf-three projectile: hitFx "${P.hitFx}" needs the vfx module (${e.message})`));
   const prj = new Map();            // host: the shots {id, shooter, seat, x..vz, age, bounces, tag}
   const view = new Map();           // every copy: what is drawn {x, y, z, vx, vy, vz, obj, fresh}
   const lastPos = new Map();        // body key → feet position last frame (the previous raw sample)
@@ -240,6 +244,7 @@ export function create(ctx, params = {}) {
     const pt = { x: d.p[0], y: d.p[1], z: d.p[2] };
     const c = tint(typeof d.o === 'string' ? ctx.players?.get?.(d.o) ?? null : null);      // the shooter's colour (`o`: their id)
     if (d.k === 'h' || d.k === 'w') { burst(pt, d.k === 'h' ? 14 : 8, 3.2, V('size') * 0.5 + 0.04, c); ctx.audio?.play(V('soundHit'), { at: pt, optional: true }); }
+    if (vfx && (d.k === 'h' || d.k === 'w')) vfx.fx(V('hitFx') || P.hitFx, { at: pt, scale: d.k === 'h' ? 1 : 0.6 });
     if (d.k === 'h' && d.t != null) ctx.players?.get?.(d.t)?.character?.express?.('hurt', 0.7);     // the hit body winces
     if (d.k === 's') burst(pt, 20, 5, 0.1, c);
   }

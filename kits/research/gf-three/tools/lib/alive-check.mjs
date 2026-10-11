@@ -53,6 +53,7 @@
 import { calibrate, walkToward } from './hits-check.mjs';
 import { normalizeWeapons } from '../../kit/mechanics/melee/logic.js';
 import { mechanicParts } from '../catalog.mjs';
+import { FLOWS, flowIdOf } from './flow-signs.mjs';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const r1 = v => Math.round(v * 10) / 10;
 const r2 = v => Math.round(v * 100) / 100;
@@ -72,7 +73,9 @@ export const GOAL_ROLE = /\b(defend(ed)?|protect(ed)?|guard(ed)?|keep (it )?safe
 /** The kit's mechanics with their manifests (tools/catalog.mjs mechanicParts): where every sign comes from. Read once,
  *  when this module is first imported; `partsOf(kit)` reads another kit folder's. */
 export const partsOf = kit => mechanicParts(kit ? { kit } : {});
-const PARTS = await partsOf();
+// a flow that keeps state of its own (kit/loops/<id>: turns, match) is sampled and judged like a mechanic, by its own
+// manifest's signs; the timed round keeps none and adds nothing
+const PARTS = [...await partsOf(), ...FLOWS.filter(f => f.manifest?.state?.key)];
 
 /**
  * In the page (installed with addInitScript): every SAMPLE_MS while a round plays, a compact copy of the observation.
@@ -99,6 +102,7 @@ const RECORD = SAMPLERS => {
     // for its mechanic's own stats (controls()), which is read once a sample and only when one asks; a kit copy that
     // does not list its mechanics gets every sampler over the shared state alone.
     const used = Array.isArray(s.modules?.mechanics) ? s.modules.mechanics.map(m => m.id) : null;
+    if (used && s.flow?.id) used.push(s.flow.id);          // the flow this game is played by, when it publishes one
     let ctl = null;
     const stats = id => { if (!used) return null; try { ctl ??= g.controls?.() ?? {}; return ctl.mechanics?.find(m => m.id === id)?.stats ?? null; } catch { return null; } };
     for (const [id, sample] of SAMPLERS) {
@@ -278,6 +282,8 @@ export function judgeAlive({ game = {}, world = {}, pages = [], firstLook = null
   const L = ALIVE_LIMITS, goal = goalOf(game, world), items = [];
   const add = (mechanic, item, status, reads, saw, fix = '') => items.push({ mechanic, item, status, reads, saw, ...(fix ? { fix } : {}) });
   const used = [...new Set((game.mechanics ?? []).map(m => m.id))];
+  // the game's flow, when it is a part with state of its own (turns, match): its sign is judged with the mechanics'
+  { const fid = flowIdOf(game); if (fid && fid !== 'round' && parts.some(p => p.id === fid) && !used.includes(fid)) used.push(fid); }
   const allRounds = pages.map(p => ({ label: p.label, samples: firstRound(p.samples ?? []) })).filter(p => p.samples.length);
   // the action mechanics' staged pages ("demo-…") count for their own signs only
   const rounds = allRounds.filter(p => !String(p.label).startsWith('demo-'));

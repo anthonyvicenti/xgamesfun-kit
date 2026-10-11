@@ -3,6 +3,8 @@
 //
 //   node research/gf-three/tools/catalog.mjs [--json] [--engine party|scenic|forge]
 //
+// loops      how a game is played (spec.loop; open builder M4-B): a timed round, a level run, a world that stays, and the
+//            ones the session cannot run yet, each `ready` or planned, with how a pitch picks one (loopGuide)
 // engines    the two engines (research/gf-scenic/PLAN.md, CONTRACT §8) and how a pitch picks one (engineGuide): each
 //            engine's worlds, looks and cameras; mechanics, bodies and props are shared. Top-level `worlds` and `looks`
 //            list both engines' (each with its `engine`); --engine keeps one engine's.
@@ -68,6 +70,7 @@ export const MANIFEST = {
   sync: '{owner: host | copy | none, how}: which copy decides',
   note: 'at most three lines for the build agent, read only by builds whose spec uses the part',
   stub: '{as, worked, traps}: its variable in rules.js, one worked line, its own traps; create writes rules.js from these and `events`',
+  asks: '(optional) [{about: "body" | "together", why}]: what a pitch must ask the creator when their words do not settle it and a card uses this part (a board with no player body asks how each player is shown); held by the pitch step (loop/pitch-rules.mjs), never by a build',
   signs: '{sample: (shared, stats) => {key: compact} | null, judge: view => void, reportOnly?}: verify check 15\'s sign of life. sample runs in the page 4 times a second (an arrow function that uses nothing outside itself); judge reads the samples in Node and adds its items',
 };
 const RESOURCE_RE = /^(input\.(key\.)?[A-Za-z0-9]+|player\.socket\.[a-z_]+|player\.control|round\.end|hud\.[a-z]+)$/;
@@ -155,7 +158,7 @@ function partEntry(part) {
   const f = partFor(part, {});
   return { ...base, engines: m.engines ?? [], needs: f.needs, uses: m.uses ?? [], owns: f.owns.map(o => ({ res: o.res, ...(o.shared ? { shared: true } : {}), why: o.why, free: o.free })),
     state: { key: m.state?.key ?? null, fields: m.state?.fields ?? {}, ...(m.state?.stats ? { stats: m.state.stats } : {}) }, events: m.events ?? [], sync: m.sync ?? null, note: m.note ?? [],
-    stub: m.stub ?? null, sign: typeof m.signs?.judge === 'function' ? (m.signs.reportOnly ? 'reported' : 'checked') : 'none' };
+    stub: m.stub ?? null, ...(Array.isArray(m.asks) && m.asks.length ? { asks: m.asks } : {}), sign: typeof m.signs?.judge === 'function' ? (m.signs.reportOnly ? 'reported' : 'checked') : 'none' };
 }
 
 /**
@@ -177,6 +180,160 @@ export async function worldParts({ kit = KIT, scenicKit = SCENIC_KIT } = {}) {
   if (existsSync(join(kit, 'world/voxel/default.json'))) out.voxel = { engine: 'any', provides: ['voxel'] };
   const sw = existsSync(join(scenicKit, 'world/generate.js')) ? await importKitModule(join(scenicKit, 'world/generate.js')) : null;
   if (sw && !sw.error) for (const id of sw.templates ?? []) out[id] = { engine: 'scenic', provides: sw.templateInfo?.[id]?.provides ?? [] };
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Loops: how a game is played (open builder M4-B). Apart from the engine (which draws it) and the mechanics (what you
+// do): how things move and who acts when. The list is what the kit's session can run today (kit/net/session.js: the
+// round, and round.mode "world"; the levels mechanic's run inside a round) plus what M4-C (session flow as data) adds.
+// No status is written here: each loop's `ready` looks at the kit it is given. A loop whose flow is a part (M4-C,
+// session flow as data: kit/loops/<id>/index.js with a manifest, LOOP_MANIFEST below) is ready when the kit carries
+// that part whole, planned when it does not carry it, and says the manifest's faults otherwise (flowParts, flowStatus).
+// The timed round is the first such part (kit/loops/round), which `round` and `run` play; a world is a mode of the
+// session, not a flow.
+// The pitch step holds a pitch to the loops (research/gf-three/loop/pitch-rules.mjs); `create` refuses a spec on a loop
+// that is not ready or whose shape is another loop's (loopProblems).
+// ---------------------------------------------------------------------------------------------------------------------
+const mechReady = (parts, id) => /^ready/.test(parts.find(p => p.id === id)?.status ?? '');
+const hasMech = (spec, id) => (spec?.mechanics ?? []).some(m => m?.id === id);
+const flowPart = (kit, id) => existsSync(join(kit, 'loops', id, 'index.js'));
+
+// A flow carries its own, like a mechanic (MANIFEST above), in kit/loops/<id>/index.js → `export const manifest`.
+export const LOOP_MANIFEST = {
+  id: 'the folder\'s name', params: 'JSON Schema of config/game.json → round.params (spec.round.params), with defaults; each is a round.* value slot',
+  describe: 'one line for the catalog', engines: 'the engines it runs on; create refuses it on another',
+  seconds: '"required" (round.seconds is the length of a round) or "cap" (round.seconds is optional: a cap on the whole session)',
+  seats: '{alone: "fill" | "min", late: "join" | "wait", why}: how many bots play with one person (every seat up to players.max, or the fewest the game needs: players.min - 1), and what happens to a seat that arrives mid-game',
+  needs: '{parts: [{id, why}], world: [{id, why}]}: mechanics and world capabilities it cannot work without',
+  uses: '(optional) mechanics it joins when the game has them (turns joins a board: kit/loops/turns/board.js)',
+  refuse: '(optional) spec => [reason with the way out]: what create refuses in a spec on this loop (two owners of one clock)',
+  state: '{key, fields}: its key in window.__game.snapshot().shared (null when it keeps none) and how to read each field',
+  events: '[{name, on, args, when}]: the rules.js hooks it calls (a hook\'s name, not onX: they are hooks of the rules object)',
+  sync: '{owner: host | copy | none, how}: which copy decides',
+  note: 'at most three lines for the build agent, read only by builds whose spec uses the loop',
+  stub: 'null (the six hooks every rules.js has are its own), or {as, worked, traps, joined?}: (joined: the one line the stub carries instead when the spec has a mechanic the flow `uses`) ctx.<as> in rules.js, one worked line, its own traps; create writes its hooks into rules.js from these and `events`',
+  signs: '{sample, judge}: verify check 15\'s sign of life, as a mechanic\'s; pulse: null or {what, min, of: snapshot => number, fix}: what "something happens" is for check 12 (null: a score that moves); pressed: (before, after) => boolean, optional: what a press that reached the flow looks like, for check 13 when no mechanic exposes anything to walk to; short: seconds => [patch]: what a check changes beside round.seconds for its short run',
+};
+/** What is wrong with a flow manifest's shape (empty when it is whole). */
+export function flowProblems(id, m) {
+  const bad = [], isFn = f => typeof f === 'function', lines = a => Array.isArray(a) && a.every(x => typeof x === 'string' && x.trim());
+  if (!m || typeof m !== 'object') return [`loop ${id}: index.js exports no manifest`];
+  if (m.id !== id) bad.push(`manifest.id is "${m.id}", the folder is "${id}"`);
+  if (typeof m.describe !== 'string' || !m.describe.trim()) bad.push('describe: one line');
+  if (!Array.isArray(m.engines) || !m.engines.length || m.engines.some(e => !['party', 'scenic', 'forge'].includes(e))) bad.push('engines: a list of party, scenic, forge');
+  if (!['required', 'cap'].includes(m.seconds)) bad.push('seconds: "required" or "cap"');
+  if (!['fill', 'min'].includes(m.seats?.alone) || !['join', 'wait'].includes(m.seats?.late) || typeof m.seats?.why !== 'string') bad.push('seats: {alone: fill | min, late: join | wait, why}');
+  if (!m.needs || typeof m.needs !== 'object') bad.push('needs: {parts, world}');
+  if (!m.state || typeof m.state !== 'object' || !('key' in m.state) || typeof m.state.fields !== 'object') bad.push('state: {key, fields}');
+  if (!Array.isArray(m.events) || m.events.some(e => !/^[a-z]\w*$/.test(e?.name ?? '') || !e.on || typeof e.args !== 'string')) bad.push('events: [{name: a rules hook, on, args, when}]');
+  if (!['host', 'copy', 'none'].includes(m.sync?.owner) || typeof m.sync?.how !== 'string') bad.push('sync: {owner: host | copy | none, how}');
+  if (!lines(m.note) || m.note.length < 1 || m.note.length > 3) bad.push('note: one to three lines');
+  if (m.stub !== null && (!/^[a-z][A-Za-z0-9]*$/.test(m.stub?.as ?? '') || typeof m.stub?.worked !== 'string' || /\n/.test(m.stub.worked) || !lines(m.stub?.traps) || !m.stub.traps.length)) bad.push('stub: null, or {as, worked (one line), traps}');
+  if (!isFn(m.signs?.sample) || !isFn(m.signs?.judge)) bad.push('signs: {sample, judge}');
+  else { try { new Function(`return (${m.signs.sample.toString()});`); } catch { bad.push('signs.sample: an arrow function that stands alone (it is sent to the page as text)'); } }
+  if (m.signs && m.signs.pulse != null && (!isFn(m.signs.pulse.of) || !Number.isFinite(m.signs.pulse.min) || typeof m.signs.pulse.what !== 'string' || typeof m.signs.pulse.fix !== 'string')) bad.push('signs.pulse: null, or {what, min, of, fix}');
+  if (m.signs && !isFn(m.signs.short)) bad.push('signs.short: seconds => [patch]');
+  if (m.signs?.pressed != null && !isFn(m.signs.pressed)) bad.push('signs.pressed: (before, after) => boolean');
+  return bad.map(b => `loop ${id}: manifest ${b}`);
+}
+/** The flow folders of a kit: every kit/loops/<id>/index.js, with its module and manifest: [{id, status, module, manifest, problems}]. */
+export async function flowParts({ kit = KIT } = {}) {
+  const dir = join(kit, 'loops'), out = [];
+  if (!existsSync(dir)) return out;
+  for (const e of (await readdir(dir, { withFileTypes: true })).filter(x => x.isDirectory() && /^[a-z0-9-]+$/.test(x.name) && flowPart(kit, x.name)).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    const m = await importKitModule(join(dir, e.name, 'index.js'));
+    if (m.error) { out.push({ id: e.name, status: `module does not import: ${m.error.message.split('\n')[0]}`, module: null, manifest: null, problems: [] }); continue; }
+    const problems = flowProblems(e.name, m.manifest);
+    out.push({ id: e.name, status: typeof m.create !== 'function' || m.id !== e.name ? 'lacks id/create' : problems.length ? `manifest: ${problems.join('; ')}` : 'ready', module: m, manifest: m.manifest ?? null, problems });
+  }
+  return out;
+}
+/** The flow a loop is played by: its own part, the timed round's (round, run), or none (a world is a mode of the session). */
+export const flowOf = loop => (loop === 'world' ? null : loop === 'run' || loop == null ? 'round' : loop);
+/** A flow part as the catalog lists it (JSON): the manifest without its functions. */
+function flowEntry(part) {
+  const m = part?.manifest; if (!m) return null;
+  return { id: part.id, params: summarizeParams(m.params), seconds: m.seconds, seats: m.seats, needs: m.needs, state: m.state, events: m.events, sync: m.sync, note: m.note, stub: m.stub,
+    sign: { alive: 'checked', pulse: m.signs?.pulse ? m.signs.pulse.what : 'a score that moves', pressed: typeof m.signs?.pressed === 'function' ? 'the flow\'s own' : 'any change of state' } };
+}
+const PLANNED = 'planned (the kit carries no flow for it: kit/loops/<id>)';
+const PLANNED_SAVED = 'planned (it needs the play host to keep each player\'s progress: kit/loops/README.md, "saved")';
+/** A loop whose flow is a part: ready when the kit carries that part whole. */
+const flowStatus = (flows, id) => { const f = flows.find(x => x.id === id); return !f ? PLANNED : f.status === 'ready' ? null : `not ready: the ${id} flow (kit/loops/${id}): ${f.status}`; };
+const LOOP_DEFS = [
+  { id: 'round', label: 'a timed round', describe: 'everyone plays at once in one timed round: lobby, countdown, play, results, play again',
+    pick: 'things move all the time and every player acts at the same moment; one clock for everyone, then a winner',
+    spec: 'round.seconds (30-900), round.winBy; the mechanics are what you do during it', engines: ['party', 'scenic', 'forge'],
+    ready: ({ kit, flows }) => (!existsSync(join(kit, 'net/session.js')) ? 'not ready: the kit has no session (kit/net/session.js)' : flows.some(f => f.id === 'round') ? flowStatus(flows, 'round') : null),
+    shape: spec => (spec.round?.mode === 'world' ? 'round.mode is "world", which is the loop "world"' : hasMech(spec, 'levels') ? 'the spec has the levels mechanic, which is the loop "run"' : null) },
+  { id: 'run', label: 'a level run', describe: 'a run through levels in order: clear one and a portal takes everyone to the next; the last level, or a boss, ends it (one clock for the whole run)',
+    pick: 'the players go through places in order and the game is over at the end of the last one',
+    spec: 'the levels mechanic (boss for a boss at the end, loot between levels); a world with a place per level (isles, dungeon); round.seconds for the whole run', engines: ['party', 'scenic'],
+    ready: ({ parts }) => (mechReady(parts, 'levels') ? null : 'not ready: the levels mechanic is not ready'),
+    shape: spec => (spec.round?.mode === 'world' ? 'round.mode is "world", which is the loop "world"' : hasMech(spec, 'levels') ? null : 'a run needs the levels mechanic in the spec') },
+  { id: 'world', label: 'a world that stays', describe: 'no rounds: one shared place, saved on the play host, that players drop in and out of; no clock, no score, no bots, no results',
+    pick: 'nothing ends and nobody wins: people come back to what they left (a block sandbox, a hangout)',
+    spec: 'round.mode "world", world.template "voxel", the build mechanic (shove beside it); camera first or orbit', engines: ['party'],
+    ready: ({ kit, parts }) => (!existsSync(join(kit, 'world/voxel/default.json')) ? 'not ready: the kit has no voxel world' : mechReady(parts, 'build') ? null : 'not ready: the build mechanic is not ready'),
+    shape: spec => (spec.round?.mode !== 'world' ? 'a world needs round.mode "world" (and world.template "voxel")' : spec.world?.template !== 'voxel' ? `a world needs world.template "voxel" (this one is "${spec.world?.template}")` : null) },
+  { id: 'turns', label: 'taking turns', describe: 'one player acts at a time, in order; nothing moves between turns; a clock for each turn',
+    pick: 'only one player may act at a time: board and card games, puzzles played in moves',
+    spec: 'round.params {turnSeconds, first, late}; round.seconds is optional (a cap on the whole game); the rules give move(ctx, player, move), or a mechanic that plays its own moves (board) joins the flow', flow: true,
+    shape: spec => (spec.round?.mode === 'world' ? 'round.mode is "world", which is the loop "world"' : hasMech(spec, 'levels') ? 'the spec has the levels mechanic, which is the loop "run"' : null) },
+  { id: 'match', label: 'a match of several rounds', describe: 'short rounds that reset, with the wins counted: first to N, or best of N',
+    pick: 'the same short round is played again and again and the rounds won are the score',
+    spec: 'round.seconds is one round\'s length (30-900); round.params {rounds, winsToWin, between}', flow: true,
+    shape: spec => (spec.round?.mode === 'world' ? 'round.mode is "world", which is the loop "world"' : hasMech(spec, 'levels') ? 'the spec has the levels mechanic, which is the loop "run"' : null) },
+  { id: 'endless', label: 'a session with no end', describe: 'no clock and no last level: it goes on until everyone has fallen or leaves, and the score only grows',
+    pick: 'it ends only when the players lose or stop',
+    spec: 'no round.seconds (it is a cap when given); the rules end it in check(ctx)', flow: true,
+    shape: spec => (spec.round?.mode === 'world' ? 'round.mode is "world", which is the loop "world"' : hasMech(spec, 'levels') ? 'the spec has the levels mechanic, which is the loop "run"' : null) },
+  { id: 'saved', label: 'progress that is saved', describe: 'what a player earned is still there next time: pets, money, upgrades, a town',
+    pick: 'the fun is coming back to what you built up: idle, tycoon, collecting and life-sim games', planned: PLANNED_SAVED },
+];
+/** How a pitch picks the loop. The pitch step (loop/pitch-rules.mjs) enforces the starred lines. */
+const LOOP_GUIDE = [
+  'pick the loop before the engine and the cards, by how things move and who acts when in the creator\'s idea, not by its theme',
+  '* every card\'s spec says its loop, and it is a ready one; the spec has that loop\'s shape (loops[].spec)',
+  '* the pitch says which loop the idea needs (play.loop.wants): a ready one, a planned one, or "none" when none of them is how the idea is played',
+  '* when that loop is planned or none fits: play.loop.closest is the ready loop card 1 uses, play.loop.lost says what the creator loses, the reply starts with it and names the closest loop in plain words, and card 1 lists it in v1.notYet. A planned loop is never pitched as if it were ready',
+];
+
+/**
+ * The loops of a kit, each with its status ('ready', or why not): [{id, label, status, describe, pick, spec, engines,
+ * flow, part}]. `flow` is the flow part that plays it (kit/loops/<flow>; none for a world) and `part` that part as the
+ * catalog lists it (its params, seats, hooks, note, stub and signs), when the kit carries it.
+ */
+export async function loopParts({ kit = KIT, parts = null, flows = null } = {}) {
+  const P = parts ?? await mechanicParts({ kit }), F = flows ?? await flowParts({ kit });
+  return LOOP_DEFS.map(d => {
+    const why = d.ready ? d.ready({ kit, parts: P, flows: F }) : d.planned ?? flowStatus(F, d.id);
+    const flow = d.planned ? null : flowOf(d.id), part = flow ? F.find(f => f.id === flow && f.manifest) ?? null : null;
+    const engines = d.engines ?? (d.flow ? part?.manifest?.engines : null);
+    return { id: d.id, label: d.label, status: why ?? 'ready', describe: d.describe, pick: d.pick, ...(d.spec ? { spec: d.spec } : {}), ...(engines ? { engines } : {}),
+      ...(flow && part ? { flow, part: flowEntry(part) } : {}) };
+  });
+}
+/** The loop a spec plays: the one it names, else the one its shape is (a spec written before the field existed). */
+export const loopOf = spec => spec?.loop ?? (spec?.round?.mode === 'world' ? 'world' : hasMech(spec, 'levels') ? 'run' : 'round');
+/**
+ * A spec's loop against the kit's loops (loopParts, or catalog.json → loops): a loop the catalog does not have, one that
+ * is not ready, one its engine cannot run, a spec shaped like another loop. `require`: the spec must name its loop (a
+ * pitch card); without it a spec that names none is not judged. → ['loop: …']
+ */
+export function loopProblems(spec, loops, { require = false } = {}) {
+  if (!Array.isArray(loops) || !loops.length || !spec) return [];
+  const isReady = l => /^ready/.test(l.status ?? ''), ready = loops.filter(isReady).map(l => l.id);
+  const list = `ready: ${ready.join(', ')}; not built yet: ${loops.filter(l => !isReady(l)).map(l => l.id).join(', ') || 'none'}`;
+  if (spec.loop == null) return require ? [`loop: say how this game is played, one of the kit's loops (${list}; catalog.json → loops, loopGuide)`] : [];
+  const L = loops.find(l => l.id === spec.loop);
+  if (!L) return [`loop: "${spec.loop}" is not a loop in the catalog (${list})`];
+  if (!isReady(L)) return [`loop: "${L.id}" (${L.label}) is ${String(L.status).split(/[:(]/)[0].trim()}, not built yet: a spec uses a ready loop (${ready.join(', ')}). Pick the closest one and say what is lost (in a pitch: play.loop.closest and lost, and card 1's v1.notYet)`];
+  const out = [], engine = spec.engine ?? 'party';
+  if (Array.isArray(L.engines) && !L.engines.includes(engine)) out.push(`loop: "${L.id}" (${L.label}) does not run on the ${engine} engine (it runs on ${L.engines.join(', ')})`);
+  const shape = LOOP_DEFS.find(d => d.id === L.id)?.shape?.(spec);
+  if (shape) out.push(`loop: "${L.id}" (${L.label}), but ${shape}. Its shape: ${L.spec}`);
   return out;
 }
 
@@ -235,6 +392,9 @@ export async function catalog({ kit = KIT } = {}) {
     const small = gen.generateLayout(t, { size: 'small' });
     out.worlds.push({ id: t.template ?? f.replace(/\.json$/, ''), label: t.label ?? '', describe: t.describe ?? '', kind: t.kind ?? 'outdoor', setPieces: t.setPieces ?? [], size: small.size, spawns: small.spawns?.length ?? 0, zones: Object.keys(small.zones ?? {}), props: [...new Set((small.props ?? []).map(p => p.prop))].length, sizes, provides: provides[t.template ?? f.replace(/\.json$/, '')]?.provides ?? [] });
   }
+  // the block world (CONTRACT §9): a catalog world since M4-B (the build mechanic needs "a world with voxel" and no engine
+  // listed one: research/open-builder/findings/gauntlet-2026-10-11.md, finding 2). Party only: create refuses it on scenic.
+  if (provides.voxel) out.worlds.push({ id: 'voxel', label: 'Block world', describe: 'a generated block island everyone shares and changes (place, break and paint blocks), saved on the play host. Only for the loop "world" (round.mode "world", the build mechanic): never a timed round. world.voxel tunes the terrain (seed, radius, hills, trees, lake)', kind: 'outdoor', setPieces: [], size: null, spawns: 0, zones: [], props: 0, sizes: {}, provides: provides.voxel.provides, loop: 'world' });
   out.worldSizes = Object.fromEntries(gen.SIZES.map(k => [k, { area: gen.SIZE_CLASSES[k].area, describe: gen.SIZE_CLASSES[k].describe }]));
   for (const id of ['backyard', 'office', 'plaza', 'arena']) if (!out.worlds.some(w => w.id === id)) out.worlds.push({ id, label: id, describe: 'stand-in: a flat ground with the spec\'s props placed (track L\'s template is not in yet)', size: null, spawns: 0, zones: ['centre'], props: 0, standin: true });
   // bodies (track E: tags to match a game's theme; `playerColour` when the kit tints the body per seat)
@@ -266,7 +426,7 @@ export async function catalog({ kit = KIT } = {}) {
   for (const b of scenic.bodies) if (!out.bodies.some(x => x.id === b.id)) out.bodies.splice(out.bodies.length - 2, 0, b);
   for (const p of scenic.props) if (!out.props.some(x => x.id === p.id)) out.props.push(p);
   out.engines = {
-    party: { id: 'party', kit: `gf-three ${KIT_VERSION}`, for: 'silly party games with friends', look: 'jelly-pastel, toon-lowpoly or soft-stylised; flat lots and buildings', camera: 'third', cameras: ['third', 'first', 'top', 'follow'], worlds: out.worlds.filter(w => w.engine === 'party').map(w => w.id), looks: out.looks.filter(l => l.engine === 'party').map(l => l.id), status: 'ready' },
+    party: { id: 'party', kit: `gf-three ${KIT_VERSION}`, for: 'silly party games with friends', look: 'jelly-pastel, toon-lowpoly or soft-stylised; flat lots and buildings', camera: 'third', cameras: ['third', 'first', 'top', 'follow', 'orbit'], worlds: out.worlds.filter(w => w.engine === 'party').map(w => w.id), looks: out.looks.filter(l => l.engine === 'party').map(l => l.id), status: 'ready' },
     scenic: { id: 'scenic', kit: `gf-scenic ${SCENIC_VERSION}`, bodies: scenic.bodies.map(b => b.id), props: scenic.props.map(p => p.id), for: 'serious, scenic and action games: adventure, roguelite, brawler, exploration, survival, RPG-like', look: 'stylised scenic 3D: living grass and trees, water, fog, day and night, bloom; a three-quarter diorama camera', camera: 'follow', cameras: ['follow', 'third'], worlds: scenic.worlds.map(w => w.id), looks: scenic.looks.map(l => l.id), status: scenic.status, ...(scenic.note ? { note: scenic.note } : {}) },
   };
   // the forge engine (research/rust-engine/PLAN.md, CONTRACT §8 forge): its own world, look and data tables
@@ -274,10 +434,13 @@ export async function catalog({ kit = KIT } = {}) {
   out.worlds.push(...forge.worlds); out.looks.push(...forge.looks);
   out.engines.forge = forge.engine;
   out.engineGuide = ENGINE_GUIDE;
+  // how a game is played, apart from the engine (M4-B): what the session runs today, and what is planned
+  out.loops = await loopParts({ kit });
+  out.loopGuide = LOOP_GUIDE;
   // a world (CONTRACT §9): not a round but a place that stays; either engine's look draws it
   out.worldGames = {
     for: 'a place people build in or hang out in, not a match: a block sandbox players change together and come back to; it opens straight from a post on X',
-    spec: { round: { mode: 'world' }, camera: 'first', world: { template: 'voxel', voxel: '(optional) terrain: {seed, radius, hills, trees, lake, plaza: {signText}}, hotbar, paint' }, mechanics: ['build', 'shove'] },
+    spec: { loop: 'world', engine: 'party', round: { mode: 'world' }, camera: 'first', world: { template: 'voxel', voxel: '(optional) terrain: {seed, radius, hills, trees, lake, plaza: {signText}}, hotbar, paint' }, mechanics: ['build', 'shove'] },
     does: 'First person (camera "orbit" for third person). A generated island everyone shares; place, break and paint blocks, signs (filtered), boom blocks; saved on the play host; up to 8 at once, the host can change; no rounds, scores, bots or results',
     example: 'research/worlds/spec-blockhaven.json',
   };
@@ -388,6 +551,11 @@ function print(c) {
     console.log('ENGINES (spec.engine; how to pick: engineGuide below)');
     for (const e of Object.values(c.engines)) console.log(`  ${e.id.padEnd(8)} ${e.kit}${e.status === 'ready' ? '' : ` [${e.status}]`}: ${e.for}\n${' '.repeat(11)}look: ${e.look}\n${' '.repeat(11)}worlds ${e.worlds.join(', ')} · looks ${e.looks.join(', ')} · cameras ${e.cameras.join(', ')} (usually ${e.camera})`);
     console.log(`  how to pick (* the checker enforces):\n${c.engineGuide.map(g => `    ${g}`).join('\n')}\n`);
+  }
+  if (c.loops) {
+    console.log('LOOPS (spec.loop: how the game is played)');
+    for (const l of c.loops) console.log(`  ${l.id.padEnd(8)} ${l.status === 'ready' ? '' : `[${l.status}] `}${l.label}: ${l.describe}\n${' '.repeat(11)}pick it when ${l.pick}${l.spec ? `\n${' '.repeat(11)}spec: ${l.spec}` : ''}`);
+    console.log(`  how to pick (* the pitch step enforces):\n${c.loopGuide.map(g => `    ${g}`).join('\n')}\n`);
   }
   console.log('MECHANICS');
   for (const m of c.mechanics) console.log(`  ${m.id.padEnd(11)} ${m.status === 'ready' ? '' : `[${m.status}] `}${m.describe}${m.examples.length ? `\n${' '.repeat(14)}as: ${m.examples.join(' · ')}` : ''}${Object.keys(m.params).length ? `\n${' '.repeat(14)}params: ${Object.entries(m.params).map(([k, p]) => `${k}${'default' in p ? `=${JSON.stringify(p.default)}` : ''}`).join(', ')}` : ''}${partLines(m).map(l => `\n${' '.repeat(14)}${l}`).join('')}`);

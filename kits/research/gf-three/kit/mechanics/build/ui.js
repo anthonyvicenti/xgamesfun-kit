@@ -4,20 +4,9 @@
 
 const CSS = `
 #gf-build{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;align-items:flex-end;gap:10px;pointer-events:none;z-index:6}
-#gf-build .gf-bar{display:flex;gap:5px;padding:6px;border-radius:14px;background:var(--gf-panel,#1c2133cc);box-shadow:0 6px 20px #0004;pointer-events:auto;max-width:calc(100vw - 132px);overflow-x:auto;scrollbar-width:none}
-#gf-build .gf-bar::-webkit-scrollbar{display:none}
-#gf-build .gf-wrap{position:relative;pointer-events:none;min-width:0}
-#gf-build .gf-more{position:absolute;top:0;bottom:0;width:26px;display:none;align-items:center;justify-content:center;border:0;padding:0;color:#fff;font:700 18px/1 system-ui,sans-serif;pointer-events:auto;z-index:1}
-#gf-build .gf-more.l{left:0;border-radius:14px 0 0 14px;background:linear-gradient(to right,var(--gf-panel,#1c2133) 40%,transparent)}
-#gf-build .gf-more.r{right:0;border-radius:0 14px 14px 0;background:linear-gradient(to left,var(--gf-panel,#1c2133) 40%,transparent)}
-#gf-build .gf-wrap.more-l .gf-more.l,#gf-build .gf-wrap.more-r .gf-more.r{display:flex}
 #gf-build button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
-#gf-build .gf-slot{position:relative;flex:none;width:46px;height:46px;border-radius:10px;border:2px solid #ffffff22;background:#ffffff14;padding:0;display:grid;place-items:center;transition:transform .12s,border-color .12s}
-#gf-build .gf-slot canvas{width:38px;height:38px;image-rendering:auto}
-#gf-build .gf-slot i{display:block;width:30px;height:30px;border-radius:50%;box-shadow:inset 0 0 0 2px #0003}
-#gf-build .gf-slot i.wash{background:repeating-linear-gradient(45deg,#fff 0 4px,#ddd 4px 8px)}
-#gf-build .gf-slot b{position:absolute;left:4px;top:1px;font-size:10px;opacity:.75}
-#gf-build .gf-slot.on{border-color:var(--gf-accent,#ff7a59);transform:translateY(-4px);background:#ffffff26}
+#gf-build .gfp-slot i{display:block;width:30px;height:30px;border-radius:50%;box-shadow:inset 0 0 0 2px #0003}
+#gf-build .gfp-slot i.wash{background:repeating-linear-gradient(45deg,#fff 0 4px,#ddd 4px 8px)}
 #gf-build .gf-tools{display:flex;gap:5px;padding:6px;border-radius:14px;background:var(--gf-panel,#1c2133cc);pointer-events:auto}
 #gf-build .gf-tool{width:46px;height:46px;border-radius:10px;border:2px solid #ffffff22;background:#ffffff14;display:grid;place-items:center;padding:0;position:relative}
 #gf-build .gf-tool svg{width:24px;height:24px}
@@ -25,15 +14,6 @@ const CSS = `
 #gf-build .gf-tool.on{border-color:var(--gf-accent,#ff7a59);background:#ffffff26}
 #gf-build-name{position:absolute;left:50%;bottom:122px;transform:translateX(-50%);padding:3px 12px;border-radius:999px;background:#0008;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
 #gf-build-name.on{opacity:1}
-#gf-sign-editor{position:absolute;inset:0;display:none;place-items:center;background:#0006;pointer-events:auto;z-index:20}
-#gf-sign-editor.on{display:grid}
-#gf-sign-editor .card{background:var(--gf-panel,#1c2133f2);border-radius:18px;padding:18px 20px;width:min(360px,90vw);box-shadow:0 12px 40px #0006}
-#gf-sign-editor h3{margin:0 0 10px;font-size:18px}
-#gf-sign-editor textarea{width:100%;box-sizing:border-box;font:600 18px/1.3 system-ui,sans-serif;text-align:center;border-radius:10px;border:0;padding:10px;background:#f4e6c8;color:#2b1d12;resize:none}
-#gf-sign-editor .row{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px}
-#gf-sign-editor small{opacity:.7}
-#gf-sign-editor button{font:inherit;font-size:16px;border:0;border-radius:999px;padding:8px 20px;background:var(--gf-accent,#ff7a59);color:#fff;cursor:pointer}
-#gf-sign-editor button.ghost{background:#ffffff26}
 #gf-ui.gf-hotbar .gf-help{display:none}
 #gf-ui.gf-hotbar #gf-fullscreen{top:10px!important;right:10px!important;bottom:auto!important}
 #gf-ui.gf-hotbar .gf-toasts{top:auto;bottom:160px}
@@ -41,7 +21,7 @@ const CSS = `
 #gf-ui.gf-hotbar .gf-prompt{bottom:84px}
 #gf-ui.gf-hotbar .gf-touch button[data-action="jump"]{bottom:84px!important}
 #gf-ui.gf-hotbar .gf-touch button[data-action="interact"]{bottom:160px!important}
-@media (max-width:640px){#gf-build{bottom:6px;gap:6px}#gf-build .gf-slot,#gf-build .gf-tool{width:38px;height:38px}#gf-build .gf-slot canvas{width:30px;height:30px}#gf-build .gf-slot i{width:24px;height:24px}#gf-build .gf-bar,#gf-build .gf-tools{padding:4px;gap:4px}#gf-build-name{bottom:104px}#gf-ui.gf-hotbar .gf-prompt{bottom:66px}#gf-ui.gf-hotbar .gf-toasts{bottom:138px}#gf-ui.gf-hotbar .gf-me{top:84px}}
+@media (max-width:640px){#gf-build{bottom:6px;gap:6px}#gf-build .gf-tool{width:38px;height:38px}#gf-build .gfp-slot i{width:24px;height:24px}#gf-build .gf-tools{padding:4px;gap:4px}#gf-build-name{bottom:104px}#gf-ui.gf-hotbar .gf-prompt{bottom:66px}#gf-ui.gf-hotbar .gf-toasts{bottom:138px}#gf-ui.gf-hotbar .gf-me{top:84px}}
 `;
 const ICONS = {
   break: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4.5c2.8-1 5 .3 5.5 1-2.2-.3-4 .5-5 1.5"/><path d="M14.5 4.5 9 10"/><path d="M15 7l-1.5-1.5"/><path d="M10.5 8.5l5 5"/><path d="M12 11 4.5 18.5a1.4 1.4 0 0 0 2 2L14 13"/></svg>',
@@ -93,33 +73,9 @@ export function signIcon(wood, size = 76) {
 export function createBuildUi(ctx, { blocks, paint, keys = true, onSlot, onTool, onColor, onSign }) {
   const style = el('style'); style.textContent = CSS; document.head.append(style);
   const root = el('div'); root.id = 'gf-build';
-  const bar = el('div', 'gf-bar'); bar.id = 'gf-hotbar';
   const tools = el('div', 'gf-tools');
-  // a hotbar wider than the screen (a phone shows about 6 of 23) scrolls sideways; an arrow at each end that has more
-  // says so, and a tap on it scrolls a screenful (play-test 2026-10-09: Sign and Boom were out of sight with no cue)
-  const wrap = el('div', 'gf-wrap'), moreL = el('button', 'gf-more l', '‹'), moreR = el('button', 'gf-more r', '›');
-  moreL.type = moreR.type = 'button'; moreL.setAttribute('aria-label', 'More blocks'); moreR.setAttribute('aria-label', 'More blocks');
-  wrap.append(bar, moreL, moreR);
-  root.append(wrap, tools);
-  const cue = () => { const max = bar.scrollWidth - bar.clientWidth; wrap.classList.toggle('more-l', bar.scrollLeft > 4); wrap.classList.toggle('more-r', max > 4 && bar.scrollLeft < max - 4); };
-  bar.addEventListener('scroll', cue, { passive: true });
-  addEventListener('resize', cue);
-  if (typeof ResizeObserver === 'function') new ResizeObserver(cue).observe(bar);     // shown again after the menu
-  for (const [b, d] of [[moreL, -1], [moreR, 1]]) {
-    b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
-    b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); bar.scrollBy({ left: d * bar.clientWidth * 0.8, behavior: 'smooth' }); });
-  }
-  /** Bring slot i into view inside the bar only (scrollIntoView would also scroll the page, in a post's frame). */
-  const reveal = i => {
-    const b = bar.children[i]; if (!b) return;
-    const l = b.offsetLeft - bar.offsetLeft, pad = 30;
-    if (l - pad < bar.scrollLeft) bar.scrollLeft = Math.max(0, l - pad);
-    else if (l + b.offsetWidth + pad > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = l + b.offsetWidth + pad - bar.clientWidth;
-    cue();
-  };
   const name = el('div'); name.id = 'gf-build-name';
-  const editor = el('div'); editor.id = 'gf-sign-editor';
-  ctx.ui.root.append(root, name, editor);
+  ctx.ui.root.append(root, name);
   ctx.ui.root.classList.add('gf-hotbar');
   let nameT = null, mode = 'blocks';
   const stop = e => { e.preventDefault(); e.stopPropagation(); };
@@ -133,88 +89,41 @@ export function createBuildUi(ctx, { blocks, paint, keys = true, onSlot, onTool,
   const breakBtn = toolBtn('break', 'break', 'X', 'Break (X)');
   const paintBtn = toolBtn('paint', 'paint', 'P', 'Paint (P)');
 
-  function slotBtn(i, content, label) {
-    const b = el('button', 'gf-slot'); b.type = 'button'; b.dataset.i = String(i); b.title = label;
-    b.append(content);
-    if (keys && i < 10) b.append(el('b', null, String((i + 1) % 10)));
-    b.addEventListener('pointerdown', stop);
-    b.addEventListener('click', e => { stop(e); if (mode === 'blocks') onSlot(i); else onColor(i); });
-    return b;
-  }
-  function drawBlocks() {
-    mode = 'blocks';
-    bar.replaceChildren(...blocks.map((b, i) => slotBtn(i, b.icon ?? el('span', null, b.label.slice(0, 2)), b.label)));
-  }
-  function drawColors() {
-    mode = 'colors';
-    const list = [{ color: null, label: 'Wash off paint' }, ...paint.map((c, i) => ({ color: c, label: `Colour ${i + 1}` }))];
-    bar.replaceChildren(...list.map((c, i) => { const s = el('i', c.color ? '' : 'wash'); if (c.color) s.style.background = c.color; return slotBtn(i, s, c.label); }));
-  }
-  drawBlocks();
+  // the hotbar is the shared inventory panel in its bar mode (kit/ui/panels: the sideways scroll with an arrow at an end
+  // that has more, the slot labels, the selected slot lifted); this part keeps what a slot means: a block, a colour
+  const blockItems = () => blocks.map((b, i) => ({ id: String(i), name: b.label, node: b.icon ?? el('span', null, b.label.slice(0, 2)) }));
+  const colorItems = () => [{ color: null, label: 'Wash off paint' }, ...paint.map((c, i) => ({ color: c, label: `Colour ${i + 1}` }))]
+    .map((c, i) => { const s = el('i', c.color ? '' : 'wash'); if (c.color) s.style.background = c.color; return { id: String(i), name: c.label, node: s }; });
+  const bar = ctx.ui.panels.inventory({ id: 'build-hotbar', mode: 'bar', into: root, barId: 'gf-hotbar', slotClass: 'gf-slot', maxWidth: 'calc(100vw - 132px)', keys: keys ? 'labels' : false,
+    words: { more: 'More blocks' }, items: blockItems(), onSelect: ({ index }) => { if (mode === 'blocks') onSlot(index); else onColor(index); } });
+  root.append(tools);
 
-  // the sign editor
-  const card = el('div', 'card'), h = el('h3', null, 'Write on the sign'), ta = el('textarea');
-  ta.id = 'gf-sign-text'; ta.rows = 3; ta.maxLength = 60; ta.placeholder = 'Up to 3 short lines'; ta.spellcheck = false;
-  const count = el('small'), ok = el('button', null, 'Put it up'), cancel = el('button', 'ghost', 'Cancel');
-  ok.id = 'gf-sign-ok'; cancel.id = 'gf-sign-cancel';
-  const row = el('div', 'row'), btns = el('div'); btns.style.cssText = 'display:flex;gap:8px';
-  btns.append(cancel, ok); row.append(count, btns);
-  card.append(h, ta, row); editor.append(card);
-  let signCb = null;
+  // the sign editor is the shared text input: three lines, sixty characters, Ctrl+Enter or the button puts it up
+  let signH = null;
   const keysHint = ctx.input?.touch ? '' : ' · Ctrl+Enter puts it up';
-  const counter = () => { const lines = ta.value.split('\n'); if (lines.length > 3) ta.value = lines.slice(0, 3).join('\n'); count.textContent = `${ta.value.length}/60${keysHint}`; };
-  ta.addEventListener('input', counter);
-  // Enter starts a new line, up to three; on the third it does nothing, so the editor never closes under someone still
-  // typing (play-test 2026-10-09: Enter on line 3 put the sign up and the next keys moved the player). Ctrl+Enter or
-  // the button puts it up; Escape cancels.
-  ta.addEventListener('keydown', e => {
-    e.stopPropagation();
-    if (e.key === 'Escape') { e.preventDefault(); close(null); }
-    else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); close(ta.value); }
-    else if (e.key === 'Enter' && ta.value.split('\n').length >= 3) e.preventDefault();
-  });
-  ta.addEventListener('keyup', e => e.stopPropagation());
-  ok.addEventListener('click', e => { stop(e); close(ta.value); });
-  cancel.addEventListener('click', e => { stop(e); close(null); });
-  editor.addEventListener('pointerdown', e => { if (e.target === editor) { stop(e); close(null); } });
-  let relock = false;
-  function close(text) {
-    if (!editor.classList.contains('on')) return;
-    editor.classList.remove('on'); ctx.ui.cover('sign', false);
-    const cb = signCb; signCb = null;
-    try { ta.blur(); } catch {}
-    ctx.renderer?.domElement?.focus?.();
-    // first person: the editor gave the mouse back to write; the key or click that closed it takes it again
-    if (relock) { relock = false; try { const r = ctx.renderer?.domElement?.requestPointerLock?.(); r?.catch?.(() => {}); } catch {} }
-    cb?.(text === null ? null : text);
-  }
 
   return {
     root,
     select(i, tool) {
       // switching between blocks and colours starts the bar at its first slot ("wash off" stays in view)
-      if (tool === 'paint' && mode !== 'colors') { drawColors(); bar.scrollLeft = 0; }
-      if (tool !== 'paint' && mode !== 'blocks') { drawBlocks(); bar.scrollLeft = 0; }
-      for (const b of bar.children) b.classList.toggle('on', Number(b.dataset.i) === i);
+      if (tool === 'paint' && mode !== 'colors') { mode = 'colors'; bar.update({ items: colorItems(), selected: i, scroll: 0 }); }
+      else if (tool !== 'paint' && mode !== 'blocks') { mode = 'blocks'; bar.update({ items: blockItems(), selected: i, scroll: 0 }); }
+      else bar.select(i);
       breakBtn.classList.toggle('on', tool === 'break');
       paintBtn.classList.toggle('on', tool === 'paint');
-      reveal(i);
     },
     say(text) { name.textContent = text; name.classList.add('on'); clearTimeout(nameT); nameT = setTimeout(() => name.classList.remove('on'), 1300); },
     /** Open the sign editor with the words a sign has now; cb(text | null). */
     editSign(text, cb) {
-      signCb = cb; ta.value = text ?? ''; counter();
-      // first person with the mouse taken: give it back, so the words can be typed and OK clicked
-      relock = !!document.pointerLockElement;
-      if (relock) { try { document.exitPointerLock(); } catch {} }
-      editor.classList.add('on'); ctx.ui.cover('sign', true);
-      setTimeout(() => { try { ta.focus(); ta.select(); } catch {} }, 30);
+      signH = ctx.ui.panels.input({ id: 'sign', domId: 'gf-sign-editor', ids: { field: 'gf-sign-text', ok: 'gf-sign-ok', cancel: 'gf-sign-cancel' }, title: 'Write on the sign', lines: 3, maxLength: 60, value: text ?? '',
+        words: { ok: 'Put it up', cancel: 'Cancel', placeholder: 'Up to 3 short lines', hint: keysHint.replace(/^ · /, '') } });
+      signH.done.then(v => cb?.(v === null ? null : v));
       onSign?.(true);
     },
-    get editing() { return editor.classList.contains('on'); },
-    closeSign: () => close(null),
+    get editing() { return !!signH?.open; },
+    closeSign: () => signH?.close(null),
     get mode() { return mode; },
-    observe: () => ({ mode, hotbar: [...bar.children].map(b => ({ i: Number(b.dataset.i), on: b.classList.contains('on'), title: b.title })), break: breakBtn.classList.contains('on'), paint: paintBtn.classList.contains('on'), signOpen: editor.classList.contains('on') }),
-    dispose() { root.remove(); name.remove(); editor.remove(); style.remove(); ctx.ui.root.classList.remove('gf-hotbar'); },
+    observe: () => ({ mode, hotbar: [...root.querySelectorAll('.gfp-bar .gfp-slot')].map(b => ({ i: Number(b.dataset.i), on: b.classList.contains('on'), title: b.title })), break: breakBtn.classList.contains('on'), paint: paintBtn.classList.contains('on'), signOpen: !!signH?.open }),
+    dispose() { bar.close(); signH?.close(null); root.remove(); name.remove(); style.remove(); ctx.ui.root.classList.remove('gf-hotbar'); },
   };
 }

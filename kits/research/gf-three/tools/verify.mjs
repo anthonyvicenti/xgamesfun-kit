@@ -137,6 +137,7 @@ import { checkLikeness, likenessTargets } from './lib/likeness-check.mjs';
 import { STEP_PRE, STEP_POST } from './lib/stepped.mjs';
 import { lockFor } from './lib/lock.mjs';
 import { checkGameTests } from './lib/game-tests.mjs';
+import { shortRound, flowPulse } from './lib/flow-signs.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
@@ -335,7 +336,8 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   try {
     if (needRound) {
     // the solo round: real clicks and keys; a 25 s round through Studio's own override mechanism
-    S = await newPage('solo', { audio: true, overrides: { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: roundSeconds }] } });
+    // (a flow with a clock of its own says what else the short round cuts: tools/lib/flow-signs.mjs shortRound)
+    S = await newPage('solo', { audio: true, overrides: { patches: shortRound(game, roundSeconds) } });
     solo = S;
     const p = S.page;
     await p.goto(`${srv.url}?seed=7&bots=3&gf-calm=6`, { waitUntil: 'load' });   // gf-calm: bots stand still for the walk test
@@ -522,8 +524,15 @@ export async function verify(gameDir, { quick = false, out = null, log = console
       const soloMoved = Math.max(0, ...vals) >= 2;   // the bell's results: a score that built up (a lone 1 can be a flicker)
       const pages = fp?.record.pages ?? [];
       const fairMoved = pages.some(pg => pg.scoreMoved);
+      // a flow that says what "something happens" is for it (kit/loops/<id> → signs.pulse: in a turn-taking game, moves
+      // played in turn) is judged by that, on the solo round; a timed round by its scores, below
+      const fpulse = flowPulse(game, sr);
+      if (fpulse) add(12, 'something happens', fpulse.ok, fpulse.ok
+        ? `${fpulse.pulse.what}: ${fpulse.n} in the solo round (the ${fpulse.flow} flow's own sign, needs ${fpulse.pulse.min}); results ${vals.join('/') || '—'}`
+        : `${fpulse.pulse.what}: ${fpulse.n} in the solo round with bots (needs ${fpulse.pulse.min}; the ${fpulse.flow} flow's own sign, snapshot().flow ${JSON.stringify(sr?.flow ?? null).slice(0, 200)}). The game does nothing a player can see. ${fpulse.pulse.fix}`,
+        { seconds: 0, from: 'the solo round' });
       const ok = soloMoved || fairMoved;
-      add(12, 'something happens', ok, ok
+      if (!fpulse) add(12, 'something happens', ok, ok
         ? `scores moved: solo round ${vals.join('/') || '—'}; fair-play pages max score ${pages.map(pg => pg.maxScore ?? 0).join(', ')}, held moved ${pages.map(pg => `${pg.scoreHeldSec ?? 0} s`).join(', ')}`
         : `no score moved, built up to 2 and stayed (≥ 1.5 s) in ${1 + pages.length} rounds with 3 bots (solo results ${vals.join('/') || 'none'}; fair-play pages ${pages.map(pg => `${pg.mode} ${pg.observed} s`).join(', ')}; ${pages.reduce((n, pg) => n + (pg.knocks ?? 0), 0)} knocks). ` +
           'The game does nothing a player can see. Check the score code in rules.update against each mechanic\'s API in its README (e.g. paint.coverageOf(owner) returns a share 0..1, not an object; paint.coverage() lists {owner, cells, share}); ' +
@@ -873,7 +882,7 @@ async function aliveOnly(dir, { rec, outDir, add, log, t0, lap }) {
     let look = null;
     const withBots = (async () => {
       const t = Date.now(), roundSeconds = 25;
-      const T = await newPage('solo', { overrides: { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: roundSeconds }] } });
+      const T = await newPage('solo', { overrides: { patches: shortRound(game, roundSeconds) } });
       try {
         await T.page.goto(`${srv.url}?seed=7&bots=3&gf-calm=6`, { waitUntil: 'load' });
         await until(async () => (await phase(T.page)) === 'lobby', 90000, 'the lobby');

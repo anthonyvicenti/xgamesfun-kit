@@ -173,6 +173,10 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null,
   push((await provider(gameDir, 'core/slots.js')).slotsFor(cfg), 'core');
   push(mechSlots, 'mechanics');
   push((await provider(gameDir, 'controller/slots.js')).slotsFor(cfg), 'controller');
+  // the optional kit modules this game carries (modules.extras; a folder with a module.js: kit/vfx/module.js documents
+  // the contract): their slots, and their preview entries below. A new module needs no line here.
+  const extraMods = [];
+  if (!forge) for (const id of mods.extras ?? []) { const m = await provider(gameDir, `${id}/module.js`); extraMods.push(m); push(m.slotsFor?.(cfg), id); }
 
   // files under assets/ that no declaration covers still become slots (coverage rule 1)
   const covered = new Set(slots.map(s => s.source?.file));
@@ -241,6 +245,7 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null,
   const showcase = [
     ...roles.map(r => ({ id: `character.${r}`, label: r === 'player' ? 'Player character' : `${r} character`, query: `?gf-show=character.${r}`, slots: [`character.body.${r}`, `character.tint.${r}`, `character.height.${r}`].filter(has) })),
     ...propNames.map(n => ({ id: `prop.${n}`, label: n.replace(/^./, c => c.toUpperCase()), query: `?gf-show=prop.${n}`, slots: [`prop.${n}`, `prop.${n}.size`].filter(has) })),
+    ...extraMods.flatMap(m => m.showcase?.(cfg, has) ?? []),
     { id: 'world', label: 'The world', query: '?gf-show=world', groups: ['world'] },
     { id: 'look', label: 'Look and light', query: '?gf-show=look', groups: ['look'] },
   ];

@@ -42,6 +42,7 @@ Also append progress lines to `out/progress.jsonl` as you work, e.g. `{"text":"M
 ## Engine and honesty
 
 The pitch's rules hold here too, and the checker enforces them on what you write:
+- **Loop.** Keep each card's `spec.loop` (how the game is played; `catalog.json` → `loops`). A spec's loop is a ready one with that loop's shape (checked); when the creator asks for one that is not built (taking turns, saved progress), say so in `reply` and keep the closest ready loop.
 - **Engine.** Keep each card's `spec.engine` (`party` for silly party games, `scenic` for serious, scenic or action games; `catalog.json` → `engineGuide`). A spec's `world.template`, `look.preset` and `camera` are its engine's (`engines.<id>`). When the creator asks to change the feel ("make it more serious", "make it silly"), changing the engine is allowed: then change the world, look and camera to that engine's too.
 - **Promise only what the spec keeps** (`hook`, `howItPlays`, `v1.has`; for a locked spec its `hook`, `rules.summary` and `round.winBy`): levels, rooms, stages, portals or islands need the `levels` mechanic; several islands or worlds need the `isles` or `dungeon` world; a sword, a slash or melee needs `melee`; a boss fight needs `boss`; loot needs `loot`. If the kit doesn't have one ready, say what the game really does and put the rest in `v1.notYet` (for a locked spec, `notInV1`).
 - **Named games.** Keep `research.signature` from the pitch. When the creator asks for something a `missing` row names, say so first in `reply`.

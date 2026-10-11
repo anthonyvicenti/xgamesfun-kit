@@ -196,10 +196,15 @@ export async function boot({ rules = {} } = {}) {
     // ---- players, bots and the round ----
     const botParam = params.get('bots');
     const max = game.players?.max ?? 4;
-    const botCount = backdrop ? 0 : botParam !== null ? Math.max(0, Math.min(7, Number(botParam) || 0)) : game.players?.bots === false ? 0 : max - 1;
+    // the flow (open builder M4-C; kit/loops/<id>): config/game.json → round.flow names how the round is played; a game
+    // that names none runs the timed round, the session's own default. Alone, bots fill the seats the flow says (a
+    // turn-taking game seats the fewest it can be played with, not every seat); ?bots=N asks for a number outright.
+    const flowId = game.round?.flow;
+    const flowMod = typeof flowId === 'string' && flowId !== 'round' && !worldMode ? await import(`../loops/${flowId}/index.js`) : null;
+    const botCount = backdrop ? 0 : botParam !== null ? Math.max(0, Math.min(7, Number(botParam) || 0)) : game.players?.bots === false ? 0 : flowMod?.botsAlone?.(game.players ?? {}) ?? max - 1;
     const T = game.text ?? {};
     ctx.makeBot = p => createBrain(ctx, p, rng.fork(`bot:${p.id}`));
-    const session = createSession(ctx, { rules, spawnCharacter: mods.character.spawnCharacter, characterFor, rng, botCount, onPhase: ph => onPhase(ph), createPlayers });
+    const session = createSession(ctx, { rules, spawnCharacter: mods.character.spawnCharacter, characterFor, rng, botCount, onPhase: ph => onPhase(ph), createPlayers, flow: flowMod });
     ctx.round = {
       get phase() { return session.round.phase; }, get number() { return session.round.number; },
       get winners() { return session.round.winners; }, get reason() { return session.round.reason; },
@@ -257,7 +262,7 @@ export async function boot({ rules = {} } = {}) {
       onQuality: () => { if (!session.live) location.reload(); },
       // with friends the pause menu carries the room (gf-multiplayer 1.4.0, live.hud "game"): code, invite, leave, end round
       // End round goes through this game's own round end (the host owns it), so every copy reports its real score
-      room: session.live ? { info: () => net.room, leave: () => { menu.close(); net.leave(); }, end: worldMode ? null : () => { menu.close(); session.end('ended'); canvas.focus(); },
+      room: session.live ? { info: () => net.room, leave: () => { menu.close(); net.leave(); }, end: worldMode ? null : () => { menu.close(); session.end('ended', null, true); canvas.focus(); },
         // watch then play (gf-multiplayer 1.6.0): Go live, and the stream's state while it is on
         // (net.live is undefined on a gf/mp older than 1.6.0: the menu then offers no Go live)
         live: () => net.live ?? null, goLive: () => { menu.close(); canvas.focus(); net.live?.start?.(); }, showLive: () => { menu.close(); canvas.focus(); net.live?.share?.(); } } : null,
@@ -302,6 +307,8 @@ export async function boot({ rules = {} } = {}) {
       rules: (() => { try { return rules.observe?.(ctx) ?? null; } catch { return null; } })(),
       modules: { standins: mods.standins, mechanics: list.map(m => ({ id: m.id, standin: m.standin })) },
       net: session.gateBlock(ui.covered),
+      // a flow that publishes what it does (kit/loops/<id>: whose turn, turns taken): what the checks read as its sign
+      ...(session.flow.observe ? { flow: session.flow.observe() } : {}),
       // watch then play (gf-multiplayer 1.6.0): a viewer's copy, who it follows and whether the camera has them
       watch: session.watching ? { follow: session.watch?.follow ?? null, live: !!session.watch?.live, target: watchCam.target, camera: camMode } : null,
       world: worldMode ? { status: net.status ?? null, voxel: ctx.world.voxel?.stats?.() ?? null } : null,
@@ -318,6 +325,7 @@ export async function boot({ rules = {} } = {}) {
       coverage: () => coverageReport(scene),
       slots: () => assets.stats(scene, camera),
       controls: () => JSON.parse(JSON.stringify(controlsReport())),
+      panels: () => JSON.parse(JSON.stringify(ui.panels.observe())),      // the shared panels (CONTRACT §6j)
       menu: () => JSON.parse(JSON.stringify(menu.observe())),      // verify checks 20 and 22 (CONTRACT §6g)
       hud: () => JSON.parse(JSON.stringify({ phase: session.round.phase, covered: ui.covered, ...hud.observe() })),   // verify check 21
       looks: () => JSON.parse(JSON.stringify(looksReport())),
@@ -416,7 +424,7 @@ export async function boot({ rules = {} } = {}) {
       if (menu.paused && !session.live && ['playing', 'countdown'].includes(session.round.phase)) {
         input.enabled = false; input.update();
         hud.update(0, { phase: session.round.phase, covered: true });
-        ui.update(0, { left: session.round.phase === 'playing' ? ctx.time.left : null, players: ctx.players.list(), plates: [] });
+        ui.update(0, { left: session.round.phase === 'playing' && Number.isFinite(ctx.time.left) ? ctx.time.left : null, players: ctx.players.list(), plates: [] });
         if (drawn) draw();
         return;
       }
@@ -432,13 +440,15 @@ export async function boot({ rules = {} } = {}) {
       if (phase === 'countdown') ui.countdown(Math.max(1, Math.ceil(session.round.countdown)));
       session.tick(dt);
       const R = game.round ?? {};
-      ctx.time.round = session.round.clock; ctx.time.left = Math.max(0, (R.seconds ?? 120) - session.round.clock);
+      // the clock the HUD shows is the flow's when it has its own (a turn's; Infinity: none), else the round's
+      ctx.time.round = session.round.clock; ctx.time.left = session.flow.hudLeft ? session.flow.hudLeft() : Math.max(0, (R.seconds ?? 120) - session.round.clock);
       // bots (the host's)
       if (ctx.host) for (const p of ctx.players.bots()) {
         if (!p.owned || !p.bot) continue;
         p.bot.begin();
         // QA only: ?gf-calm=<seconds> keeps bots still at the start of each round, so a scripted walk can't be knocked over
-        if (session.round.phase === 'playing' && !(calm > 0 && session.round.clock < calm)) { try { if (rules.bot) rules.bot(ctx, p, dt); else defaultBot(ctx, p); } catch (e) { console.error(e); } }
+        // a flow may hold a bot (a turn-taking game's bot acts on its own turn only): flow.bot → false
+        if (session.round.phase === 'playing' && !(calm > 0 && session.round.clock < calm)) { try { if (session.flow.bot && !session.flow.bot(p, dt)) { /* held, or the flow played for it */ } else if (rules.bot) rules.bot(ctx, p, dt); else defaultBot(ctx, p); } catch (e) { console.error(e); } }
         else p.bot.stop();
         p.bot.finish(dt);
       }
@@ -469,7 +479,7 @@ export async function boot({ rules = {} } = {}) {
         const vis = !!shown && plate.z > -1 && plate.z < 1 && Math.abs(plate.x) < 1.05 && Math.abs(plate.y) < 1.05;
         plates.push({ id: p.id, text: p.name, color: p.color, x: (plate.x * 0.5 + 0.5) * w, y: (-plate.y * 0.5 + 0.5) * h, visible: vis });
       }
-      ui.update(dt, { left: phase === 'playing' ? ctx.time.left : null, players: ctx.players.list(), plates });
+      ui.update(dt, { left: phase === 'playing' && Number.isFinite(ctx.time.left) ? ctx.time.left : null, players: ctx.players.list(), plates });
       hud.update(dt, { phase, covered: ui.covered });
       // the home menu: the camera circles the player's character, which stands right of the menu column; a world
       // drifts over the island instead (behind the kit's menu alone, behind the party page's world card with friends)

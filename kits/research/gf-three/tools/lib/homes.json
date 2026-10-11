@@ -64,7 +64,14 @@
       "home": "invariant",
       "run": "build",
       "rule": "The round is heard, within the loudness targets, through the gf-audio kit.",
-      "fix": "Play sounds only through ctx.audio with ids listed in assets.json → sounds → sounds. Do not play a sound every frame, and do not raise the bus levels to pass."
+      "fix": "Play sounds only through ctx.audio with ids listed in assets.json → sounds → sounds. Do not play a sound every frame, and do not raise the bus levels to pass.",
+      "also": [
+        {
+          "home": "part",
+          "part": "loop:*",
+          "what": "the solo round the gate listens to is cut to 25 s through round.seconds and what the flow's signs.short adds (a turn clock of 4 s, so pieces land inside the window); the targets and the kit's levels are the same for every flow"
+        }
+      ]
     },
     "8": {
       "name": "swap proof",
@@ -99,17 +106,24 @@
     "12": {
       "name": "something happens",
       "home": "part",
-      "part": "loop:round",
+      "part": "loop:*",
       "run": "build",
-      "rule": "In three rounds with bots some score moves and builds up: a game in which nobody ever scores is dead.",
-      "fix": "Check the score code in rules.update against each mechanic's README, make rules.bot act (ctx.bots.target / attack, p.bot.seek), and do not make scoring depend on a score that starts at 0. Play ?bots=3&seed=1 and watch the scoreboard."
+      "rule": "Something happens, by the loop's own sign (kit/loops/<id> → signs.pulse). A timed round, a level run and an endless session: in three rounds with bots some score moves and builds up. Taking turns: moves are played in turn in the solo round. A match: a round of it ends with somebody ahead.",
+      "fix": "A timed round: check the score code in rules.update against each mechanic's README, make rules.bot act (ctx.bots.target / attack, p.bot.seek), and do not make scoring depend on a score that starts at 0. Play ?bots=3&seed=1 and watch the scoreboard. A turn-taking game: the detail says what the flow counted; rules.botMove must return a move rules.move accepts."
     },
     "13": {
       "name": "controls work",
       "home": "invariant",
       "run": "build",
       "rule": "Every control config/game.json lists does something the player sees on their own screen.",
-      "fix": "Make the control work in rules.js (for a shot: prj.fire(p) or prj.stream(p, on) with no direction lands on the crosshair). If it cannot work, take it out of config/game.json → controls so the HUD stops promising it."
+      "fix": "Make the control work in rules.js (for a shot: prj.fire(p) or prj.stream(p, on) with no direction lands on the crosshair). If it cannot work, take it out of config/game.json → controls so the HUD stops promising it.",
+      "also": [
+        {
+          "home": "part",
+          "part": "loop:turns",
+          "what": "when no mechanic exposes anything to walk to, a press of interact counts when it reached the flow (a move played, or refused with a reason on screen: signs.pressed), never because the turn clock ran"
+        }
+      ]
     },
     "14": {
       "name": "looks honoured",
@@ -124,7 +138,14 @@
       "part": "mechanic:*",
       "run": "build",
       "rule": "Each mechanic in the spec does its job in a real round, and the thing to defend is readable on screen at round start with its health on the HUD. In a first-person wave game (forge), a new player who stands and fights is not felled by the first wave, and enemies fall to the starting weapon.",
-      "fix": "The detail names the mechanic and the sign that was missing. Wire that mechanic's callbacks in rules.js as its README shows. A waves target is a zone name from config/world.json → zones, never a prop's name; stand the thing to defend in the centre zone. A first wave that fells the player: make forge.waves[0] smaller, slower to rise or fewer at once (enemies, delay, spawnEvery, maxAlive, attackers) and ramp the later waves; never answer it with one-hit kills (check 16)."
+      "fix": "The detail names the mechanic and the sign that was missing. Wire that mechanic's callbacks in rules.js as its README shows. A waves target is a zone name from config/world.json → zones, never a prop's name; stand the thing to defend in the centre zone. A first wave that fells the player: make forge.waves[0] smaller, slower to rise or fewer at once (enemies, delay, spawnEvery, maxAlive, attackers) and ramp the later waves; never answer it with one-hit kills (check 16).",
+      "also": [
+        {
+          "home": "part",
+          "part": "loop:*",
+          "what": "a flow that keeps state of its own (turns, match) is sampled and judged by its own manifest's signs, like a mechanic: the turn passes and a move is played; the next round of a match starts"
+        }
+      ]
     },
     "16": {
       "name": "hits read",

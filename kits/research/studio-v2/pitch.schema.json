@@ -211,6 +211,161 @@
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
       "description": "The id of the option the cards' specs already assume."
+     },
+     "about": {
+      "enum": [
+       "together",
+       "body"
+      ],
+      "description": "Only on the two questions the pitch step holds (play.together, play.body). together: how friends play (against each other, together, in teams, taking turns, each on their own board). body: what each player is on screen when the game has no character to walk (a board, a cursor, a vehicle, a hand of cards). Leave it out on any other question."
+     }
+    }
+   }
+  },
+  "play": {
+   "type": "object",
+   "required": [
+    "loop",
+    "together",
+    "body"
+   ],
+   "additionalProperties": false,
+   "description": "How the creator's idea is played, decided before the cards (open builder M4-B). The pitch step (research/gf-three/loop/pitch-rules.mjs) holds a new pitch to it whenever catalog.json lists loops: the loop the idea needs and whether the kit has it, how friends play together, what each player is on screen, and what the idea needs that the kit lacks.",
+   "properties": {
+    "loop": {
+     "type": "object",
+     "required": [
+      "wants",
+      "why"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "wants": {
+       "type": "string",
+       "pattern": "^[a-z][a-z0-9-]{0,23}$",
+       "description": "The loop the idea needs, by how things move and who acts when: a catalog loop id (catalog.json → loops, ready or planned), or \"none\" when none of them is how this idea is played."
+      },
+      "why": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 200,
+       "description": "One sentence: how things move and who acts when in the idea."
+      },
+      "closest": {
+       "type": "string",
+       "pattern": "^[a-z][a-z0-9-]{0,23}$",
+       "description": "When wants is planned or none: the ready loop card 1 uses instead."
+      },
+      "lost": {
+       "type": "array",
+       "maxItems": 4,
+       "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+       },
+       "description": "When wants is planned or none: what the creator loses by playing it on the closest loop, in plain words. Each is also in card 1's v1.notYet, and the reply starts with one."
+      }
+     }
+    },
+    "together": {
+     "type": "object",
+     "required": [
+      "how"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "how": {
+       "enum": [
+        "versus",
+        "coop",
+        "teams",
+        "turns",
+        "own-board"
+       ],
+       "description": "How friends play in card 1: against each other, together, in teams, taking turns, or each on their own board."
+      },
+      "from": {
+       "type": "string",
+       "minLength": 2,
+       "maxLength": 120,
+       "description": "The creator's own words that settle it, copied exactly from the prompt (checked). Leave it out when their words do not say: then one question asks (about: together), with the cards' choice as its default."
+      }
+     }
+    },
+    "body": {
+     "type": "object",
+     "required": [
+      "what"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "what": {
+       "enum": [
+        "character",
+        "vehicle",
+        "board",
+        "cursor",
+        "cards",
+        "other"
+       ],
+       "description": "What a player is in the idea: a character that walks about, or a game with no body of that kind (a vehicle, a piece or a hand on a board, a cursor, a hand of cards)."
+      },
+      "from": {
+       "type": "string",
+       "minLength": 2,
+       "maxLength": 120,
+       "description": "Only when what is not character: the creator's own words that say how each player is shown on screen, copied exactly from the prompt (checked). Leave it out when they do not say: then one question asks (about: body)."
+      }
+     }
+    },
+    "needs": {
+     "type": "array",
+     "minItems": 2,
+     "maxItems": 8,
+     "description": "When the creator names no existing game (a named game has research.signature instead): the 2-8 things their words ask for, each held against card 1. The checker holds card 1 to it as it holds a named game to its signature.",
+     "items": {
+      "type": "object",
+      "required": [
+       "feature",
+       "support",
+       "how"
+      ],
+      "additionalProperties": false,
+      "properties": {
+       "feature": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120,
+        "description": "One thing the creator's words ask for, e.g. 'cars you drive', 'a track with a road', 'three laps and a finish order'."
+       },
+       "support": {
+        "enum": [
+         "supported",
+         "approximated",
+         "missing"
+        ]
+       },
+       "by": {
+        "type": "array",
+        "maxItems": 4,
+        "items": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9-]{0,39}$"
+        },
+        "description": "supported or approximated: what in card 1's spec does it (checked): a mechanic id the spec lists, its world.template, its loop, or one of camera, players, characters, props, look, rules (the game's own rules.js: a number or a condition, never a missing part)."
+       },
+       "how": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240,
+        "description": "supported or approximated: how close; missing: what the kit lacks."
+       },
+       "core": {
+        "type": "boolean",
+        "description": "true for the 1-3 things without which it is not the game the creator asked for."
+       }
+      }
      }
     }
    }

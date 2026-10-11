@@ -22,6 +22,9 @@
 //   ui.pop(text, x, y, color?)                  a short word that rises and fades at a screen point ("+1" for a kill)
 //   meter handle .flash()                       the meter pulses once (the local player was hurt)
 //   ui.goal(text | null)                        the goal line under the clock (null: the game's own, text.goal)
+//   ui.panels.choice | shop | inventory | dialogue | input (opts) → handle   the shared panels (./panels/panels.js, CONTRACT §6j):
+//                                               cards to pick, a shop, a hotbar or item grid, a dialogue, a text field. They show
+//                                               and return a choice; they never pause the round and hold no game logic
 //
 // The kit's own HUD (the player card, health, state, the menu button: ./hud.js) and the home menu (./menu.js) sit on
 // this layer too (CONTRACT §6g). Meters from ui.meter go in the player card.
@@ -32,6 +35,7 @@
 //   ui.banner(text, seconds, {sub, tone: 'blood' | 'ember' | 'moon', soft})   a second line, a colour, and `soft`: the
 //                                               kit's own word (a wave starting), which never replaces a banner showing
 import { applyTheme, themeOf } from './theme.js';
+import { createPanels } from './panels/panels.js';
 
 const CSS = `
 #gf-ui{position:fixed;inset:0;pointer-events:none;font:600 15px/1.25 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--gf-text,#fff);z-index:5;user-select:none;-webkit-user-select:none}
@@ -133,7 +137,11 @@ export function createUI(ctx, { text = {}, controls = {}, theme = null } = {}) {
     /** For the kit's HUD and menu only. */
     parts: { meters, card },
     /** The kit's menu (or anything else of the kit's) covers the game: the input reads idle under it. */
-    cover(name, on) { if (on) covers.add(name); else covers.delete(name); },
+    cover(name, on) {
+      if (on) covers.add(name); else covers.delete(name);
+      // a panel that does not take the game's input (a bar, cards at the bottom) yields to the menu and the results (panels/css.js)
+      root.classList.toggle('gf-yield', [...covers].some(n => !String(n).startsWith('panel:')));
+    },
     goal(t) { goalFn?.(t); },
     /** The HUD's goal setter (boot wires it). */
     set goalTo(fn) { goalFn = fn; },
@@ -235,6 +243,7 @@ export function createUI(ctx, { text = {}, controls = {}, theme = null } = {}) {
       else stickEl.style.display = 'none';
     },
   };
+  api.panels = createPanels(ctx, api);
   return api;
 }
 

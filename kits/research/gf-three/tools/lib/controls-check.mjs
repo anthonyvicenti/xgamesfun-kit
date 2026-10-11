@@ -47,6 +47,7 @@
 // "as fast as it can". Keys, clicks and mouse moves are real either way. An older kit (no step) runs on the wall
 // clock, as before; the record's `clock` says which.
 import { prepareStepped, stepUrl, clockFor, mouseTaken } from './stepped.mjs';
+import { flowSigns, flowIdOf } from './flow-signs.mjs';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 /** Stepped time: the game time between two frames taken while a button is held. */
 export const FRAME_MS = 60;
@@ -205,6 +206,14 @@ async function interact({ p, obs, game, words, shot, L, clock }) {
     const before = JSON.stringify([o0.shared, o0.rules, o0.scores, o0.controls?.me]);
     await p.keyboard.press('KeyE'); await clock.wait(500);
     const o1 = await obs();
+    // a flow that says what a press that reached it looks like (kit/loops/<id> → signs.pressed: in a turn-taking game
+    // a move played, or one refused with a reason on screen) is judged by that; a clock running is not a change
+    const pressed = flowSigns(game)?.pressed ?? null;
+    if (pressed) {
+      let went = false; try { went = pressed(o0, o1) === true; } catch { went = false; }
+      return { action: 'interact', words, ok: went, why: went ? `E reached the ${flowIdOf(game)} flow: a move was played or refused with a reason (no mechanic exposes interactables; the rules handle it)`
+        : `E did nothing the ${flowIdOf(game)} flow saw: no move was played and none was refused (the player was alone, so it was their turn). Call ctx.turns.submit(move) from the player's input in rules.update (ctx.me.actions.interact.pressed), or remove controls.interact from config/game.json` };
+    }
     const changed = JSON.stringify([o1.shared, o1.rules, o1.scores, o1.controls?.me]) !== before;
     return { action: 'interact', words, ok: changed, why: changed ? 'E changed the game state (no mechanic exposes interactables; the rules handle it)' : 'E changed nothing, and no mechanic exposes anything to interact with (pickup spots that take a press, a free station, a carry item): bind interact in a mechanic (pickup collect "both", station action "interact", carry grabAction "interact") or in rules.js, or remove controls.interact' };
   }

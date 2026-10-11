@@ -80,18 +80,6 @@ export function slotsFor(m = {}, cfg = {}) {
 }
 
 const r2 = v => Math.round(v * 100) / 100;
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const CSS = `
-#gf-ui .gf-loot{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
-#gf-ui .gf-loot h3{margin:0;font-size:16px;font-weight:800;text-shadow:0 2px 0 #0008;letter-spacing:.02em}
-#gf-ui .gf-loot-row{display:flex;gap:10px}
-#gf-ui .gf-loot-card{pointer-events:auto;cursor:pointer;width:164px;min-height:92px;padding:10px 12px;border-radius:14px;border:2px solid #ffffff40;background:var(--gf-panel,#1c2133e6);color:#fff;font:600 13px/1.25 system-ui,sans-serif;text-align:left;box-shadow:0 6px 18px #0006;display:flex;flex-direction:column;gap:4px;transition:transform .12s,border-color .12s}
-#gf-ui .gf-loot-card:hover{transform:translateY(-3px);border-color:var(--gf-accent,#ffd23f)}
-#gf-ui .gf-loot-card b{font-size:11px;opacity:.7}
-#gf-ui .gf-loot-card strong{font-size:15px;font-weight:800}
-#gf-ui .gf-loot-card.picked{border-color:var(--gf-accent,#ffd23f);background:#2d3550}
-@media (max-width:640px){#gf-ui .gf-loot{bottom:120px}#gf-ui .gf-loot-card{width:104px;min-height:80px;font-size:12px;padding:8px}}
-`;
 
 export function create(ctx, params = {}) {
   const P = { ...D, ...params };
@@ -102,7 +90,7 @@ export function create(ctx, params = {}) {
   const view = new Map();        // every copy: id → {id, kind, x, z, obj, ox, oz, t}
   const pending = new Map();     // drop id → time a take was asked for (no spam)
   const rnd = () => ctx.rng();
-  let S = null, lastE, nextId = 1, lastList = null, taken = 0, dropped = 0, opened = 0, picks = 0, offerSerial = 0, botPickAt = new Map(), cards = null, shownSerial = 0, keyHandler = null, promptOn = null;
+  let S = null, lastE, nextId = 1, lastList = null, taken = 0, dropped = 0, opened = 0, picks = 0, offerSerial = 0, botPickAt = new Map(), cardsH = null, shownSerial = 0, promptOn = null;
   const stats = { coins: 0, potions: 0, weapons: 0, chests: 0 };
 
   // ---------- host ----------
@@ -310,25 +298,18 @@ export function create(ctx, params = {}) {
     const want = Array.isArray(o) && o[0] > 0 && me && (S.p?.[me.id] ?? 0) < o[0] && ctx.round?.phase === 'playing' ? o[0] : 0;
     if (want === shownSerial) return;
     shownSerial = want;
-    cards?.remove(); cards = null;
-    if (keyHandler) { removeEventListener('keydown', keyHandler); keyHandler = null; }
-    if (!want || !ctx.ui?.root || typeof document === 'undefined') return;
-    if (!document.getElementById('gf-loot-css')) { const st = document.createElement('style'); st.id = 'gf-loot-css'; st.textContent = CSS; document.head.append(st); }
-    cards = document.createElement('div'); cards.className = 'gf-loot'; cards.id = 'gf-loot-cards';
+    cardsH?.close(); cardsH = null;
+    if (!want || !ctx.ui?.panels) return;
+    // the shared choice panel (kit/ui/panels, CONTRACT §6j): the cards sit at the bottom and the player keeps moving
     const ids = o[1];
-    cards.innerHTML = `<h3>${esc(V('upgradeTitle'))}</h3><div class="gf-loot-row">${ids.map((u, i) => `<button class="gf-loot-card" data-i="${i}" data-upgrade="${esc(u)}"><b>${i + 1}</b><strong>${esc(UPGRADES[u]?.name ?? u)}</strong><span>${esc(UPGRADES[u]?.text ?? '')}</span></button>`).join('')}</div>`;
-    const choose = i => {
-      if (!(i >= 0 && i < ids.length)) return;
-      cards?.querySelector(`[data-i="${i}"]`)?.classList.add('picked');
-      ctx.audio?.play(V('soundUpgrade'), { optional: true });
-      if (ctx.host) pick(me, want, i); else ctx.net.send('loot:pick', { s: want, i }, 'host');
-      setTimeout(() => { if (shownSerial === want) { cards?.remove(); cards = null; } }, 250);
-    };
-    cards.addEventListener('click', e => { const b = e.target.closest?.('.gf-loot-card'); if (b) { e.stopPropagation(); choose(Number(b.dataset.i)); } });
-    cards.addEventListener('mousedown', e => e.stopPropagation());
-    keyHandler = e => { const n = Number(e.key); if (n >= 1 && n <= ids.length && !e.repeat) choose(n - 1); };
-    addEventListener('keydown', keyHandler);
-    ctx.ui.root.append(cards);
+    cardsH = ctx.ui.panels.choice({
+      id: 'loot-cards', domId: 'gf-loot-cards', optionClass: 'gf-loot-card', placement: 'bottom', modal: false, title: V('upgradeTitle'),
+      cards: ids.map(u => ({ id: u, name: UPGRADES[u]?.name ?? u, text: UPGRADES[u]?.text ?? '', attrs: { upgrade: u } })),
+      onPick: ({ index }) => {
+        ctx.audio?.play(V('soundUpgrade'), { optional: true });
+        if (ctx.host) pick(me, want, index); else ctx.net.send('loot:pick', { s: want, i: index }, 'host');
+      },
+    });
   }
 
   const api = {
@@ -362,7 +343,7 @@ export function create(ctx, params = {}) {
     get stats() {
       const me = ctx.me;
       return { drops: view.size, kinds: Object.fromEntries(KIND_NAME.map(k => [k, [...view.values()].filter(v => KIND_NAME[v.kind] === k).length])), dropped: ctx.host ? dropped : null, taken: ctx.host ? taken : null, opened: ctx.host ? opened : null, picks: ctx.host ? picks : null,
-        coins: me ? api.coinsOf(me) : 0, upgrades: me ? api.upgradesOf(me) : [], offer: S?.o ?? null, cards: !!cards, ...stats };
+        coins: me ? api.coinsOf(me) : 0, upgrades: me ? api.upgradesOf(me) : [], offer: S?.o ?? null, cards: !!cardsH?.open, ...stats };
     },
     setup() {
       // drops from kills and from the boss (host)
@@ -370,7 +351,7 @@ export function create(ctx, params = {}) {
       waves?.onKill?.(k => { if (ctx.host) dropFor({ x: k.enemy.x, z: k.enemy.z, score: k.enemy.score ?? 10 }); });
       if (V('bossDrops')) boss?.onDown?.(k => { if (ctx.host) dropFor({ x: k.x, z: k.z, score: 100 }, { boss: true }); });
     },
-    reset() { host.clear(); for (const v of view.values()) { v.obj?.removeFromParent(); unsolid(v); } view.clear(); lastList = null; pending.clear(); botPickAt.clear(); offerSerial = 0; shownSerial = -1; cards?.remove(); cards = null; taken = dropped = opened = picks = 0; for (const k of Object.keys(stats)) stats[k] = 0; },
+    reset() { host.clear(); for (const v of view.values()) { v.obj?.removeFromParent(); unsolid(v); } view.clear(); lastList = null; pending.clear(); botPickAt.clear(); offerSerial = 0; shownSerial = -1; cardsH?.close(); cardsH = null; taken = dropped = opened = picks = 0; for (const k of Object.keys(stats)) stats[k] = 0; },
     update(dt) {
       if (!S) { if (!(ctx.shared && ctx.players && ctx.me)) return; S = ctx.shared.register('loot', { d: [], c: {}, u: {}, o: [0, []], p: {}, e: [0, 0, '', 0] }); }
       const playing = ctx.round?.phase === 'playing';
@@ -394,7 +375,7 @@ export function create(ctx, params = {}) {
       if (name === 'take' && Number.isFinite(d.i)) take(p, d.i, { press: d.e === 1 });
       if (name === 'pick' && Number.isFinite(d.s) && Number.isFinite(d.i)) pick(p, d.s, d.i);
     },
-    dispose() { root.removeFromParent(); cards?.remove(); if (keyHandler) removeEventListener('keydown', keyHandler); },
+    dispose() { root.removeFromParent(); cardsH?.close(); },
   };
   return api;
 }
