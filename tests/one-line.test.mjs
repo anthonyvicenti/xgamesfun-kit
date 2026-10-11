@@ -412,6 +412,21 @@ test('the one line is the same in README.md and docs/ONE-LINE.md, and every comm
   assert.ok((guide.match(/^If it fails/gm) ?? []).length >= 4, 'each step says what to do when it fails');
 });
 
+test('docs/TRY-IT.md carries the same one line, every picture it shows is in the repository, and it has the eight things and the seven checks', async () => {
+  const { existsSync } = await import('node:fs');
+  const fence = text => text.match(/```text\n([^\n]+)\n```/)?.[1];
+  const text = await readFile(new URL('../docs/TRY-IT.md', import.meta.url), 'utf8');
+  assert.equal(fence(text), fence(await readFile(new URL('../README.md', import.meta.url), 'utf8')), 'the line a person pastes is README.md\'s, character for character');
+  const pictures = [...text.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map(m => m[1]);
+  assert.ok(pictures.length >= 8, 'it shows pictures');
+  for (const p of pictures) assert.ok(existsSync(new URL(`../docs/${p}`, import.meta.url)), `docs/${p} is missing`);
+  assert.equal((text.match(/^### \d\. /gm) ?? []).length, 8, 'eight things to try');
+  assert.ok((text.match(/\*\*If it goes wrong, send us:\*\*/g) ?? []).length >= 7, 'each thing that can be tried says what to send');
+  const seven = text.slice(text.indexOf('## Seven more checks'), text.indexOf('## What to send'));
+  assert.equal((seven.match(/^\d\. \*\*/gm) ?? []).length, 7, 'the seven by-hand items of docs/CI.md section 8');
+  for (const must of ['## Windows: what to install', '## Mac: what to install', '/reload-plugins', 'giant-four', 'comes in the next update']) assert.ok(text.includes(must), must);
+});
+
 test('dev: the port and the browser can be set from the environment, and an option wins', async () => {
   const { devOptions } = await import('../commands/dev.mjs');
   assert.deepEqual(devOptions({}, {}), { port: null, open: true });

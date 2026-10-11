@@ -113,7 +113,7 @@ has an `assets.json` and adds its ignore entry at once. It reads the same JSON f
 
 ## Tool faults worked around here (requests to games.fun)
 
-Checked against the kits synced from games.fun e11b74df9 (2026-10-11). Deleted here because the loop library now covers them: `paths.GAME` for the rescue and play-repair messages, `playWords.REPORT_HOW` for the play-test brief's report line (`gamesfun_playtest_report`), a refusal that `step()` returns being marked told, `.gf-loop/**` in the game's ignore list decided by where the state file is (`ignoreStateDir`), `host.session` kept as `state.session` (the stop guard holds that session only); the reminder
+Checked against the kits synced from games.fun de2ea9313 (2026-10-11). Deleted here because the loop library now covers them: `paths.GAME` for the rescue and play-repair messages, `playWords.REPORT_HOW` for the play-test brief's report line (`gamesfun_playtest_report`), a refusal that `step()` returns being marked told, `.gf-loop/**` in the game's ignore list decided by where the state file is (`ignoreStateDir`), `host.session` kept as `state.session` (the stop guard holds that session only); the reminder
 round's words after a restart, the promises writer bound by hand, the rewriting of the loop's messages and of the play-tester's brief for this kit's
 folders and tools (`paths`, `toolNames`, `playWords`), stopping a running verify with its host (`host.signal`), and the roll-back work-around (`loop.cancel`). Fixed upstream and removed from this table: the forge
 HUD and forge-spec refusals now load by `importPart` (`spec-config.mjs`, `create.mjs`); `verify.mjs` imports the body judge
@@ -124,6 +124,9 @@ camera passed 27 of 27 with `--quick --release`).
 | Fault | Where | Work-around here | Fix asked for |
 |---|---|---|---|
 | `lookdev/capture.mjs` (check 9's contact sheet) is left out | `tools/verify.mjs` | none needed: `--quick` skips it and a full verify says it is absent | none |
+| Keeping a person's edits made while the play-tester had the game has no entry in the loop library | `loop/build-loop.mjs` (the `playtest` and `deliver` steps) | `gamesfun_keep_edits` (`mcp/tools/loop.mjs`) uses the library's own steps: it puts the play-tester's files back for the one step that reads the report (so the proof on record names those files), restores the kept files, and lets the delivery step's stale-proof rule send the loop to verify and then to the play-test again. With no report the round ends as an error, and the library then delivers with no play-test on the kept files (the kit's delivery answer says so by name) | `loop.keepEdits({wish})`: the wish on the state, from a handed play-test straight to verify, and a play-test afterwards also when the first round had no report |
+| A game of single sounds fails check 7 by half a decibel | `research/audio/qa-gate-v4.mjs` | the `giant-four` example lists check 7 under `knownFailing` | the next gate version (open builder wave 8, track V); then delete the entry |
+| `specs/dev-dodgeball.spec.json` names no `loop`, and a pitch card's spec must (`$.cards[n].spec.loop`) | `research/studio-v2/specs/` | none: the pitch round's message points to it as an example of a locked spec, where `loop` is optional | add `"loop": "round"` so the example is also a valid card spec |
 
 ## Examples
 

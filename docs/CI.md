@@ -132,10 +132,10 @@ What each system runs, the same on all three (run 38155626989 and the three afte
 | Step | party job | scenic job |
 |---|---|---|
 | `npm ci`, runner facts (processors, memory, Chrome's version) | yes | yes |
-| `npm test` (244 tests; 241 pass and 3 skip on every system) | yes | no |
+| `npm test` (252 tests on 2026-10-11; 3 skip on every system: the smoke test, one per example) | yes | no |
 | `sync-skills --check`, `doctor --skip-graphics`, `examples`, `catalog --all` | yes | no |
-| `create` from the example | `soak-squad` | `isle-run` |
-| `verify --quick --profile .github/ci-profile.json` | yes | yes |
+| `create` from the example | `soak-squad`, then `giant-four` (the turn-based board game, since 2026-10-11) | `isle-run` |
+| `verify --quick --profile .github/ci-profile.json` | yes, once for each of the two games | yes |
 | the evidence uploaded (`verdict.json`, the gate's `record.json` and its picture) | yes | yes |
 
 Inside verify, on every system and for both games:
