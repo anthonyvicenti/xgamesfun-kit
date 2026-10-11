@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { openSync, closeSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { catalog, catalogLines, SECTIONS } from '../../lib/catalog.mjs';
+import { catalog, catalogLines, DEFAULT_SECTIONS, SECTIONS } from '../../lib/catalog.mjs';
 import { createGame } from '../../lib/create.mjs';
 import { listExamples } from '../../lib/examples.mjs';
 import { listGames, resolveGame, shown, summarizeVerdict } from '../../lib/games.mjs';
@@ -23,12 +23,12 @@ async function reachable(url) {
 export const tools = [
   {
     name: 'gamesfun_catalog',
-    description: 'What the gf-three kit can build: mechanics (with their params), world templates and sizes, look presets, character bodies, props, clips, fair-play defaults. Every game spec must stay inside it. Default sections: mechanics and worlds.',
+    description: 'What the gf-three kit can build: loops (how a game is played: a timed round, turns, a match, endless …), mechanics (with their params), world templates and sizes, look presets, character bodies, props, clips, fair-play defaults. Every game spec must stay inside it. Default sections: loops, mechanics and worlds.',
     inputSchema: { type: 'object', properties: { sections: { type: 'array', items: { type: 'string', enum: SECTIONS }, description: `Any of ${SECTIONS.join(', ')}` }, json: { type: 'boolean', description: 'Return the raw catalog JSON for the sections (large)' } } },
     async handler({ sections, json }) {
       const c = await catalog();
-      const want = sections?.length ? sections : ['mechanics', 'worlds'];
-      if (json) return Object.fromEntries(want.map(s => [s, c[s]]));
+      const want = sections?.length ? sections : DEFAULT_SECTIONS;
+      if (json) return Object.fromEntries(want.flatMap(s => (s === 'loops' ? [[s, c[s]], ['loopGuide', c.loopGuide]] : [[s, c[s]]])));
       return catalogLines(c, want).join('\n');
     },
   },
