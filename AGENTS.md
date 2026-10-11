@@ -105,8 +105,7 @@ Its evidence (verdict, screenshots) is in `games/<name>/evidence/verify-N/`. The
 | | | 34 | watch then play: a viewer can join, start a room or play solo |
 
 The list is verify's own (`kits/research/gf-three/tools/verify.mjs`); it grows as games.fun adds checks, and a failing
-line names its rule and the fix. On `--quick` a scenic example records its two known kit faults in `example.json`
-(`knownFailing`; see `docs/DEVELOPING.md`).
+line names its rule and the fix. Both examples (party and scenic) pass every check on `--quick`.
 
 Check 9 (a contact sheet on the GPU) is skipped here: the look tooling is not part of this kit.
 

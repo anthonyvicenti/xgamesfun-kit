@@ -11,10 +11,14 @@ export const LIMITS = {
   lockRefusals: 2,           // stops refused for one edit of the locked spec that is still on the disk
   requestRefusals: 2,        // stops refused for one unanswered request
   permissionHoldMs: 240_000, // how long an approval waits for a click before the terminal decides
+  wakingMs: 20_000,          // after a wake, how long an idle session with no wait is "waking up" and not "gone"
   justHandedMs: 3000,        // a request the wait handed over this recently is on its way: the stop is not refused for it
   events: 500, requests: 200, permissions: 50,
   text: 8000, selection: 4096, cut: 2000,
 };
+
+/** Our loop tools as a session's hooks name them: mcp__<server>__gamesfun_step_*, _next, _change, _ask, _rollback. */
+export const LOOP_TOOL = /^mcp__.+__gamesfun_(step_[a-z]+|next|change|ask|rollback)$/;
 
 export class BridgeError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -42,7 +46,7 @@ export function requestMessage(requests, { session, heading = 'Requests from the
   ].join('\n');
 }
 
-export function createBridge({ gameDir = null, run = randomBytes(4).toString('hex'), now = Date.now, limits = {}, readLoop = readLoopState, readBusy = readRunning, readSpecLock = readLock, transport = null } = {}) {
+export function createBridge({ gameDir = null, run = randomBytes(4).toString('hex'), now = Date.now, limits = {}, readLoop = readLoopState, readBusy = readRunning, readSpecLock = readLock, transport = null, kitRoot = null } = {}) {
   const L = { ...LIMITS, ...limits };
   const sessions = new Map();     // id → session record
   const requests = new Map();     // id → request (insertion order = age)
@@ -67,7 +71,7 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     if (!id) throw new BridgeError(400, 'the event has no session id');
     let s = sessions.get(id);
     if (!s) {
-      s = { id, agent, cwd: cwd ?? null, told: false, state: 'idle', mode: mode ?? null, started: now(), lastEvent: null, lastEventAt: null, wait: null, guard: { fingerprint: null, refusals: 0, released: null }, cancelTold: null, lockTold: new Set(), lockSeen: new Map() };
+      s = { id, agent, cwd: cwd ?? null, told: false, state: 'idle', mode: mode ?? null, started: now(), lastEvent: null, lastEventAt: null, wait: null, guard: { fingerprint: null, refusals: 0, released: null }, cancelTold: null, lockTold: new Set(), lockSeen: new Map(), game: null, wokeAt: null };
       sessions.set(id, s);
     }
     if (cwd) s.cwd = cwd;
@@ -78,6 +82,10 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
   const viewSession = s => ({
     id: s.id, agent: s.agent, cwd: s.cwd, state: s.state, connected: !!s.wait, primary: primary() === s, permissionMode: s.mode,
     started: s.started, lastEvent: s.lastEvent, lastEventAt: s.lastEventAt,
+    // the game folder this session last drove with a loop tool (null until it calls one): the stop guard follows it
+    game: s.game,
+    // a wake has just handed it a request and its first event has not arrived yet: it is waking up, not gone
+    waking: !!s.wokeAt && !s.wait && s.state === 'idle' && now() - s.wokeAt < L.wakingMs && (s.lastEventAt ?? 0) <= s.wokeAt,
     guard: s.guard.released ? { status: 'waiting-on-question', why: s.guard.released.why, at: s.guard.released.at } : null,
   });
 
@@ -111,6 +119,7 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     const w = s.wait;
     const list = hand(sid, 'wake');
     w.send({ type: 'requests', session: sid, text: requestMessage(list, { session: sid }), requests: list.map(brief) });
+    s.wokeAt = now();
     if (w.form === 'rewake') { s.wait = null; emit('wait', { session: sid, open: false, form: w.form }); w.end(); }
     return true;
   }
@@ -218,6 +227,11 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     }
     if (kind === 'tool-start') {
       s.state = 'working';
+      // Which game is this session building? Its own loop tools say: every one names the game folder. The stop guard
+      // then holds this session by that game's state, whichever game this studio shows and whatever folder the
+      // session sits in. (The loop's state has no field for a session id, and an MCP server is not told one.)
+      const g = LOOP_TOOL.test(String(data.tool ?? '')) && typeof data.input?.game === 'string' && data.input.game.trim() ? path.resolve(kitRoot ?? s.cwd ?? '.', data.input.game) : null;
+      if (g) s.game = g;
       markSeen(s.id);
       emit(kind, { session: s.id, tool: data.tool, input: trim(data.input) });
       return;
@@ -283,16 +297,22 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     // 0. one of our own tools is still running on the game (a verify takes minutes; an agent moves the call to the
     // background and ends its turn to wait for the result, which wakes it). That turn end is a wait: nothing is
     // refused and nothing is counted. The next turn end after the result is judged as usual.
-    const busy = gameDir ? await readBusy(gameDir).catch(() => []) : [];
+    // The game that decides: the one this session drives with the loop tools, else this studio's.
+    const game = s.game ?? gameDir;
+    // Whose build is it? The session the state names, when it names one; else the sessions that drive this game with
+    // the loop tools, when any does; else (nothing known yet) every session in, above or below the game's folder.
+    const drivers = [...sessions.values()].filter(x => x.state !== 'ended' && x.game && game && path.resolve(x.game) === path.resolve(game));
+    const mine = loop => (loop?.session ? loop.session === s.id : drivers.length ? drivers.includes(s) : related(s.cwd, game));
+    const busy = game ? await readBusy(game).catch(() => []) : [];
     const waiting = busy.length > 0;
 
     // 1. the build
-    const loop = gameDir ? await readLoop(gameDir) : null;
-    const held = loop?.status === 'building' && (loop.session ? loop.session === s.id : related(s.cwd, gameDir));
+    const loop = game ? await readLoop(game) : null;
+    const held = loop?.status === 'building' && mine(loop);
     // 1a. the person rolled back a run that was under way (loop.cancel is the mark: the run is cancelled, and the loop
     // tools write that at their next call). The session is not held for the build any more. It is told once, so that
     // it does not put the undone edits back: one refusal for each roll-back, never more.
-    if (loop?.cancel && (loop.session ? loop.session === s.id : related(s.cwd, gameDir)) && s.cancelTold !== loop.cancel.at) {
+    if (loop?.cancel && mine(loop) && s.cancelTold !== loop.cancel.at) {
       s.cancelTold = loop.cancel.at;
       reasons.push('rolled-back');
       parts.push(`The person rolled the game back from the studio page${loop.cancel.label ? ` to "${loop.cancel.label}"` : ''}. The run that was under way is cancelled: do not go on with it, and do not put the undone changes back. Call the gamesfun_next tool once (it ends the run and puts back anything written since the roll-back), tell the person the game is as they left it, and wait for what they ask next.`);
@@ -329,8 +349,8 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     // locked. Two things hold a session of this game, each bounded: a locked spec file that is edited on the disk now
     // (while the run is building; at most lockRefusals stops for one edit, then the person is told), and a refusal on
     // the loop's record that this session has not been told in a round's message (once each).
-    if (gameDir && !waiting && loop && (loop.session ? loop.session === s.id : related(s.cwd, gameDir))) {
-      const lock = await readSpecLock(gameDir).catch(() => ({ problems: [], refusals: [] }));
+    if (game && !waiting && loop && mine(loop)) {
+      const lock = await readSpecLock(game).catch(() => ({ problems: [], refusals: [] }));
       const said = [];
       const edits = loop.status === 'building' ? lock.problems : [];
       if (edits.length) {

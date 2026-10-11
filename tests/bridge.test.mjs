@@ -310,6 +310,53 @@ test('stop guard: holds only the sessions of this game', async () => {
   assert.ok((await b.stop({ session: 'else' })).refuse);
 });
 
+test('stop guard: a session is held by the game it drives with the loop tools, whichever game the studio shows and wherever it sits', async () => {
+  const OTHER = path.resolve('/games/other'), KIT = path.resolve('/');
+  const loops = { [GAME]: null, [OTHER]: { status: 'building', step: 'verify', why: 'w', updated: 't' } };
+  const b = createBridge({ gameDir: GAME, kitRoot: KIT, readLoop: async g => loops[g] ?? null, readBusy: async () => [], readSpecLock: async () => ({ problems: [], refusals: [] }) });
+  start(b, 'D', path.resolve('/somewhere/else')); start(b, 'N', path.resolve('/games'));
+  // nobody has called a loop tool: the studio's game decides, by folder (it is not building)
+  assert.equal((await b.stop({ session: 'D' })).refuse, null);
+  // D builds another game than the studio shows, from a folder that has nothing to do with it
+  b.event('tool-start', { session: 'D', tool: 'mcp__gamesfun__gamesfun_step_fix', input: { game: 'games/other' } });
+  assert.equal(b.sessions().find(x => x.id === 'D').game, OTHER);
+  assert.match((await b.stop({ session: 'D' })).refuse, /next step is "verify"/);
+  // N sits above both games and drives neither: once a session drives the game, only that session is held
+  loops[GAME] = { status: 'building', step: 'agent', why: 'w', updated: 't' };
+  assert.ok((await b.stop({ session: 'N' })).refuse, 'the studio\'s game, by folder, while nobody drives it');
+  b.event('tool-start', { session: 'D', tool: 'mcp__plugin_gamesfun_gamesfun__gamesfun_next', input: { game: GAME } });
+  assert.equal((await b.stop({ session: 'N' })).refuse, null, 'D drives it now');
+  assert.ok((await b.stop({ session: 'D' })).refuse);
+  // a tool that is not a loop tool, or names no game, changes nothing
+  b.event('tool-start', { session: 'D', tool: 'mcp__gamesfun__gamesfun_verify', input: { dir: 'games/other' } });
+  b.event('tool-start', { session: 'D', tool: 'Bash', input: { command: 'ls', game: 'games/other' } });
+  assert.equal(b.sessions().find(x => x.id === 'D').game, GAME);
+});
+
+test('a wake does not read as "idle: press Enter": the session is waking up until its first event, for a bounded time', async () => {
+  let t = 1000;
+  const b = createBridge({ gameDir: GAME, now: () => t, readLoop: async () => null, readBusy: async () => [] });
+  start(b, 'W');
+  const sent = [];
+  b.openWait('W', { form: 'rewake', send: o => sent.push(o), end: () => {} });
+  b.addRequest({ text: 'make it faster' });
+  let s = b.sessions()[0];
+  assert.deepEqual([s.state, s.connected, s.waking], ['idle', false, true]);
+  const { connection, IDLE_HINT } = await import('../studio/lib/session.js');
+  assert.equal(connection({ sessions: [s] }).state, 'working'); assert.match(connection({ sessions: [s] }).hint, /Waking up/);
+  t += 500; b.event('prompt', { session: 'W', text: 'GF_REQUEST' });
+  assert.equal(b.sessions()[0].waking, false, 'its first event arrived');
+  // a wake that never roused it: after the bound the page says to press Enter
+  for (const q of b.collect('W').requests) b.reportRequest(q.id, { note: 'done' });
+  assert.equal((await b.stop({ session: 'W' })).refuse, null);
+  b.openWait('W', { form: 'rewake', send: () => {}, end: () => {} });
+  b.addRequest({ text: 'again' });
+  assert.equal(b.sessions()[0].waking, true);
+  t += 21_000;
+  s = b.sessions()[0];
+  assert.equal(s.waking, false); assert.equal(connection({ sessions: [s] }).hint, IDLE_HINT);
+});
+
 test('readLoopState: the merged shape, and null for anything else', async () => {
   const t = await tempDir();
   try {

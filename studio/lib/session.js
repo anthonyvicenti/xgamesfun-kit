@@ -80,6 +80,8 @@ export function connection(queue) {
   const mode = s.permissionMode && s.permissionMode !== 'default' ? s.permissionMode : null;
   const base = { mode, guard: s.guard ?? null, agent: s.agent ?? null };
   if (s.connected) return { ...base, state: 'listening', hint: 'Requests reach it at once.' };
+  // a wake has just handed it a request: its wait closed with the wake, and its first step is on the way
+  if (s.state === 'idle' && s.waking) return { ...base, state: 'working', hint: 'Waking up with your request.' };
   if (s.state === 'idle') return { ...base, state: 'idle', hint: IDLE_HINT };
   return { ...base, state: 'working', hint: 'Requests are handed over when its turn ends.' };
 }

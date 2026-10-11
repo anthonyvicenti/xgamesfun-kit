@@ -9,6 +9,7 @@ import { listExamples } from '../../lib/examples.mjs';
 import { listGames, resolveGame, shown, summarizeVerdict } from '../../lib/games.mjs';
 import { BIN, KIT_ROOT, STATE } from '../../lib/paths.mjs';
 import { listSlots, setFile, setValue } from '../../lib/slots.mjs';
+import { stopTree } from '../../lib/proc.mjs';
 import { alive, listDevServers } from '../../lib/state.mjs';
 
 const gameProp = { type: 'string', description: 'The game folder, relative to the kit root (e.g. games/my-game). Optional when there is only one game.' };
@@ -145,7 +146,7 @@ export const tools = [
       const list = await listDevServers();
       const s = pid ? list.find(x => x.pid === pid) : list.length === 1 ? list[0] : null;
       if (!s) throw new Error(list.length ? `which one? ${list.map(x => `${x.pid} (${x.game})`).join(', ')}` : 'no dev server is running');
-      process.kill(s.pid, 'SIGTERM');
+      stopTree({ pid: s.pid });          // the server and anything it started, the same way on Windows, macOS and Linux (lib/proc.mjs)
       for (let i = 0; i < 20 && alive(s.pid); i++) await sleep(150);
       return { stopped: s.pid, game: s.game };
     },

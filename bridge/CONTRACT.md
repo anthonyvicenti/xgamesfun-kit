@@ -69,6 +69,8 @@ Everything the page needs to draw itself, in one read. → `200`
   "started": 1791700000000,
   "lastEvent": "tool-start",
   "lastEventAt": 1791700001000,
+  "game": null,                   // the game folder this session last drove with a loop tool; null until it calls one
+  "waking": false,                // a wake handed it a request under 20 s ago and its first event has not arrived
   "guard": null                   // or { "status": "waiting-on-question", "why": "…", "at": … } (section 6)
 }
 ```
@@ -76,6 +78,8 @@ Everything the page needs to draw itself, in one read. → `200`
 What the page says from it:
 - `state: "idle"` and `connected: false`: "Press Enter in the terminal once to reconnect" (the wait has ended; the
   next turn end starts a new one).
+- `state: "idle"`, `connected: false` and `waking: true`: "Waking up with your request" (a rewake wait closes when
+  it hands a request over; the session's first event follows).
 - `state: "working"` and `connected: false`: normal in the middle of a turn. The request is handed over when the turn
   ends.
 - No session at all: "Start your agent in this folder" (with the plugin loaded).
@@ -282,8 +286,12 @@ instruction) in two cases, both bounded:
    count again). After the third, the bridge stops holding: it marks the session `guard:
    {"status":"waiting-on-question","why":…}`, sends the `guard` event, tells the person in the terminal
    (`systemMessage`) and lets the session stop until the loop state changes. The bridge never writes the loop state.
-   When the state file carries a `session` field, only that session is held; otherwise every session whose working
-   directory is the game folder, inside it or above it.
+   **Which game, which session.** The game that decides is the one the session drives: the bridge notes the `game`
+   argument of every loop tool call it sees (`mcp__…__gamesfun_step_*`, `_next`, `_change`, `_ask`, `_rollback`), so
+   a session building another game than the studio shows is held by that game's state. A session that has called no
+   loop tool is judged by the studio's game. When the state file carries a `session` field, only that session is
+   held (the library has no such field today, and an MCP server is not told its session's id); else the sessions that
+   drive the game, when any does; else every session whose working directory is the game folder, inside it or above it.
    **While the play-tester subagent has the round** (the state's `step` is `playtest` and `handed.step` is `playtest`):
    one refusal, which tells the session to wait for the report if the subagent is playing and to start it if it is
    not; later stops for the same state are let through with no notice to the person, because an agent may run the

@@ -1,5 +1,6 @@
 // /api/build/…: the build loop as the studio shows it (read-only), and the roll-back button.
-//   GET  /state      → { loop, verdict, checkpoints, rollback }  loop = the loop state file as written (null when none),
+//   GET  /state      → { loop, verdict, checkpoints, rollback, elsewhere }  elsewhere = the game a session is building when it is not this studio's
+//                      (each of)  loop = the loop state file as written (null when none),
 //                      verdict = the newest verify run summarised, checkpoints = what lib/checkpoint.mjs lists (M2-G)
 //   POST /rollback   { id } → restores that checkpoint through lib/checkpoint.mjs; a run under way is cancelled (lib/cancel.mjs)
 // The state file is written only by the loop library (through M2-G's tools). It is read here; never written.
@@ -39,7 +40,14 @@ export default function register(router, ctx) {
     let loop = await readLoopFile(gameDir);
     const mark = loop?.status === 'building' ? await readCancel(gameDir) : null;
     if (mark) loop = { ...loop, status: 'cancelled', step: 'done', outcome: 'cancelled', why: mark.reason, handed: null };
-    return { loop, verdict: await latestVerdict(gameDir), checkpoints, rollback: !!lib?.restoreCheckpoint };
+    // A session that is building another game than the one this studio shows: say so, never show nothing.
+    let elsewhere = null;
+    try {
+      const { bridgeFor } = await import('./session.mjs');
+      const other = bridgeFor(ctx.url)?.bridge.sessions().find(x => x.state !== 'ended' && x.game && path.resolve(x.game) !== path.resolve(gameDir));
+      if (other) elsewhere = { game: other.game, name: path.relative(KIT_ROOT, other.game).split(path.sep).join('/'), loop: await readLoopFile(other.game).then(l => (l ? { status: l.status, step: l.step } : null)) };
+    } catch { /* no bridge on this server */ }
+    return { elsewhere, loop, verdict: await latestVerdict(gameDir), checkpoints, rollback: !!lib?.restoreCheckpoint };
   });
 
   router.post('/rollback', async req => {

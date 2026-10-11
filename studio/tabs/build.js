@@ -27,6 +27,7 @@ export default {
     function paint(data) {
       const v = loopView(data.loop, data.verdict);
       body.replaceChildren();
+      if (data.elsewhere) body.append(el('p', { className: 'error-box' }, `Your session is working on another game: ${data.elsewhere.name}${data.elsewhere.loop ? ` (${data.elsewhere.loop.status}, step ${data.elsewhere.loop.step})` : ''}. This studio shows ${ctx.game?.title ?? 'this game'}. To follow that build here, start the studio on it: node bin/gamesfun.mjs dev ${data.elsewhere.name}`));
       if (!v.present) {
         body.append(el('p', { className: 'muted' }, 'No build is running. When your session builds or changes this game with the gamesfun tools, its steps appear here.'));
       } else {
