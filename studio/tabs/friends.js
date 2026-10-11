@@ -11,9 +11,10 @@ function readRoom(frame) {
   try {
     const w = frame.contentWindow, d = frame.contentDocument;
     const code = (d?.getElementById('mp-code') ?? d?.getElementById('gf-room-code'))?.textContent?.trim() || null;
-    let players = null;
-    try { players = (w.__game?.snapshot?.().players ?? []).length || null; } catch {}
-    return { code: code && /^[A-Za-z0-9-]{3,16}$/.test(code) ? code : null, players };
+    let players = null, pcode = null;
+    try { const s = w.__party?.snapshot?.(); pcode = s?.code ?? null; players = Array.isArray(s?.racers) ? s.racers.length : null; } catch {}
+    const c = pcode || code;
+    return { code: c && /^[A-Za-z0-9-]{3,16}$/.test(c) ? c : null, players };
   } catch { return { code: null, players: null }; }
 }
 

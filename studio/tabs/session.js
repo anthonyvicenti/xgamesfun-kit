@@ -121,7 +121,7 @@ export default {
       const words = { listening: 'Your session is listening', working: 'Your session is working', idle: 'Your session is idle', none: 'No session connected yet' }[c];
       banner.dataset.state = c;
       banner.replaceChildren(el('span', { className: `dot ${c === 'idle' ? 'warn' : c === 'none' ? 'wait' : 'ok'}` }), el('strong', {}, words),
-        c === 'idle' ? el('div', { className: 'small' }, IDLE_HINT) : c === 'none' ? el('div', { className: 'small muted' }, 'Start your coding agent in this folder; its events appear here.') : null);
+        ...[c === 'idle' ? el('div', { className: 'small' }, IDLE_HINT) : c === 'none' ? el('div', { className: 'small muted' }, 'Start your coding agent in this folder; its events appear here.') : null].filter(Boolean));
     }
 
     function paintLine() {

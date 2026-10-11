@@ -78,6 +78,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .conn[data-state=idle] { border-color: var(--warn); }
 textarea.ask { width: 100%; resize: vertical; min-height: 64px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--accent); border-radius: 99px; padding: 2px 4px 2px 10px; font-size: 12px; max-width: 100%; overflow-wrap: anywhere; }
+.chip[hidden] { display: none; }
 .chip.small { padding: 2px 10px; margin-top: 4px; }
 .chip-x { background: transparent; color: var(--text); padding: 0 8px; border-radius: 99px; font-size: 16px; line-height: 1.2; min-width: 28px; min-height: 28px; }
 .req { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 8px; background: var(--panel-2); }
@@ -99,6 +100,11 @@ ul.notes { margin: 4px 0; padding-left: 18px; }
 .roomcode { display: flex; flex-direction: column; margin: 10px 0; }
 .roomcode b { font: 700 28px/1.2 var(--mono); letter-spacing: .12em; }
 @media (max-width: 900px) {
+  html, body { height: auto; min-height: 100%; }
+  .layout { grid-template-rows: auto auto; }
+  .preview { height: min(62vh, 420px); }
+  .frame-wrap { min-height: 0; }
+  .side { min-height: 60vh; }
   .panel { padding: 12px 16px; }
   .row { grid-template-columns: 1fr; }
   .row .edit { justify-content: flex-start; flex-wrap: wrap; }

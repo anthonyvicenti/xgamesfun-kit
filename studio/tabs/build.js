@@ -35,7 +35,7 @@ export default {
           el('div', { className: 'conn', 'data-tone': tone, role: 'status' }, el('span', { className: `dot ${tone}` }), el('strong', {}, `${v.statusWords}: ${v.stepWords}`),
             v.why ? el('div', { className: 'small muted' }, v.why) : null,
             el('div', { className: 'small muted' }, `Round ${v.round} · ${v.counts.verifies} verify · ${v.counts.repairs} repair · ${v.counts.playtests} play-test${v.counts.playtests === 1 ? '' : 's'}${v.counts.rescues ? ` · ${v.counts.rescues} rescue` : ''}`)),
-          v.staleProof ? el('p', { className: 'error-box' }, 'Delivered, but the files changed after the last play-test: the proof is out of date.') : null);
+          ...(v.staleProof ? [el('p', { className: 'error-box' }, 'Delivered, but the files changed after the last play-test: the proof is out of date.')] : []));
 
         body.append(el('h3', {}, 'Verdict'));
         if (!v.verify) body.append(el('p', { className: 'muted' }, 'Verify has not run yet.'));
