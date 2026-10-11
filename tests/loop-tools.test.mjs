@@ -240,6 +240,58 @@ test('the one reminder: a round that ends without a passing quick verify gets it
   assert.deepEqual(r.ran, ['agent', 'fix']); assert.equal(r.step, 'verify'); assert.equal(r.next.tool, 'gamesfun_step_verify');
 });
 
+test('the loop\'s messages are the library\'s own words for this host: this kit\'s folders and tools, nothing rewritten', async t => {
+  const b = await bench(t, { verdicts: [false] });
+  await lockSpec(b);
+  await b.call('gamesfun_step_create');
+  await b.call('gamesfun_step_fix', DONE);
+  const r = await b.call('gamesfun_step_verify');
+  const game = b.game.split(path.sep).join('/'), brief = r.round.brief;
+  assert.ok(brief.includes(`Fix the game in ${game} (`), 'the game folder is this kit\'s, not <job>/game');
+  assert.ok(brief.includes(`${game}/.gf-loop/job/out/verify-1/verdict.json`));
+  assert.match(brief, /ran the full verify \(the tool gamesfun_step_verify\)/);
+  assert.match(brief, /run the tool gamesfun_verify until it passes/);
+  assert.match(brief, /the summary and controls you pass to gamesfun_step_fix/);
+  assert.doesNotMatch(brief, /delivery\.json|verify\.mjs|In this session:/);
+  assert.equal(brief, await readFile(path.join(b.G.rounds, 'round-2.md'), 'utf8'));
+  // the play-tester's brief names the tool it plays through; no shell line is left in it
+  const b2 = await bench(t);
+  await lockSpec(b2); await b2.call('gamesfun_step_create'); await b2.call('gamesfun_step_fix', DONE); await b2.call('gamesfun_step_verify');
+  await b2.call('gamesfun_step_playtest');
+  const md = await readFile(path.join(b2.G.playtest, 'PLAYTEST.md'), 'utf8');
+  assert.match(md, /Call the tool `gamesfun_play` with/);
+  assert.doesNotMatch(md, /play\.mjs|nvm use|\{\{[A-Z_]+\}\}/);
+});
+
+test('a roll-back from the studio page mid-run cancels the run: the tools end it, undo what was written since, and say so', async t => {
+  const { writeCancel, readCancel } = await import('../lib/cancel.mjs');
+  const b = await bench(t);
+  await lockSpec(b);
+  await b.call('gamesfun_step_create');
+  const rules = path.join(b.game, 'rules.js'), was = await readFile(rules, 'utf8');
+  await writeFile(rules, was + '\n// the round wrote this\n');
+  // the dev server's route: the checkpoint is restored and the mark left (server/routes/build.mjs)
+  await checkpointStore(b.game).restore('round-1');
+  await writeCancel(b.game, { reason: 'the person rolled the game back from the studio page to "Before round 1"', checkpoint: 'round-1', label: 'Before round 1' });
+  assert.equal((await state(b)).status, 'building');
+  // the session, not yet told, writes its edit back; its next tool call ends the run and undoes that again
+  await writeFile(rules, was + '\n// put back by a session that did not know\n');
+  let r = await b.call('gamesfun_step_fix', DONE);
+  assert.equal(r.refused, 'out-of-order');
+  assert.equal(r.rolledBack.runCancelled, true); assert.deepEqual(r.rolledBack.undoneAgain.written, ['rules.js']);
+  assert.match(r.rolledBack.do, /do not put the undone changes back/);
+  assert.equal(await readFile(rules, 'utf8'), was);
+  assert.equal(await readCancel(b.game), null, 'the mark is applied once');
+  const s = await state(b);
+  assert.deepEqual([s.status, s.step, s.outcome], ['cancelled', 'done', 'cancelled']);
+  r = await b.call('gamesfun_next');
+  assert.equal(r.status, 'cancelled'); assert.equal(r.next.tool, null); assert.equal(r.next.waitingOn, 'the person'); assert.equal(r.rolledBack, undefined);
+  for (const tool of ['gamesfun_step_verify', 'gamesfun_step_playtest', 'gamesfun_step_deliver']) assert.equal((await b.call(tool)).refused, 'out-of-order', tool);
+  // the person's next request starts a new run on the files as they left them
+  r = await b.call('gamesfun_change', { request: 'make the balls bigger' });
+  assert.equal(r.status, 'building'); assert.equal(r.round.kind, 'change');
+});
+
 test('rollback: a round is undone and the folder is byte for byte what it was', async t => {
   const b = await bench(t);
   await lockSpec(b);

@@ -5,13 +5,22 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 export const LOOP_STATE = ['.gf-loop', 'state.json'];
-export const LOOP_STATUSES = ['building', 'waiting-on-question', 'delivered', 'failed'];
+export const LOOP_STATUSES = ['building', 'waiting-on-question', 'delivered', 'failed', 'cancelled'];
+// The mark the dev server's roll-back route leaves when the person rolls back a run that is under way (lib/cancel.mjs
+// writes it; a test holds the two to the same file). The loop tools end the run at their next call; until then a
+// building run with this mark is read as cancelled, with `cancel` naming the mark so a session can be told once.
+export const CANCEL_FILE = ['.gf-loop', 'cancel.json'];
+export async function readCancel(gameDir) {
+  try { const m = JSON.parse(await readFile(path.join(gameDir, ...CANCEL_FILE), 'utf8')); return m?.schema === 'gf-cancel/1' && typeof m.reason === 'string' ? m : null; } catch { return null; }
+}
 
-/** → { status, step, why, round, updated, session, handed } or null (no file, not JSON, or a status the bridge does not know). */
+/** → { status, step, why, round, updated, session, handed, cancel? } or null (no file, not JSON, or a status the bridge does not know). */
 export async function readLoopState(gameDir) {
   let s;
   try { s = JSON.parse(await readFile(path.join(gameDir, ...LOOP_STATE), 'utf8')); } catch { return null; }
   if (!s || typeof s !== 'object' || !LOOP_STATUSES.includes(s.status)) return null;
+  const mark = s.status === 'building' ? await readCancel(gameDir) : null;
+  if (mark) return { status: 'cancelled', step: 'done', why: mark.reason, round: s.round ?? null, updated: mark.at ?? null, session: typeof s.session === 'string' ? s.session : null, handed: null, cancel: { at: mark.at ?? null, label: mark.label ?? null } };
   return {
     status: s.status,
     step: typeof s.step === 'string' ? s.step : null,

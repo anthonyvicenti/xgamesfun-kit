@@ -144,6 +144,11 @@ if (isMain(import.meta)) {
   console.info = (...a) => console.error(...a);
   const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
   const { server, tools } = await createServer();
+  // Whoever started this server stopping it (a closed stdin, a stop signal) is an ordinary exit, so the 'exit' handlers
+  // run: a verify under way is stopped with its browser (mcp/tools/loop.mjs), and the running marks are removed.
+  // Windows knows SIGINT and SIGTERM only by name.
+  process.stdin.on('close', () => process.exit(0));
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) { try { process.on(sig, () => process.exit(0)); } catch { /* not on this system */ } }
   await server.connect(new StdioServerTransport());
   console.error(`gamesfun MCP server: ${tools.size} tools (${[...tools.keys()].join(', ')})`);
 }

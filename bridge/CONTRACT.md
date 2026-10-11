@@ -177,7 +177,7 @@ Every event has `seq`, `t`, `kind` and (except `hello`) `session`.
 | `tool-end` | `tool`, `ok` (boolean), `denied` (boolean) | it ran, failed or was denied |
 | `permission-request` | `permission` (a Permission) | the session is about to ask the person |
 | `permission-resolved` | `permission` | any change of a Permission's state |
-| `stop` | `allowed` (boolean), `reasons` (array of `"build"`, `"unanswered"`, `"new-requests"`), `lastMessage` (cut at 2000) | the turn ended, or its end was refused |
+| `stop` | `allowed` (boolean), `reasons` (array of `"build"`, `"unanswered"`, `"new-requests"`, `"rolled-back"`, `"lock"`), `lastMessage` (cut at 2000) | the turn ended, or its end was refused |
 | `request` | `request` (a Request; `session` may be null) | any change of a Request |
 | `wait` | `open` (boolean), `form` (`rewake` or `monitor`) | the session's wait opened or closed |
 | `guard` | `status` (`waiting-on-question`), `why` | the stop guard gave up holding a stuck build (section 6) |
@@ -250,7 +250,8 @@ session with `GAMESFUN_BRIDGE_TOKEN` set and a fixed port may point HTTP hooks s
 |---|---|---|---|
 | `<kit>/.gamesfun/bridge.json` (git-ignored) | the dev server, at start and stop | the plugin's scripts, `bridge/client.mjs`, `doctor` | `{ "schema": "gf-bridge/1", "runs": [ { "url", "token", "run", "pid", "game", "wait", "started" } ] }`, one entry per running dev server |
 | `<kit>/.gamesfun/bridge-config.json` | `setWaitForm()` (what `doctor` calls) | the dev server at start | `{ "wait": "rewake" \| "monitor" }` |
-| `<game>/.gf-loop/state.json` (schema `gf-loop/1`) | the loop library only, through the loop tools | `bridge/loop-state.mjs` (`readLoopState`, one function) | `status`: `building` \| `waiting-on-question` \| `delivered` \| `failed`; `step`; `why` |
+| `<game>/.gf-loop/state.json` (schema `gf-loop/1`) | the loop library only, through the loop tools | `bridge/loop-state.mjs` (`readLoopState`, one function) | `status`: `building` \| `waiting-on-question` \| `delivered` \| `failed` \| `cancelled`; `step`; `why` |
+| `<game>/.gf-loop/cancel.json` (schema `gf-cancel/1`) | the dev server's roll-back route (`lib/cancel.mjs`), when the person rolls back a run that is under way | the loop tools (they end the run with the library's `loop.cancel` at their next call and remove the file); `bridge/loop-state.mjs` (`readCancel`) | `reason`, `checkpoint`, `label`, `at`. While it is there, a `building` state is read as `cancelled` |
 
 A script finds its run by looking for `.gamesfun/bridge.json` in, in order: the file named by
 `GAMESFUN_BRIDGE_FILE`; the session's working directory and each folder above it; the project folder
@@ -280,6 +281,11 @@ instruction) in two cases, both bounded:
    **While one of our own tools is running on the game** (the MCP server marks each call in
    `<game>/.gf-loop/running/`; `bridge/loop-state.mjs` `readRunning`): the turn end is a wait for that tool's result,
    which wakes the session. Nothing is refused and nothing is counted, for the build or for a request.
+   **A roll-back from the page cancels a run that is under way** (the reasons are in `mcp/tools/loop.mjs`,
+   `applyCancel`): the dev server cannot write the loop's state, so it leaves `cancel.json`; from that moment the
+   build holds nobody. The session is told once, with one refused stop (`reasons: ["rolled-back"]`): the run is
+   cancelled, do not put the undone changes back, call `gamesfun_next` (which ends the run in the state file and puts
+   back anything written since the roll-back). The plugin's write guard also refuses an edit of that game until then.
 2. **A request is unanswered.** A request this session was handed and has not reported. At most 2 refusals for each
    request; then the request becomes `dropped`. A request the wait handed over less than 3 seconds ago does not refuse
    the stop: its wake is already bringing it.

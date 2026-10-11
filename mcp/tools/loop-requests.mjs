@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { readCancel } from '../../lib/cancel.mjs';
 import { KIT_ROOT } from '../../lib/paths.mjs';
 
 export const BRIDGE = path.join(KIT_ROOT, 'bridge', 'index.mjs');
@@ -48,7 +49,7 @@ export const tools = [
         if (status === 'done') {
           const st = await bridge.bridgeStatus({ cwd }).catch(() => null);
           const loop = st?.game ? await readFile(path.join(st.game, '.gf-loop', 'state.json'), 'utf8').then(JSON.parse).catch(() => null) : null;
-          if (loop?.status === 'building') {
+          if (loop?.status === 'building' && !await readCancel(st.game)) {
             const game = path.relative(KIT_ROOT, st.game).split(path.sep).join('/');
             return { isError: true, content: [{ type: 'text', text: JSON.stringify({ refused: 'not-delivered', why: `The game's ${loop.kind === 'change' ? 'change run' : 'build'} is not delivered yet (step "${loop.step}"), so this request is not done. Go on with the loop, and report the request when gamesfun_step_deliver has delivered. The request stays open on the page meanwhile and is not dropped.`, next: { tool: 'gamesfun_next', args: { game } } }, null, 2) }] };
           }

@@ -6,7 +6,7 @@ const STEP_WORDS = {
   fix: 'Applying automatic fixes', verify: 'Running verify', playtest: 'The play-tester is playing', repair: 'Your session is repairing what failed',
   deliver: 'Handing the game over', done: 'Finished',
 };
-const STATUS_WORDS = { building: 'Building', 'waiting-on-question': 'Waiting for your answer', delivered: 'Delivered', failed: 'Stopped: it did not work out' };
+const STATUS_WORDS = { building: 'Building', 'waiting-on-question': 'Waiting for your answer', delivered: 'Delivered', failed: 'Stopped: it did not work out', cancelled: 'Cancelled: you rolled back' };
 
 /** Raw state (or null) + the newest verify run (summarizeVerdict shape, or null) → what the Build tab draws. */
 export function loopView(raw, verdict = null) {

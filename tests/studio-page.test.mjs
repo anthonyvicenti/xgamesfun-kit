@@ -135,18 +135,27 @@ test('build route: no state, then the state file and the newest verdict', async 
   r = await call('/api/build/rollback', { method: 'POST', body: JSON.stringify({ id: 'round-1' }), headers: { 'content-type': 'application/json' } });
   assert.equal(r.status, 200);
   assert.deepEqual([r.body.restored, r.body.written, r.body.removed], ['round-1', 1, 1]);
-  assert.equal(r.body.told, null, 'no session is there to tell');
   assert.equal(await treeHash(game.dir), before, 'the folder is what it was');
   assert.equal(await readFile(rules, 'utf8'), was);
-  // with a session there, the roll-back is told to it as a request (a work-around: server/routes/build.mjs says why)
+  // the run was under way: the roll-back cancels it. This server cannot write the loop's state (the MCP server holds
+  // it), so it leaves the mark the loop tools apply; the Build tab and the stop guard read the run as cancelled at once
+  const { readCancel, clearCancel } = await import('../lib/cancel.mjs');
+  assert.equal(r.body.cancelled.step, 'repair');
+  assert.match((await readCancel(game.dir)).reason, /rolled the game back from the studio page to "Before round 1/);
+  assert.equal(JSON.parse(await readFile(path.join(game.dir, '.gf-loop', 'state.json'), 'utf8')).status, 'building', 'the state file is the loop library\'s: not written here');
+  r = await call('/api/build/state');
+  assert.deepEqual([r.body.loop.status, r.body.loop.step], ['cancelled', 'done']);
+  // a session there is told once at its next turn end (one refusal), and is then free: the build no longer holds it
   const { bridgeFor } = await import('../server/routes/session.mjs');
   const bridge = bridgeFor(srv.url).bridge;
   bridge.event('session-start', { session: 'RB', cwd: game.dir, mode: 'default' });
-  r = await call('/api/build/rollback', { method: 'POST', body: JSON.stringify({ id: 'round-1' }), headers: { 'content-type': 'application/json' } });
-  const told = (await bridge.queue()).requests.find(q => q.id === r.body.told);
-  assert.match(told.text, /rolled the game back.*Before round 1.*do not put the undone changes back/s);
-  bridge.reportRequest(told.id, { note: 'ok' });
+  let st = await bridge.stop({ session: 'RB', cwd: game.dir });
+  assert.deepEqual(st.reasons, ['rolled-back']);
+  assert.match(st.refuse, /rolled the game back.*Before round 1.*do not put the undone changes back.*gamesfun_next/s);
+  st = await bridge.stop({ session: 'RB', cwd: game.dir });
+  assert.equal(st.refuse, null, 'told once; a cancelled run holds nobody');
   bridge.event('session-end', { session: 'RB', reason: 'exit' });
+  await clearCancel(game.dir);
   r = await call('/api/build/rollback', { method: 'POST', body: JSON.stringify({ id: 'round-9' }), headers: { 'content-type': 'application/json' } });
   assert.equal(r.status, 400, 'an unknown checkpoint is refused');
   assert.match(r.body.error, /no checkpoint/);

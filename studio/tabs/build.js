@@ -30,7 +30,7 @@ export default {
       if (!v.present) {
         body.append(el('p', { className: 'muted' }, 'No build is running. When your session builds or changes this game with the gamesfun tools, its steps appear here.'));
       } else {
-        const tone = v.status === 'failed' ? 'bad' : v.status === 'delivered' ? 'ok' : v.status === 'waiting-on-question' ? 'warn' : 'go';
+        const tone = v.status === 'failed' ? 'bad' : v.status === 'delivered' ? 'ok' : v.status === 'waiting-on-question' || v.status === 'cancelled' ? 'warn' : 'go';
         body.append(
           el('div', { className: 'conn', 'data-tone': tone, role: 'status' }, el('span', { className: `dot ${tone}` }), el('strong', {}, `${v.statusWords}: ${v.stepWords}`),
             v.why ? el('div', { className: 'small muted' }, v.why) : null,

@@ -288,6 +288,14 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     // 1. the build
     const loop = gameDir ? await readLoop(gameDir) : null;
     const held = loop?.status === 'building' && (loop.session ? loop.session === s.id : related(s.cwd, gameDir));
+    // 1a. the person rolled back a run that was under way (loop.cancel is the mark: the run is cancelled, and the loop
+    // tools write that at their next call). The session is not held for the build any more. It is told once, so that
+    // it does not put the undone edits back: one refusal for each roll-back, never more.
+    if (loop?.cancel && (loop.session ? loop.session === s.id : related(s.cwd, gameDir)) && s.cancelTold !== loop.cancel.at) {
+      s.cancelTold = loop.cancel.at;
+      reasons.push('rolled-back');
+      parts.push(`The person rolled the game back from the studio page${loop.cancel.label ? ` to "${loop.cancel.label}"` : ''}. The run that was under way is cancelled: do not go on with it, and do not put the undone changes back. Call the gamesfun_next tool once (it ends the run and puts back anything written since the roll-back), tell the person the game is as they left it, and wait for what they ask next.`);
+    }
     if (!held) s.guard = { fingerprint: null, refusals: 0, released: null };
     else if (!waiting) {
       const fingerprint = [loop.step, loop.round, loop.updated].join('|');

@@ -34,7 +34,7 @@ export function describeEvent(e) {
     case 'tool-start': return `Using ${e.tool ?? 'a tool'}${inputLine(e.input) ? `: ${inputLine(e.input)}` : ''}`;
     case 'tool-end': return e.denied ? `${e.tool ?? 'A tool'} was denied` : e.ok === false ? `${e.tool ?? 'A tool'} failed` : null;
     case 'permission-request': return `Asks to use ${e.permission?.tool ?? 'a tool'}`;
-    case 'stop': return e.allowed === false ? `Your session was asked to carry on (${(e.reasons ?? []).map(r => ({ build: 'the build is not finished', unanswered: 'a request is unanswered', 'new-requests': 'new requests arrived' }[r] ?? r)).join(', ')})` : 'Your session finished its turn';
+    case 'stop': return e.allowed === false ? `Your session was asked to carry on (${(e.reasons ?? []).map(r => ({ build: 'the build is not finished', unanswered: 'a request is unanswered', 'new-requests': 'new requests arrived', 'rolled-back': 'you rolled back: it is told to leave the game as it is', lock: 'the locked spec was changed' }[r] ?? r)).join(', ')})` : 'Your session finished its turn';
     case 'wait': return e.open ? 'Your session is listening for requests' : null;
     case 'guard': return `The build is waiting for you${e.message ? `: ${clip(e.message, 100)}` : ''}`;
     case 'notification': return e.message ? clip(e.message, 120) : null;

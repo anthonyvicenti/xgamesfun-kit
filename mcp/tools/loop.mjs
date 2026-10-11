@@ -23,11 +23,12 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   openBuildLoop, openTalkLoop, kitTools, fileStore, stateFileOf, filesHash, proofOf, composeBrief, loadParts, partsWords,
-  promisesLib, readPlaytestReport,
+  readPlaytestReport,
 } from '../../kits/research/gf-three/loop/index.mjs';
 import { check as schemaProblems } from '../../kits/research/gf-three/tools/lib/schema.mjs';
+import { clearCancel, readCancel } from '../../lib/cancel.mjs';
 import { CHAR_DEPS, npmCli } from '../../lib/char-deps.mjs';
-import { checkpointStore } from '../../lib/checkpoint.mjs';
+import { checkpointStore, treeHash } from '../../lib/checkpoint.mjs';
 import { ensureBrowser } from '../../lib/chrome.mjs';
 import { createGame as kitCreate } from '../../lib/create.mjs';
 import { isGame } from '../../lib/games.mjs';
@@ -102,12 +103,15 @@ export function where(s, G) {
     if (s.step !== 'done') return { ...base, ...call('gamesfun_step_spec'), do: s.handed ? 'Your answer was not valid: fix the file the last answer named, then call the tool.' : 'Have your answer checked.' };
     if (s.outcome === 'locked') return { ...base, ...call('gamesfun_step_create'), do: 'The spec is locked: make the game.' };
     if (s.outcome === 'pitched') return { ...base, tool: null, args: null, waitingOn: 'the person', after: call('gamesfun_step_pitch'), do: 'Show the person the concepts and wait for their choice. When they choose, call gamesfun_step_pitch: it hands you the round to write the spec.' };
+    if (s.status === 'cancelled') return { ...base, tool: null, args: null, waitingOn: 'the person', after: call('gamesfun_step_pitch'), do: `This was cancelled: ${s.why}. Wait for what the person asks next.` };
     return { ...base, ...call('gamesfun_step_pitch'), do: `The last answer ended as "${s.outcome}". Start the pitch again.` };
   }
   const base = { phase: 'build', step: s.step, status: s.status, handed: s.step !== 'done' && !!s.handed };
   if (s.step === 'done') {
     if (s.status === 'delivered') return { ...base, tool: null, args: null, do: `Delivered (${s.outcome}). To change the game, call gamesfun_change with what the person asked for.`, after: call('gamesfun_change') };
     if (s.status === 'waiting-on-question') return { ...base, tool: null, args: null, waitingOn: 'the person', after: call('gamesfun_step_pitch'), do: 'The build waits on the person: tell them plainly what is in the way and ask how to change the plan. With their answer, call gamesfun_step_pitch and write the revised spec.' };
+    // ended on purpose (the person rolled back from the studio page): nothing is next until the person says so
+    if (s.status === 'cancelled') return { ...base, tool: null, args: null, waitingOn: 'the person', after: call(isGame(G.game) ? 'gamesfun_change' : 'gamesfun_step_pitch'), do: `This run was cancelled: ${s.why}. The files are as the person left them: do not put the undone changes back. Tell the person, and wait for what they ask next (a new change starts with gamesfun_change).` };
     return { ...base, ...call('gamesfun_step_pitch'), do: `The build ended as "${s.outcome}": ${s.why}. Tell the person, then start again from the pitch or change the plan.` };
   }
   if (ROUND_STEPS.includes(s.step)) return { ...base, ...call('gamesfun_step_fix'), do: s.handed ? 'An agent round is yours (its brief is in `round`). Do the work, then call the tool with your summary and controls.' : 'Take the next agent round: the tool hands you its brief.' };
@@ -122,16 +126,18 @@ function nextOf(s, G) {
 }
 
 // ---------------------------------------------------------------- words for the session
-const SESSION_WORDS = G => [
-  'In this session:',
-  `- the game folder is \`${p(G.game)}\` (a path the message writes as \`game/…\` is inside it); the loop's own files are in \`${p(G.job)}\`;`,
-  `- your own \`verify --quick\` is the tool \`gamesfun_verify\` {"dir": "${p(G.game)}"}; \`play.mjs\` is the tool \`gamesfun_play\`;`,
-  `- you do not write \`out/delivery.json\`: end the round by calling \`gamesfun_step_fix\` {"game": "${p(G.game)}", "summary": "…", "controls": "…"};`,
-  '- to give up on a round or ask the person, call `gamesfun_ask`; `gamesfun_rollback` undoes the round.',
-].join('\n');
-
-/** A loop message in this session's terms: the worker's job-folder layout becomes this game's, and the tools are named. */
-const inSession = (message, G) => `${String(message).replaceAll(`${p(G.job)}/game`, p(G.game))}\n\n${SESSION_WORDS(G)}`;
+// The loop's own messages (a repair round, the reminder, a refusal, the play-tester's brief) are worded by the library
+// for this host: it is given this kit's folders (`paths`), its tools by name (`toolNames`) and how a play-tester plays
+// here (`playWords`). Nothing below rewrites a message of the library's.
+/** The session's tools, as the loop's messages name them in place of a shell command. */
+export const TOOL_NAMES = { verify: 'gamesfun_step_verify', quick: 'gamesfun_verify', play: 'gamesfun_play', catalog: 'gamesfun_catalog', ask: 'gamesfun_ask' };
+/** A round ends with a call, never a file: what the loop's messages say where the worker's say "out/delivery.json". */
+const DELIVERY_WORDS = 'the summary and controls you pass to gamesfun_step_fix';
+const playWords = G => ({
+  PLAY_HOW: `Call the tool \`gamesfun_play\` with \`{"game": "${p(G.game)}", "name": "<a short name for the run>", "steps": [ … ]}\`. It answers with the play log and the path of each screenshot.`,
+  PLAY_STEPS_AT: 'The tool\'s own description names every step it takes.',
+  RUN_NODE: '',
+});
 
 /** The first round's brief: the rules for this game's parts, from the loop's prompt source (never a copy here). */
 export async function roundBrief(G, spec, { kind = 'build', request = null } = {}) {
@@ -208,27 +214,18 @@ function talkHost(G, { kind, idea = null, resume }) {
   };
 }
 
-async function buildHost(G, { kind = 'build', resume = true, request = null, log = () => {} } = {}) {
+async function buildHost(G, { kind = 'build', resume = true, request = null, log = () => {}, signal = null } = {}) {
   const spec = await readJson(G.spec) ?? await readJson(path.join(G.game, 'spec.json'));
   if (!spec) throw new Error(`no locked spec for ${p(G.game)}: gamesfun_step_spec locks one`);
   const versions = checkpointStore(G.game);
   const specFile = existsSync(G.spec) ? G.spec : path.join(G.game, 'spec.json');
-  const tools = {
-    ...kitTools({ kit: GF3, cwd: KIT_ROOT, log }),
-    // the library's own writePromises reads <job>/game; here the game is not inside the job folder
-    promises: async () => {
-      try {
-        const list = await (await promisesLib(GF3)).promisesFor(G.game, { spec: specFile });
-        await mkdir(G.job, { recursive: true });
-        await writeFile(G.promises, JSON.stringify(list, null, 2) + '\n');
-        return list;
-      } catch (e) { log(`  no promise list: ${String(e.message).split('\n')[0].slice(0, 200)}`); return null; }
-    },
-    ...(seams.tools ?? {}),
-  };
+  const tools = { ...kitTools({ kit: GF3, cwd: KIT_ROOT, log }), ...(seams.tools ?? {}) };
   return {
-    kind, resume, job: G.job, game: G.game, kit: GF3, who: 'The loop', log,
-    paths: { JOB: p(G.job), KIT_TOOLS: p(GF3_TOOLS), PLAYTEST: p(G.playtest) },
+    kind, resume, job: G.job, game: G.game, kit: GF3, who: 'The loop', log, specFile,
+    paths: { JOB: p(G.job), KIT_TOOLS: p(GF3_TOOLS), PLAYTEST: p(G.playtest), GAME: p(G.game), OUT: p(G.out), SPEC: p(specFile), QUESTIONS: p(path.join(G.out, 'questions.json')), DELIVERY: DELIVERY_WORDS },
+    toolNames: TOOL_NAMES, playWords: playWords(G),
+    // a verify that is running when the MCP server is told to stop (the call is cancelled, or the process ends) is stopped with its browser
+    signal: signal ?? undefined,
     firstMessage: await roundBrief(G, spec, { kind, request }),
     spec, get promises() { try { return JSON.parse(readFileSync(G.promises, 'utf8')); } catch { return null; } },
     tools, versions, prompts: PROMPTS, gameRef: p(G.game),
@@ -254,12 +251,63 @@ async function openBuild(G, options = {}) {
   const lines = [];
   const host = await buildHost(G, { ...options, log: l => lines.push(String(l).trim()) });
   const L = await openBuildLoop(host);
-  // The reminder round's words are built from the agent's own verify, which the library keeps in memory only. A tool
-  // call is a new process as far as the loop knows, so it is read again here (handed over or not: the library builds
-  // the message before it looks whether the round was handed).
-  if (L.state.step === 'agent' && L.state.agent === 'reminder' && !L.mem.own) L.mem.own = await host.tools.ownVerify(G.game) ?? { ok: false, why: 'no passing verify --quick on record' };
   return { L, host, lines };
 }
+
+// A verify that is running when this process is told to stop must not outlive it (verify starts Chrome): the library
+// stops the whole tree when `host.signal` aborts. The signal is the call's own (the session cancelled the call) or the
+// process ending (mcp/server.mjs turns a closed stdin and a stop signal into an ordinary exit).
+const ending = new AbortController();
+let endingHooked = false;
+function stopSignal(ctx) {
+  if (!endingHooked) { endingHooked = true; process.once('exit', () => ending.abort()); }
+  return ctx?.signal ? AbortSignal.any([ctx.signal, ending.signal]) : ending.signal;
+}
+
+// ---------------------------------------------------------------- a roll-back from the studio page (lib/cancel.mjs)
+/**
+ * DECISION (2026-10-11): a roll-back from the studio page while a run is under way CANCELS the run; it does not
+ * rewind it. Reasons: (1) the library can end a run (`loop.cancel`) and cannot rewind one, and a tools host never
+ * writes the state itself; (2) the person pressing "Roll back" is saying they do not want what this run was doing, so
+ * going on with the same run (which is what a rewind would mean) is what put the undone edits back on 2026-10-11;
+ * (3) a cancelled run delivers nothing and no proof of it counts, so nothing stale can be handed over; the stop guard
+ * lets the session go, and the person's next request starts a new run (gamesfun_change) on the files as they left them.
+ *
+ * The dev server leaves a mark; this applies it at the next call of any loop tool: the run is ended with the library's
+ * cancel, files the session wrote after the roll-back are put back to the checkpoint again, and the session is told.
+ * → what the session is told, or null when there is no mark.
+ */
+async function applyCancel(G) {
+  const mark = await readCancel(G.game);
+  if (!mark) return null;
+  const s = await readState(G);
+  let ended = false;
+  if (s && s.step !== 'done' && s.status === 'building') {
+    const L = isTalk(s) ? await openTalkLoop(talkHost(G, { kind: s.kind, idea: null, resume: true })) : (await openBuild(G, { kind: s.kind })).L;
+    ended = !(await L.cancel(mark.reason)).refused;
+  }
+  let undone = null;
+  const cp = checkpointStore(G.game), kept = mark.checkpoint ? await cp.get(mark.checkpoint) : null;
+  if (kept && kept.hash !== await treeHash(G.game)) { const r = await cp.restore(mark.checkpoint); undone = { written: r.written, removed: r.removed }; }
+  await clearCancel(G.game);
+  return {
+    by: 'the person, from the studio page', checkpoint: mark.checkpoint, at: mark.at, runCancelled: ended,
+    ...(undone ? { undoneAgain: undone } : {}),
+    do: `The person rolled the game back${mark.label ? ` to "${mark.label}"` : ''}${ended ? ', which ended the run that was under way (cancelled: nothing of it is delivered)' : ''}. ${undone ? 'Files written after the roll-back were put back to that checkpoint again. ' : ''}The files are as the person left them: do not put the undone changes back. Tell the person, and wait for what they ask next.`,
+  };
+}
+/** Every loop tool applies a waiting roll-back first, and says so in its answer. */
+const withCancel = t => ({
+  ...t,
+  async handler(input, ctx) {
+    let told = null;
+    if (typeof input?.game === 'string' && input.game.trim()) { const G = places(input.game); told = await serial(G.game, () => applyCancel(G)); }
+    const r = await t.handler(input, ctx);
+    if (!told) return r;
+    if (r && Array.isArray(r.content)) { try { return { ...r, content: [{ type: 'text', text: JSON.stringify({ rolledBack: told, ...JSON.parse(r.content[0].text) }, null, 2) }] }; } catch { return r; } }
+    return r && typeof r === 'object' && !Array.isArray(r) ? { rolledBack: told, ...r } : r;
+  },
+});
 
 // ---------------------------------------------------------------- rounds
 const roundFile = (G, name) => path.join(G.rounds, `${name}.md`);
@@ -270,7 +318,7 @@ async function handOver(L, host, G) {
   await cp.keep(name, { step: L.state.step, kind: L.state.step === 'repair' ? L.state.repair : L.state.agent, before: true });
   const r = await L.step();
   if (!r.waiting) return { stepped: r };
-  const brief = r.kind === 'build' || r.kind === 'change' ? r.message : inSession(r.message, G);
+  const brief = r.message;
   await mkdir(G.rounds, { recursive: true });
   await writeFile(roundFile(G, name), brief);
   return { round: { n, checkpoint: name, kind: r.kind, ...(r.model ? { strongerModelAdvised: r.model } : {}), brief } };
@@ -331,7 +379,7 @@ const schema = (properties = {}, required = ['game']) => ({ type: 'object', requ
 const keepAlive = (ctx, words) => { const t0 = Date.now(), t = setInterval(() => ctx.progress?.(`${words} (${Math.round((Date.now() - t0) / 1000)} s)`), 10000); return () => clearInterval(t); };
 
 // ---------------------------------------------------------------- the tools
-export const tools = [
+const TOOLS = [
   {
     name: 'gamesfun_next',
     description: 'Where the build loop of a game stands and which tool comes next. Reads only. Call it first in a new session, after a restart, or whenever you are unsure: it picks a build up at the right step. Answers the status (building, waiting-on-question, delivered, failed), the step, why, the round that is with you (with its brief), whether the proof on record is about the files as they are, and the checkpoints gamesfun_rollback can restore.',
@@ -440,7 +488,7 @@ export const tools = [
     handler: ({ game }, ctx) => { const G = places(game); return serial(G.game, async () => {
       const s = await readState(G);
       if (!s || isTalk(s) || s.step !== 'verify') return outOfOrder('gamesfun_step_verify', s, G);
-      const { L, host, lines } = await openBuild(G, { kind: s.kind });
+      const { L, host, lines } = await openBuild(G, { kind: s.kind, signal: stopSignal(ctx) });
       await readyToVerify(ctx);
       const stop = keepAlive(ctx, `verify ${p(G.game)}`);
       try { await L.step(); } finally { stop(); }
@@ -604,3 +652,4 @@ export const tools = [
     }); },
   },
 ];
+export const tools = TOOLS.map(withCancel);
