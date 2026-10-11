@@ -223,6 +223,22 @@ test('resume: a new copy of the tools picks a build up at the right step, with t
   assert.deepEqual((await state(b)).history.map(h => h.step), ['create', 'agent', 'fix', 'verify', 'repair', 'fix', 'verify', 'playtest', 'deliver']);
 });
 
+test('the one reminder: a round that ends without a passing quick verify gets it, also across a restart', async t => {
+  const own = { ok: false, why: 'its last verify (verify-2) failed check 7' };
+  const b = await bench(t, { own });
+  await lockSpec(b);
+  await b.call('gamesfun_step_create');
+  let r = await b.call('gamesfun_step_fix', DONE);
+  assert.deepEqual(r.ran, ['agent', 'fix']); assert.equal(r.step, 'agent'); assert.equal(r.round.kind, 'reminder'); assert.equal(r.round.checkpoint, 'round-2');
+  assert.match(r.round.brief, /without a passing verify --quick/); assert.match(r.round.brief, /failed check 7/); assert.equal(r.next.tool, 'gamesfun_step_fix');
+  // a new process (the session was closed in the reminder round): the round ends and the loop goes on to the full verify
+  const call = b.use(await import(`${pathToFileURL(path.join(KIT_ROOT, 'mcp', 'tools', 'loop.mjs')).href}?session=reminder`));
+  r = await call('gamesfun_next');
+  assert.equal(r.round.kind, 'reminder'); assert.match(r.round.brief, /failed check 7/);
+  r = await call('gamesfun_step_fix', DONE);
+  assert.deepEqual(r.ran, ['agent', 'fix']); assert.equal(r.step, 'verify'); assert.equal(r.next.tool, 'gamesfun_step_verify');
+});
+
 test('rollback: a round is undone and the folder is byte for byte what it was', async t => {
   const b = await bench(t);
   await lockSpec(b);
