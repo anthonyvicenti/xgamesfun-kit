@@ -130,8 +130,10 @@ camera passed 27 of 27 with `--quick --release`).
 An example is `templates/examples/<id>/` with `spec.json` (a locked spec), `rules.js`, `README.md` (what it shows,
 provenance) and `example.json` (`title`, `summary`, `verified: { result, kits, date }`). Optional `files/` is laid over
 the created game (then `assets.json` is regenerated). An example ships only after `npx gamesfun verify --quick` passes
-on a fresh `create --from` with the current kits; record the result in `example.json`. An example that a kit fault fails may list the failing checks in `example.json` → `knownFailing` and say why in its README; the smoke test then requires exactly those to fail. No example has one today. There is one per engine:
-`soak-squad` (party, WebGL) and the scenic one (WebGPU, with WebGL2 inside WebGPURenderer where Chrome has no adapter).
+on a fresh `create --from` with the current kits; record the result in `example.json`. An example that a kit fault fails may list the failing checks in `example.json` → `knownFailing` and say why in its README; the smoke test then requires exactly those to fail. `giant-four` has one: check 7, the audio gate, for a game of single sounds (its README and `example.json` say why; delete the entry when the kits carry games.fun's next gate version, which the smoke test will tell you). There is one per engine:
+`soak-squad` (party, WebGL) and the scenic one (WebGPU, with WebGL2 inside WebGPURenderer where Chrome has no adapter), and `giant-four` for a game that is not a party round (the `turns` loop and the `board` mechanic, party engine).
+
+`tests/try-it-shots.mjs <out dir> [port]` takes the screenshots `docs/TRY-IT.md` shows (`docs/try-it/01` to `10`) from real runs of the examples; run it again when the studio page or an example changes.
 
 ## The studio's web3 tabs
 

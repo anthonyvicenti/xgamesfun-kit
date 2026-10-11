@@ -22,6 +22,7 @@ test('the workflow runs the profile through the real flag for both engines, macO
   assert.ok(!wf.includes('GF_VERIFY_PROFILE'), 'no gate variable');
   assert.equal(wf.match(/verify games\/ci(-scenic)? --quick --profile \.github\/ci-profile\.json/g)?.length, 2);
   assert.match(wf, /--from soak-squad/); assert.match(wf, /--from isle-run/);
+  assert.match(wf, /--from giant-four/); assert.match(wf, /verify games\/ci-board --quick --profile \.github\/ci-profile\.json/, 'the turn-based board example runs under the profile too');
   assert.match(wf, /doctor --skip-graphics/);
   assert.ok(!wf.includes('continue-on-error'), 'no step may fail quietly: a check that cannot run on a runner leaves the profile by name, with its reason');
   const matrices = wf.match(/os: \$\{\{ fromJSON\(github\.event_name == 'pull_request'[\s\S]*?\) \}\}/g) ?? [];

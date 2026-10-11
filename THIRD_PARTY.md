@@ -71,6 +71,9 @@ Sounds are gf-audio presets, synthesised at run time: no audio files.
 `templates/examples/soak-squad/` is adapted from "Bladder Brawl", a game games.fun's Studio v2 built and delivered
 (same owner). It uses only the library art above.
 
+`templates/examples/isle-run/` is games.fun's scenic sandbox spec, and `templates/examples/giant-four/` is the proof
+game of games.fun's board mechanic and turns loop (same owner). Each uses only the library art of its engine.
+
 ## npm dependencies (`package.json`, pinned exactly; installed by `npm ci`, not committed)
 
 | Package | Version | Licence |

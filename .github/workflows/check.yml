@@ -88,12 +88,20 @@ jobs:
         # A hard failure on every system since 2026-10-11 (three green runs on Linux, Windows and macOS; docs/CI.md section 7).
         timeout-minutes: 12
         run: node bin/gamesfun.mjs verify games/ci --quick --profile .github/ci-profile.json
+      # A turn-based board game (the turns loop and the board mechanic): not a party round, same checks.
+      - name: Create a board game from the example
+        run: node bin/gamesfun.mjs create games/ci-board --from giant-four
+      - name: Verify the board game --quick under the CI profile
+        timeout-minutes: 12
+        run: node bin/gamesfun.mjs verify games/ci-board --quick --profile .github/ci-profile.json
       - name: Keep the verify evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: verify-party-${{ matrix.os }}
-          path: games/ci/evidence/
+          path: |
+            games/ci/evidence/
+            games/ci-board/evidence/
           if-no-files-found: ignore
           retention-days: 14
 
