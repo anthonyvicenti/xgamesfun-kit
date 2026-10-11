@@ -277,12 +277,19 @@ instruction) in two cases, both bounded:
    one refusal, which tells the session to wait for the report if the subagent is playing and to start it if it is
    not; later stops for the same state are let through with no notice to the person, because an agent may run the
    subagent in the background and end its turn to wait, and the report wakes it.
+   **While one of our own tools is running on the game** (the MCP server marks each call in
+   `<game>/.gf-loop/running/`; `bridge/loop-state.mjs` `readRunning`): the turn end is a wait for that tool's result,
+   which wakes the session. Nothing is refused and nothing is counted, for the build or for a request.
 2. **A request is unanswered.** A request this session was handed and has not reported. At most 2 refusals for each
    request; then the request becomes `dropped`. A request the wait handed over less than 3 seconds ago does not refuse
    the stop: its wake is already bringing it.
 
 Requests that arrived while the session was busy are handed over at the same moment, in the same answer (state
 `handed`, via `"stop"`), so they do not wait for the next wake.
+
+While the build holds a session (case 1 is refusing), an open request is named in the reason and not counted: the
+session finishes the build first, and the request is not dropped for it. The session's `gamesfun_requests` tool
+refuses a "done" report while the game's run is not delivered.
 
 Claude Code itself ends a turn after eight refused stops in a row; the bounds above keep the bridge under that.
 

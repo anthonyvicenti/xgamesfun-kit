@@ -1,7 +1,7 @@
 // The one place the bridge reads the build loop's state. The file is written only by the loop library, through the
 // loop tools (kits/research/gf-three/loop/README.md, "The state file"); the bridge never writes it. If its place or
 // shape changes, this function is all that follows.
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 export const LOOP_STATE = ['.gf-loop', 'state.json'];
@@ -22,4 +22,26 @@ export async function readLoopState(gameDir) {
     // who has the round, when someone does: 'playtest' means the play-tester subagent, not the session itself
     handed: s.handed && typeof s.handed === 'object' ? String(s.handed.step ?? s.handed.kind ?? 'round') : null,
   };
+}
+
+// Tool calls of ours that are running on the game right now (lib/running.mjs writes one marker per call; this is the
+// bridge's reader of them). A marker counts while its process lives and it is younger than half an hour.
+export const RUNNING_DIR = ['.gf-loop', 'running'];
+const MAX_AGE_MS = 30 * 60 * 1000;
+const alive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+/** → [{ tool, pid, since }] */
+export async function readRunning(gameDir, { now = Date.now, isAlive = alive } = {}) {
+  const dir = path.join(gameDir, ...RUNNING_DIR);
+  let names = [];
+  try { names = await readdir(dir); } catch { return []; }
+  const out = [];
+  for (const f of names) {
+    if (!f.endsWith('.json')) continue;
+    let m = null;
+    try { m = JSON.parse(await readFile(path.join(dir, f), 'utf8')); } catch { continue; }
+    if (!m || !Number.isInteger(m.pid) || typeof m.since !== 'number') continue;
+    if (now() - m.since > MAX_AGE_MS || !isAlive(m.pid)) continue;
+    out.push({ tool: String(m.tool ?? ''), pid: m.pid, since: m.since });
+  }
+  return out;
 }

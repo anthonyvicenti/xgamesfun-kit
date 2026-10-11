@@ -3,7 +3,7 @@
 // server/routes/session.mjs turns the page's routes into them. Shapes are in CONTRACT.md.
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
-import { readLoopState } from './loop-state.mjs';
+import { readLoopState, readRunning } from './loop-state.mjs';
 
 export const CONTRACT = 1;
 export const LIMITS = {
@@ -41,7 +41,7 @@ export function requestMessage(requests, { session, heading = 'Requests from the
   ].join('\n');
 }
 
-export function createBridge({ gameDir = null, run = randomBytes(4).toString('hex'), now = Date.now, limits = {}, readLoop = readLoopState, transport = null } = {}) {
+export function createBridge({ gameDir = null, run = randomBytes(4).toString('hex'), now = Date.now, limits = {}, readLoop = readLoopState, readBusy = readRunning, transport = null } = {}) {
   const L = { ...LIMITS, ...limits };
   const sessions = new Map();     // id → session record
   const requests = new Map();     // id → request (insertion order = age)
@@ -279,11 +279,17 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     const parts = [], reasons = [];
     let notice = null;
 
+    // 0. one of our own tools is still running on the game (a verify takes minutes; an agent moves the call to the
+    // background and ends its turn to wait for the result, which wakes it). That turn end is a wait: nothing is
+    // refused and nothing is counted. The next turn end after the result is judged as usual.
+    const busy = gameDir ? await readBusy(gameDir).catch(() => []) : [];
+    const waiting = busy.length > 0;
+
     // 1. the build
     const loop = gameDir ? await readLoop(gameDir) : null;
     const held = loop?.status === 'building' && (loop.session ? loop.session === s.id : related(s.cwd, gameDir));
     if (!held) s.guard = { fingerprint: null, refusals: 0, released: null };
-    else {
+    else if (!waiting) {
       const fingerprint = [loop.step, loop.round, loop.updated].join('|');
       if (s.guard.fingerprint !== fingerprint) s.guard = { fingerprint, refusals: 0, released: null };
       // The play-tester subagent has the round. An agent may run it in the background and end its turn to wait: its
@@ -311,8 +317,12 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     }
 
     // 2. requests handed and not reported
+    // While the build guard holds the session (it was just told to go on with the build), an open request is not
+    // counted against it too: the session finishes the build first, and the request is neither refused twice nor
+    // dropped for that. The same while one of our tools is running.
+    const building = held && !s.guard.released;
     const unanswered = [];
-    for (const r of open(s.id)) {
+    for (const r of (waiting || building) ? [] : open(s.id)) {
       // The Stop hook and the new wait start together at a turn end. When the wait took the request a moment ago, its
       // wake is already bringing it: refusing the stop too would say it twice.
       if (r.state === 'handed' && r.via === 'wake' && now() - r.handed < L.justHandedMs) continue;
@@ -326,6 +336,7 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     if (fresh.length) reasons.push('new-requests');
     const freshText = fresh.length ? requestMessage(fresh, { session: s.id }) : null;
 
+    if (parts.length && building && open(s.id).length) parts.push(`${open(s.id).length === 1 ? 'A request from the studio page is' : 'Requests from the studio page are'} still open (${open(s.id).map(r => r.id).join(', ')}): report with gamesfun_requests once the work is delivered.`);
     const refusing = parts.length > 0;
     if (refusing && freshText) parts.push(freshText);
     const allowed = !refusing && !freshText;

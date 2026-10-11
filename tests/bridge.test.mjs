@@ -196,6 +196,79 @@ test('the loop state reader says who has the round', async () => {
   } finally { await t.cleanup(); }
 });
 
+test('stop guard: a turn end while one of our tools is still running on the game is a wait: not refused, not counted', async () => {
+  // found in the end-to-end run: a verify takes two minutes, the agent moved the call to the background and ended its
+  // turn to wait; three such turn ends in twenty seconds released the guard ("the session is waiting for you") and
+  // dropped a page request the session was already working on
+  let busy = [{ tool: 'gamesfun_verify', pid: 1, since: 0 }];
+  const b = mk({ loop: { status: 'building', step: 'repair', why: 'w', round: 1, updated: 't1' }, readBusy: async () => busy });
+  start(b, 'A');
+  const seen = [];
+  b.subscribe(e => seen.push(e));
+  const r = b.addRequest({ text: 'shorter rounds' });
+  b.collect('A');
+  for (let i = 0; i < 6; i++) {
+    const s = await b.stop({ session: 'A' });
+    assert.equal(s.refuse, null, 'waiting for its own tool');
+    assert.equal(s.notice, null);
+  }
+  assert.ok(!seen.some(e => e.kind === 'guard'));
+  assert.equal((await b.queue()).requests[0].state, 'seen', 'the request is still open');
+  assert.equal((await b.queue()).requests[0].refusals, 0);
+  // the tool is over: the next turn end is judged, and the full bound is still there
+  busy = [];
+  for (let i = 0; i < 3; i++) assert.match((await b.stop({ session: 'A' })).refuse, /next step is "repair"/);
+  const fourth = await b.stop({ session: 'A' });
+  assert.match(fourth.notice, /through 3 refused stops/, 'the build guard lets go as before');
+  assert.deepEqual(fourth.reasons, ['unanswered'], 'and only now is the open request the session\'s to answer for');
+  assert.equal(r.id, (await b.queue()).requests[0].id);
+});
+
+test('stop guard: while the build holds the session, an open page request is named but not counted or dropped', async () => {
+  const b = mk({ loop: { status: 'building', step: 'agent', why: 'w', round: 1, updated: 't1' } });
+  start(b, 'A');
+  b.addRequest({ text: 'shorter rounds' });
+  b.collect('A');
+  for (let i = 0; i < 3; i++) {
+    const s = await b.stop({ session: 'A' });
+    assert.deepEqual(s.reasons, ['build']);
+    assert.match(s.refuse, /still open \(r_.*report with gamesfun_requests once the work is delivered/);
+  }
+  assert.equal((await b.queue()).requests[0].state, 'seen');
+  assert.equal((await b.queue()).requests[0].refusals, 0);
+  // delivered: now the request is the session's to report, with its own bound
+  b.setLoop({ status: 'delivered', step: 'done', why: '' });
+  assert.deepEqual((await b.stop({ session: 'A' })).reasons, ['unanswered']);
+  assert.deepEqual((await b.stop({ session: 'A' })).reasons, ['unanswered']);
+  await b.stop({ session: 'A' });
+  assert.equal((await b.queue()).requests[0].state, 'dropped');
+});
+
+test('a running tool call is marked in the game\'s loop folder by the MCP server and read by the bridge', async () => {
+  const { markRunning, RUNNING_DIR } = await import('../lib/running.mjs');
+  const { readRunning, RUNNING_DIR: READ_DIR } = await import('../bridge/loop-state.mjs');
+  const { running } = await import('../mcp/server.mjs');
+  assert.deepEqual(RUNNING_DIR, READ_DIR, 'one place');
+  const t = await tempDir('gf-running-');
+  try {
+    assert.deepEqual(await readRunning(t.dir), []);
+    const done = await markRunning(t.dir, 'gamesfun_verify');
+    const now = await readRunning(t.dir);
+    assert.deepEqual(now.map(x => [x.tool, x.pid]), [['gamesfun_verify', process.pid]]);
+    assert.deepEqual(await readRunning(t.dir, { isAlive: () => false }), [], 'a marker of a process that is gone does not count');
+    assert.deepEqual(await readRunning(t.dir, { now: () => Date.now() + 31 * 60 * 1000 }), [], 'nor one older than half an hour');
+    await done();
+    assert.deepEqual(await readRunning(t.dir), []);
+    // the server marks a call by its game or dir argument, and nothing for a call without one or a folder that is not there
+    const d2 = await running('gamesfun_step_verify', { game: t.dir });
+    assert.equal((await readRunning(t.dir))[0].tool, 'gamesfun_step_verify');
+    await d2();
+    await (await running('gamesfun_catalog', {}))();
+    await (await running('gamesfun_next', { game: path.join(t.dir, 'not-there') }))();
+    assert.deepEqual(await readRunning(t.dir), []);
+  } finally { await t.cleanup(); }
+});
+
 test('stop guard: only "building" holds; bounded at 3, then waiting-on-question with the reason for the person', async () => {
   const b = mk({ loop: { status: 'building', step: 'verify', why: 'the full verify has not run', round: 1, updated: 't1' } });
   start(b, 'A');

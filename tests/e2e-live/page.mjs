@@ -8,9 +8,10 @@
 //   tab:<id>                 open a tab (session, build, …)
 //   shot:<name>              screenshot the whole page as <name>.png
 //   type:<text>              type the text into the Session tab's box, with real keys, and click "Send to your session"
-//   states:<s1,s2,…>:<secs>  watch the newest request's row until it has shown these states in this order
+//   states:<s1,s2,…>:<secs>  watch the newest request's row (the last one) until it has shown these states in this order
 //                            (a screenshot at each new state: <prefix>-<state>.png); prints the times
 //   perm:allow|deny:<secs>   wait for a permission card and click its Allow or Deny button
+//   remove                   click Remove on the newest request (only a waiting one has the button)
 //   rollback:<id>:<secs>     in the Build tab, click "Roll back to this" on the row of that checkpoint and accept
 //   wait:<secs>              wait
 //   build:<secs>             watch the Build tab's headline for that long, printing each change (a screenshot each)
@@ -33,7 +34,7 @@ const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('dialog', d => d.accept());
 let prefix = 'page', failed = false, n = 0;
-const shot = async name => { await sleep(400); const f = `${name}.png`; await page.screenshot({ path: path.join(shotsDir, f) }); return f; };
+const shot = async (name, settle = 400) => { await sleep(settle); const f = `${name}.png`; await page.screenshot({ path: path.join(shotsDir, f) }); return f; };
 const tab = async id => { await page.click(`#tabs button[data-id="${id}"]`); await sleep(500); };
 const banner = () => page.locator('.panel:not([hidden]) .conn').first().innerText().catch(() => null);
 const rows = () => page.evaluate(() => [...document.querySelectorAll('.queue .req')].map(r => ({ state: r.dataset.state, label: r.querySelector('.req-state')?.innerText ?? '', text: r.querySelector('.req-text')?.innerText ?? '' })));
@@ -64,15 +65,23 @@ try {
       const want = rest[0].split(','), secs = Number(rest[1] ?? 120), t0 = Date.now(), seen = [];
       let i = 0;
       while (i < want.length && Date.now() - t0 < secs * 1000) {
-        const r = (await rows())[0];
+        const r = (await rows()).at(-1);
         if (r && r.state !== seen.at(-1)?.state) {
-          seen.push({ state: r.state, label: r.label.trim(), ms: Date.now() - t0, file: await shot(`${prefix}-${++n}-${r.state}`) });
+          seen.push({ state: r.state, label: r.label.trim(), ms: Date.now() - t0, file: await shot(`${prefix}-${++n}-${r.state}`, 0) });
           if (r.state === want[i]) i++;
         }
         await sleep(40);
       }
       if (i < want.length) failed = true;
       say({ step, ok: i === want.length, seen, banner: await banner(), game: await game() });
+      continue;
+    }
+    if (kind === 'remove') {   // the person takes a waiting request back
+      const row = page.locator('.queue .req').last();
+      const was = await row.getAttribute('data-state');
+      await row.locator('button:has-text("Remove")').click({ timeout: 5000 });
+      await sleep(800);
+      say({ step, was, rows: await rows(), file: await shot(`${prefix}-removed`) });
       continue;
     }
     if (kind === 'perm') {

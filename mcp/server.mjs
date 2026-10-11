@@ -8,11 +8,12 @@
 //
 // stdout is the protocol: everything else (logs, tool output) goes to stderr.
 import { spawn } from 'node:child_process';
-import { readdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isMain } from '../lib/main.mjs';
 import { BIN, KIT_ROOT } from '../lib/paths.mjs';
+import { markRunning } from '../lib/running.mjs';
 
 export const TOOLS_DIR = path.join(KIT_ROOT, 'mcp', 'tools');
 const NAME = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -83,6 +84,15 @@ export function inputProblems(schema, input) {
   return out;
 }
 
+/** The game folder a call names (its `game` or `dir` argument), when it is a folder that exists. → done() */
+export async function running(tool, input) {
+  const arg = typeof input.game === 'string' ? input.game : typeof input.dir === 'string' ? input.dir : null;
+  if (!arg) return async () => {};
+  const dir = path.resolve(KIT_ROOT, arg);
+  try { if (dir === KIT_ROOT || !(await stat(dir)).isDirectory()) return async () => {}; } catch { return async () => {}; }
+  return markRunning(dir, tool);
+}
+
 export function toResult(value) {
   if (value && typeof value === 'object' && Array.isArray(value.content)) return value;
   const text = typeof value === 'string' ? value : JSON.stringify(value ?? null, null, 2);
@@ -118,8 +128,12 @@ export async function createServer({ toolsDir = TOOLS_DIR, log = (...a) => conso
       runCli,
       signal: extra.signal,
     };
+    // While a call runs on a game folder, say so in that folder (lib/running.mjs): an agent that moved a long call to
+    // the background and ended its turn is waiting for it, and the studio's stop guard must not count that turn end.
+    const done = await running(req.params.name, input);
     try { return toResult(await t.handler(input, ctx)); }
     catch (e) { return { isError: true, content: [{ type: 'text', text: e.message }] }; }
+    finally { await done(); }
   });
   return { server, tools };
 }

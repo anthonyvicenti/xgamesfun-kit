@@ -14,6 +14,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { normalizeVerdict } from '../kits/research/gf-three/loop/index.mjs';
 import { checkpointStore, gameFiles, treeHash } from '../lib/checkpoint.mjs';
 import { KIT_ROOT, KITS } from '../lib/paths.mjs';
+import { tempDir } from './helpers.mjs';
 import { createServer, loadTools, offered, INSTRUCTIONS } from '../mcp/server.mjs';
 import * as loop from '../mcp/tools/loop.mjs';
 import * as requests from '../mcp/tools/loop-requests.mjs';
@@ -364,8 +365,26 @@ test('gamesfun_requests calls the bridge\'s three functions and nothing else', a
   assert.deepEqual(r.reported, { id: 'r_1', state: 'done', note: 'Enemies run 30% faster.' });
   assert.deepEqual((await tool.handler({})).requests, []);
   await assert.rejects(() => tool.handler({ done: { id: 'r_1', status: 'ignored' } }), /"done" or "dropped"/);
-  assert.deepEqual(calls.map(c => c[0]), ['collect', 'collect', 'status', 'report', 'collect']);
+  assert.deepEqual(calls.map(c => c[0]), ['collect', 'collect', 'status', 'status', 'report', 'collect']);
   assert.equal(calls[0][1].cwd, KIT_ROOT);
+  // "done" is refused while the studio's game is in a run that is not delivered; declining is not
+  const g = await tempDir('gf-req-');
+  t.after(() => g.cleanup());
+  await mkdir(path.join(g.dir, '.gf-loop'), { recursive: true });
+  const put = v => writeFile(path.join(g.dir, '.gf-loop', 'state.json'), JSON.stringify({ schema: 'gf-loop/1', ...v }));
+  requests.seams.bridge.bridgeStatus = async () => ({ running: true, game: g.dir });
+  queue.push({ id: 'r_2', text: 'make the grass pink', selection: null, state: 'seen', refusals: 0 }, { id: 'r_3', text: 'add guns', selection: null, state: 'seen', refusals: 0 });
+  await put({ kind: 'change', status: 'building', step: 'verify' });
+  r = await tool.handler({ done: { id: 'r_2', note: 'Pink.' } });
+  assert.equal(r.isError, true);
+  const said = JSON.parse(r.content[0].text);
+  assert.equal(said.refused, 'not-delivered'); assert.equal(said.next.tool, 'gamesfun_next'); assert.match(said.why, /change run is not delivered yet \(step "verify"\)/);
+  assert.equal(queue.find(q => q.id === 'r_2').state, 'seen', 'nothing was reported');
+  r = await tool.handler({ done: { id: 'r_3', status: 'dropped', note: 'The kit has no guns in a tag game.' } });
+  assert.equal(r.reported.state, 'dropped');
+  await put({ kind: 'change', status: 'delivered', step: 'done' });
+  r = await tool.handler({ done: { id: 'r_2', note: 'Pink.' } });
+  assert.deepEqual(r.reported, { id: 'r_2', state: 'done', note: 'Pink.' });
 });
 
 test('the skill and the play-tester agent are generated from the tools and the loop\'s prompt (run node scripts/sync-skills.mjs on drift)', async () => {
