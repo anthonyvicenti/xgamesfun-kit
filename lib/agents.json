@@ -1,6 +1,6 @@
 {
   "schema": "gamesfun-agents/1",
-  "about": "The coding agents this kit can register its MCP server with, as rows of data. A new agent costs a row. Read by lib/agents.mjs; checked by tests/agents.test.mjs. Placeholders in an argument list: {name} the server's name, {scope} the chosen scope, {command} the program that starts the server (an absolute path to this Node), and {...args} (a whole element) which expands to the server's arguments. We never edit an agent's own configuration file: registration is the agent's own command, and reading is the agent's own list or get command. Nothing here reads, copies or stores a credential, a login or a token.",
+  "about": "The coding agents this kit can register its MCP server with, as rows of data. A new agent costs a row. Read by lib/agents.mjs; checked by tests/agents.test.mjs. A row's `plugin` (or null) is the agent's own commands for installing this kit's plugin, which carries the studio bridge's hooks; an agent with no such command gets null and the studio page cannot reach its session yet. Placeholders in an argument list: {name} the server's name, {scope} the chosen scope, {command} the program that starts the server (an absolute path to this Node), and {...args} (a whole element) which expands to the server's arguments. We never edit an agent's own configuration file: registration is the agent's own command, and reading is the agent's own list or get command. Nothing here reads, copies or stores a credential, a login or a token.",
   "server": { "name": "gamesfun" },
   "agents": [
     {
@@ -29,7 +29,18 @@
         "get": ["mcp", "get", "{name}"],
         "list": ["mcp", "list"],
         "remove": ["mcp", "remove", "--scope", "{scope}", "{name}"],
-        "restartHint": "Start a new Claude Code session in your game folder (or run /mcp inside one) so it picks up the new server."
+        "restartHint": "In the Claude Code session you are in, type /reload-plugins: it picks up the new tools and the studio's hooks without a restart (a new session picks them up by itself)."
+      },
+      "plugin": {
+        "about": "The kit's plugin (plugin/: the studio bridge's hooks and the play-tester subagent), installed from this checkout through Claude Code's own plugin commands. The checkout is a marketplace of one plugin (.claude-plugin/marketplace.json). {kit} is this checkout's folder.",
+        "marketplace": "gamesfun-kit",
+        "name": "gamesfun",
+        "scopes": ["user", "local", "project"],
+        "addMarketplace": ["plugin", "marketplace", "add", "{kit}", "--scope", "{scope}"],
+        "install": ["plugin", "install", "{plugin}@{marketplace}", "--scope", "{scope}"],
+        "list": ["plugin", "list", "--json"],
+        "uninstall": ["plugin", "uninstall", "{plugin}@{marketplace}", "--scope", "{scope}"],
+        "removeMarketplace": ["plugin", "marketplace", "remove", "{marketplace}", "--scope", "{scope}"]
       },
       "docs": "https://code.claude.com/docs/en/mcp"
     },
@@ -61,6 +72,7 @@
         "remove": ["mcp", "remove", "{name}"],
         "restartHint": "Start a new Codex session so it picks up the new server."
       },
+      "plugin": null,
       "docs": "https://learn.chatgpt.com/docs/extend/mcp?surface=cli"
     }
   ]

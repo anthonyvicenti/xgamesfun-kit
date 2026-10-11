@@ -6,6 +6,10 @@
 // loads only the scratch project's own settings.
 //
 //   node tests/bridge-live/child.mjs <scratch-project-dir> --port <n> [--model haiku] [--game <dir>]
+//   node tests/bridge-live/child.mjs <folder> --port <n> --plain [--model haiku]
+//     --plain: the end-to-end proof. A session as a person starts it: no plugin flag, no fixture server, and no
+//     settings written here. Whatever the folder's own project and local settings name is loaded (what `gamesfun
+//     connect` registered through the agent's own commands), and nothing else of this machine's.
 //   POST /type   {"text":"hello"}      types the text and presses Enter
 //   POST /keys   {"keys":"\r"}         raw keys
 //   GET  /screen                       the last 4000 characters, colours removed
@@ -24,16 +28,23 @@ const project = path.resolve(args[0]);
 const model = opt('--model', 'haiku');
 const PORT = Number(opt('--port', 5912));
 const game = path.resolve(opt('--game', path.join(project, 'game')));
-
-mkdirSync(path.join(project, '.claude'), { recursive: true });
-// The scratch project allows only the two fixture tools, so everything else still asks (the approvals test needs that).
-writeFileSync(path.join(project, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: ['mcp__gamesfun__gamesfun_requests', 'mcp__gamesfun__gamesfun_next'] } }, null, 2) + '\n');
-const mcp = path.join(project, 'mcp.json');
-writeFileSync(mcp, JSON.stringify({ mcpServers: { gamesfun: { command: process.execPath, args: [path.join(here, 'mcp-fixture.mjs')], env: { GF_FIXTURE_GAME: game } } } }, null, 2) + '\n');
+const plain = args.includes('--plain');
+const debugLog = path.resolve(opt('--debug-file', path.join(project, 'debug.log')));
 
 const q = s => `'${s.replaceAll("'", "'\\''")}'`;
-const cmd = ['stty rows 50 cols 150;', 'claude', '--model', model, '--strict-mcp-config', '--mcp-config', q(mcp), '--permission-mode', 'default', '--setting-sources', 'project,local',
-  '--plugin-dir', q(path.join(kit, 'plugin')), '--debug-file', q(path.join(project, 'debug.log'))].join(' ');
+mkdirSync(project, { recursive: true });
+let cmd;
+if (plain) {
+  cmd = ['stty rows 50 cols 150;', 'claude', '--model', model, '--permission-mode', 'default', '--setting-sources', 'project,local', '--debug-file', q(debugLog)].join(' ');
+} else {
+  mkdirSync(path.join(project, '.claude'), { recursive: true });
+  // The scratch project allows only the two fixture tools, so everything else still asks (the approvals test needs that).
+  writeFileSync(path.join(project, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: ['mcp__gamesfun__gamesfun_requests', 'mcp__gamesfun__gamesfun_next'] } }, null, 2) + '\n');
+  const mcp = path.join(project, 'mcp.json');
+  writeFileSync(mcp, JSON.stringify({ mcpServers: { gamesfun: { command: process.execPath, args: [path.join(here, 'mcp-fixture.mjs')], env: { GF_FIXTURE_GAME: game } } } }, null, 2) + '\n');
+  cmd = ['stty rows 50 cols 150;', 'claude', '--model', model, '--strict-mcp-config', '--mcp-config', q(mcp), '--permission-mode', 'default', '--setting-sources', 'project,local',
+    '--plugin-dir', q(path.join(kit, 'plugin')), '--debug-file', q(debugLog)].join(' ');
+}
 
 // A fresh session, not a child of whatever session ran this script.
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('CLAUDE')));

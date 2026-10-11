@@ -92,12 +92,19 @@ test('stopping a tree: taskkill on Windows, the process group elsewhere, never p
 });
 
 // A recording stand-in for an agent's program: it keeps a set of registered names and answers get/add/remove.
-function fakeAgents({ registered = {}, addFails = false } = {}) {
+function fakeAgents({ registered = {}, addFails = false, pluginFails = null } = {}) {
   const calls = [], state = { ...registered };
   const runner = async (file, argv) => {
     calls.push([path.basename(file), ...argv].join(' '));
     const id = path.basename(file);
     const verb = argv[1];
+    if (argv[0] === 'plugin') {   // the agent's plugin commands: a marketplace, an install, a list, an uninstall
+      const sc = argv.includes('--scope') ? argv[argv.indexOf('--scope') + 1] : 'user';
+      if (verb === 'list') return { code: 0, stdout: JSON.stringify(state.plugin ? [{ id: state.plugin.id, scope: state.plugin.scope, enabled: true }] : []), stderr: '' };
+      if (verb === 'marketplace') { if (pluginFails === 'marketplace') return { code: 1, stdout: '', stderr: 'no marketplace there' }; state.marketplace = argv[2] === 'add' ? argv[3] : undefined; return { code: 0, stdout: 'ok', stderr: '' }; }
+      if (verb === 'install') { if (pluginFails === 'install') return { code: 1, stdout: '', stderr: 'not found in marketplace' }; state.plugin = { id: argv[2], scope: sc }; return { code: 0, stdout: 'ok', stderr: '' }; }
+      if (verb === 'uninstall') { delete state.plugin; return { code: 0, stdout: 'ok', stderr: '' }; }
+    }
     const nm = argv[0] === 'mcp' && verb === 'add' ? argv[argv.indexOf('--') > 0 ? argv.indexOf('--') - 1 : 2] : argv.at(-1);
     if (verb === 'get') return state[id] ? { code: 0, stdout: `gamesfun:\n  Status: ok\n`, stderr: '' } : { code: 1, stdout: '', stderr: 'No MCP server found' };
     if (verb === 'add') { if (addFails) return { code: 1, stdout: '', stderr: 'boom' }; state[id] = nm; return { code: 0, stdout: 'added', stderr: '' }; }
@@ -116,15 +123,71 @@ test('connect registers with each found agent through its own command, then chec
   assert.deepEqual(r.results.map(x => x.status), ['registered', 'registered']);
   assert.equal(f.calls.filter(c => c.startsWith('claude mcp add --transport stdio --scope user gamesfun -- ')).length, 1);
   assert.equal(f.calls.filter(c => c.startsWith('codex mcp add gamesfun -- ')).length, 1);
-  assert.ok(f.calls.every(c => /^(claude|codex) mcp (get|add)/.test(c)), 'only the agents\' own commands');
-  assert.ok(r.results[0].steps.at(-1).command.includes('mcp get'));
+  assert.ok(f.calls.every(c => /^(claude|codex) mcp (get|add)|^claude plugin (list|marketplace add|install)/.test(c)), 'only the agents\' own commands');
+  assert.ok(r.results[0].steps.filter(s => s.command.includes(' mcp ')).at(-1).command.includes('mcp get'));
+  assert.ok(r.results[0].steps.at(-1).command.includes('plugin list'), 'the plugin is checked last, in the agent\'s own list');
+});
+
+test('connect installs the kit\'s plugin through the agent\'s own plugin commands, from this checkout, and --remove takes it out', async () => {
+  const f = fakeAgents();
+  const kit = path.resolve('some kit');
+  let r = await connect({ agent: 'claude', scope: 'local', dir: 'proj', kit, runner: f.runner, detected: f.detected, listTools: okServer, data });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.results[0].plugin, { id: 'gamesfun@gamesfun-kit', status: 'installed' });
+  assert.ok(f.calls.includes(`claude plugin marketplace add ${kit} --scope local`), 'the checkout is the marketplace');
+  assert.ok(f.calls.includes('claude plugin install gamesfun@gamesfun-kit --scope local'));
+  assert.ok(f.calls.indexOf('claude plugin install gamesfun@gamesfun-kit --scope local') > f.calls.findIndex(c => c.startsWith('claude mcp add')), 'the tools first, then the plugin');
+  assert.match(r.results[0].restartHint, /\/reload-plugins/, 'the person is told the one thing to type in the session they are in');
+  assert.ok(r.results[0].steps.every(s => s.cwd === path.resolve('proj')), 'local scope belongs to --dir');
+  // a second run leaves both alone
+  const before = f.calls.length;
+  r = await connect({ agent: 'claude', scope: 'local', dir: 'proj', kit, runner: f.runner, detected: f.detected, listTools: okServer, data });
+  assert.equal(r.results[0].plugin.status, 'already installed');
+  assert.ok(!f.calls.slice(before).some(c => / (add|install) /.test(c)));
+  r = await connect({ agent: 'claude', scope: 'local', dir: 'proj', kit, remove: true, runner: f.runner, detected: f.detected, data });
+  assert.equal(r.results[0].plugin.status, 'removed');
+  assert.equal(f.state.plugin, undefined);
+  assert.ok(f.calls.includes('claude plugin uninstall gamesfun@gamesfun-kit --scope local') && f.calls.includes('claude plugin marketplace remove gamesfun-kit --scope local'));
+  // an agent with no plugin command says so, and is still registered
+  r = await connect({ agent: 'codex', runner: fakeAgents().runner, detected: f.detected, listTools: okServer, data });
+  assert.equal(r.results[0].status, 'registered');
+  assert.equal(r.results[0].plugin.status, 'none');
+});
+
+test('a refused plugin is reported and the tools stay registered; the scope and folder can come from the environment', async () => {
+  for (const [fails, words] of [['marketplace', /refused the marketplace: no marketplace there/], ['install', /refused the plugin: not found/]]) {
+    const f = fakeAgents({ pluginFails: fails });
+    const r = await connect({ agent: 'claude', runner: f.runner, detected: f.detected, listTools: okServer, data });
+    assert.equal(r.results[0].status, 'registered');
+    assert.equal(r.results[0].plugin.status, 'failed');
+    assert.match(r.results[0].plugin.note, words);
+  }
+  const g = fakeAgents();
+  const r = await connect({ agent: 'claude', env: { GAMESFUN_CONNECT_SCOPE: 'local', GAMESFUN_CONNECT_DIR: 'elsewhere' }, runner: g.runner, detected: g.detected, listTools: okServer, data });
+  assert.ok(g.calls.some(c => c.startsWith('claude mcp add --transport stdio --scope local gamesfun')));
+  assert.ok(r.results[0].steps.every(s => s.cwd === path.resolve('elsewhere')));
+  const d = fakeAgents();
+  const dry = await connect({ agent: 'claude', dryRun: true, runner: d.runner, detected: d.detected, data });
+  assert.equal(dry.results[0].plugin.status, 'would install');
+  assert.ok(!d.calls.some(c => /plugin (install|marketplace)/.test(c)), 'a dry run installs nothing');
+});
+
+test('the checkout is a plugin marketplace of one plugin, the one in plugin/', async () => {
+  const m = JSON.parse(await readFile(new URL('../.claude-plugin/marketplace.json', import.meta.url), 'utf8'));
+  const p = JSON.parse(await readFile(new URL('../plugin/.claude-plugin/plugin.json', import.meta.url), 'utf8'));
+  assert.equal(m.name, claude.plugin.marketplace);
+  assert.deepEqual(m.plugins.map(x => [x.name, x.source]), [[claude.plugin.name, './plugin']]);
+  assert.equal(p.name, claude.plugin.name);
+  // the play-tester's tools are this kit's MCP tools under the name connect registers the server with
+  const agent = await readFile(new URL('../plugin/agents/playtester.md', import.meta.url), 'utf8');
+  for (const t of agent.match(/^tools: (.*)$/m)[1].split(',').map(x => x.trim()).filter(x => x.startsWith('mcp__'))) assert.ok(t.startsWith(`mcp__${data.server.name}__gamesfun_`), t);
 });
 
 test('connect leaves an existing registration alone unless --replace, and --remove takes it out', async () => {
   const f = fakeAgents({ registered: { claude: 'gamesfun' } });
   let r = await connect({ agent: 'claude', runner: f.runner, detected: f.detected, listTools: okServer, data });
   assert.equal(r.results[0].status, 'already registered');
-  assert.ok(!f.calls.some(c => c.includes(' add ')));
+  assert.ok(!f.calls.some(c => c.includes(' mcp add ')));
   r = await connect({ agent: 'claude', replace: true, runner: f.runner, detected: f.detected, listTools: okServer, data });
   assert.equal(r.results[0].status, 'registered');
   assert.ok(f.calls.some(c => c.startsWith('claude mcp remove --scope user gamesfun')));
