@@ -135,8 +135,18 @@ test('build route: no state, then the state file and the newest verdict', async 
   r = await call('/api/build/rollback', { method: 'POST', body: JSON.stringify({ id: 'round-1' }), headers: { 'content-type': 'application/json' } });
   assert.equal(r.status, 200);
   assert.deepEqual([r.body.restored, r.body.written, r.body.removed], ['round-1', 1, 1]);
+  assert.equal(r.body.told, null, 'no session is there to tell');
   assert.equal(await treeHash(game.dir), before, 'the folder is what it was');
   assert.equal(await readFile(rules, 'utf8'), was);
+  // with a session there, the roll-back is told to it as a request (a work-around: server/routes/build.mjs says why)
+  const { bridgeFor } = await import('../server/routes/session.mjs');
+  const bridge = bridgeFor(srv.url).bridge;
+  bridge.event('session-start', { session: 'RB', cwd: game.dir, mode: 'default' });
+  r = await call('/api/build/rollback', { method: 'POST', body: JSON.stringify({ id: 'round-1' }), headers: { 'content-type': 'application/json' } });
+  const told = (await bridge.queue()).requests.find(q => q.id === r.body.told);
+  assert.match(told.text, /rolled the game back.*Before round 1.*do not put the undone changes back/s);
+  bridge.reportRequest(told.id, { note: 'ok' });
+  bridge.event('session-end', { session: 'RB', reason: 'exit' });
   r = await call('/api/build/rollback', { method: 'POST', body: JSON.stringify({ id: 'round-9' }), headers: { 'content-type': 'application/json' } });
   assert.equal(r.status, 400, 'an unknown checkpoint is refused');
   assert.match(r.body.error, /no checkpoint/);
