@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
-import { ensureCharDeps, runShim } from '../lib/char-deps.mjs';
+import { ensureCharDeps } from '../lib/char-deps.mjs';
 import { guard, UsageError } from '../lib/cli.mjs';
 import { KIT_ROOT, STATE } from '../lib/paths.mjs';
 import { runTool } from '../lib/run-tool.mjs';
@@ -57,7 +57,6 @@ export default {
     ensureCharDeps();
     await mkdir(STATE, { recursive: true });
     if (what === 'prop') return (await runTool('meshy-prop', rest, { env })).code;
-    // the character tool's own CLI does not start on Windows: run it through our copy of its CLI
-    return runShim('meshy-character-cli.mjs', rest, { env });
+    return (await runTool('meshy-character', rest, { env })).code;
   }),
 };

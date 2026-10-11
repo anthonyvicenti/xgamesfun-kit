@@ -1,4 +1,5 @@
-import { ensureCharDeps, runShim } from '../lib/char-deps.mjs';
+import { ensureCharDeps } from '../lib/char-deps.mjs';
+import { runTool } from '../lib/run-tool.mjs';
 import { guard, UsageError } from '../lib/cli.mjs';
 
 const usage = `Usage: gamesfun rig-check <body.glb> [...] [--json]
@@ -15,6 +16,6 @@ export default {
   run: args => guard(async () => {
     if (!args.some(a => !a.startsWith('--'))) throw new UsageError(usage);
     ensureCharDeps();
-    return runShim('rig-check-cli.mjs', args);
+    return (await runTool('rig-check', args)).code;
   }),
 };

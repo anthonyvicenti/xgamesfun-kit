@@ -2,7 +2,6 @@ import path from 'node:path';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { runTool } from '../lib/run-tool.mjs';
-import { addKitIgnores } from '../lib/manifest-ignores.mjs';
 import { listSlots, setFile, setValue, findSlot, getPointer, slotsUpToDate } from '../lib/slots.mjs';
 
 const usage = `Usage:
@@ -47,9 +46,7 @@ export default {
     }
     if (verb === 'write') {
       const dir = await resolveGame(values.game ?? positionals[0]);
-      const r = await runTool('slots', [dir, '--write'], { stdio: 'inherit' });
-      if (r.code === 0) await addKitIgnores(dir);
-      return r.code;
+      return (await runTool('slots', [dir, '--write'], { stdio: 'inherit' })).code;
     }
     if (verb === 'check') {
       const dir = await resolveGame(values.game ?? positionals[0]);

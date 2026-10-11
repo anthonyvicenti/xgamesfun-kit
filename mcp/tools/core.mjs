@@ -76,7 +76,7 @@ export const tools = [
       try { rec = JSON.parse(r.stdout.slice(i, j + 1)); } catch {}
       if (!rec) throw new Error(`verify did not produce a verdict (exit ${r.code}): ${(r.stderr || r.stdout).trim().split('\n').slice(-4).join(' | ')}`);
       const s = summarizeVerdict(rec);
-      return { game: shown(d), pass: s.pass, passed: s.passed, ran: s.ran, skipped: s.skipped, failed: s.failed, checks: s.checks.map(c => `${c.ok === null ? 'SKIP' : c.ok ? 'PASS' : 'FAIL'} ${c.n} ${c.name}${c.ok === false ? ` — ${c.detail}` : ''}`), notes: (rec.notes ?? []).slice(0, 8), evidence: rec.outDir ? path.relative(KIT_ROOT, path.resolve(KIT_ROOT, 'kits', rec.outDir)).split(path.sep).join('/') : null, seconds: rec.seconds };
+      return { game: shown(d), pass: s.pass, passed: s.passed, ran: s.ran, skipped: s.skipped, failed: s.failed, checks: s.checks.map(c => `${c.ok === null ? 'SKIP' : c.ok ? 'PASS' : 'FAIL'} ${c.n} ${c.name}${c.ok === false ? ` — ${c.detail}` : ''}`), notes: (rec.notes ?? []).slice(0, 8), evidence: rec.outDir ? path.relative(KIT_ROOT, path.resolve(d, rec.outDir)).split(path.sep).join('/') : null, seconds: rec.seconds };
     },
   },
   {

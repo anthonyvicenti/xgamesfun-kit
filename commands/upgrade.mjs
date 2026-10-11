@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { guard, parse } from '../lib/cli.mjs';
-import { addKitIgnores } from '../lib/manifest-ignores.mjs';
 import { resolveGame } from '../lib/games.mjs';
 import { runTool } from '../lib/run-tool.mjs';
 import { installGfWeb3 } from '../web3/node/install.mjs';
@@ -23,7 +22,6 @@ export default {
     if (values.world) flags.push('--world');
     if (values.json) flags.push('--json');
     const r = await runTool('upgrade', [dir, ...flags]);
-    if (r.code === 0) await addKitIgnores(values.out ? path.resolve(values.out) : dir).catch(() => {});
     if (r.code === 0) await installGfWeb3(values.out ? path.resolve(values.out) : dir);   // refresh gf/web3/
     return r.code;
   }),

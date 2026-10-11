@@ -1,3 +1,4 @@
+import { ensureCharDeps } from '../lib/char-deps.mjs';
 import { ensureBrowser } from '../lib/chrome.mjs';
 import { guard, parse, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
@@ -27,6 +28,7 @@ export default {
       const b = await ensureBrowser({ log: m => console.error(m) });
       if (!values.json) console.error(`verify: ${shown(dir)} in ${b.kind === 'edge' ? 'Microsoft Edge' : b.kind === 'chromium' ? 'Chromium' : 'Chrome'} (${b.path})`);
     }
+    ensureCharDeps();   // verify reads every body's skeleton (check 19) with the 3D tools' packages; installed once
     const flags = [];
     if (values.quick) flags.push('--quick');
     if (values.check) flags.push('--check', values.check);
