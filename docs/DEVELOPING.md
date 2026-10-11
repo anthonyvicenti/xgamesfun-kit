@@ -97,6 +97,8 @@ environment:
 | `GF_MANIFEST_IGNORE` | `lib/run-tool.mjs`, for every tool | names `lib/manifest-ignore.json`: the files this kit adds to a game that are not assets (`AGENTS.md`, `CLAUDE.md`, `.claude/`, `.agents/`, `scratch/`, `gamesfun.json`). gf-three writes them into `assets.json` → `ignore` and keeps them |
 | `MESHY_API_KEY`, `GF_MESHY_LEDGER`, `GF_MESHY_WAVE`, `GF_MESHY_CAP` | `gamesfun meshy` | the person's own key, and a ledger under `.gamesfun/` (outside games.fun the tools refuse a paid task without one) |
 | `CHROME_PATH` | `lib/chrome.mjs` `ensureBrowser`, only when no browser is installed | Playwright's own Chromium, downloaded once. Finding an installed Chrome, Chromium or Edge is the tools' job (`qa/browser.mjs`) |
+| `GAMESFUN_CONNECT_SCOPE`, `GAMESFUN_CONNECT_DIR` | whoever starts the agent (a test machine) | the scope and folder `connect` uses when `--scope` and `--dir` are not given |
+| `GAMESFUN_DEV_PORT`, `GAMESFUN_NO_OPEN` | the same | the port `dev` takes and whether it opens a browser, when `--port` and `--no-open` are not given |
 
 Playwright is found by package name (`playwright-core`, pinned in this package). The 3D tools' own packages
 (gltf-transform, meshoptimizer, sharp) are installed on first use into `kits/research/gf-three/tools/lib/char-deps/`
@@ -174,6 +176,13 @@ has no command for adding a server, it does not get a row (document the manual s
 - Real runs on Linux (2026-10-10): `connect` against the installed Claude Code 2.1.296 in a scratch folder (project
   scope, then local scope, where `claude mcp list` shows "Connected"), and against codex-cli 0.160.0 with `CODEX_HOME`
   pointed at a scratch folder; each registration was removed afterwards.
+- The whole thing in one run on Linux (2026-10-11, Claude Code 2.1.296, a fresh clone, `tests/e2e-live/README.md`):
+  the one line typed into a real session; `connect` adding the server (`claude mcp add`, local scope) and the plugin
+  (`claude plugin marketplace add <checkout>`, `claude plugin install gamesfun@gamesfun-kit`); `/reload-plugins`
+  loading both into the running session ("1 plugin · 7 agents · 13 hooks", the `gamesfun` server connected); a build
+  through the loop tools with the stop guard live; two tabs; a change, two approvals and a roll-back from the page.
+  `/reload-plugins` typed in the same second as the install read the settings before Claude Code had noticed the
+  change and loaded nothing; a second later it did. A person types it after the line has finished, so this is not hit.
 - **Not run:** anything on Windows or macOS (no machine). Untested there: the `cmd.exe` call for `codex.cmd`, `taskkill`,
   `winget`/`brew` fix lines, Chrome and Edge lookup (covered by the kit's own tests), a real `claude.exe`.
   Codex's `.cmd` shim is the likeliest first failure on Windows.

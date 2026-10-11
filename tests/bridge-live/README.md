@@ -16,7 +16,8 @@ Claude Code: the studio (`gamesfun dev`), a child session with `plugin/` loaded,
 No harness is needed: use two terminals and a browser.
 
 1. `node bin/gamesfun.mjs create games/try --from soak-squad`, then `node bin/gamesfun.mjs dev games/try`.
-2. In the kit folder, in another terminal: `claude --plugin-dir plugin` (accept the trust question).
+2. In the kit folder, in another terminal: `node bin/gamesfun.mjs connect`, then `claude` (accept the trust
+   question). (`claude --plugin-dir plugin` loads the plugin for one session without installing it.)
    `node bin/gamesfun.mjs doctor --skip-graphics` should now say the bridge has 1 session with the wait open.
 3. With the session idle, send a request (the studio's Session tab, or
    `node tests/bridge-live/drive.mjs http://127.0.0.1:5180 request "make the title bigger"`): the terminal should wake
