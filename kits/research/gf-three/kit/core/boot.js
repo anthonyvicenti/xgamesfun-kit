@@ -17,7 +17,7 @@ import audioPresets from '../../../audio/presets.json' with { type: 'json' };
 import KIT from '../kit.js';
 import { assets } from '../assets/assets.js';
 import { createRng, seedOf } from './rng.js';
-import { pickQuality, deviceFacts } from './quality.js';
+import { pickQuality, deviceFacts, drawsOnCard } from './quality.js';
 import { pixelRatioFor, watchPixelRatio, createGovernor, PIXEL_BUDGET } from './resolution.js';
 import { createInput } from './input.js';
 import { runShow } from './show.js';
@@ -25,7 +25,7 @@ import { createUI } from '../ui/ui.js';
 import { createHud } from '../ui/hud.js';
 import { createMenu, loadSettings } from '../ui/menu.js';
 import { listenForHost, host } from '../net/host.js';
-import { createSession } from '../net/session.js';
+import { createSession, seatPalette } from '../net/session.js';
 import { createPlayers } from '../net/players.js';
 import { listenForLoadout, pageLoadout } from '../net/looks.js';
 import { createBrain, createBots, defaultBot } from '../bots/bots.js';
@@ -72,6 +72,17 @@ export async function boot({ rules = {} } = {}) {
   let ui = null;
   try {
     await assets.init({ configs: ['game', 'look', 'world', 'characters'] });
+    // A backdrop is decoration, and on a machine that draws on its processor (no graphics card: a virtual machine, a
+    // remote desktop, a CI runner) it is left out: the host's page and a friend's each drawing the world in software
+    // took both processors of such a machine, the pages stopped answering, and the friend's join ran into the kit's
+    // 20 s limit ("Could not connect to the host"; the first CI runs of gamesfun-kit, 2026-10-11, on Linux and
+    // Windows runners; without the backdrop the same join took 1.6 s). The lobby keeps its seat colours and stands on
+    // the party page's own background. Nothing of a round is touched: a round is never a backdrop.
+    if (backdrop && !drawsOnCard()) {
+      net.describe?.({ colors: seatPalette(assets).slice(0, 8).map(String) });
+      document.documentElement.dataset.gfBackdrop = 'off';
+      return;
+    }
     // the prop catalog belongs to a layout world; a voxel world (CONTRACT §9) has none, so it is never asked for
     if (KIT.modules?.world && assets.config('world')?.template !== 'voxel') await assets.addConfig('props');
     const game = assets.config('game'), lookCfg = assets.config('look'), charsCfg = assets.config('characters');

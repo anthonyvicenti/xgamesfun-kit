@@ -31,3 +31,19 @@ export function deviceFacts() {
     width: g.innerWidth || 1280,
   };
 }
+
+/**
+ * Does this browser draw 3D on a graphics card? Asked the web's own way: a WebGL context with
+ * failIfMajorPerformanceCaveat, which a browser refuses when it would draw on the processor (Chrome's SwiftShader on a
+ * machine with no card: a virtual machine, a remote desktop, a blocked driver, a CI runner). No WebGL at all is a no.
+ * The probe context is given back at once. `doc` is the page's document (tests pass their own).
+ */
+export function drawsOnCard(doc = globalThis.document) {
+  try {
+    const canvas = doc.createElement('canvas'), opts = { failIfMajorPerformanceCaveat: true };
+    const gl = canvas.getContext('webgl2', opts) ?? canvas.getContext('webgl', opts);
+    if (!gl) return false;
+    try { gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch {}
+    return true;
+  } catch { return false; }
+}

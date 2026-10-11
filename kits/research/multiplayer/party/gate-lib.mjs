@@ -8,6 +8,23 @@ export async function until(fn, ms, label) {
 export const snap = page => page.evaluate(() => window.__party?.snapshot() ?? null).catch(() => null);
 export const p2p = page => page.evaluate(() => window.__p2p?.snapshot() ?? null).catch(() => null);
 /**
+ * What this Chrome draws WebGL with: {renderer, card}. `card` is false when the browser would draw on the processor
+ * (a context asked with failIfMajorPerformanceCaveat is refused), null when the page gave no answer. For the record:
+ * a gate that passed on a graphics card says nothing about a machine without one.
+ */
+export async function graphicsOf(browser) {
+  const page = await browser.newPage();
+  try {
+    return await page.evaluate(() => {
+      const gl = document.createElement('canvas').getContext('webgl2') ?? document.createElement('canvas').getContext('webgl');
+      const ext = gl?.getExtension('WEBGL_debug_renderer_info');
+      const o = { failIfMajorPerformanceCaveat: true }, c = document.createElement('canvas');
+      return { renderer: gl ? String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)).slice(0, 160) : null, card: !!(c.getContext('webgl2', o) ?? c.getContext('webgl', o)), processors: navigator.hardwareConcurrency ?? null };
+    });
+  } catch { return { renderer: null, card: null, processors: null }; }
+  finally { await page.close().catch(() => {}); }
+}
+/**
  * What both pages show while a joiner is joining, as one line: for a wait that ran out, so the record says where the
  * join stood and not only that the gate waited (the party page's phase and players, the kit's own connection state).
  */

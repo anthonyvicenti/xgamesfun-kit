@@ -44,7 +44,7 @@ import { launchChrome, manifestGpu } from '../../foundations/qa/browser.mjs';
 import { fuzz, reachPlay, runSteps } from '../../asset-manifest/play-driver.mjs';
 import { KIT_DIR, KIT_VERSION, MANIFEST, WORLD_SINCE, checkKitReleased, compareVersions, kitFiles, kitHasSignal, readManifest, repo, sha256, startParty, validateMultiplayer } from './lib.mjs';
 
-import { checkTransport, inFrame, p2p, sleep, snap, until } from './gate-lib.mjs';
+import { checkTransport, graphicsOf, inFrame, p2p, sleep, snap, until } from './gate-lib.mjs';
 import { gateLive } from './gate-live.mjs';
 
 export async function gate(gameDir, { out = null, seconds = 75, draft = null, devKit = false, record = true, port = 0, signal = null, legs = null, log = console.log } = {}) {
@@ -142,6 +142,7 @@ export async function gate(gameDir, { out = null, seconds = 75, draft = null, de
   const software = !!process.env.GF_VERIFY_SOFTWARE;
   const browser = await launchChrome(software ? {} : { gpu: manifestGpu(assets) ?? 'webgl' });
   rec.chrome = browser.version(); rec.renderer = software ? 'software' : manifestGpu(assets) ?? 'webgl';
+  rec.graphics = await graphicsOf(browser);
   const errors = [];
   async function player(label) {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });

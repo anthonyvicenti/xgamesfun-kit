@@ -67,6 +67,9 @@ export function worldNet(net) {
 // engines pass none and send the world every frame as before.
 // `engineWatch` (the forge engine, watch then play: CONTRACT §9b): {key(), take(data)}: the engine's own part of the
 // stream's key frame (what a viewer tuning in cannot learn from the messages to come), beside looks, mech and rules.
+/** The seat colours: character.tint.<role> (config/characters.json → palette), else the look's player palette. */
+export const seatPalette = assets => assets.config('characters').palette ?? assets.config('look').palette?.players ?? ['#4f7cff', '#ff5ea8', '#3ddc84', '#ffd166'];
+
 export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, botCount, onPhase = () => {}, createPlayers, engineWorld = null, engineWatch = null }) {
   const cfg = ctx.config;
   const R = cfg.round ?? {};
@@ -156,7 +159,7 @@ export function createSession(ctx, { rules, spawnCharacter, characterFor, rng, b
 
   // ---- who plays ----
   // seat colours: character.tint.<role> (config/characters.json → palette), else the look's player palette
-  const palette = ctx.assets.config('characters').palette ?? ctx.assets.config('look').palette?.players ?? ['#4f7cff', '#ff5ea8', '#3ddc84', '#ffd166'];
+  const palette = seatPalette(ctx.assets);
   const botNames = cfg.players?.botNames ?? ['Pip', 'Bo', 'Moss', 'Juno', 'Rex', 'Ivy', 'Tam'];
   const colorOf = seat => palette[seat % palette.length];
   // a world: the room gives each player the colour that follows their tab (gf-multiplayer 1.5.0, from the palette
