@@ -7,6 +7,18 @@ export async function until(fn, ms, label) {
 }
 export const snap = page => page.evaluate(() => window.__party?.snapshot() ?? null).catch(() => null);
 export const p2p = page => page.evaluate(() => window.__p2p?.snapshot() ?? null).catch(() => null);
+/**
+ * What both pages show while a joiner is joining, as one line: for a wait that ran out, so the record says where the
+ * join stood and not only that the gate waited (the party page's phase and players, the kit's own connection state).
+ */
+export async function joinState(H, J) {
+  const [h, j, hp, jp] = [await snap(H.page), await snap(J.page), await p2p(H.page), await p2p(J.page)];
+  const jt = await J.page.evaluate(() => window.__p2p?.transport?.() ?? null).catch(() => null);
+  const peers = await H.page.evaluate(() => window.__p2p?.peers?.() ?? null).catch(() => null);
+  const party = s => (s ? `${s.phase}, ${s.racers?.length ?? 0} player${s.racers?.length === 1 ? '' : 's'}` : 'no answer from the page');
+  const kit = s => (s ? `${s.phase}${s.connected ? ', connected' : ''}${s.reason ? ` ("${String(s.reason).slice(0, 60)}")` : ''}` : 'no answer');
+  return `host page: ${party(h)}; host kit: ${kit(hp)}, peers ${peers ? JSON.stringify(peers.map(x => `${x.state}${x.open ? ' open' : ''}`)) : '?'}; joiner page: ${party(j)}; joiner kit: ${kit(jp)}${jt ? `, channel ${jt.dc ?? 'none'}, connection ${jt.pc ?? 'none'}` : ''}`;
+}
 
 /** Which signaling transport each player's kit used (gf.js 1.3.0+ reports it); with --signal, both must have used it. */
 export async function checkTransport({ H, J, srv, signal, check, rec }) {

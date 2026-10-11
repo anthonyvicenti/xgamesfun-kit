@@ -3,8 +3,8 @@
  "about": "A sparse mirror of the games.fun repository at one commit: the kits games are built on and the tools that create and verify them. Written by scripts/sync-kits.mjs; never edited by hand (fix the kit in games.fun and sync again). tests/kits.test.mjs checks kits/ against this file.",
  "source": {
   "repo": "games.fun",
-  "commit": "b095b4b1fd2498aba7aff58bd4d281f7c5cc0fb9",
-  "date": "2026-10-11T08:54:13-07:00"
+  "commit": "bb5766dd24adb0624c05830760779a4d2a2de829",
+  "date": "2026-10-11T08:56:40-07:00"
  },
  "kits": {
   "gf-three": {
@@ -75,7 +75,7 @@
  },
  "totals": {
   "files": 1075,
-  "bytes": 36023201,
+  "bytes": 36025200,
   "excluded": 152,
   "excludedBy": {
    "Meshy-generated (licence tier unconfirmed)": 3,
@@ -195,7 +195,7 @@
  ],
  "closure": {
   "files": 119,
-  "bytes": 1967842,
+  "bytes": 1969841,
   "modules": [
    "creator-studio/lib/asset-kinds.mjs",
    "creator-studio/lib/code-literals.mjs",
@@ -1565,9 +1565,9 @@
   "research/multiplayer/p2p/vendor/ws/wrapper.mjs": "fe154662301fd558f935f9c217fccbe7a7dac02ff39e648a000589403ff27c7f",
   "research/multiplayer/party/LIVE_HANDBOOK.md": "03f634dd5197d4dcc0b457b87232eeabebfdb0a49db8c56b56a2f8b79160cbd7",
   "research/multiplayer/party/adopt.mjs": "b3cb3e0172932f2d6bd00e5692f29af88b022b8a024048eb5aeea5bcf4bae371",
-  "research/multiplayer/party/gate-lib.mjs": "8883fcd9870f573bc5a45348f84dcc8a4b19a99c1c76bb79e19e071e96913603",
-  "research/multiplayer/party/gate-live.mjs": "95460ad32ae860096e4be47bcf596f692b0c73b15811618900e59ac08666ab1b",
-  "research/multiplayer/party/gate.mjs": "a09b85dd31b82d767613ec1786a24d54a71dc33456a17d6445f366cfc4d0dcba",
+  "research/multiplayer/party/gate-lib.mjs": "d1282177f3c0507add57c883e59085c7d66ca76640ac5f5f852fd7a29d7b33ea",
+  "research/multiplayer/party/gate-live.mjs": "ddb0a01f540c75c63fa1b3f39be740d0193b7c97cde63e8e1085ab498f618d92",
+  "research/multiplayer/party/gate.mjs": "bab62af593dedc1ff061ed9784f939d921726b1ac66c67ad2a7e6e7f0b14d858",
   "research/multiplayer/party/kit/bot.js": "882495b3814773423d12d02e7fc3ac4fef463ec838d63cf816182f5c94c5b043",
   "research/multiplayer/party/kit/index.html": "b53a4c6947668ce6f6ebf8e999d65102dcc6a4df9dead80af96455a20e201817",
   "research/multiplayer/party/kit/net.js": "fc92719992cbcf88d2b8d3c9f7ff58a18dd2d04efc4fa96c47980b518787033d",

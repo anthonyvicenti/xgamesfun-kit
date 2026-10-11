@@ -17,7 +17,7 @@
 // background; a result reaches both; play again; a reload drops back into the round and sees the others; the host
 // ends a round; the host leaving closes the room.
 import { fuzz } from '../../asset-manifest/play-driver.mjs';
-import { checkTransport, endRound, inFrame, p2p, sleep, snap, until } from './gate-lib.mjs';
+import { checkTransport, endRound, inFrame, joinState, p2p, sleep, snap, until } from './gate-lib.mjs';
 
 const dist = (a, b) => Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0), (a.z ?? 0) - (b.z ?? 0));
 
@@ -49,9 +49,11 @@ export async function gateLive({ manifest, live, assets, dir, srv, player, check
   await until(async () => (await snap(J.page))?.phase === 'home', 20000, 'the joiner lobby');
   await J.page.fill('#gfp-name', 'Joan');
   await J.page.click('#gfp-join');
-  await until(async () => { const a = await snap(H.page), b = await snap(J.page); return a?.racers.length === 2 && b?.racers.length === 2 && b.phase === 'room'; }, 30000, 'both players in the room');
+  await until(async () => { const a = await snap(H.page), b = await snap(J.page); return a?.racers.length === 2 && b?.racers.length === 2 && b.phase === 'room'; }, 30000, 'both players in the room')
+    .catch(async e => { throw new Error(`${e.message} (${await joinState(H, J)})`); });
   const j0 = await snap(J.page), h0 = await snap(H.page);
-  check('joiner-joins-over-webrtc', j0.you && j0.you !== h0.you && !j0.host && (await p2p(J.page))?.connected === true, `host ${h0.you} "${h0.names[h0.you]}", joiner ${j0.you} "${j0.names[j0.you]}"`);
+  const joined = j0.you && j0.you !== h0.you && !j0.host && (await p2p(J.page))?.connected === true;
+  check('joiner-joins-over-webrtc', joined, `host ${h0.you} "${h0.names[h0.you]}", joiner ${j0.you} "${j0.names[j0.you]}"${joined ? '' : ` (${await joinState(H, J)})`}`);
   await checkTransport({ H, J, srv, signal, check, rec });
   await shot(H.page, 'host-lobby');
   if (legs === 'lobby') {

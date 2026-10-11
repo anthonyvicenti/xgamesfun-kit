@@ -50,13 +50,14 @@ import { gateLive } from './gate-live.mjs';
 export async function gate(gameDir, { out = null, seconds = 75, draft = null, devKit = false, record = true, port = 0, signal = null, legs = null, log = console.log } = {}) {
   const dir = resolve(gameDir);
   const checks = [], notes = [];
-  const check = (name, ok, detail = '', { soft = false } = {}) => { checks.push({ name, ok: !!ok, ...(soft ? { soft: true } : {}), detail: String(detail ?? '').slice(0, 500) }); log(`${ok ? 'PASS' : soft ? 'SOFT' : 'FAIL'} ${name}${detail ? ` — ${String(detail).slice(0, 220)}` : ''}`); return !!ok; };
+  const t0 = Date.now(), timeline = [];   // [check, seconds since the gate began]: where a slow run spent its time
+  const check = (name, ok, detail = '', { soft = false } = {}) => { timeline.push([name, Math.round((Date.now() - t0) / 100) / 10]); checks.push({ name, ok: !!ok, ...(soft ? { soft: true } : {}), detail: String(detail ?? '').slice(0, 500) }); log(`${ok ? 'PASS' : soft ? 'SOFT' : 'FAIL'} ${name}${detail ? ` — ${String(detail).slice(0, 220)}` : ''}`); return !!ok; };
   if (signal !== null && signal !== 'http' && signal !== 'ws') throw new Error(`--signal must be http or ws (got ${JSON.stringify(signal)})`);
   // legs "lobby" (a live game): stop once both players are in the room over WebRTC. For a machine that cannot draw a
   // round (a CI runner with no graphics card); the record says so and verify never counts it as the whole gate.
   if (legs !== null && legs !== 'lobby') throw new Error(`--legs must be lobby (got ${JSON.stringify(legs)})`);
   const rec = { schemaVersion: 1, kind: 'mp-gate', game: relative(repo, dir), started: new Date().toISOString(), kit: { name: 'gf-multiplayer', version: KIT_VERSION, source: draft || devKit ? 'development sources (served over the game, nothing written)' : `${KIT_DIR}/ in the game` },
-    signal: signal ?? 'default (the WebSocket on 127.0.0.1)', draft: !!draft, seconds, mode: null, verdict: 'fail', checks, notes, players: {}, shots: [] };
+    signal: signal ?? 'default (the WebSocket on 127.0.0.1)', draft: !!draft, seconds, mode: null, verdict: 'fail', checks, timeline, notes, players: {}, shots: [] };
   const finish = async () => {
     const hard = checks.filter(c => !c.soft);
     // A soft check that failed: for a race, no run reached an end; for a live game, only one of the two players had the other on screen.
@@ -135,8 +136,12 @@ export async function gate(gameDir, { out = null, seconds = 75, draft = null, de
   try { assets = JSON.parse(await readFile(join(dir, 'assets.json'), 'utf8')); } catch {}
   const isolated = assets?.runtime?.crossOriginIsolated === true;
   const srv = await startParty({ dir, port, overlay, isolated });
-  const browser = await launchChrome({ gpu: manifestGpu(assets) ?? 'webgl' });
-  rec.chrome = browser.version();
+  // GF_VERIFY_SOFTWARE=1 (verify's software mode, a CI profile): Chrome's software renderer here too. Until 2026-10-11
+  // the gate ignored it and asked for the graphics card, so a "software" run on a machine with a card proved nothing
+  // about a machine without one (gamesfun-kit's first CI run: the lobby legs passed here and failed on every runner).
+  const software = !!process.env.GF_VERIFY_SOFTWARE;
+  const browser = await launchChrome(software ? {} : { gpu: manifestGpu(assets) ?? 'webgl' });
+  rec.chrome = browser.version(); rec.renderer = software ? 'software' : manifestGpu(assets) ?? 'webgl';
   const errors = [];
   async function player(label) {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
