@@ -388,6 +388,23 @@ test('routes: the token is needed everywhere, and only this server\'s own page g
   assert.equal(q.json.loop, null);
 });
 
+test('routes: a session that never started under the plugin is told the protocol and its id with its first prompt, once', async () => {
+  // loaded into a running session (/reload-plugins), or the studio started after the session: no SessionStart came
+  const first = await call('POST', '/api/session/hook/UserPromptSubmit', { body: hookIn('LATE', { prompt: 'hi' }) });
+  assert.equal(first.status, 200);
+  const ctx = first.json.hookSpecificOutput;
+  assert.equal(ctx.hookEventName, 'UserPromptSubmit');
+  assert.match(ctx.additionalContext, /Your session id for it is LATE/);
+  assert.match(ctx.additionalContext, /GF_REQUEST/);
+  assert.match(ctx.additionalContext, new RegExp(base.replace(/[.]/g, '\\.')));
+  const second = await call('POST', '/api/session/hook/UserPromptSubmit', { body: hookIn('LATE', { prompt: 'again' }) });
+  assert.equal(second.json, null, 'said once');
+  // a session that did start under the plugin was told by its SessionStart hook: its prompts get nothing
+  await call('POST', '/api/session/hook/SessionStart', { body: hookIn('EARLY', { source: 'startup' }) });
+  assert.equal((await call('POST', '/api/session/hook/UserPromptSubmit', { body: hookIn('EARLY', { prompt: 'hi' }) })).json, null);
+  for (const id of ['LATE', 'EARLY']) await call('POST', '/api/session/hook/SessionEnd', { body: hookIn(id, { reason: 'exit' }) });
+});
+
 test('routes: a request from the page reaches the session\'s wait, is edited and removed while waiting, and is reported', async () => {
   await call('POST', '/api/session/hook/SessionStart', { body: hookIn('S1', { source: 'startup' }) });
   const events = stream(`/api/session/events?token=${token}`, { 'x-gamesfun-token': '' });
@@ -578,7 +595,7 @@ test('doctor: the bridge line, for Windows, macOS and Linux', async () => {
   assert.equal((await bridgeDoctor({ platform: 'darwin', probes: { plugin: [], form: 'monitor', status: off } })).status, 'ok');
   const none = await bridgeDoctor({ platform: 'linux', probes: { plugin: [], form: 'rewake', status: { running: true, url: 'http://127.0.0.1:5180/', sessions: [] } } });
   assert.equal(none.status, 'warn');
-  for (const sys of ['win32', 'darwin', 'linux']) assert.match(none.fix[sys], /claude --plugin-dir/);
+  for (const sys of ['win32', 'darwin', 'linux']) assert.match(none.fix[sys], /gamesfun\.mjs connect.*\/reload-plugins/);
   const asleep = await bridgeDoctor({ probes: { plugin: [], form: 'rewake', status: { running: true, url: 'u', sessions: [{ state: 'idle', connected: false }] } } });
   assert.equal(asleep.status, 'warn');
   assert.match(asleep.fix.linux, /--bridge-wait monitor/);

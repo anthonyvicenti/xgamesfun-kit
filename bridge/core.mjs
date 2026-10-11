@@ -66,7 +66,7 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     if (!id) throw new BridgeError(400, 'the event has no session id');
     let s = sessions.get(id);
     if (!s) {
-      s = { id, agent, cwd: cwd ?? null, state: 'idle', mode: mode ?? null, started: now(), lastEvent: null, lastEventAt: null, wait: null, guard: { fingerprint: null, refusals: 0, released: null } };
+      s = { id, agent, cwd: cwd ?? null, told: false, state: 'idle', mode: mode ?? null, started: now(), lastEvent: null, lastEventAt: null, wait: null, guard: { fingerprint: null, refusals: 0, released: null } };
       sessions.set(id, s);
     }
     if (cwd) s.cwd = cwd;
@@ -194,6 +194,7 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     const s = session(sid, { cwd, mode });
     s.lastEvent = kind; s.lastEventAt = now();
     if (kind === 'session-start') {
+      s.told = true;   // the plugin's SessionStart hook prints the protocol itself
       if (s.state === 'ended') { s.state = 'idle'; s.started = now(); }
       emit(kind, { session: s.id, cwd: s.cwd, source: data.source ?? null });
       return;
@@ -350,6 +351,12 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     // a transport
     event, askPermission, stop, openWait,
     sessions: () => [...sessions.values()].map(viewSession),
+    /**
+     * Has this session been told the protocol and its id? True once per session per run: a transport calls it when a
+     * prompt arrives, and tells a session that never started under the plugin (loaded into a running session, or the
+     * studio started or restarted after the session did).
+     */
+    introduce(sid) { const s = sessions.get(String(sid)); if (!s || s.told) return false; s.told = true; return true; },
     setTransport: t => { transport = t; },
     close,
   };

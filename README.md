@@ -12,11 +12,13 @@ Windows, macOS and Linux. No desktop app and no build step: Node 24 and Chrome. 
 Open your coding agent (Claude Code or Codex) in a terminal and paste this:
 
 ```text
-Set up the games.fun game-building kit on this machine: git clone https://github.com/anthonyvicenti/gamesfun-kit.git (skip the clone if a gamesfun-kit folder is already here), then in that folder run these, one at a time, with Node 24: npm ci, then node bin/gamesfun.mjs doctor, then node bin/gamesfun.mjs connect, then node bin/gamesfun.mjs create games/first --from soak-squad, then start node bin/gamesfun.mjs dev games/first in the background and give me the studio address it prints (it opens my browser too). Tell me what each step printed in one line. If a step fails, do what its "If it fails" section in gamesfun-kit/docs/ONE-LINE.md says, and if that doesn't fix it, stop and tell me exactly what failed. Never ask me for a password, token or key.
+Set up the games.fun game-building kit on this machine: git clone https://github.com/anthonyvicenti/gamesfun-kit.git (skip the clone if a gamesfun-kit folder is already here), then in that folder run these, one at a time, with Node 24: npm ci, then node bin/gamesfun.mjs doctor, then node bin/gamesfun.mjs connect, then node bin/gamesfun.mjs create games/first --from soak-squad, then start node bin/gamesfun.mjs dev games/first in the background and give me the studio address it prints (it opens my browser too). Tell me what each step printed in one line, and end with the line connect printed after "next:" (what I type in this session so the studio page reaches it). If a step fails, do what its "If it fails" section in gamesfun-kit/docs/ONE-LINE.md says, and if that doesn't fix it, stop and tell me exactly what failed. Never ask me for a password, token or key.
 ```
 
 Your agent clones this repository, installs it, checks your machine (`doctor`), adds our tools to itself through its own
-command (`claude mcp add`, `codex mcp add`: `connect`), makes a first game from an example and opens the studio page. It
+commands (`claude mcp add`, `codex mcp add`, and for Claude Code `claude plugin install` for the hooks that link the
+studio page to your session: `connect`), makes a first game from an example and opens the studio page. In Claude Code
+you then type `/reload-plugins` once, in the same session: the tools and the page's link are live without a restart. It
 talks to the model the way it always does, under your own login; nothing here signs you in or sends anything to a
 model. What each step does and what the agent does when one fails: [docs/ONE-LINE.md](docs/ONE-LINE.md). The line
 names the address the repository has today; it changes when the repository is public.
@@ -69,7 +71,7 @@ playbook) and the skills in `skills/`.
 | `npx gamesfun rig-check <body.glb>` | does a model work as a character body? |
 | `npx gamesfun meshy prop\|character …` | optional: generate a model with your own Meshy key |
 | `npx gamesfun doctor` | is this machine ready? One line per check, with the one command that fixes each problem on your system (`--json`) |
-| `npx gamesfun connect` | add our MCP server to Claude Code and Codex through their own commands, and check it works (`--remove` undoes it) |
+| `npx gamesfun connect` | add our MCP server to Claude Code and Codex through their own commands, and for Claude Code install the kit's plugin (the studio page's link to your session); checks both (`--remove` undoes it) |
 | `npx gamesfun update` | fetch and fast-forward the kit; `npm ci` only if the lockfile changed |
 
 `npx gamesfun <command> --help` gives each one's options. If `npx` can't find the command (an older npm), run

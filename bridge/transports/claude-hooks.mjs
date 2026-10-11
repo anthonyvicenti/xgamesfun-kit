@@ -8,6 +8,8 @@
 //
 // hook(event, input) answers with exactly what Claude Code reads from a hook: null (an empty 200) or the JSON output
 // object for that event. Documentation: https://code.claude.com/docs/en/hooks.md (fetched 2026-10-11).
+import { protocolWords } from '../../plugin/scripts/lib.mjs';
+
 export const claudeHooks = {
   id: 'claude-hooks', agent: 'claude-code', built: true,
   capabilities: { wakesIdleSession: true, deliversMidTurn: true, approvals: 'page-and-terminal', holdsStop: true, needsShell: false },
@@ -19,7 +21,7 @@ export const claudeHooks = {
   },
   events: ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest', 'PermissionDenied', 'Notification', 'Stop', 'StopFailure', 'SessionEnd'],
 
-  attach(bridge) {
+  attach(bridge, options = {}) {
     const base = input => ({ session: input?.session_id, cwd: input?.cwd, mode: input?.permission_mode });
 
     /** → { body, onClose? }: body is the hook's answer (null = empty 200); onClose is called if the hook goes away first. */
@@ -28,7 +30,13 @@ export const claudeHooks = {
       switch (name) {
         case 'SessionStart': bridge.event('session-start', { ...b, source: input.source }); return { body: null };
         case 'SessionEnd': bridge.event('session-end', { ...b, reason: input.reason }); return { body: null };
-        case 'UserPromptSubmit': bridge.event('prompt', { ...b, text: input.prompt }); return { body: null };
+        case 'UserPromptSubmit': {
+          bridge.event('prompt', { ...b, text: input.prompt });
+          // A session the plugin was loaded into after it started (/reload-plugins), or one older than this studio,
+          // never ran SessionStart here: it learns the protocol and its id with its first prompt instead.
+          if (options.url && bridge.introduce(b.session)) return { body: { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: protocolWords(options.url, b.session) } } };
+          return { body: null };
+        }
         case 'PreToolUse': bridge.event('tool-start', { ...b, tool: input.tool_name, input: input.tool_input }); return { body: null };
         case 'PostToolUse': bridge.event('tool-end', { ...b, tool: input.tool_name, input: input.tool_input, ok: true }); return { body: null };
         case 'PostToolUseFailure': bridge.event('tool-end', { ...b, tool: input.tool_name, input: input.tool_input, ok: false }); return { body: null };

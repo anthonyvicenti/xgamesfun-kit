@@ -34,11 +34,11 @@ export async function bridgeDoctor({ root = KIT, platform = process.platform, en
   if (form === 'monitor' && platform === 'win32' && !(probes.gitBash ?? false)) {
     return item('warn', 'the wait is set to "monitor", which needs Git Bash on Windows', { win32: 'node bin/gamesfun.mjs doctor --bridge-wait rewake   (or: winget install Git.Git)', darwin: 'none needed', linux: 'none needed' });
   }
-  const start = `claude --plugin-dir "${pluginDir}"`;
+  const start = 'node bin/gamesfun.mjs connect   (then type /reload-plugins in your Claude Code session, or start a new one)';
   const st = probes.status ?? await bridgeStatus({ cwd: root, env });
   if (!st.running) return item('ok', `plugin whole, wait "${form}" (no shell needed: ${form === 'rewake' ? 'yes' : 'no'}); the studio is not running`, null);
   const liveSessions = (st.sessions ?? []).filter(s => s.state !== 'ended');
-  if (!liveSessions.length) return item('warn', `the studio is running at ${st.url} and no agent session has reached it`, same(`start your session with the plugin: ${start}`));
+  if (!liveSessions.length) return item('warn', `the studio is running at ${st.url} and no agent session has reached it`, same(`give your session the plugin: ${start}`));
   const connected = liveSessions.filter(s => s.connected);
   if (!connected.length && liveSessions.every(s => s.state === 'idle')) return item('warn', `${liveSessions.length} session(s) known to the studio, none has its wait open: a request from the page will not wake it`, same(`press Enter once in the session's terminal (the next turn end starts the wait again); if it never opens, switch the wait: node bin/gamesfun.mjs doctor --bridge-wait ${form === 'rewake' ? 'monitor' : 'rewake'}`));
   return item('ok', `studio at ${st.url}; ${liveSessions.length} session(s), ${connected.length} with the wait open ("${form}")`);

@@ -19,7 +19,7 @@ export default async function register(router, ctx) {
   const token = randomBytes(24).toString('base64url');
   const wait = await waitForm(ctx.kitRoot);
   const bridge = createBridge({ gameDir: ctx.gameDir });
-  const transport = openTransport(process.env.GAMESFUN_BRIDGE_TRANSPORT || 'claude-hooks', bridge, { wait });
+  const transport = openTransport(process.env.GAMESFUN_BRIDGE_TRANSPORT || 'claude-hooks', bridge, { wait, url: ctx.url });
   const streams = new Set();
 
   const sameToken = given => {
