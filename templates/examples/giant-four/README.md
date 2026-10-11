@@ -22,12 +22,9 @@ What it shows:
   in a row win): `npx gamesfun slots list games/my-game --all`. `npx gamesfun slots set rules.need 5` makes it five in a
   row with no code.
 
-**Checks.** A fresh create passes 23 of the 24 checks of `verify --quick`. It fails one, check 7 (the audio gate), by
-half a decibel: momentary loudness -32.5 LUFS against a floor of -32. The game is heard; it is quiet because one disc
-landing is the loudest thing it ever does, and the gate's floor was set on rounds where many sounds overlap. The sound
-levels are not raised to pass. games.fun is making the next version of the gate for games of single sounds; until the
-kits carry it, `example.json` lists the check under `knownFailing` and the smoke test holds the verdict to exactly
-that one failure.
+**Checks.** A fresh create passes every check of `verify --quick`. Check 7 (the audio gate) used to fail by half a
+decibel on gate v4, because one disc landing is the loudest thing this game does; the kits carry gate v5 since the
+sync of games.fun ed6c86ffa and it passes. The sound levels were never raised to pass.
 
 Provenance: the board mechanic's proof game from games.fun's open builder (tracks M4-F and M4-C, 2026-10-11:
 `research/open-builder/findings/m4c/giant-four-turns/`), spec and rules unchanged. Same owner as this kit

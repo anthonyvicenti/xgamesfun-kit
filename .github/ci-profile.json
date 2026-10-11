@@ -15,8 +15,6 @@
     { "check": 16, "reason": "shoots enemies in a staged moment on real clicks" },
     { "check": 20, "reason": "drives the menu on a page that draws too slowly" },
     { "check": 21, "reason": "reads the HUD during a round" },
-    { "check": 22, "reason": "opens the menu's wallet panel on a running page" },
-    { "check": 24, "reason": "loads the game in a post frame and waits for its first frames" },
     { "check": 25, "reason": "plays a friends round with two players" }
   ]
 }

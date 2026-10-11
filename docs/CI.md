@@ -275,6 +275,13 @@ the three has run on Windows or macOS.
 `research/multiplayer/party/manifest.mjs`), then sync. Until then a game made with this kit plays with friends on this
 machine only, whatever the play host's switch says, and `doctor` and `dev` say so.
 
+### Kits synced to games.fun ed6c86ffa (2026-10-11)
+
+Checks 22 and 24 are release-only in the kits now (`RELEASE_ONLY` in `tools/lib/verdict.mjs`: a build's verify does not
+run them), so `.github/ci-profile.json` no longer lists them and `tests/ci.test.mjs` would fail if it did. `create`
+vendors gf-multiplayer 1.6.5 (`KIT_VERSION`), so the workflow's games now exercise 1.6.4's and 1.6.5's changes. The
+sections above keep the 1.6.3 and 1.6.4 wording as the record of those runs.
+
 ## 8. What a person on a real Windows machine or a Mac still has to try by hand
 
 A runner is a virtual machine without a real graphics card, and it ran the profile only. None of this has been done on

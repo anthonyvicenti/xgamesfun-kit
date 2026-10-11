@@ -256,27 +256,22 @@ never joins, this question is the first thing to check (System Settings, Privacy
 
 ### 6. Play with a friend on another machine
 
-**Today: not yet for a game you make here.** Two things have to be true before a friend on another computer can join,
-and today one of them is not.
+**Status: the kit side is done; the server side is games.fun's.** Two things have to be true before a friend on another
+computer can join.
 
-1. **The game must carry the newer multiplayer part (version 1.6.4).** A game the kit makes today carries 1.6.3, which
-   only knows how to connect players on one computer. games.fun has not yet made 1.6.4 the version new games get. Until
-   it does, there is nothing to switch on.
+1. **The game must carry multiplayer part 1.6.4 or newer.** Since the sync of games.fun ed6c86ffa a game the kit makes
+   carries 1.6.5, which knows online play. (Games made before that sync carry 1.6.3 and stay on this machine until
+   `npx gamesfun upgrade <game>`.)
 2. **Our server must accept games that people run themselves.** It introduces the two browsers to each other (a room
-   code, then they connect directly). That part is being switched on now.
+   code, then they connect directly). Whether it does is the play host's switch, not the kit's. This page has not
+   been checked against the real server since the sync.
 
-**What you see today.** Run `node bin/gamesfun.mjs doctor`. The line **Online play** says:
+**What you see.** Run `node bin/gamesfun.mjs doctor`. The line **Online play** says
+`online through games-fun-play.vercel.app: a game served by dev opens its rooms there ...`, or says the game is on this
+machine only (an older game, `GAMESFUN_ONLINE=off`, or the server refusing or not answering). The studio's terminal
+says the same in its `online` line. Thing 5 (a second tab) works as before either way.
 
-```
-ok   Online play   this machine only for a new game: create vendors multiplayer kit 1.6.3, and online play needs 1.6.4 ...
-```
-
-When you start the studio (`node bin/gamesfun.mjs dev games/<your-game>`), the terminal says the same in its `online`
-line: `this machine only (this game's multiplayer kit is 1.6.3; online play needs 1.6.4 or newer)`. Thing 5 (a second
-tab) works exactly as before. There is nothing more to test here today.
-
-**What you will see once both are true** (after an update of the kit; `doctor` then says
-`online through games-fun-play.vercel.app`):
+**What you will see when the server accepts the game** (`doctor` says `online through games-fun-play.vercel.app`):
 
 1. The studio's terminal says `online through games-fun-play.vercel.app: friends on other machines can join`.
 2. Your friend needs the same game on their computer: the kit, and a copy of your game's folder in its `games` folder.

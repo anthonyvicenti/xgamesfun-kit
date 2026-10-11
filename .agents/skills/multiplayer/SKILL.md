@@ -8,7 +8,7 @@ description: Keep a gf-three game live multiplayer - friends in one game, in syn
 The bar: friends are in one game, in sync, and each player sees the others as a character where they really are. Every
 gf-three game is `live` (`multiplayer.json` → `"mode": "live"`). One player hosts in their own browser; the others
 join with a code or an invite link; game traffic goes peer to peer over WebRTC. There is no game server. The kit
-(`gf/mp/`, gf-multiplayer 1.6.3) and gf-three's `kit/net/` do the networking: poses, drawing friends, the round,
+(`gf/mp/`, gf-multiplayer 1.6.5) and gf-three's `kit/net/` do the networking: poses, drawing friends, the round,
 loadouts. Background: `kits/research/multiplayer/STANDARD.md` and `kits/research/multiplayer/party/LIVE_HANDBOOK.md`.
 
 ## The rules that keep copies in sync
@@ -53,6 +53,6 @@ leaving and the loadout leg. Run it with the rest: `npx gamesfun verify games/<n
 ## Beyond this machine
 
 Local signaling (`gamesfun dev`) only answers this machine: two tabs, or two windows, play together. games.fun's own
-play host has HTTP signaling at `/signal/v1` and a relay for networks that can't connect directly (gf-multiplayer 1.6.3),
+play host has HTTP signaling at `/signal/v1` and a relay for networks that can't connect directly (gf-multiplayer 1.6.5),
 but whether a game built with this kit may use it by default is not decided yet. Until it is, say plainly that friends
 elsewhere cannot join a locally built game.

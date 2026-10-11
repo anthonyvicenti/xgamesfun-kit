@@ -3,12 +3,10 @@
   "summary": "A turn-based board game: four in a row on a giant board on the town square. Players take turns; bots take the empty seats.",
   "engine": "party",
   "loop": "turns",
-  "knownFailing": [7],
   "verified": {
-    "result": "FAIL 23/24 with --quick (check 9 skipped): only check 7, the audio gate (momentary loudness -33.3 LUFS against a floor of -32 in this run; -32.5 on the kits before). Every other check passes, the turns among them (12, 13, 15) and two players over WebRTC (5, 25)",
-    "why": "One disc landing with one cue is the loudest thing this game ever does; the gate's floor was set on rounds where sounds overlap. The bus levels are the creator-approved ones and are not raised to pass. games.fun is making the next version of the gate, which judges loudness where sounds play (open builder wave 8, track V). Delete knownFailing when the kits carry it: the smoke test fails the day check 7 passes.",
-    "kits": "f70f94e13316fb07cad65e019763c8a495242880",
+    "result": "PASS 22/22 with --quick (9 skipped by --quick). Check 7, the audio gate, passes on the kits' qa-gate-v5 (it failed by half a decibel on gate v4)",
+    "kits": "ed6c86ffa",
     "date": "2026-10-11",
-    "how": "npx gamesfun create <dir> --from giant-four, npx gamesfun verify <dir> --quick (119 s), by the smoke test (Linux, Chrome on the graphics card)"
+    "how": "npx gamesfun create <dir> --from giant-four, npx gamesfun verify <dir> --quick (120 s), by the smoke test (Linux, Chrome on the graphics card)"
   }
 }
