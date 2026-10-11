@@ -1,5 +1,5 @@
 // The routes seam (docs/ARCHITECTURE.md): server/routes/<area>.mjs exports `default function register(router, ctx)`.
-// `router.get(path, handler)` and `router.post(path, handler)` mount under /api/<area>/…; a path may hold `:name`
+// `router.get/post/patch/delete(path, handler)` mount under /api/<area>/…; a path may hold `:name`
 // segments, handed to the handler as params. Handlers receive (req, res, params) and may be async. A handler that
 // returns a value without writing a response gets it sent as JSON (200); a thrown HttpError sends its status, any
 // other throw a 500. req.query is the URL's searchParams.
