@@ -1,6 +1,6 @@
 # CI: what runs on a GitHub runner, and what cannot
 
-Status: written 2026-10-10, **never run on GitHub** (Actions are off for this repository on purpose, gate G1). Every
+Status: written 2026-10-10, updated 2026-10-11 for `verify --profile`, the scenic job and stepped time. **Never run on GitHub** (Actions are off for this repository on purpose, gate G1). Every
 number below was measured on one Linux machine, except where it says estimate.
 
 ## 1. The runners have no graphics card
@@ -9,7 +9,7 @@ number below was measured on one Linux machine, except where it says estimate.
 `CHROME_PATH` is set per system in the workflow) draws WebGL with SwiftShader, on the CPU. The workflow sets
 `GF_VERIFY_SOFTWARE=1`, which makes verify launch Chrome without graphics flags.
 
-### Measured: `create --from soak-squad`, `verify --quick`, software rendering
+### Measured 2026-10-10 (before `--profile`): `create --from soak-squad`, `verify --quick`, software rendering
 
 Machine: Linux, Chrome 148, Node 24.19.0, `taskset -c 0-3` (4 CPUs), GPU forced off in the browser, under
 `flock ~/.cache/gf-gpu.lock`. Caveat: the 24-core host was busy with other agents (load average 15 to 20 throughout), so
@@ -28,7 +28,7 @@ the 4 CPUs were shared and these numbers are worse than a dedicated 4-vCPU runne
 | 4 slot coverage, 6 round to results, 7 audio, 8 swap proof, 10 fair play, 12 something happens, 13 controls, 15 loop alive, 16 hits | cannot run (same cause) | - |
 | 9 contact sheet and perf | skipped by `--quick` | - |
 
-Whole `verify --quick`: **1500 s and FAIL 5 of 16 (skipped 1)**, then killed. The cause, probed directly: the game shell
+Whole `verify --quick` (no profile; the kits were 70bfafac7): **1500 s and FAIL 5 of 16 (skipped 1)**, then killed. The cause, probed directly: the game shell
 page renders at **1.6 frames per second** under SwiftShader on those 4 CPUs, so a round (which the checks wait for with
 timeouts of 60 s and less) never reaches play. The kit's own comment in `verify.mjs` records the same effect at about
 4 fps on an earlier machine ("Studio v2 T1 run 4"). A dedicated runner may do better; that is unmeasured, and the first
@@ -40,47 +40,70 @@ an edit to the kit's tools (M1-A, M2-D), not to this workflow.
 
 ## 2. Scenic games
 
-The kit's snapshot has no scenic engine yet (M1-B). Read from games.fun main (`research/gf-three/tools/lib/paths.mjs`,
-`launchForGame`; `research/foundations/qa/browser.mjs`):
+Read from the kit's tools (`research/gf-three/tools/lib/paths.mjs`, `launchForGame`; `research/foundations/qa/browser.mjs`):
 
 - A scenic game draws with three's `WebGPURenderer`. Verify normally launches Chrome's headless shell with Vulkan flags
   and requires a **hardware** WebGPU adapter; SwiftShader's fallback adapter counts as none (`NoWebGPUError`).
 - On a runner there is no adapter, so `launchForGame` falls back to WebGL2 inside `WebGPURenderer` and notes it. With
   `GF_VERIFY_SOFTWARE=1` it skips the WebGPU probe and launches plain Chrome (no WebGPU, so the same WebGL2 backend),
-  on SwiftShader. A scenic game's frame is heavier than the party game's (TSL materials, bloom, depth of field,
-  quality tiers), so it will be slower than 1.6 fps: expect the same static-only result.
+  on SwiftShader.
 - The headless shell the probe wants comes from `npx playwright install chromium-headless-shell`, which a runner does
   not have. If the shell is missing and software mode is off, `launchChrome` throws something other than
-  `NoWebGPUError` and the fallback does not trigger. The workflow sets software mode, so it avoids that path; M1-B must
-  keep it so.
-- WebGPU on a runner is not available: none of the standard images exposes a GPU. A look judged from a software frame
-  is meaningless (COMMON.md): scenic CI checks behaviour, never looks.
+  `NoWebGPUError` and the fallback does not trigger. The profile sets software mode, so it avoids that path.
+- A look judged from a software frame is meaningless: scenic CI checks behaviour, never looks.
 
-The workflow's `scenic` job is off until the repository variable `GF_SCENIC_EXAMPLE` names a scenic example.
+The workflow's `scenic` job creates `isle-run` and runs the same profile as the party job. Measured below (section 3):
+the scenic game's lobby legs pass under software rendering just as the party game's do.
 
 ## 3. The CI profile: `ci-software`
 
-Data: `.github/ci-profile.json`. It lists the checks to run and each check left out with its reason. The workflow runs
-them today as `verify --check 11,17` and `verify --check 14` (both exist in the kit), plus `npm test`, the skills
-mirror check, `catalog` and `create`; check 1 and 2 run inside any full verify. The profile leaves out checks 3, 4, 5
-(in-round and loadout legs), 6, 7, 8, 10, 12, 13, 15 and 16, all for one reason: they need a round running at a
-playable frame rate. A skipped check is reported as skipped, with its reason, never as passed.
+`.github/ci-profile.json` is the file `gamesfun verify --quick --profile .github/ci-profile.json` reads (the kit's
+`verify.mjs`; the shape is held by `checkProfile` in `tools/lib/verdict.mjs`, and `tests/ci.test.mjs` checks the file
+against it). It sets `GF_VERIFY_SOFTWARE=1` before any browser starts and lists the checks left out, each with its
+reason. Everything else a build's verify runs, runs. A skipped check is recorded in `verdict.json` as skipped with its
+reason, never as passed; the verdict carries `profile` and `profilePass`, `pass` stays false, and the command prints
+`PROFILE ci-software OK (not a full pass)` and exits 0 when everything that ran passed. `"legs": "lobby"` on check 5
+runs the gate's lobby legs only (room, WebRTC, both games in the room) and records the check as skipped.
 
-## 4. Request for M1-A's owner (verify is not edited here)
+Runs (2026-10-11, Linux, Chrome 148, Node 24.19.0, `GF_VERIFY_SOFTWARE=1`, `taskset -c 0-3`; the host was busy, load
+average about 22), the workflow's own commands in order:
 
-Add `--profile <path>` to `research/gf-three/tools/verify.mjs`, kit copy and games.fun main:
+| Step | Party (`soak-squad`) | Scenic (`isle-run`) |
+|---|---|---|
+| `create games/ci --from <example>` | 1 s | 1 s |
+| `verify --quick --profile .github/ci-profile.json` | PROFILE OK, 9 checks ran and passed, 15 skipped, 7 s | same, 7 s |
+| checks that ran | 1, 2, 11, 14, 17, 18, 19, 23, 35, and check 5's lobby legs (gate pass 8 of 8) | the same |
+| `doctor --skip-graphics` | ready, under 1 s | (same machine) |
 
-1. Read the JSON; set `process.env` from `environment` for the run (before any browser launch).
-2. For each check in `skip`, record `ok: null` with detail `skipped by profile ci-software: <reason>`, and do not
-   launch the solo session or the gate when nothing that needs them is left (check 5 partly: with the lobby legs only,
-   add a gate option `legs: 'lobby'`; otherwise skip 5 whole).
-3. Exit 0 when every check not skipped and REQUIRED in `verdict.mjs` passes; the verdict file stores `profile`
-   (name) and the skipped list, so a profile pass can never be read as a full pass (`passes()` in `verdict.mjs` must
-   return false for a profiled verdict where a REQUIRED check is skipped, and Studio must never accept one).
-4. Also make `--check` accept `1,2` (today only `11,17` and single checks).
+Skipped, with the reason written in the profile: 3 boots to play, 4 slot coverage, 5 in-round and loadout legs, 6 a round
+to results, 7 audio of the solo round, 10 fair play, 12 something happens, 13 controls, 15 the loop is alive, 16 hits,
+20 the menu, 21 the HUD, 22 the wallet in the menu, 24 plays inside a post, 25 friends. They all play a running game, and
+a software-rendered page draws about 1.6 frames a second. 8, 31 and 34 are release-only and not in `--quick`.
 
-When that lands, set the repository variable `GF_VERIFY_PROFILE=1` to turn on the profile steps in the workflow. Without
-it, verify ignores the unknown flag and runs the whole `--quick`, which never ends on a runner.
+### Stepped time does not bring 13 or 16 inside five minutes
+
+Since stepped time (`?gf-step=1`, `kit/core/step.js`) checks 10, 13, 16 and 35 count in the game's own time. Tried alone
+under the same software rendering with a 300 s limit, each twice:
+
+| Check | Party (`soak-squad`) | Scenic (`isle-run`) |
+|---|---|---|
+| 13 controls work | 2 of 2 not finished in 300 s: jump and interact pass, the run step is cut off (the page is closed by the limit) | 2 of 2 not finished in 300 s |
+| 16 hits read | passes in 1 s, both times, because the game has no weapon (not applicable): proves nothing | 2 of 2 not finished in 300 s: 0 swings reached an enemy |
+
+So neither goes in the profile. Stepped time moves the game's clock; the page still draws at a few frames a second, and
+the checks wait for frames.
+
+## 4. What the workflow runs
+
+Per job (party, scenic), on Ubuntu and Windows for pull requests and on macOS as well for pushes to `main` and
+`workflow_dispatch` (the matrix is chosen by an expression on `github.event_name`): `npm ci`; party only: `npm test`, the skills
+mirror check, `doctor --skip-graphics`, `examples`, `catalog --all`; then `create` and
+`verify --quick --profile .github/ci-profile.json`, and the evidence uploaded. The verify step is a hard failure on
+Ubuntu; on Windows and macOS it is `continue-on-error` until a first run there says whether it holds.
+`sync-kits --check` is not a runner step: it compares `kits/` with a games.fun checkout, which a runner does not have.
+`tests/kits.test.mjs` (inside `npm test`) holds `kits/` to its recorded hashes on every system.
+The workflow was parsed as YAML and checked with `npx @action-validator/cli .github/workflows/check.yml` (exit 0; the
+same command exits 1 on a deliberately bad file).
 
 ## 5. Cost of a run (estimate, to decide G1)
 
@@ -101,9 +124,8 @@ Job wall-time estimates (not measured on GitHub): checkout, Node and the npm cac
 | **One run, all three** | | | **about 53** | **about $0.32** |
 
 On the Free plan that is about 37 runs a month inside the included minutes; macOS is three quarters of it. The scenic
-job, once on, adds about the same again. Cheaper: run macOS only on pushes to `main` and `workflow_dispatch`, not on
-every pull request (a one-line `if:` on the matrix). If the profile steps ever hang, the 12 minute step limit costs 120
-macOS minutes in one job: that is why they are off until `GF_VERIFY_PROFILE=1`.
+job adds a little more (the profile run is 7 s). macOS therefore runs only on pushes to `main` and `workflow_dispatch`, not on pull requests. The verify step's 12
+minute limit bounds a hang.
 
 ## 6. Risks on Windows and macOS runners, ranked
 
@@ -124,7 +146,7 @@ Nothing of ours has run on either. Expected, most likely first:
    are not expected on a runner.
 6. **macOS and Windows: the gate's WebRTC over loopback** with the runners' virtual network adapters: ICE can
    pick an address that does not route. Watch check 5's lobby legs first.
-7. **Tests that assume POSIX:** the `npm test` suites (127 pass, 1 skipped on Linux) may include path assertions (not read); any
+7. **Tests that assume POSIX:** the `npm test` suites (about 220 tests, 2 skipped on Linux) may include path assertions (not read); any
    `\` versus `/` difference shows as a failure in `paths.test.mjs`, `kits.test.mjs`, `seams.test.mjs`.
 8. **Slow runners:** a 3-vCPU macOS image under SwiftShader will be no better than section 1's 1.6 fps; the profile
    already leaves those checks out.

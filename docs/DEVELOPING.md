@@ -37,7 +37,7 @@ There is no list of files. The script works out what the tools need from the too
 
 1. **The walk.** From the tools this package runs (`TOOL_ENTRIES`, plus the signal server and the two tools a check's
    message tells a person to run), it follows every relative `import`, `import('…')`, `register('…', import.meta.url)`
-   and `new URL('…', import.meta.url)`, however deep. That brings the multiplayer gate, the manifest validator, the
+   and `new URL('…', import.meta.url)`, however deep (text inside a template literal is never an import: `create.mjs` writes a game's source as a template). That brings the multiplayer gate, the manifest validator, the
    audio gate, the browser launcher, the watch relay and the modules of `creator-studio/lib` they use.
 2. **Parts loaded by path.** A tool loads a part a game may not need with `importPart(join(FOLDER, '…'))`. The script
    reads those calls: a part this package carries is walked like an import (the world server, the character bench);
@@ -107,13 +107,14 @@ has an `assets.json` and adds its ignore entry at once. It reads the same JSON f
 
 ## Tool faults worked around here (requests to games.fun)
 
+Checked against the kits synced from games.fun bce56abc5 (2026-10-11). Fixed upstream and removed from this table: the forge
+HUD and forge-spec refusals now load by `importPart` (`spec-config.mjs`, `create.mjs`); `verify.mjs` imports the body judge
+only when check 19 runs (the CLI still installs the 3D packages first, so check 19 can run); the scenic `follow` camera
+failing checks 24 and 34 (the example passes both); melee under `third` and `orbit` cameras (a scenic spec with either
+camera passed 27 of 27 with `--quick --release`).
+
 | Fault | Where | Work-around here | Fix asked for |
 |---|---|---|---|
-| A forge HUD module loaded with a bare `import('../../../gf-forge/hud/create.mjs')` | `research/gf-three/tools/lib/spec-config.mjs:343` | none needed (it runs only for a forge spec); the sync records it as a part not taken | use `importPart`, so a checkout without the engine gets the plain "not in this checkout" error |
-| A forge spec without the engine is refused with a module-resolution error for `gf-forge/kit/look.js`, not the plain error | `research/gf-three/tools/create.mjs` (`decideModules`) | none (the refusal is correct and nothing is written; a test holds that) | check the engine folder once, first, with the `importPart` wording |
-| `verify.mjs` cannot load without the 3D tools' packages, even for a static check | `tools/lib/bodies-check.mjs` → `body-judge.mjs` → `char-node.mjs` | `gamesfun verify` installs them first (`ensureCharDeps`) | import the body judge when check 19 runs |
-| A scenic game on its own `follow` camera fails check 24 (the check waits for a refused pointer lock; `follow` never asks for one) and check 34 (a viewer's camera is about 45 m and 84° from the streamer's) | `tools/lib/embed-check.mjs` (`free` is true only for `orbit`), the kit's viewer camera | the scenic example records them in `example.json` → `knownFailing`; the smoke test fails when the list and the verdict differ | treat `follow` as a camera that needs no lock in check 24; make the viewer use the streamer's `follow` rig |
-| The same scenic spec with `"camera": "third"` fails 13, 16 and 34 (a melee swing goes 95° from the aim; viewer 1.10 m off, limit 1 m), with `"orbit"` 13 and 16 | `kit/mechanics/melee` under those cameras | none: the example keeps `follow` | melee follows the aim under every camera the schema allows a scenic game |
 | `lookdev/capture.mjs` (check 9's contact sheet) is left out | `tools/verify.mjs` | none needed: `--quick` skips it and a full verify says it is absent | none |
 
 ## Examples
@@ -121,8 +122,15 @@ has an `assets.json` and adds its ignore entry at once. It reads the same JSON f
 An example is `templates/examples/<id>/` with `spec.json` (a locked spec), `rules.js`, `README.md` (what it shows,
 provenance) and `example.json` (`title`, `summary`, `verified: { result, kits, date }`). Optional `files/` is laid over
 the created game (then `assets.json` is regenerated). An example ships only after `npx gamesfun verify --quick` passes
-on a fresh `create --from` with the current kits; record the result in `example.json`. An example that a kit fault fails lists the failing checks in `example.json` → `knownFailing` and says why in its README; the smoke test then requires exactly those to fail. There is one per engine:
+on a fresh `create --from` with the current kits; record the result in `example.json`. An example that a kit fault fails may list the failing checks in `example.json` → `knownFailing` and say why in its README; the smoke test then requires exactly those to fail. No example has one today. There is one per engine:
 `soak-squad` (party, WebGL) and the scenic one (WebGPU, with WebGL2 inside WebGPURenderer where Chrome has no adapter).
+
+## The studio's web3 tabs
+
+The Token and Shop tabs are off. `GET /api/studio/tabs` (`server/routes/studio.mjs`) leaves `token.js` and `shop.js` out of the
+list the page builds its tab row from, so they are neither in the page nor reachable by keyboard, unless the dev server
+was started with `GAMESFUN_WEB3=1` (the variable that also lists the MCP server's `web3_*` tools) or the game has a
+`gamesfun.json`. `tests/web3-switch.test.mjs` holds both ways.
 
 ## Skills
 
@@ -185,7 +193,8 @@ git is started with `GIT_TERMINAL_PROMPT=0` so a private remote fails instead of
 
 ## CI
 
-`.github/workflows/check.yml` runs `npm ci`, the tests, and create plus quick verify of the example on Ubuntu, Windows
-and macOS. Actions are off for this repository on purpose (the owner's billing decision); the workflow runs once they
-are turned on. GitHub's runners have no GPU, so verify renders with SwiftShader there: slower than on a desktop, and
-not yet measured.
+`.github/workflows/check.yml` runs `npm ci`, the tests, and create plus `verify --quick --profile
+.github/ci-profile.json` for the party and the scenic example on Ubuntu and Windows (pull requests) and macOS as well
+(pushes to `main`). `docs/CI.md` has the profile, what a runner can check, the measured software-rendering runs and the
+cost. Actions are off for this repository on purpose (the owner's billing decision); the workflow runs once they are
+turned on. It has not run on GitHub, Windows or macOS.
