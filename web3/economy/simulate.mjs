@@ -46,6 +46,8 @@ export function simulate(economy, { now = 0 } = {}) {
   const accounts = {};
   const platform = { player: 0, project: 0 };
   const notes = [];
+  /** Prizes that are a share of a pool: counted for players once each pool's level is known. */
+  const sharePrizes = [];
 
   /** Where `amount` of `token` goes under `split`, per day: pools, burns, accounts, the treasury. */
   const carryOut = (split, token, amount, by) => {
@@ -90,6 +92,7 @@ export function simulate(economy, { now = 0 } = {}) {
         const prizeToken = m.pool.get(o.pool)?.currency;
         Object.assign(row, { pool: o.pool, percent: o.percent, token: prizeToken });
         rateOut(o.pool, `box:${b.key}`, opens * p * (bps / 10_000));
+        sharePrizes.push({ pool: o.pool, rate: opens * p * (bps / 10_000), box: b.key, perOpen: p * (bps / 10_000) });
         row.shareOfPool = true;
       } else if (o.gives === 'item') {
         const it = m.item.get(o.item);
@@ -128,9 +131,9 @@ export function simulate(economy, { now = 0 } = {}) {
       opensPerDay: opens,
       outcomes,
       expectedBack: round(value),
-      returnPercent: price ? round((value / price) * 100, 4) : null,
+      returnPercent: price && (value > 0 || !Object.keys(other).length) ? round((value / price) * 100, 4) : null,
       houseEdgePercent: known && price ? round((1 - value / price) * 100, 4) : null,
-      alsoPays: Object.fromEntries(Object.entries(other).map(([t, v]) => [t, round(v)])),
+      alsoPays: other,
       unpriced,
       playerFee: PLAYER_FEE,
     };
@@ -183,6 +186,8 @@ export function simulate(economy, { now = 0 } = {}) {
       if (line.gives === 'item') {
         gives.push(line.item);
         players.rent += crafts * COLLECTIBLE_RENT;
+        const worth = m.item.get(line.item)?.value;
+        if (worth !== undefined) add(players.get, game, crafts * num(worth));
       } else if (line.gives === 'tokens') {
         const token = line.currency ?? game;
         gives.push(`${num(line.amount)} ${symbol(token)}`);
@@ -191,6 +196,7 @@ export function simulate(economy, { now = 0 } = {}) {
       } else if (line.gives === 'share') {
         gives.push(`${line.percent}% of ${line.pool}`);
         rateOut(line.pool, `recipe:${r.key}`, crafts * ((toBps(line.percent) ?? 0) / 10_000));
+        sharePrizes.push({ pool: line.pool, rate: crafts * ((toBps(line.percent) ?? 0) / 10_000) });
       }
     }
     const signatures = 1 + (r.out ?? []).filter((l) => l.gives === 'item').length;
@@ -250,7 +256,10 @@ export function simulate(economy, { now = 0 } = {}) {
     platform.project += rate * PROJECT_FEE;
     creator.network += rate * NETWORK_FEE;
     if ((d.does === 'payout' || d.does === 'burn') && d.pool) {
-      if (d.percent !== undefined) rateOut(d.pool, `decision:${d.key}`, rate * ((toBps(d.percent) ?? 0) / 10_000));
+      if (d.percent !== undefined) {
+        rateOut(d.pool, `decision:${d.key}`, rate * ((toBps(d.percent) ?? 0) / 10_000));
+        if (d.does === 'payout') sharePrizes.push({ pool: d.pool, rate: rate * ((toBps(d.percent) ?? 0) / 10_000) });
+      }
       else flowOut(d.pool, `decision:${d.key}`, rate * num(d.amount));
       const token = m.pool.get(d.pool)?.currency;
       if (d.does === 'payout' && d.amount !== undefined) add(players.get, token, rate * num(d.amount));
@@ -334,7 +343,12 @@ export function simulate(economy, { now = 0 } = {}) {
       ins: p.in.map((f) => ({ by: f.by, perDay: round(f.perDay) })),
       outs: [...p.out.map((f) => ({ by: f.by, perDay: round(f.perDay) })), ...p.rate.map((f) => ({ by: f.by, percentPerDay: round(f.perDay * 100, 6) }))],
     };
-    if (rate > 0) {
+    if (rate > 0 && Math.abs(net) < 1e-12) {
+      // Only a share goes out: it shrinks by that share for ever, and never quite empties.
+      row.after = round(p.seed * Math.exp(-rate * days));
+      row.halfLifeDays = round(Math.log(2) / rate, 2);
+      row.lasts = 'shrinks';
+    } else if (rate > 0) {
       const steady = net / rate;
       if (steady > 0) {
         row.settlesAt = round(steady);
@@ -364,6 +378,18 @@ export function simulate(economy, { now = 0 } = {}) {
     if (row.lasts === 'runs dry') notes.push(`The pool “${p.key}” pays out more than comes in: it lasts about ${row.lastsDays} days from its seed of ${p.seed} ${symbol(p.currency)}.`);
     return row;
   });
+
+  for (const prize of sharePrizes) {
+    const row = poolRows.find((r) => r.key === prize.pool);
+    const level = row ? (row.settlesAt ?? row.seed) : 0;
+    add(players.get, row?.token, prize.rate * level);
+    const box = prize.box && boxes.find((b) => b.key === prize.box);
+    if (box) add(box.alsoPays, row?.token, round(prize.perOpen * level));
+  }
+  for (const t of m.tokens.values())
+    if (t.powers?.transferFeePercent > 0) notes.push(`${t.symbol} keeps ${t.powers.transferFeePercent}% of every transfer: pools, prizes, stakes and the treasury receive that much less than shown here.`);
+  for (const part of [...m.items, ...m.boxes])
+    if (part.fall) notes.push(`“${part.name}”’s price falls by ${part.fall.step} every ${part.fall.every}${part.fall.floor !== undefined ? `, never below ${part.fall.floor}` : ''}, and starts again after each sale; this counts every sale at its full ${part.price}.`);
 
   const totals = (map) => Object.fromEntries(Object.entries(map).map(([k, v]) => [k, round(v)]));
   return {
@@ -398,24 +424,31 @@ export function explain(sim, economy) {
   lines.push(`Assuming ${Object.entries(sim.scenario.perDay).map(([k, v]) => `${v} × ${k}`).join(', ') || 'nothing in particular'} a day (anything not named: ${sim.scenario.defaultPerDay} a day), over ${sim.scenario.days} days.`);
   for (const b of sim.boxes) {
     const edge = b.houseEdgePercent !== null ? `; the house keeps ${n(b.houseEdgePercent)}% of each price` : '';
-    lines.push(`Box “${b.name}”: costs ${n(b.price)} ${sym(b.token)} (+${n(b.playerFee)} SOL player fee), gives back ${n(b.expectedBack)} ${sym(b.token)} on average (${n(b.returnPercent)}%)${edge}.`);
+    const also = Object.entries(b.alsoPays).map(([t, v]) => `${n(v)} ${sym(t)}`);
+    const back = b.returnPercent !== null ? `${n(b.expectedBack)} ${sym(b.token)} on average (${n(b.returnPercent)}%)${also.length ? ` and ${also.join(', ')}` : ''}` : `${also.join(', ') || 'nothing'} on average`;
+    lines.push(`Box “${b.name}”: costs ${n(b.price)} ${sym(b.token)} (+${n(b.playerFee)} SOL player fee), gives back ${back}${edge}.`);
     for (const o of b.outcomes) lines.push(`  ${n(o.chance)}%: ${o.gives === 'pay' ? `${n(o.amount)} ${sym(o.token)} from ${o.pool}` : o.gives === 'share' ? `${o.percent}% of ${o.pool}` : o.gives === 'item' ? `${o.item}${o.worth !== null ? ` (worth ${n(o.worth)})` : ' (no value given)'}` : o.gives}`);
     if (b.unpriced.length) lines.push(`  Give ${b.unpriced.join(', ')} a "value" to count them in the return.`);
   }
   for (const l of sim.lotteries)
-    lines.push(`Lottery “${l.name}”: ${n(l.ticketsPerRound)} tickets a round of ${n(l.roundDays)} days; the pot reaches about ${n(l.potBeforeDraw)} ${sym(l.potToken)} and pays ${l.prizes.map(n).join(' / ')}; a ${n(l.price)} ${sym(l.token)} ticket is worth ${n(l.expectedPerTicket)} on average${l.returnPercent !== null ? ` (${n(l.returnPercent)}%)` : ''}.`);
+    lines.push(`Lottery “${l.name}”: ${n(l.ticketsPerRound)} tickets a round of ${n(l.roundDays)} days; the pot reaches about ${n(l.potBeforeDraw)} ${sym(l.potToken)} and pays ${l.prizes.map(n).join(' / ')}; a ${n(l.price)} ${sym(l.token)} ticket is worth ${n(l.expectedPerTicket)} ${sym(l.potToken)} on average${l.returnPercent !== null ? ` (${n(l.returnPercent)}%)` : ''}.`);
   for (const s of sim.stakes)
     lines.push(`Stake “${s.name}”: ${n(s.rewardsPerDay)} ${sym(s.rewardsToken)} a day to everyone staked${s.perThousandStakedPerDay !== undefined ? `, ${n(s.perThousandStakedPerDay)} a day for each 1,000 ${sym(s.stakes)} staked` : ''}${s.yearlyPercent !== undefined ? ` (${n(s.yearlyPercent)}% a year)` : ''}.`);
   for (const r of sim.recipes) lines.push(`Recipe “${r.name}”: ${r.takes.join(' + ') || 'nothing'} → ${r.gives.join(' + ') || 'nothing'}, ${n(r.craftsPerDay)} a day.`);
   for (const s of sim.schedules) lines.push(`Schedule “${s.key}”: ${s.says}.`);
   for (const c of sim.contests) lines.push(`Contest “${c.name}”: ${c.says}.`);
   for (const p of sim.pools) {
-    const fate = p.lasts === 'runs dry' ? `runs dry in about ${n(p.lastsDays)} days` : p.lasts === 'settles' ? `settles at about ${n(p.settlesAt)}` : p.lasts === 'grows' ? `grows to about ${n(p.after)} after ${sim.scenario.days} days` : 'holds steady';
+    const fate =
+      p.lasts === 'runs dry' ? `runs dry in about ${n(p.lastsDays)} days`
+      : p.lasts === 'settles' ? `settles at about ${n(p.settlesAt)}`
+      : p.lasts === 'shrinks' ? `shrinks to about ${n(p.after)} after ${sim.scenario.days} days (half gone every ${n(p.halfLifeDays)} days)`
+      : p.lasts === 'grows' ? `grows to about ${n(p.after)} after ${sim.scenario.days} days`
+      : 'holds steady';
     lines.push(`Pool “${p.key}”: ${n(p.inPerDay)} ${sym(p.token)} in and ${n(p.outPerDay)} out a day from a seed of ${n(p.seed)}; it ${fate}.`);
   }
   const d = sim.perDay;
   const list = (map) => Object.entries(map).map(([k, v]) => `${n(v)} ${sym(k)}`).join(', ') || 'nothing';
-  lines.push(`Each day players pay ${list(d.players.pay)} and get back ${list(d.players.getBack)} on average, plus ${n(d.players.playerFeesSol)} SOL in player fees and ${n(d.players.networkFeesSol)} SOL in network fees.`);
+  lines.push(`Each day players pay ${list(d.players.pay)} and get back ${list(d.players.getBack)} on average (items at the value you gave them), plus ${n(d.players.playerFeesSol)} SOL in player fees and ${n(d.players.networkFeesSol)} SOL in network fees.`);
   lines.push(`The treasury gets ${list(d.creator.treasury)} a day; burned: ${list(d.burned)}. games.fun’s fees: ${n(d.platform.totalSol)} SOL a day.`);
   for (const note of sim.notes) lines.push(note);
   return lines.join('\n');

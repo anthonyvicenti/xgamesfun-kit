@@ -125,6 +125,8 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
  */
 export function diff(oldSpec, newSpec, { now = Math.floor(Date.now() / 1000), network = 'devnet' } = {}) {
   const next = carryIds(oldSpec, newSpec);
+  const fixedCurrency = { code: 'E-CURRENCY-FIXED', where: 'economy.currency', message: 'The game’s currency is fixed once it is live: every price and the treasury are in it.', fix: 'Keep the currency, and price new boxes in another token with their own "currency".' };
+  if (oldSpec?.live?.game && model(oldSpec).currencyKey !== model(next).currencyKey) return { ok: false, refusals: [fixedCurrency], warnings: [] };
   const verdict = check(next, { now, network });
   if (!verdict.ok) return { ok: false, refusals: verdict.refusals, warnings: verdict.warnings };
   if (!oldSpec?.live?.game) return { ...plan(setupSteps(next, { now }), next, verdict.warnings), note: 'Nothing is live yet: the whole setup.' };
@@ -138,7 +140,7 @@ export function diff(oldSpec, newSpec, { now = Math.floor(Date.now() / 1000), ne
   const refusals = [];
   for (const s of after) {
     const was = before.get(`${s.id}#${s.ix}`);
-    if (s.id.startsWith('seed:')) continue; // seeds are handled below
+    if (s.id.startsWith('seed:') || s.id === 'wrap') continue; // seeds are handled below
     if (was && same(was.args, s.args)) continue;
     if (s.alone && was) continue;
     if (was && s.ix === 'open_stake')
@@ -182,7 +184,6 @@ export function diff(oldSpec, newSpec, { now = Math.floor(Date.now() / 1000), ne
     const accounts = { owner: 'wallet:owner', game: 'pda:game', treasury: `ata:owner/${newModel.currencyKey}` };
     steps.push({ ...lootStep('update_game', { update }, accounts, { id: 'game', says: 'Hand the game’s decisions to the new authority' }), creates: [] });
   }
-  if (oldModel.currencyKey !== newModel.currencyKey) refusals.push({ code: 'E-CURRENCY-FIXED', where: 'economy.currency', message: 'The game’s currency is fixed once it is live: every price and the treasury are in it.', fix: 'Keep the currency, and price new boxes in another token with their own "currency".' });
   if (refusals.length) return { ok: false, refusals, warnings: verdict.warnings };
   return { ...plan(steps, next, verdict.warnings, notes), spec: next };
 }

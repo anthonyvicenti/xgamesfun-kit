@@ -30,7 +30,8 @@ export function economySlots(economy) {
     if (Array.isArray(value)) value.forEach((v, i) => walk(v, [...idPath, i], `${pointer}/${i}`, `${label} ${i + 1}`, field));
     else if (value && typeof value === 'object') for (const [k, v] of Object.entries(value)) walk(v, [...idPath, k], `${pointer}/${escape(k)}`, `${label} ${k}`, k);
   };
-  for (const [list, kind] of Object.entries(KINDS))
+  // A token's numbers (decimals, a mint's transfer fee) are facts about the mint, not tuning: no slots.
+  for (const [list, kind] of Object.entries(KINDS).filter(([list]) => list !== 'tokens'))
     (economy?.[list] ?? []).forEach((part, i) => {
       for (const [k, v] of Object.entries(part)) if (k !== 'key') walk(v, ['economy', kind, part.key, k], `/economy/${list}/${i}/${escape(k)}`, `${part.name ?? part.key}: ${k}`, k);
     });

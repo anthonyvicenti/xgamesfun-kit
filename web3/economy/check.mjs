@@ -361,6 +361,7 @@ export function check(economy, { network = 'devnet', now = Math.floor(Date.now()
         const tok = token(line.currency, `${at}.currency`);
         const amount = units(line.amount, tok, `${at}.amount`, `What ${label(r)} takes`);
         if (amount === 0n) refuse('E-RECIPE', `${at}.amount`, `${label(r)} takes an amount of 0.`, 'Give it an amount above 0.');
+        feeNote(amount, tok, `${at}.amount`, `craft of ${label(r)}`);
         if (!line.to) refuse('E-RECIPE', `${at}.to`, `${label(r)} takes ${tok?.symbol ?? 'a token'} but does not say where it goes.`, 'Add "to": "burn", "pool:<key>", "account:<address>" or "holder:<address>".');
         else split([{ to: line.to, percent: 100 }], tok, `${at}`, { what: label(r) });
         continue;

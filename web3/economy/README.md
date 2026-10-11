@@ -2,7 +2,7 @@
 
 A game's economy is the `economy` section of its `gamesfun.json`. It says what the game's money and collectibles are, where they flow, and which rules run by themselves on games.fun's loot program 0.3 (devnet). The schema is `economy.schema.json`; `fixtures/coin-flip-arena.json` is a whole example.
 
-Plain ES modules, no build step, no dependencies. Nothing here signs or talks to the chain. (The schema landed first; the tools in the table land in the commits after it.)
+Plain ES modules, no build step, no dependencies. Nothing here signs or talks to the chain.
 
 | File | Does |
 | --- | --- |
@@ -12,10 +12,11 @@ Plain ES modules, no build step, no dependencies. Nothing here signs or talks to
 | `simulate.mjs` | the quick simulation: what each box, ticket and craft is worth, how long each pool lasts, who pays what |
 | `cost.mjs` | what going live costs: each account's rent, each call's fee, network fees |
 | `compile.mjs` | the setup plan: the program's instructions in order, split into transactions that fit; `diff` for a change |
-| `migrate.mjs` | today's `shop` section → an `economy` section |
+| `migrate.mjs` | today's `shop` section → an `economy` section (`gamesfun economy migrate --write`, or `gamesfun upgrade --economy`) |
 | `slots.mjs` | every number in the spec as a value slot |
+| `model.mjs`, `steps.mjs`, `txsize.mjs`, `idl.mjs` | the shared parts: units and the program's numbers; one setup step per instruction; transaction sizes; loot 0.3's IDL (`loot-0.3.json`, trimmed from the deployed program's) |
 
-From a terminal: `npx gamesfun economy check|simulate|cost|plan [game-dir]` (add `--json` for machines).
+From a terminal: `npx gamesfun economy check|simulate|cost|plan|migrate [game-dir]` (`--spec <file>` for a spec outside a game, `--json` for machines). `publish` and `status` answer "not built yet": they need the loot 0.3 chain client.
 
 ## How to write one
 
@@ -57,3 +58,39 @@ Read `launchpad/loot/PROGRAM-0.3.md` in games.fun for the whole program. The che
 ## Fees
 
 The program charges two flat fees in SOL: **0.002 SOL** when a player signs for something of their own (`pay`, `buy_item`, `open_box`, `buy_tickets`, `stake`, `unstake`, `craft`, `hold`, `enter`), and **0.00001 SOL** for everything else that is charged (`deposit`, `payout`, `burn`, `issue`, `make`, `unmake`, `set`, `roll`, `award`, `open_contest`, `decide`). Setting the economy up (`create_game`, `open_pool`, the `upsert_*` calls, `open_stake`) pays rent and network fees only. Finishing what is already decided (`settle`, `run_schedule`, `draw_lottery`, `pay_lottery`, `claim`, ...) is free.
+
+## The setup plan (`compile.mjs`)
+
+`compile(spec)` returns `{ ok, program, before, transactions, play, warnings, notes }`, or `{ ok: false, refusals }`.
+
+- `transactions`: `[{ signer, signers, bytes, says, steps }]`, in order. Each is one wallet signature's worth; `signer` is `owner` (the setup) or `authority` (a seed of a token the game mints, when the authority is another key).
+- A step: `{ id, program, ix, args, accounts, signer, signers, says, data, creates }`.
+  - `program` is `loot` for loot 0.3, where `ix` and the names in `args` are exactly the IDL's (`upsert_box` with `box_id` and `args: { price, currency, rise, fall, stock_odds, active, shares, entries }`). Other steps are `system`, `spl-token`, `associated-token`, `mpl-core` and `mpl-token-metadata`.
+  - In `args`, a u64 is a decimal string in base units; a pubkey is an address, or `@<name>` for one that exists only after an earlier step (`@mint:points`, `@wallet:owner`, `@pda:game`); an enum is `{ Variant: fields }`, `{ Variant: {} }` without fields, `{ Pool: 3 }` with one unnamed field.
+  - `accounts` maps the IDL's account names (nested ones flattened, `fee.platform`) to names that stand for one address each: `wallet:owner`, `pda:game`, `pda:pool/0`, `pda:item/3`, `mint:<token key>`, `ata:owner/<token key>`, `new:collection` (a key made for this setup; it signs), `program:system`.
+  - `data` is the instruction data's size in bytes; `creates` lists the accounts it opens and their bytes (for the rent).
+- `before`: steps outside this plan (a token launched on games.fun's curve has its own approval).
+- `play`: what each part needs while the game runs: `{ part, ix, signer, says }` (`open_box` by the player, `settle_prize` by anyone, `decide` by the authority).
+- Sizes never come out below the real transaction: every account is counted once per name, loot data is sized from the IDL byte for byte, no lookup tables. Transactions are packed to 1,168 bytes, leaving 64 of the network's 1,232 for the wallet's own compute-budget instructions.
+
+`diff(liveSpec, newSpec)` returns the same shape with only what a change needs: parts keep their program ids by key, a removed item, box, recipe or schedule is switched off (the program has no close for them), a removed pool is closed, a bigger seed deposits the difference. It refuses what the program cannot change: an open stake (`E-STAKE-FIXED`), a pool's token (`E-POOL-FIXED`), the game's currency (`E-CURRENCY-FIXED`).
+
+## The fixtures
+
+Ten economies from `research/gf-economy/ECONOMIES-100.md` (games.fun) and the coin-flip arena of `KIT-PLAN.md` §1. The tests check, simulate and compile all of them.
+
+| Fixture | From the list | What it exercises |
+| --- | --- | --- |
+| `coin-flip-arena` | KIT-PLAN §1 (#61) | a box that pays from a pool, a split into three pools, a lottery with three places, a stake on a curve token |
+| `blind-forge` | #1, #8 | a Token-2022 coin with a 1% transfer fee; a box of items with a rising price and stock odds; a lottery with a cut |
+| `spark-pity` | #2 | two tokens the game mints; a recipe that pays SOL into a pool and mints both; a box priced in a game token whose split burns it all; a prize from a pool; a recipe that burns 90 Sparks for an item |
+| `halving-seasons` | #81, #6, #96 | a schedule that mints with a halving and a run limit; a schedule that moves a share between pools; a soulbound pass with a cooldown, used by a recipe that pays from a pool; a stake |
+| `scorched-treasury` | #14 (needs the authority) | a schedule that burns a share; a seed; a payment into a pool; the authority's payouts |
+| `merge-2048` | #21 | an existing pump.fun-style mint (placeholder address); recipes that burn two for one; a share of a pool as a craft's prize |
+| `stud-farm` | #31, #19, #26 | uses and a cooldown, ready-after and lasts; a recipe that uses, burns and pays the stud's holder; needs and keeps; renew |
+| `sacrifice-raffle` | #15, #67 | recipes that burn an item for minted tickets; a lottery whose tickets are another token (burned) with eight places |
+| `falling-drop` | #92, #40, #74, #20 | a price that falls, a price that rises, payments with a share to an account, a share that burns |
+| `duel-arena` | #69, #47 (needs the authority) | a contest with a share for a collectible's holder and a burn; a hold; decisions signed by a separate authority key |
+| `starforce` | #22 | a recipe that gives an attempt token; a box in that token whose outcomes are an item, the same item again, a burn, and a share of the jackpot |
+
+Real devnet mints where the kit has them: USDC-dev, MAIN-dev, and the Token-2022 coin of the 0.3 devnet run (`7MJWx2u…`). The pump.fun mint, the stud's and the arena deed's addresses, the partners' accounts and the duel arena's authority are placeholders: replace them before putting those fixtures live.
