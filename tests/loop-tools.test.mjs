@@ -165,6 +165,20 @@ test('the order is held: each tool is refused until its step, and names the righ
   t.diagnostic(seq.filter(x => !/refused/.test(x)).join(' → '));
 });
 
+test('the pitch step\'s own rules are held at gamesfun_step_spec: concepts say how the idea is played, with the kit\'s catalog', async t => {
+  const b = await bench(t);
+  let r = await b.call('gamesfun_step_pitch', { idea: 'four in a row on a giant board, we take turns' });
+  assert.match(r.round.brief, /\*\*How it is played\.\*\*/, 'the round\'s message carries the library\'s play step');
+  assert.match(r.round.brief, /play\.loop\.wants/);
+  const spec = JSON.parse(await readFile(DEV_SPEC, 'utf8'));
+  const card = { id: 'a', title: 'Dodge', hook: 'Throw balls at your friends.', howItPlays: 'Everyone throws at once for ninety seconds.', players: '2-4', whyFunny: 'Friends get bonked.', similar: [], v1: { has: ['one arena'], notYet: [] }, conceptPrompt: 'a playground at noon', spec };
+  const pitch = { pitchVersion: 0, reply: 'Here is one take.', cards: [card], questions: [], research: { bank: [], web: [], notes: 'none' }, policy: { ok: true } };
+  r = await b.call('gamesfun_step_spec', { pitch });
+  t.diagnostic(`concepts with no play: ${(r.round?.brief ?? JSON.stringify(r.problems)).split('\n').slice(0, 4).join(' | ').slice(0, 400)}`);
+  assert.equal(r.valid, false);
+  if (!/pitch \$\.play: say how the idea is played/.test(r.round.brief)) assert.fail(`the schema refused the stand-in pitch before the play step could: ${r.round.brief}`);
+});
+
 test('stale proof is refused at delivery: a file changed after verify sends the loop back to verify', async t => {
   const b = await bench(t);
   await lockSpec(b);
