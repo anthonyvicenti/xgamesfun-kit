@@ -35,7 +35,7 @@ export function createRouter({ log = () => {} } = {}) {
       routes.push({ method, full, handler, area: name, ...compile(full) });
       rec.routes.push(`${method} ${full}`);
     };
-    return { get: add('GET'), post: add('POST'), area: name };
+    return { get: add('GET'), post: add('POST'), patch: add('PATCH'), delete: add('DELETE'), area: name };
   }
 
   /** Try to answer a request under /api/. → true when a route took it. */
