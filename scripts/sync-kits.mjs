@@ -296,6 +296,30 @@ export function stripComments(t) {
   }
   return out;
 }
+/**
+ * Code with the text of template literals blanked (line breaks stay). A tool that writes a game's source file as a
+ * template (create.mjs writes `import { FEEL_OP } from './gf/forge/feel.js'` into a game's rules) does not import it.
+ * Run on stripComments' output, where strings and templates are intact. `${…}` expressions are blanked with the rest.
+ */
+export function maskTemplates(code) {
+  let out = '', i = 0;
+  const n = code.length, stack = [];   // stack: brace depth at which each open `${` began
+  while (i < n) {
+    const c = code[i];
+    if (!stack.length || stack.at(-1).tpl === false) {
+      if (c === '\'' || c === '"') { let j = i + 1; while (j < n && code[j] !== c) { if (code[j] === '\\') j++; else if (code[j] === '\n') break; j++; } out += code.slice(i, j + 1); i = j + 1; continue; }
+      if (c === '`') { stack.push({ tpl: true }); out += c; i++; continue; }
+      if (stack.length) { if (c === '{') stack.at(-1).braces++; if (c === '}' && --stack.at(-1).braces < 0) { stack.pop(); out += c; i++; continue; } }
+      out += c; i++; continue;
+    }
+    // inside a template literal
+    if (c === '\\') { out += code[i + 1] === '\n' ? ' \n' : '  '; i += 2; continue; }
+    if (c === '`') { stack.pop(); out += c; i++; continue; }
+    if (c === '$' && code[i + 1] === '{') { stack.push({ tpl: false, braces: 0 }); out += '  '; i += 2; continue; }
+    out += c === '\n' ? c : ' '; i++;
+  }
+  return out;
+}
 const isModule = f => /\.m?js$/.test(f);
 
 /**
@@ -354,7 +378,7 @@ export function closure({ entries = ENTRIES, has, read, browser = () => false, f
     if (modules.has(f)) continue;
     modules.add(f);
     if (!isModule(f) || browser(f)) continue;
-    const code = stripComments(read(f));
+    const code = maskTemplates(stripComments(read(f)));
     const rel = spec => path.posix.normalize(path.posix.join(path.posix.dirname(f), spec));
     for (const m of code.matchAll(IMPORT_RE)) {
       const spec = m[1] ?? m[2];

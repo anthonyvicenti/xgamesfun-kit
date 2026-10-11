@@ -9,9 +9,10 @@
 //   sheet) did not fail: it counts only when it ran (--quick skips it, which is ok: null).
 //   checks: [{n, ok}] as verify records them (ok true | false | null for skipped)
 
-/** Every check of a round game, as a release run holds it (regress.mjs --corpus; verify --release): 1–8, 10–25, 31 and
- *  34. 9 (the contact sheet) counts only when it ran. A build's own verify requires these less RELEASE_ONLY. */
-export const REQUIRED = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 31, 34];
+/** Every check of a round game, as a release run holds it (regress.mjs --corpus; verify --release): 1–8, 10–25, 31, 34
+ *  and 35 (the game's own tests, tools/lib/game-tests.mjs: a round game's for now; a world's and a forge game's flows do
+ *  not run it yet). 9 (the contact sheet) counts only when it ran. A build's own verify requires these less RELEASE_ONLY. */
+export const REQUIRED = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 31, 34, 35];
 
 /** A world (CONTRACT §9, tools/verify-world.mjs): no rounds, so 6, 10, 12, 15, 16, 17 and 23 have a world's
  *  equivalents instead (26 persists, 27 the host leaves, 28 the spawn square holds, 29 sign words, 30 phones). */
@@ -32,7 +33,8 @@ export const REQUIRED_FORGE = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 1
 /** What cannot apply to a forge game yet, and why: recorded "not yet for forge" (ok: null), never counted as passed. */
 export const NOT_YET_FORGE = {
   mechanics: 'no mechanic module runs on forge yet (tracks F and A); their params stay in config/game.json for the rules',
-  34: 'a forge game offers no Go live yet: the boot does not stream a round or draw a viewer\'s camera (CONTRACT §9b is gf-three and worlds only)',
+  // (wave 3, track S3: the reason said a forge game 'offers no Go live yet'; that is true of its own menu only)
+  34: 'the forge boot has no Go live in its own menu and draws no viewer\'s camera (CONTRACT §9b is gf-three and worlds only); the friends page still offers Go live wherever streams are on, and what a viewer of a forge game would see is untried: settle it before a forge game is published (research/gf-forge/evidence/wave3-S3-2026-10-10/GO_LIVE.md)',
 };
 /** The forge pass rule: every REQUIRED_FORGE check ran and passed, no other check failed; not-yet checks never count. */
 export function passesForge(checks, required = REQUIRED_FORGE) {

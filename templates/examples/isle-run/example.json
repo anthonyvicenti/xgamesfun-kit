@@ -2,14 +2,10 @@
   "title": "Isle Run",
   "summary": "A co-op action run on the scenic engine: knights clear three floating isles of skeletons, then beat the Bone Sorcerer.",
   "engine": "scenic",
-  "knownFailing": [
-    24,
-    34
-  ],
   "verified": {
-    "result": "FAIL 24/26 (check 9 skipped by --quick): 24 and 34 fail, both kit faults of the follow camera (README.md)",
-    "kits": "4c3585f89a64fe91fd5be84fc97a831dd54062d7",
-    "date": "2026-10-10",
-    "how": "npx gamesfun create <dir> --from isle-run, npx gamesfun verify <dir> --quick (Linux, Chrome on the graphics card, 210 s); then two pages on gamesfun dev each drew the other player in place (26 of 26 samples)"
+    "result": "PASS 24/24 with --quick (check 9 skipped); PASS 27/27 with --quick --release (24 and 34 pass)",
+    "kits": "bce56abc5c643a0add7ec202a8f466b7164b42cf",
+    "date": "2026-10-11",
+    "how": "npx gamesfun create <dir> --from isle-run, npx gamesfun verify <dir> --quick (156 s) and --quick --release (172 s) (Linux, Chrome on the graphics card, two verifies sharing the card)"
   }
 }

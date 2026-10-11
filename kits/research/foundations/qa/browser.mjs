@@ -186,8 +186,30 @@ export async function webgpuAdapter(browser, { timeoutMs = Number(process.env.GF
   } finally { await page.close().catch(() => {}); }
 }
 
+/**
+ * gf-forge's WebGL2 build (research/gf-forge, wave 3 track W): with GF_FORGE_BACKEND=webgl2 in the environment, every
+ * tool that asks for a WebGPU Chrome gets a Chrome with WebGL on the real GPU instead, and every page it opens is told
+ * there is no WebGPU, so a forge game's loader picks its WebGL2 build there. It is how a whole verify (and measure,
+ * capture, the gate) runs on the WebGL2 build without a line changed in those tools. On this host it also needs
+ * CHROME_ARGS="--use-gl=angle --use-angle=gl-egl" and __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json.
+ */
+export const forgeWebgl2 = () => /^webgl2?$/.test(process.env.GF_FORGE_BACKEND ?? '');
+const HIDE_WEBGPU = () => { try { Object.defineProperty(Navigator.prototype, 'gpu', { get: () => undefined, configurable: true }); } catch {} };
+function withoutWebgpu(browser) {
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (...a) => { const ctx = await newContext(...a); await ctx.addInitScript(HIDE_WEBGPU); return ctx; };
+  // (a page asked of the browser itself lives in a context of its own that goes when the page does)
+  browser.newPage = async (...a) => { const ctx = await browser.newContext(...a), page = await ctx.newPage(); page.once('close', () => ctx.close().catch(() => {})); return page; };
+  browser.forgeBackend = 'webgl2';
+  return browser;
+}
+
 export async function launchChrome(options = {}) {
-  const { gpu = null, chromium: browserType, ...rest } = options;
+  const { gpu: asked = null, chromium: browserType, ...rest } = options;
+  const gpu = asked === 'webgpu' && forgeWebgl2() ? 'webgl' : asked;
+  // (the same binary the WebGPU kind uses, chrome-headless-shell, so a run differs by the backend alone: installed
+  // Chrome's headless mode asks for a favicon, which is a console error on a page without one, and slows hidden pages)
+  if (gpu !== asked) return withoutWebgpu(await launchChrome({ ...((rest.headless ?? process.env.HEADED !== '1') && headlessShellPath() ? { executablePath: headlessShellPath() } : {}), ...options, gpu }));
   const chromium = browserType ?? await loadChromium();
   // CHROME_ARGS adds flags, e.g. "--enable-gpu --ignore-gpu-blocklist" for WebGL games that fail on software GL.
   const extra = (process.env.CHROME_ARGS ?? '').split(/\s+/).filter(Boolean);

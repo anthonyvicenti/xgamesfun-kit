@@ -188,8 +188,11 @@ const ENGINE_GUIDE = [
   'scenic (gf-scenic): serious, scenic or action games: adventure, roguelite, brawler, dungeon crawler, hack and slash, exploration, survival, RPG-like; anything that names a serious game; reference images that look like polished 3D art',
   'forge (gf-forge): first-person or close-camera action with weight: a shooter, a dark roguelite run, survival nights, arena fights; the feel of a modern FPS (a Rust core on WebGPU); co-op for 2-4. Its play is the data tables (spec.forge: weapons, enemies, waves, cards) and rules.js, not mechanic modules',
   'when unsure, scenic for anything that is not silly',
-  '* forge is never a card for a game meant to open inside a post on X (or another in-app browser): it needs WebGPU until its WebGL2 build (track W, research/rust-engine/PLAN.md §9)',
+  '* forge is never a card for a game meant to open inside a post on X (or another in-app browser) yet: it draws with WebGPU, or with its WebGL2 build where there is none (since wave 3), and that build has not been run inside an in-app browser or on a phone (research/rust-engine/PLAN.md §10)',
   '* a forge spec lists no mechanic; a forge card promises only what its tables run today (catalog.json → engines.forge.tables: a table whose `runs` is null goes in v1.notYet)',
+  '* a forge game is our own design in our own words: no forge card\'s spec or conceptPrompt names an existing game, not even the one the creator named (leave the spec\'s `prompt` out), and nothing in it is named after that game\'s places, weapons, enemies or cards; the name stays in `research` and `similar`',
+  '* a forge spec\'s `characters` is one role, the player, with body {from: "bean", why: "the forge engine draws its own hunters"}: friends see the kit\'s hunters and the enemies are spec.forge.enemies rows; no generated, reference or library body, and no generated prop (engines.forge.spec, .props, .cannot)',
+  'a forge card says what forge cannot do yet in v1.notYet when the idea needs it (engines.forge.cannot), and never promises it',
   '* every card\'s spec says its engine; its world.template, look.preset and camera are that engine\'s (engines.<id>)',
   '* a prompt that names a serious genre (roguelike, brawler, dungeon crawler, hack and slash, RPG, adventure, survival …) and nothing silly gets scenic on card 1, or forge when it is first-person action',
 ];
@@ -316,9 +319,29 @@ export const FORGE_OPEN = process.env.GF_FORGE_OPEN === '1';
 const FORGE_CLOSED = 'not open yet (gf-forge is still being built: never a card until the catalog says ready)';
 async function forgeCatalog() {
   const engine = { id: 'forge', kit: `gf-forge ${FORGE_VERSION}`, for: 'first-person and close-camera action with weight: shooters, dark roguelite runs, survival nights, arena fights; co-op for 2-4 friends who see each other', look: 'dark retro first person: a cold moon, fog and fire light, bloom, square texels and grain (moonlit-ruins, ember-crypt, ash-storm); every model, texture and value a slot', camera: 'first', cameras: ['first'], worlds: [], looks: [], status: FORGE_OPEN ? 'ready' : FORGE_CLOSED,
-    note: 'WebGPU only until its WebGL2 build (track W): Chrome, Edge, Chrome on Android, Safari 26+; not inside a post on X yet. No mechanic modules: its play is spec.forge (the data tables) and rules.js (commands in, events out; prompts/build.md)',
+    note: 'WebGPU where the browser has it (Chrome, Edge, Chrome on Android, Safari 26+), else its WebGL2 build (wave 3; not yet run on a phone or inside an in-app browser); not inside a post on X yet. No mechanic modules: its play is spec.forge (the data tables) and rules.js (commands in, events out; prompts/build.md)',
     multiplayer: 'live co-op for 2-4: the host\'s core owns the world and replays each friend\'s inputs; each player moves at once on their own screen (predicted) and sees the others as a hunter in their colour (one body a seat), holding their weapon',
-    tables: {}, bodies: ['the four co-op hunters, one a seat: hooded, templar, rogue, witchfinder (what friends see; their cloth takes the player\'s colour)', 'enemies: the grim skeletons by archetype (chaser, caster, soldier, brute, lord), holding their weapons'] };
+    tables: {}, bodies: ['the four co-op hunters, one a seat: hooded, templar, rogue, witchfinder (what friends see; their cloth takes the player\'s colour)', 'enemies: the grim skeletons by archetype (chaser, caster, soldier, brute, lord), holding their weapons'],
+    // what a forge spec looks like beside the tables (the worked example: research/gf-forge/specs/vigil.spec.json), and
+    // what the engine cannot do yet, so no pitch promises it (wave 3, track S3; the checker holds the starred guide lines)
+    spec: {
+      players: '{min: 1, max: 2-4, bots: false, teams: 0, mode: "coop"}: co-op only; a friends round has no bots',
+      round: 'seconds: the longest a run may last (600-900 for three waves and a boss; the rules end it when the run is won or everyone has fallen); winBy and loseBy in plain words',
+      controls: '{jump, primary: "fire"} and, for 2-4 players, interact: "raise a fallen friend (hold)". Nothing else: create adds the engine\'s own keys to How to play (Shift evades, R reloads, V is a quick melee, the number keys pick a weapon); secondary (right click) does nothing yet, so never list it',
+      characters: '[{role: "player", describe: …, body: {from: "bean", why: "the forge engine draws its own hunters"}}] and no other role',
+      props: 'world.props: one, the thing the players guard, named "chest" ({name: "chest", describe, role: "what you guard"})',
+      example: 'research/gf-forge/specs/vigil.spec.json',
+    },
+    props: ['chest (the forge library\'s iron-bound reliquary: the thing to guard; verify looks for it on screen at the start)'],
+    cannot: [
+      'more than one place: no levels, rooms to clear, doors, portals, a second map or a shop (one arena a game: crypt-room or ruins-arena)',
+      'any camera but first person; versus or teams (players cannot hurt each other: co-op for 2-4 only)',
+      'the party and scenic mechanics (pickups to carry, stations, paint, races, a base with health to defend): the play is the tables and rules.js',
+      'new bodies or props made for the game: the players are the kit\'s four hunters, the enemies the library\'s grim skeletons in six archetypes (a row renames and retunes one), the prop a library piece',
+      'an alternate fire (right click), thrown things, grenades, vehicles, mounts, building',
+      'spending coins (they are counted, nothing is sold); a reward after the last wave (cards are dealt after any earlier wave marked "reward")',
+      'playing inside a post on X (its WebGL2 build has not been run in an in-app browser yet)',
+    ] };
   const worlds = [], looks = [];
   try {
     const world = await importKitModule(join(FORGE_KIT, 'world.js')), look = await importKitModule(join(FORGE_KIT, 'look.js')), tables = await importKitModule(join(FORGE_KIT, 'tables/index.js'));

@@ -38,8 +38,18 @@
 //              0.35 s and the kit counts a dash (a jump would rise; a dash does not).
 //
 // The HUD's control line must never list a control this check finds dead: the detail names the control, what
-// happened, and what to change. Budget: about 25 s on the solo browser.
+// happened, and what to change. Budget: about 25 s on the solo browser in real time.
+//
+// Time (tools/lib/stepped.mjs): the page runs on stepped time when the game's kit offers it (?gf-step=1,
+// window.__game.step). Every wait below is then the game's time, let by at once, and time stands still while a
+// screenshot is taken, so a loaded machine cannot change what is measured (the check flaked under load three times on
+// 2026-10-10: a slow screenshot ate the hold). Held frames are FRAME_MS of game time apart, what an idle machine gets
+// "as fast as it can". Keys, clicks and mouse moves are real either way. An older kit (no step) runs on the wall
+// clock, as before; the record's `clock` says which.
+import { prepareStepped, stepUrl, clockFor, mouseTaken } from './stepped.mjs';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+/** Stepped time: the game time between two frames taken while a button is held. */
+export const FRAME_MS = 60;
 const r2 = v => Math.round(v * 100) / 100;
 export const CONTROL_LIMITS = { JUMP_RISE: 0.25, HOLD_MS: 1400, CORE_RADIUS: 0.025, CORE_MIN: 0.12, CORE_FRAMES: 2, NEAR_RADIUS: 0.065, CENTRAL_MIN: 0.01, LAND_PX: 0.1, PIXEL_T: 60, WALK_SECONDS: 14, SWING_DEG: 35, DASH_M: 2.4 };
 const ACTIONS = ['jump', 'interact', 'primary', 'secondary'];
@@ -119,7 +129,7 @@ async function analyse(browser, released, held, L, view) {
  * Check 13. newPage(label, {overrides}) → {ctx, page, errors} (verify's own); url: the served game; game: config/game.json;
  * browser: for the pixel analysis; shot(page, name): an evidence screenshot. → {ok, detail, record, warnings}
  */
-export async function checkControls({ newPage, browser, url, game, shot = async () => null, log = () => {} }) {
+export async function checkControls({ newPage, browser, url, game, shot = async () => null, log = () => {}, stepped = true }) {
   const L = CONTROL_LIMITS, t0 = Date.now();
   const listed = Object.keys(game.controls ?? {}).filter(k => ACTIONS.includes(k)).sort((a, b) => ACTIONS.indexOf(a) - ACTIONS.indexOf(b));
   const others = Object.keys(game.controls ?? {}).filter(k => !ACTIONS.includes(k));
@@ -132,17 +142,20 @@ export async function checkControls({ newPage, browser, url, game, shot = async 
   const vp = p.viewportSize() ?? { width: 1280, height: 720 };
   const view = { w: vp.width, h: vp.height, clip: { x: Math.floor(vp.width * 0.25), y: Math.floor(vp.height * 0.27), width: Math.round(vp.width * 0.5), height: Math.round(vp.height * 0.55) } };
   const png = (full = false) => p.screenshot(full ? { type: 'png' } : { type: 'png', clip: view.clip });
+  let clock = null;
   try {
     // a melee game's enemies close in and fight an idle player (it would be down before its last control is tried): its
     // page plays the kit's staged moment instead (?gf-demo=waves.hit: one enemy standing still in front, no waves)
     const calm = (game.mechanics ?? []).some(m => m.id === 'melee') && (game.mechanics ?? []).some(m => m.id === 'waves') ? '&gf-demo=waves.hit' : '';
-    await p.goto(`${url}?seed=7&bots=0${calm}`, { waitUntil: 'load' });
+    if (stepped) await prepareStepped(p);
+    await p.goto(stepped ? stepUrl(`${url}?seed=7&bots=0${calm}`) : `${url}?seed=7&bots=0${calm}`, { waitUntil: 'load' });
     for (let t = Date.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'lobby'; ) { if (Date.now() - t > 90000) throw new Error('no lobby in 90 s'); await sleep(200); }
     const play = await p.locator('#gf-play').boundingBox().catch(() => null);
     if (play) await p.mouse.click(play.x + play.width / 2, play.y + play.height / 2); else await p.keyboard.press('Enter');
-    for (let t = Date.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'playing'; ) { if (Date.now() - t > 20000) throw new Error('the round did not start'); await sleep(120); }
-    await sleep(1600);                                              // the "Go!" banner
-    await p.mouse.click(640, 400); await sleep(300);                // takes the mouse (pointer lock), as a player does
+    clock = await clockFor(p, { real: !stepped });
+    for (let t = clock.now(); (await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'playing'; ) { if (clock.now() - t > 20000) throw new Error('the round did not start'); await clock.wait(120); }
+    await clock.wait(1600);                                         // the "Go!" banner
+    await p.mouse.click(640, 400); await mouseTaken(p); await clock.wait(300);   // takes the mouse (pointer lock), as a player does
     const o0 = await obs();
     const hasObs = !!o0.controls;
     const crosshair = hasObs ? !!o0.controls.crosshair : (game.camera ?? 'third') !== 'top';
@@ -151,20 +164,20 @@ export async function checkControls({ newPage, browser, url, game, shot = async 
     const meleeAct = a => !!melee && ((melee.params?.action ?? 'primary') === a || (melee.params?.heavyAction ?? 'secondary') === a);
     for (const action of listed) {
       const words = game.controls[action];
-      if (action === 'jump' && melee && (melee.params?.dashAction ?? 'jump') === 'jump') { results.push(await dash({ p, obs, words, L, shot })); await sleep(700); continue; }
-      if ((action === 'primary' || action === 'secondary') && meleeAct(action)) { results.push(await swing({ p, obs, browser, action, words, game, shot, L, heavy: (melee.params?.heavyAction ?? 'secondary') === action })); await sleep(900); continue; }
+      if (action === 'jump' && melee && (melee.params?.dashAction ?? 'jump') === 'jump') { results.push(await dash({ p, obs, words, L, shot, clock })); await clock.wait(700); continue; }
+      if ((action === 'primary' || action === 'secondary') && meleeAct(action)) { results.push(await swing({ p, obs, browser, action, words, game, shot, L, clock, heavy: (melee.params?.heavyAction ?? 'secondary') === action })); await clock.wait(900); continue; }
       if (action === 'jump') {
         const a = await obs(); let top = a.me.y;
-        await p.keyboard.down('Space'); await sleep(90); await p.keyboard.up('Space');
-        for (let i = 0; i < 8; i++) { await sleep(90); const b = await obs(); top = Math.max(top, b.me.y); }
+        await p.keyboard.down('Space'); await clock.wait(90); await p.keyboard.up('Space');
+        for (let i = 0; i < 8; i++) { await clock.wait(90); const b = await obs(); top = Math.max(top, b.me.y); }
         const rise = r2(top - a.me.y);
         results.push({ action, words, ok: rise >= L.JUMP_RISE, rise, why: rise >= L.JUMP_RISE ? `rose ${rise} m` : `Space: the player rose ${rise} m (needs ${L.JUMP_RISE}); check config/game.json controller.jump (m/s) and that nothing holds the controller (controller.enabled)` });
-        await sleep(500);
+        await clock.wait(500);
         continue;
       }
-      if (action === 'interact') { results.push(await interact({ p, obs, game, words, shot, L, t0 })); continue; }
+      if (action === 'interact') { results.push(await interact({ p, obs, game, words, shot, L, t0, clock })); continue; }
       // primary / secondary: held near the crosshair
-      results.push(await fire({ p, obs, png, view, browser, action, words, crosshair, hasObs, game, shot, L }));
+      results.push(await fire({ p, obs, png, view, browser, action, words, crosshair, hasObs, game, shot, L, clock }));
     }
   } catch (e) {
     results.push({ action: 'run', ok: false, why: `the controls page stopped: ${e.message}` });
@@ -179,32 +192,32 @@ export async function checkControls({ newPage, browser, url, game, shot = async 
     : `${results.filter(r => !r.ok).map(line).join('; ')}. The HUD lists ${listed.map(a => `${a} "${game.controls[a]}"`).join(', ')}; every listed control must do something the player sees on their own screen. ` +
       'If the game is on an older kit, run node research/gf-three/tools/upgrade.mjs <game> (aim at the crosshair, press to collect, prompts); otherwise fix the binding in rules.js or remove the control from config/game.json → controls.' +
       (results.some(r => r.ok) ? ` Working: ${results.filter(r => r.ok).map(r => r.action).join(', ')}.` : '');
-  return { ok, detail, warnings, record: { listed, limits: L, observation: results.some(r => r.legacy) ? 'shared state (older kit)' : 'controls()', results, seconds: Math.round((Date.now() - t0) / 1000) } };
+  return { ok, detail, warnings, record: { listed, limits: L, observation: results.some(r => r.legacy) ? 'shared state (older kit)' : 'controls()', results, clock: clock?.stepped ? 'stepped' : 'wall', seconds: Math.round((Date.now() - t0) / 1000) } };
 }
 
 /** Walk to the nearest interactable (real keys), press its action, see it change. */
-async function interact({ p, obs, game, words, shot, L }) {
+async function interact({ p, obs, game, words, shot, L, clock }) {
   const o0 = await obs();
   let list = interactablesOf(o0, game).filter(t => (t.action ?? 'interact') === 'interact');
   const key = { interact: 'KeyE' };
   if (!list.length) {
     // nothing exposed: E where the player stands must change some state
     const before = JSON.stringify([o0.shared, o0.rules, o0.scores, o0.controls?.me]);
-    await p.keyboard.press('KeyE'); await sleep(500);
+    await p.keyboard.press('KeyE'); await clock.wait(500);
     const o1 = await obs();
     const changed = JSON.stringify([o1.shared, o1.rules, o1.scores, o1.controls?.me]) !== before;
     return { action: 'interact', words, ok: changed, why: changed ? 'E changed the game state (no mechanic exposes interactables; the rules handle it)' : 'E changed nothing, and no mechanic exposes anything to interact with (pickup spots that take a press, a free station, a carry item): bind interact in a mechanic (pickup collect "both", station action "interact", carry grabAction "interact") or in rules.js, or remove controls.interact' };
   }
   // calibrate: which way W and D move the player (the camera does not turn: the mouse stays still)
-  const step = async k => { const a = (await obs()).me; await p.keyboard.down(k); await sleep(200); await p.keyboard.up(k); await sleep(260); const b = (await obs()).me; const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz); return l > 0.05 ? [dx / l, dz / l] : null; };
+  const step = async k => { const a = (await obs()).me; await p.keyboard.down(k); await clock.wait(200); await p.keyboard.up(k); await clock.wait(260); const b = (await obs()).me; const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz); return l > 0.05 ? [dx / l, dz / l] : null; };
   const f = await step('KeyW'), rt = await step('KeyD');
   if (!f || !rt) return { action: 'interact', words, ok: false, why: 'the player did not move on W or D, so the check could not walk to anything to interact with (is the controller held?)' };
   const tried = [];
-  const deadline = Date.now() + L.WALK_SECONDS * 1000;
+  const deadline = clock.now() + L.WALK_SECONDS * 1000;
   for (const first of list.slice(0, 3)) {
     let t = first, best = Infinity, stall = 0, arrived = false;
     const want = t.touch > 0 ? (t.touch + t.reach) / 2 : t.reach * 0.6;
-    while (Date.now() < deadline) {
+    while (clock.now() < deadline) {
       const o = await obs(), me = o.me;
       t = interactablesOf(o, game).find(x => x.id === first.id);
       if (!t) break;                                                  // taken by touch on the way, or gone
@@ -215,20 +228,20 @@ async function interact({ p, obs, game, words, shot, L }) {
       const pf = ux * f[0] + uz * f[1], pr = ux * rt[0] + uz * rt[1];
       const keys = []; if (pf > 0.38) keys.push('KeyW'); if (pf < -0.38) keys.push('KeyS'); if (pr > 0.38) keys.push('KeyD'); if (pr < -0.38) keys.push('KeyA');
       for (const k of keys) await p.keyboard.down(k);
-      await sleep(Math.max(45, Math.min(220, Math.abs(d - want) * 85)));
+      await clock.wait(Math.max(45, Math.min(220, Math.abs(d - want) * 85)));
       for (const k of keys) await p.keyboard.up(k);
-      await sleep(200);
+      await clock.wait(200);
     }
     if (!arrived || !t) { tried.push(`${first.kind} ${first.id}: ${!t ? 'gone before the press (touched on the way)' : 'could not walk there'}`); continue; }
-    await sleep(250);
+    await clock.wait(250);
     const o1 = await obs(), at = r2(Math.hypot(t.x - o1.me.x, t.z - o1.me.z)), prompt = o1.controls?.prompt ?? null;
     if (!unchanged(t, o1, game)) { tried.push(`${t.id}: changed before the press`); continue; }
     await shot(p, 'controls-interact-near');
     const k = key[t.action ?? 'interact'] ?? 'KeyE';
-    if (t.kind === 'station' && t.mode === 'tap') { for (let i = 0; i < Math.min(40, t.taps ?? 8); i++) { await p.keyboard.press(k); await sleep(70); } }
-    else if (t.kind === 'station' && t.mode === 'hold') { await p.keyboard.down(k); await sleep(Math.min(8000, (t.seconds ?? 3) * 1000 + 400)); await p.keyboard.up(k); }
-    else { await p.keyboard.down(k); await sleep(100); await p.keyboard.up(k); }
-    await sleep(450);
+    if (t.kind === 'station' && t.mode === 'tap') { for (let i = 0; i < Math.min(40, t.taps ?? 8); i++) { await p.keyboard.press(k); await clock.wait(70); } }
+    else if (t.kind === 'station' && t.mode === 'hold') { await p.keyboard.down(k); await clock.wait(Math.min(8000, (t.seconds ?? 3) * 1000 + 400)); await p.keyboard.up(k); }
+    else { await p.keyboard.down(k); await clock.wait(100); await p.keyboard.up(k); }
+    await clock.wait(450);
     const o2 = await obs();
     await shot(p, 'controls-interact-after');
     const changed = !unchanged(t, o2, game);
@@ -242,20 +255,22 @@ async function interact({ p, obs, game, words, shot, L }) {
 }
 
 /** Hold primary or secondary; look near the crosshair. */
-async function fire({ p, obs, png, view, browser, action, words, crosshair, hasObs, game, shot, L }) {
+async function fire({ p, obs, png, view, browser, action, words, crosshair, hasObs, game, shot, L, clock }) {
   const released = [];
-  for (let i = 0; i < 4; i++) { released.push(await png()); await sleep(170); }
+  for (let i = 0; i < 4; i++) { released.push(await png()); await clock.wait(170); }
   const o0 = await obs();
   const btn = action === 'primary' ? 'left' : 'right';
   const held = [];
   await p.mouse.down({ button: btn });
-  const t1 = Date.now();
+  const t1 = clock.now();
   let mid = null;
   let shown = null;
-  while (Date.now() - t1 < L.HOLD_MS) { held.push(await png()); if (!mid && Date.now() - t1 > 500) { mid = await obs(); shown = await png(true); } }
+  // (stepped: a frame of the game every FRAME_MS, time standing still while each is taken)
+  await clock.pass(FRAME_MS);
+  while (clock.now() - t1 < L.HOLD_MS) { held.push(await png()); if (!mid && clock.now() - t1 > 500) { mid = await obs(); shown = await png(true); } await clock.pass(FRAME_MS); }
   const o1 = await obs();
   await p.mouse.up({ button: btn });
-  await sleep(300);
+  await clock.wait(300);
   const o2 = await obs();
   const a = await analyse(browser, released, held, L, view);
   const bestI = a.frames.reduce((bi, f, i) => (f.core + f.near > a.frames[bi].core + a.frames[bi].near ? i : bi), 0), best = a.frames[bestI] ?? { core: 0, near: 0, central: 0 };
@@ -323,30 +338,34 @@ async function analyseDisc(browser, released, held, c, rad, L) {
 }
 
 /** Hold (or click, heavy) the melee action: a swing goes the way the player aims and shows there on their own screen. */
-async function swing({ p, obs, browser, action, words, game, shot, L, heavy }) {
+async function swing({ p, obs, browser, action, words, game, shot, L, heavy, clock }) {
   const mode = game.camera ?? 'third', vp = p.viewportSize() ?? { width: 1280, height: 720 };
   const btn = action === 'primary' ? 'left' : 'right';
   // aim: the follow camera aims with the cursor (a point beside the player, who stands near the middle); third and
   // first person aim with the crosshair as it is
-  if (mode === 'follow' || mode === 'top') { await p.mouse.move(Math.round(vp.width / 2 + vp.width * 0.17), Math.round(vp.height / 2 - vp.height * 0.08), { steps: 4 }); await sleep(350); }
+  if (mode === 'follow' || mode === 'top' || mode === 'orbit') { await p.mouse.move(Math.round(vp.width / 2 + vp.width * 0.17), Math.round(vp.height / 2 - vp.height * 0.08), { steps: 4 }); await clock.wait(350); }
   const png = () => p.screenshot({ type: 'png' });
-  const released = []; for (let i = 0; i < 4; i++) { released.push(await png()); await sleep(150); }
+  const released = []; for (let i = 0; i < 4; i++) { released.push(await png()); await clock.wait(150); }
   const o0 = await obs(), s0 = meleeStats(o0);
   if (!s0) return { action, words, ok: false, why: 'the game has the melee mechanic in config/game.json but the page reports no melee stats (window.__game.controls()): its kit copy lacks the module; upgrade the game' };
   const aim0 = o0.controls?.aim?.point ?? null, me0 = o0.me;
   const held = [];
   await p.mouse.down({ button: btn });
-  const t1 = Date.now();
-  if (heavy) { await sleep(80); await p.mouse.up({ button: btn }); }
+  const t1 = clock.now();
+  // a click: the heavy action, and any action under the orbit camera, where a button held still is a drag that has
+  // not started and the action comes when it is let go (kit/core/input.js 'drag' mode): the frames follow the click
+  const click = heavy || mode === 'orbit';
+  if (click) { await clock.wait(80); await p.mouse.up({ button: btn }); }
   let shown = null;
-  while (Date.now() - t1 < (heavy ? 900 : L.HOLD_MS)) { held.push(await png()); if (!shown && Date.now() - t1 > 260) { shown = held[held.length - 1]; } }
-  if (!heavy) await p.mouse.up({ button: btn });
-  await sleep(250);
+  if (!click) await clock.pass(FRAME_MS);
+  while (clock.now() - t1 < (heavy ? 900 : L.HOLD_MS)) { held.push(await png()); if (!shown && clock.now() - t1 > 260) { shown = held[held.length - 1]; } await clock.pass(FRAME_MS); }
+  if (!click) await p.mouse.up({ button: btn });
+  await clock.wait(250);
   const o1 = await obs(), s1 = meleeStats(o1), ls = s1?.lastSwing ?? null;
   if (shown) await shot(p, `controls-${action}-swing`, shown);
   const fails = [];
   const swings = (s1?.swings ?? 0) - (s0.swings ?? 0);
-  if (swings < 1 || !ls) fails.push(`${heavy ? 'a click' : `${L.HOLD_MS / 1000} s held`} started no swing (the melee mechanic's count stayed ${s0.swings ?? 0}); check melee ${heavy ? 'heavyAction' : 'action'} is "${action}" and nothing holds the player`);
+  if (swings < 1 || !ls) fails.push(`${click ? 'a click' : `${L.HOLD_MS / 1000} s held`} started no swing (the melee mechanic's count stayed ${s0.swings ?? 0}); check melee ${heavy ? 'heavyAction' : 'action'} is "${action}" and nothing holds the player`);
   let dirOff = null, change = null;
   if (ls) {
     // the way it went, against the page's own aim point (the cursor's or the crosshair's ray into the world)
@@ -367,16 +386,16 @@ async function swing({ p, obs, browser, action, words, game, shot, L, heavy }) {
   }
   const ok = fails.length === 0;
   return { action, words, ok, melee: true, swings, dirOff, change, lastSwing: ls, trail: s1?.trail ?? null,
-    why: ok ? `${heavy ? 'a click' : `held ${L.HOLD_MS / 1000} s`}: ${swings} swing${swings === 1 ? '' : 's'}, ${dirOff === null ? 'the aim had no point' : `${dirOff}° from the aim`}, ${change ? `${change.frames} frames changed round the swing (up to ${change.best}%, noise ${change.noise}%)` : ''}`
+    why: ok ? `${click ? 'a click' : `held ${L.HOLD_MS / 1000} s`}: ${swings} swing${swings === 1 ? '' : 's'}, ${dirOff === null ? 'the aim had no point' : `${dirOff}° from the aim`}, ${change ? `${change.frames} frames changed round the swing (up to ${change.best}%, noise ${change.noise}%)` : ''}`
       : `${fails.join('; ')}. A melee swing must go where the player aims and show there on their own screen (kit/mechanics/melee: the trail, the swing clip)` };
 }
 
 /** jump bound to melee's dash: Space with D held moves the player well beyond a walk, and the kit counts a dash. */
-async function dash({ p, obs, words, L, shot }) {
+async function dash({ p, obs, words, L, shot, clock }) {
   const o0 = await obs(), s0 = meleeStats(o0), a = o0.me;
   if (!s0) return { action: 'jump', words, ok: false, why: 'melee binds the dash to Space but the page reports no melee stats' };
-  await p.keyboard.down('KeyD'); await sleep(60); await p.keyboard.press('Space'); await sleep(300); await p.keyboard.up('KeyD');
-  await sleep(80);
+  await p.keyboard.down('KeyD'); await clock.wait(60); await p.keyboard.press('Space'); await clock.wait(300); await p.keyboard.up('KeyD');
+  await clock.wait(80);
   const o1 = await obs(), s1 = meleeStats(o1), b = o1.me;
   const moved = Math.round(Math.hypot(b.x - a.x, b.z - a.z) * 100) / 100, dashes = (s1?.dashes ?? 0) - (s0.dashes ?? 0);
   const ok = dashes >= 1 && moved >= L.DASH_M;

@@ -15,6 +15,10 @@
 // load really took is kept in this browser (localStorage, by page and by boot.bytes) and is the total the next time.
 // A game with no boot.bytes shows the megabytes and a bar that only creeps.
 //
+// Wave 3 (track M): the page itself starts the core's wasm with its first bytes (index.html: window.__gfEarly, which
+// counts that download's bytes; they are added here), and this view asks for assets.json the moment it starts, so the
+// boot finds it waiting (gf-assets keeps the one request).
+//
 // It leaves by itself when window.__game exists (the menu is up, or the kit's no-WebGPU screen is), and on an error (the
 // boot's own message shows). Nothing is shown for a lobby backdrop (?gf-backdrop=1: the friends page is the screen).
 // QA: window.__gfLoading.observe() → {shown, stage, loaded, total, share, title, firstMs, readyMs, samples}.
@@ -102,19 +106,23 @@ export function startLoading({ theme = null, title = null } = {}) {
     } catch { return res; }
   };
   if (typeof orig === 'function') W.fetch = wrapped;
+  // the manifest, asked for now (the boot's own gf.manifest() is this same request)
+  try { gf.manifest().catch(() => {}); } catch { /* the boot will say what is wrong with it */ }
 
-  const share = () => (S.total > 0 ? Math.min(1, S.loaded / S.total) : 1 - Math.exp(-S.loaded / 6e6));
+  // what has come in: this view's own count, and the wasm's bytes when the page started it before this view existed
+  const loaded = () => S.loaded + (Number(W.__gfEarly?.bytes) || 0);
+  const share = () => (S.total > 0 ? Math.min(1, loaded() / S.total) : 1 - Math.exp(-loaded() / 6e6));
   const draw = () => {
     const now = performance.now(), p = share();
     // downloaded: everything the total names is in, or nothing has come for a while after most of it has
-    if (S.stage === 'download' && S.loaded > 0 && S.open === 0 && (p >= 0.995 || (now - S.last > 600 && (S.total === 0 || p > 0.8)))) S.stage = 'ready';
+    if (S.stage === 'download' && loaded() > 0 && S.open === 0 && (p >= 0.995 || (now - S.last > 600 && (S.total === 0 || p > 0.8)))) S.stage = 'ready';
     if (view) {
       bar.style.width = `${(Math.min(S.stage === 'ready' ? 1 : 0.985, p) * 100).toFixed(1)}%`;
       view.classList.toggle('ready', S.stage === 'ready');
-      const text = S.stage === 'ready' ? S.words.preparing : S.words.loading, nums = S.stage === 'ready' ? '' : S.total > 0 ? `${MB(Math.min(S.loaded, S.total))} / ${MB(S.total)} MB` : S.loaded > 0 ? `${MB(S.loaded)} MB` : '';
+      const text = S.stage === 'ready' ? S.words.preparing : S.words.loading, nums = S.stage === 'ready' ? '' : S.total > 0 ? `${MB(Math.min(loaded(), S.total))} / ${MB(S.total)} MB` : loaded() > 0 ? `${MB(loaded())} MB` : '';
       if (line.dataset.k !== `${text}|${nums}`) { line.dataset.k = `${text}|${nums}`; const b = document.createElement('b'); b.textContent = nums; line.replaceChildren(text, ...(nums ? [b] : [])); }
     }
-    if (S.samples.length < 400 && (!S.samples.length || now - t0 - S.samples.at(-1).ms >= 100)) S.samples.push({ ms: Math.round(now - t0), loaded: S.loaded, share: Math.round(p * 1000) / 1000, stage: S.stage });
+    if (S.samples.length < 400 && (!S.samples.length || now - t0 - S.samples.at(-1).ms >= 100)) S.samples.push({ ms: Math.round(now - t0), loaded: loaded(), share: Math.round(p * 1000) / 1000, stage: S.stage });
     if (W.__game) api.done();
   };
   const onError = () => api.done(true);
@@ -122,20 +130,20 @@ export function startLoading({ theme = null, title = null } = {}) {
     /** Leave: the game is ready (or it failed: its own message shows). */
     done(failed = false) {
       if (S.done) return;
-      S.done = true; S.readyMs = Math.round(performance.now() - t0); S.failed = !!failed; S.atReady = S.loaded;
+      S.done = true; S.readyMs = Math.round(performance.now() - t0); S.failed = !!failed; S.atReady = loaded();
       clearInterval(timer);
       if (W.fetch === wrapped) W.fetch = orig;
       W.removeEventListener?.('unhandledrejection', onError);
       document.documentElement.classList.remove('gf-loading-on');
       // what this load took, for the next one of the same build (a real game only: never the no-WebGPU screen)
-      if (!failed && S.declared > 0 && S.loaded > 0 && W.__game?.phase !== 'unsupported' && !params.get('gf-show')) { try { localStorage.setItem(KEY, JSON.stringify({ declared: S.declared, bytes: S.loaded })); } catch { /* private mode: the estimate again next time */ } }
+      if (!failed && S.declared > 0 && S.atReady > 0 && W.__game?.phase !== 'unsupported' && !params.get('gf-show')) { try { localStorage.setItem(KEY, JSON.stringify({ declared: S.declared, bytes: S.atReady })); } catch { /* private mode: the estimate again next time */ } }
       if (!view) return;
       if (!failed) bar.style.width = '100%';
       view.classList.add('out');
       const gone = () => view.remove();
       if (failed || params.get('gf-show')) gone(); else setTimeout(gone, 220);
     },
-    observe: () => ({ shown: !!view?.isConnected && !view.classList.contains('out'), stage: S.done ? 'done' : S.stage, loaded: S.done ? S.atReady : S.loaded, total: S.total, declared: S.declared, learned: S.learned, share: Math.round((S.done && S.total > 0 ? Math.min(1, S.atReady / S.total) : share()) * 1000) / 1000, title: h1?.textContent ?? null, line: line?.textContent ?? null, firstMs: S.firstMs, readyMs: S.readyMs, failed: !!S.failed, samples: S.samples.slice() }),
+    observe: () => ({ shown: !!view?.isConnected && !view.classList.contains('out'), stage: S.done ? 'done' : S.stage, loaded: S.done ? S.atReady : loaded(), early: Number(W.__gfEarly?.bytes) || 0, total: S.total, declared: S.declared, learned: S.learned, share: Math.round((S.done && S.total > 0 ? Math.min(1, S.atReady / S.total) : share()) * 1000) / 1000, title: h1?.textContent ?? null, line: line?.textContent ?? null, firstMs: S.firstMs, readyMs: S.readyMs, failed: !!S.failed, samples: S.samples.slice() }),
   };
   W.addEventListener?.('unhandledrejection', onError);
   timer = setInterval(draw, 50);

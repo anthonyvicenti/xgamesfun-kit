@@ -40,7 +40,7 @@ export async function checkEmbed({ newPage, url, game = {}, log = () => {}, shot
   const server = createServer((req, res) => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(html); });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const postUrl = `http://127.0.0.1:${server.address().port}/status/1`;
-  const T = await newPage('post');
+  const T = await newPage('post', { realLock: true });   // this page tests the frame's own refusal of the lock (tools/lib/lock.mjs)
   const p = T.page, steps = [], fail = [], warnings = [];
   // the orbit camera (CONTRACT §9) never asks for the lock: the mouse stays free, a drag turns it, a click acts
   // The follow camera (CONTRACT §8, scenic) never asks either: the cursor aims and nothing turns the camera

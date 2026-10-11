@@ -10,6 +10,12 @@
 // Fails when, on either page: the longest stretch without control while alive > fair.downSeconds + 1 s; a protected
 // player is knocked; or the player is in control < 85% of the time alive. Bot score balance is reported, never failed.
 // The detail names the numbers and what to change, because the build agent repairs from it.
+//
+// Time (tools/lib/stepped.mjs): each page runs on stepped time when the game's kit offers it. The 42 s are then the
+// game's own seconds, let by 100 ms at a time between the scripted human's real keys and clicks, and a sample's `wall`
+// is the game time since the round was taken up (it was the wall clock, which is the same thing at 60 frames a second
+// and not on a slow machine). An older kit runs on the wall clock, as before; the record's `clock` says which.
+import { prepareStepped, stepUrl, clockFor, mouseTaken } from './stepped.mjs';
 import { DOWN_WORDS } from '../../kit/core/fair-logic.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -30,26 +36,30 @@ const SAMPLE = () => {
 };
 
 /** One page: play `seconds` as `mode` ('stand' | 'wander'), return the samples. */
-async function playPage({ newPage, url, seed, mode, seconds, log }) {
+async function playPage({ newPage, url, seed, mode, seconds, log, stepped = true }) {
   const T = await newPage(`fair ${mode}`, { overrides: { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: Math.ceil(seconds) + 8 }] } });
   const p = T.page, rnd = stream(seed * 7919 + (mode === 'stand' ? 1 : 2));
   const samples = [];
+  let clock = null;
   try {
-    await p.goto(`${url}?seed=${seed}&bots=3`, { waitUntil: 'load' });
+    if (stepped) await prepareStepped(p);
+    await p.goto(stepped ? stepUrl(`${url}?seed=${seed}&bots=3`) : `${url}?seed=${seed}&bots=3`, { waitUntil: 'load' });
     const t0 = Date.now();
     while ((await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'lobby') { if (Date.now() - t0 > 90000) throw new Error('no lobby in 90 s'); await sleep(250); }
     const play = await p.locator('#gf-play').boundingBox().catch(() => null);
     if (play) await p.mouse.click(play.x + play.width / 2, play.y + play.height / 2); else await p.keyboard.press('Enter');
-    const t1 = Date.now();
-    while ((await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'playing') { if (Date.now() - t1 > 20000) throw new Error('the round did not start'); await sleep(150); }
+    clock = await clockFor(p, { real: !stepped });
+    const t1 = clock.now();
+    while ((await p.evaluate(() => window.__game?.phase ?? null).catch(() => null)) !== 'playing') { if (clock.now() - t1 > 20000) throw new Error('the round did not start'); await clock.wait(150); }
     await p.mouse.click(640, 400);
+    if (clock.stepped) await mouseTaken(p);
     if (mode === 'wander') await p.keyboard.down('KeyW');
     let k = 0, firing = false;
-    const start = Date.now();
-    while ((Date.now() - start) / 1000 < seconds) {
+    const start = clock.now();
+    while ((clock.now() - start) / 1000 < seconds) {
       const s = await p.evaluate(SAMPLE).catch(() => null);
       if (!s) break;
-      samples.push({ ...s, wall: (Date.now() - start) / 1000 });
+      samples.push({ ...s, wall: (clock.now() - start) / 1000 });
       if (s.phase !== 'playing') break;
       k++;
       // the scripted human: turn now and then, fire in bursts, pick things up, jump once in a while
@@ -58,7 +68,7 @@ async function playPage({ newPage, url, seed, mode, seconds, log }) {
       if (k % 20 === (mode === 'wander' ? 10 : 14) && firing) { await p.mouse.up(); firing = false; }
       if (k % 30 === 5) await p.keyboard.press('KeyE');
       if (mode === 'wander' && k % 45 === 22) await p.keyboard.press('Space');
-      await sleep(100);
+      await clock.wait(100);
     }
     if (firing) await p.mouse.up().catch(() => {});
     if (mode === 'wander') await p.keyboard.up('KeyW').catch(() => {});
@@ -67,7 +77,7 @@ async function playPage({ newPage, url, seed, mode, seconds, log }) {
     await T.ctx.close().catch(() => {});
     T.errorsAtEnd = errors;
   }
-  return { mode, seed, samples, errors: T.errorsAtEnd };
+  return { mode, seed, samples, errors: T.errorsAtEnd, clock: clock?.stepped ? 'stepped' : 'wall' };
 }
 
 /** The numbers for one page's samples. */
@@ -129,10 +139,10 @@ export function measure(samples, { downSeconds = 1.2 } = {}) {
 /**
  * Check 10. newPage(label, {overrides}) → {ctx, page, errors} (verify's own); url: the served game. → {ok, detail, record}
  */
-export async function checkFairPlay({ newPage, url, seconds = 42, log = () => {} }) {
+export async function checkFairPlay({ newPage, url, seconds = 42, log = () => {}, stepped = true }) {
   const runs = await Promise.all([
-    playPage({ newPage, url, seed: 11, mode: 'stand', seconds, log }),
-    playPage({ newPage, url, seed: 7, mode: 'wander', seconds, log }),
+    playPage({ newPage, url, seed: 11, mode: 'stand', seconds, log, stepped }),
+    playPage({ newPage, url, seed: 7, mode: 'wander', seconds, log, stepped }),
   ]);
   const pages = runs.map(r => {
     const downSeconds = r.samples.at(-1)?.fair?.downSeconds ?? 1.2;
@@ -145,7 +155,7 @@ export async function checkFairPlay({ newPage, url, seconds = 42, log = () => {}
     if (m.controlPct < FAIR_LIMITS.minControlPct) fails.push(`the player was in control ${m.controlPct}% of the time alive (needs ${FAIR_LIMITS.minControlPct}%; ${m.knocks} knocks in ${m.aliveSec} s)`);
     if (m.protectedKnocked.length) fails.push(`${m.protectedKnocked.length} knock(s) landed on protected players (${m.protectedKnocked.slice(0, 3).map(v => `${v.name} at ${v.at} s with ${v.left} s left`).join(', ')})`);
     if (!m.fairObserved) fails.push('the observation has no fair-play fields (players[].control, down, protected): the game\'s kit predates fair play; re-run create to refresh gf/three');
-    return { mode: r.mode, seed: r.seed, ...m, limit, fails, errors: r.errors.slice(0, 3) };
+    return { mode: r.mode, seed: r.seed, clock: r.clock, ...m, limit, fails, errors: r.errors.slice(0, 3) };
   });
   const ok = pages.every(p => p.fails.length === 0);
   const line = p => `${p.mode} (seed ${p.seed}): in control ${p.controlPct}% of ${p.aliveSec} s alive, longest without control ${p.longestNoControlSec} s (limit ${p.limit}), ${p.knocks} knocks, ${p.deaths} knock-outs (${p.outSec} s out)${p.protectedKnocked.length ? `, ${p.protectedKnocked.length} protected players knocked` : ''}`;

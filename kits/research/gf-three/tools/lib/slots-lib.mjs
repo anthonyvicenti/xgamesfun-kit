@@ -29,6 +29,7 @@ export const BASE_IGNORE = [
   { path: 'gf/**', reason: 'kit copies: gf-three, gf-multiplayer, gf-assets (vendored by create, never edited)' },
   { path: 'audio/**', reason: 'gf-audio 1.5.0 kit' },
   { path: 'evidence/**', reason: 'QA evidence (verify runs), append-only' },
+  { path: 'tests/**', reason: 'the game\'s own tests (verify check 35): play scripts that hold its own promises, not assets' },
   { path: 'spec.json', reason: 'the game spec this project was made from (research/studio-v2/game-spec.schema.json)' },
   { path: 'gf-three.json', reason: 'build record from create: kit version, modules, where each asset came from' },
   { path: 'generated.json', reason: 'record of the models the spec asked to generate and what happened (the Studio worker writes it; verify check 14 reads it)' },
