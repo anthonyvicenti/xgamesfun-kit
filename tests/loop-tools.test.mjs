@@ -49,9 +49,9 @@ const lockSpec = async b => {
   await copyFile(DEV_SPEC, b.G.spec);
   return b.call('gamesfun_step_spec');
 };
-const answerAll = async (b, pass = true) => {
+const answerAll = async (b, pass = true, call = b.call) => {
   const list = JSON.parse(await readFile(path.join(b.G.playtest, 'promises.json'), 'utf8'));
-  return b.call('gamesfun_playtest_report', { report: { verdict: pass ? 'pass' : 'fail', promises: list.promises.map((x, i) => ({ id: x.id, pass: pass || i > 0, evidence: [], note: pass || i > 0 ? 'I saw it happen.' : 'Nothing happened on my screen.' })), feel: [], summary: 'Played a round.' } });
+  return call('gamesfun_playtest_report', { report: { verdict: pass ? 'pass' : 'fail', promises: list.promises.map((x, i) => ({ id: x.id, pass: pass || i > 0, evidence: [], note: pass || i > 0 ? 'I saw it happen.' : 'Nothing happened on my screen.' })), feel: [], summary: 'Played a round.' } });
 };
 const state = async b => JSON.parse(await readFile(b.G.state, 'utf8'));
 const DONE = { summary: 'Throw balls at your friends; last one standing scores.', controls: 'WASD move, mouse aim, click throw, E pick up' };
@@ -216,7 +216,7 @@ test('resume: a new copy of the tools picks a build up at the right step, with t
   call = await fresh('d');
   r = await call('gamesfun_next');
   assert.equal(r.step, 'playtest'); assert.equal(r.round.agent, 'playtester'); assert.match(r.round.brief, /PLAYTEST\.md/);
-  await answerAll(b);
+  await answerAll(b, true, call);       // one MCP server at a time works on a game: an older one's memory is not the state
   await call('gamesfun_step_playtest');
   call = await fresh('e');
   r = await call('gamesfun_step_deliver');
@@ -290,6 +290,51 @@ test('a roll-back from the studio page mid-run cancels the run: the tools end it
   // the person's next request starts a new run on the files as they left them
   r = await b.call('gamesfun_change', { request: 'make the balls bigger' });
   assert.equal(r.status, 'building'); assert.equal(r.round.kind, 'change');
+});
+
+test('the locked spec is locked: an edited spec is put back and refused, the brief comes from the held text, an edited state is written again', async t => {
+  const { createBridge } = await import('../bridge/core.mjs');
+  const b = await bench(t, { verdicts: [false, true] });
+  await lockSpec(b);
+  const locked = await readFile(b.G.spec, 'utf8'), plan = JSON.parse(locked);
+  const weaker = text => { const j = JSON.parse(text); j.title = 'Easier Game'; j.mechanics = j.mechanics.slice(0, 1); return JSON.stringify(j, null, 2) + '\n'; };
+  // before create: the spec in the job folder is edited. The game is made from the spec as locked, and the session is told
+  await writeFile(b.G.spec, weaker(locked));
+  let r = await b.call('gamesfun_step_create');
+  assert.equal(r.refused, 'spec-changed'); assert.match(r.message, /locked spec was changed after it was locked.*put it back.*gamesfun_ask/s);
+  assert.equal(await readFile(b.G.spec, 'utf8'), locked);
+  assert.match(r.round.brief, new RegExp(`# Build round: ${plan.title}`), 'the brief is built from the text held in memory');
+  assert.deepEqual(JSON.parse(await readFile(path.join(b.game, 'spec.json'), 'utf8')).mechanics.map(m => m.id), plan.mechanics.map(m => m.id), 'create ran on the locked spec');
+  const inGame = await readFile(path.join(b.game, 'spec.json'), 'utf8');
+
+  // in the build round: both copies are edited (the one verify reads is the game's). The stop guard sees it on the disk
+  await writeFile(b.G.spec, weaker(locked)); await writeFile(path.join(b.game, 'spec.json'), weaker(inGame));
+  const bridge = createBridge({ gameDir: b.game });
+  bridge.event('session-start', { session: 'S', cwd: b.game, mode: 'default' });
+  let st = await bridge.stop({ session: 'S', cwd: b.game });
+  assert.deepEqual(st.reasons, ['build', 'lock']); assert.match(st.refuse, /locked spec is changed on the disk.*spec\.json: edited/s);
+  r = await b.call('gamesfun_step_fix', DONE);
+  assert.equal(r.refused, 'spec-changed'); assert.deepEqual(r.ran, ['agent', 'fix']);
+  assert.equal(await readFile(b.G.spec, 'utf8'), locked); assert.equal(await readFile(path.join(b.game, 'spec.json'), 'utf8'), inGame);
+  // the refusal is on the loop's record until a round's message has said it: the guard says it once
+  st = await bridge.stop({ session: 'S', cwd: b.game });
+  assert.ok(st.reasons.includes('lock')); assert.match(st.refuse, /The loop refused this.*locked spec was edited and put back/s);
+  st = await bridge.stop({ session: 'S', cwd: b.game });
+  assert.deepEqual(st.reasons, ['build'], 'told once');
+
+  // the state file is the loop's: a session that writes itself to "deliver" is not believed
+  const disk = await state(b);
+  await writeFile(b.G.state, JSON.stringify({ ...disk, step: 'deliver', verify: { n: 1, ok: true, playable: true, hash: 'f'.repeat(64), failed: [] } }, null, 1) + '\n');
+  r = await b.call('gamesfun_step_deliver');
+  assert.equal(r.refused, 'out-of-order'); assert.equal(r.next.tool, 'gamesfun_step_verify');
+  assert.equal((await state(b)).step, 'verify', 'written again from memory');
+  r = await b.call('gamesfun_step_verify');
+  assert.match(r.refused, /state-changed/); assert.match(r.message, /state file was changed by something other than the loop/);
+  // the repair round's brief repeats what was refused (the library's own note), once
+  assert.match(r.round.brief, /The loop refused this/);
+  assert.ok((await state(b)).refusals.every(x => x.told), 'every refusal has been said in a round\'s message');
+  st = await bridge.stop({ session: 'S', cwd: b.game });
+  assert.deepEqual(st.reasons, ['build']);
 });
 
 test('rollback: a round is undone and the folder is byte for byte what it was', async t => {

@@ -286,6 +286,12 @@ instruction) in two cases, both bounded:
    build holds nobody. The session is told once, with one refused stop (`reasons: ["rolled-back"]`): the run is
    cancelled, do not put the undone changes back, call `gamesfun_next` (which ends the run in the state file and puts
    back anything written since the roll-back). The plugin's write guard also refuses an edit of that game until then.
+   **The locked spec** (the loop library's lock; `bridge/loop-state.mjs` `readLock` calls the library's
+   `lockProblems(state.lock, lockFiles({job, game}))` and reads `state.refusals`). A session of this game is held,
+   with `reasons: ["lock"]`: while a locked spec file is edited on the disk and the run is building (at most 2
+   refusals for one edit, then the person is told in the terminal; the loop puts the file back at its next step
+   either way); and once for each refusal on the loop's record that no round's message has told the session yet
+   (`spec-changed`, `state-changed`, `lock-changed`, `promises-shrunk`, `no-repair`, `brief-changed`).
 2. **A request is unanswered.** A request this session was handed and has not reported. At most 2 refusals for each
    request; then the request becomes `dropped`. A request the wait handed over less than 3 seconds ago does not refuse
    the stop: its wake is already bringing it.

@@ -3,11 +3,12 @@
 // server/routes/session.mjs turns the page's routes into them. Shapes are in CONTRACT.md.
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
-import { readLoopState, readRunning } from './loop-state.mjs';
+import { readLock, readLoopState, readRunning } from './loop-state.mjs';
 
 export const CONTRACT = 1;
 export const LIMITS = {
   buildRefusals: 3,          // stops refused while the loop state does not change
+  lockRefusals: 2,           // stops refused for one edit of the locked spec that is still on the disk
   requestRefusals: 2,        // stops refused for one unanswered request
   permissionHoldMs: 240_000, // how long an approval waits for a click before the terminal decides
   justHandedMs: 3000,        // a request the wait handed over this recently is on its way: the stop is not refused for it
@@ -41,7 +42,7 @@ export function requestMessage(requests, { session, heading = 'Requests from the
   ].join('\n');
 }
 
-export function createBridge({ gameDir = null, run = randomBytes(4).toString('hex'), now = Date.now, limits = {}, readLoop = readLoopState, readBusy = readRunning, transport = null } = {}) {
+export function createBridge({ gameDir = null, run = randomBytes(4).toString('hex'), now = Date.now, limits = {}, readLoop = readLoopState, readBusy = readRunning, readSpecLock = readLock, transport = null } = {}) {
   const L = { ...LIMITS, ...limits };
   const sessions = new Map();     // id → session record
   const requests = new Map();     // id → request (insertion order = age)
@@ -66,7 +67,7 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
     if (!id) throw new BridgeError(400, 'the event has no session id');
     let s = sessions.get(id);
     if (!s) {
-      s = { id, agent, cwd: cwd ?? null, told: false, state: 'idle', mode: mode ?? null, started: now(), lastEvent: null, lastEventAt: null, wait: null, guard: { fingerprint: null, refusals: 0, released: null } };
+      s = { id, agent, cwd: cwd ?? null, told: false, state: 'idle', mode: mode ?? null, started: now(), lastEvent: null, lastEventAt: null, wait: null, guard: { fingerprint: null, refusals: 0, released: null }, cancelTold: null, lockTold: new Set(), lockSeen: new Map() };
       sessions.set(id, s);
     }
     if (cwd) s.cwd = cwd;
@@ -322,6 +323,36 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
           notice = `games.fun studio: ${why}`;
         }
       }
+    }
+
+    // 1b. the locked spec (the loop library's lock). The game is checked against what was promised when the spec was
+    // locked. Two things hold a session of this game, each bounded: a locked spec file that is edited on the disk now
+    // (while the run is building; at most lockRefusals stops for one edit, then the person is told), and a refusal on
+    // the loop's record that this session has not been told in a round's message (once each).
+    if (gameDir && !waiting && loop && (loop.session ? loop.session === s.id : related(s.cwd, gameDir))) {
+      const lock = await readSpecLock(gameDir).catch(() => ({ problems: [], refusals: [] }));
+      const said = [];
+      const edits = loop.status === 'building' ? lock.problems : [];
+      if (edits.length) {
+        const key = edits.map(p => `${p.role}:${p.how}`).join('|'), n = s.lockSeen.get(key) ?? 0;
+        s.lockSeen.set(key, n + 1);
+        if (n < L.lockRefusals) said.push(`The locked spec is changed on the disk (${edits.map(p => `${p.file}: ${p.how}`).join('; ')}). It is the plan the person agreed to, and the game is verified and play-tested against it as locked: the next loop tool puts it back, and an edit passes no check and drops no promise. Call gamesfun_next and go on with the game as the spec says.`);
+        else if (n === L.lockRefusals) notice = `games.fun studio: your session changed the locked spec of this game and left it changed through ${L.lockRefusals} refused stops. The loop puts it back at its next step; nothing is delivered against an edited spec.`;
+      } else s.lockSeen.clear();
+      const untold = lock.refusals.filter(r => !s.lockTold.has(`${r.code}|${r.at}`) && (!r.at || Date.parse(r.at) >= s.started));
+      if (untold.length) {
+        for (const r of untold) s.lockTold.add(`${r.code}|${r.at}`);
+        const WHAT = {
+          'spec-changed': 'the locked spec was edited and put back',
+          'state-changed': 'the loop\'s state file was changed by something other than the loop and written again from the loop\'s memory',
+          'lock-changed': 'the loop\'s record of the locked spec was changed; the record held in memory stands',
+          'promises-shrunk': 'the game stopped making a promise it made when the spec was locked; the promise is still checked',
+          'no-repair': 'a repair round changed no file of the game, so it repaired nothing',
+          'brief-changed': 'the play-tester\'s brief was changed after the loop wrote it; that round does not count',
+        };
+        said.push(`The loop refused this (the game is checked against what was promised when the spec was locked): ${[...new Set(untold.map(r => WHAT[r.code] ?? r.code))].join('; ')}. A repair changes the game (rules.js, config, slots), never what the game is checked against. If a part of the plan cannot be built, ask the person with the gamesfun_ask tool, or say what is not there yet in your round's summary.`);
+      }
+      if (said.length) { reasons.push('lock'); parts.push(...said); }
     }
 
     // 2. requests handed and not reported

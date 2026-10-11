@@ -22,7 +22,7 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from '
 import os from 'node:os';
 import path from 'node:path';
 import {
-  openBuildLoop, openTalkLoop, kitTools, fileStore, stateFileOf, filesHash, proofOf, composeBrief, loadParts, partsWords,
+  openBuildLoop, openTalkLoop, kitTools, heldStore, specLock, ignoreStateDir, stateFileOf, filesHash, proofOf, composeBrief, loadParts, partsWords,
   readPlaytestReport,
 } from '../../kits/research/gf-three/loop/index.mjs';
 import { check as schemaProblems } from '../../kits/research/gf-three/tools/lib/schema.mjs';
@@ -59,7 +59,24 @@ export function places(gameArg) {
     promises: path.join(job, 'promises.json'), playtest: path.join(job, 'playtest'), rounds: path.join(job, 'rounds'), state: stateFileOf(game),
   };
 }
-export const readState = G => fileStore(G.state).load();
+
+// ---------------------------------------------------------------- what this process holds (the lock's host side)
+// The loop's state file is inside the game's folder, where the session can write it. So the truth is kept here, in
+// the MCP server's memory, for as long as it lives, and the disk is a copy (the library's README, "The locked spec"):
+//   store  ONE heldStore per game, for the talk loop and the build loop: load() answers from memory, and a state file
+//          that is not what the loop last saved is written again and refused (`state-changed`)
+//   spec   the locked spec's text, from the moment gamesfun_step_spec locked it: the build's host.spec, its first
+//          brief and `locked: specLock(text)` come from it, never from a re-read of spec.json
+//   lock   `loop.lock` as it stood after the last step, passed back as `locked` at the next call
+// After this process restarts the memory is gone and the files are all there is; a library cannot close that.
+const HELD = new Map();
+function heldOf(G) {
+  let h = HELD.get(G.game);
+  if (!h) HELD.set(G.game, h = { store: heldStore(G.state), spec: null, lock: null });
+  return h;
+}
+export const readState = G => heldOf(G).store.load();
+const STATE_CHANGED_WORDS = 'The loop\'s state file was changed by something other than the loop, and was written again from the copy the loop holds in memory. The steps, the verdicts and the counts are the loop\'s to write.';
 const isTalk = s => !!s && TALK.includes(s.kind);
 
 // one tool at a time on a game (a session may send two calls at once)
@@ -207,7 +224,7 @@ async function readAnswer(G) {
 
 function talkHost(G, { kind, idea = null, resume }) {
   return {
-    kind, resume, store: fileStore(G.state),
+    kind, resume, store: heldOf(G).store,
     firstMessage: pitchMessage(G, { kind, idea }),
     check: () => readAnswer(G),
     repairMessage: errors => `Your answer is not valid yet:\n${errors.slice(0, 20).map(e => `- ${e}`).join('\n')}\n\nFix the answer (use only catalog values: \`gamesfun_catalog\`), then call \`gamesfun_step_spec\` {"game": "${p(G.game)}"} again (with the corrected \`spec\` or \`pitch\` when you passed it to the tool). This is the one repair round.`,
@@ -215,13 +232,26 @@ function talkHost(G, { kind, idea = null, resume }) {
 }
 
 async function buildHost(G, { kind = 'build', resume = true, request = null, log = () => {}, signal = null } = {}) {
-  const spec = await readJson(G.spec) ?? await readJson(path.join(G.game, 'spec.json'));
+  const h = heldOf(G), fresh = kind === 'change' && !resume;
+  // A game made outside the loop (`create` in a terminal) has no spec in the job folder: a change starts from a copy
+  // of the game's own, so the locked spec file is always <job>/spec.json.
+  if (!existsSync(G.spec) && existsSync(path.join(G.game, 'spec.json'))) { await mkdir(G.job, { recursive: true }); await writeFile(G.spec, await readFile(path.join(G.game, 'spec.json'))); }
+  const specFile = G.spec;
+  // The spec as locked, from memory: this run's lock, else the text gamesfun_step_spec held. Only when this process
+  // holds neither (it restarted, or a change is starting from the plan as it stands) is it read from the files: the
+  // lock in the state, then spec.json.
+  const state = fresh ? null : await h.store.load();
+  const text = fresh ? null : h.lock?.spec?.text ?? (kind === 'build' ? h.spec : null) ?? (state && !isTalk(state) ? state.lock?.spec?.text : null) ?? null;
+  let spec = null;
+  try { spec = text == null ? null : JSON.parse(text); } catch { /* not JSON: the files say */ }
+  spec ??= await readJson(G.spec) ?? await readJson(path.join(G.game, 'spec.json'));
   if (!spec) throw new Error(`no locked spec for ${p(G.game)}: gamesfun_step_spec locks one`);
   const versions = checkpointStore(G.game);
-  const specFile = existsSync(G.spec) ? G.spec : path.join(G.game, 'spec.json');
+  const locked = fresh ? null : h.lock ?? (kind === 'build' && h.spec != null ? specLock(h.spec) : null);
   const tools = { ...kitTools({ kit: GF3, cwd: KIT_ROOT, log }), ...(seams.tools ?? {}) };
   return {
     kind, resume, job: G.job, game: G.game, kit: GF3, who: 'The loop', log, specFile,
+    store: h.store, ...(locked ? { locked } : {}),
     paths: { JOB: p(G.job), KIT_TOOLS: p(GF3_TOOLS), PLAYTEST: p(G.playtest), GAME: p(G.game), OUT: p(G.out), SPEC: p(specFile), QUESTIONS: p(path.join(G.out, 'questions.json')), DELIVERY: DELIVERY_WORDS },
     toolNames: TOOL_NAMES, playWords: playWords(G),
     // a verify that is running when the MCP server is told to stop (the call is cancelled, or the process ends) is stopped with its browser
@@ -240,19 +270,42 @@ async function buildHost(G, { kind = 'build', resume = true, request = null, log
           catch (e) { return { end: { outcome: 'asked', why: 'create', message: String(e.message).slice(0, 800) } }; }
         }
         if (!same || !await versions.has('created')) await versions.keep('created', { step: 'create' });
+        await ignoreStateDir(G.game);       // the loop's folder is in the game's folder: not a game asset (the library does this only for its own default store)
         return null;
       },
     },
   };
 }
 
-/** Open the build loop on a game as it stands on disk (every tool call does: resume is the normal path). */
+/**
+ * Open the build loop on a game (every tool call does: resume is the normal path), with what this process holds.
+ * After every step the lock is kept in memory, and what the loop refused is collected for the tool's answer
+ * (`L.refusals`). A step refused because the locked spec was edited did not run (the library put the files back): it
+ * is run again here, on the spec as locked, so one call both tells the session and goes on.
+ */
 async function openBuild(G, options = {}) {
-  const lines = [];
+  const lines = [], h = heldOf(G);
+  if (options.kind === 'change' && options.resume === false) h.lock = null;       // a new change: its lock is taken when its round is over
   const host = await buildHost(G, { ...options, log: l => lines.push(String(l).trim()) });
   const L = await openBuildLoop(host);
+  const refusals = [];
+  // refused while the loop opened (the state file or the lock in it was not the loop's own)
+  for (const r of L.state.refusals.filter(x => !x.told && (x.code === 'state-changed' || x.code === 'lock-changed'))) refusals.push({ code: r.code, message: r.code === 'state-changed' ? STATE_CHANGED_WORDS : 'The loop\'s own record of the locked spec was changed. The record the loop held in memory stands, and the spec was checked against it.' });
+  const step = L.step.bind(L), cancel = L.cancel.bind(L);
+  L.step = async () => {
+    let r = await step();
+    for (let n = 0; n < 3 && r.refused === 'spec-changed' && !r.waiting && r.next === r.ran; n++) { refusals.push({ code: r.refused, message: r.message || r.why }); r = await step(); }
+    if (r.refused) refusals.push({ code: r.refused, message: r.message || r.why });
+    h.lock = L.lock;
+    return r;
+  };
+  L.cancel = async why => { const r = await cancel(why); h.lock = L.lock; return r; };
+  h.lock = L.lock ?? h.lock;
+  L.refusals = refusals;
   return { L, host, lines };
 }
+/** What the loop refused during this call, as a tool's answer carries it: the code(s) and the loop's own words. */
+const refusedOf = L => (L.refusals?.length ? { refused: [...new Set(L.refusals.map(r => r.code))].join(', '), message: [...new Set(L.refusals.map(r => String(r.message).trim()))].join('\n\n') } : {});
 
 // A verify that is running when this process is told to stop must not outlive it (verify starts Chrome): the library
 // stops the whole tree when `host.signal` aborts. The signal is the call's own (the session cancelled the call) or the
@@ -310,12 +363,14 @@ const withCancel = t => ({
 });
 
 // ---------------------------------------------------------------- rounds
+/** The checkpoint of the play-test round that is under way: the newest one (they are numbered across runs). */
+const latestPlaytest = async cp => `playtest-${await cp.next('playtest') - 1}`;
 const roundFile = (G, name) => path.join(G.rounds, `${name}.md`);
 
 /** Hand the next agent round to the session: checkpoint the game first, then take the loop's message. */
 async function handOver(L, host, G) {
   const cp = host.versions, n = await cp.next('round'), name = `round-${n}`;
-  await cp.keep(name, { step: L.state.step, kind: L.state.step === 'repair' ? L.state.repair : L.state.agent, before: true });
+  await cp.keep(name, { step: L.state.step, kind: L.state.step === 'repair' ? `repair: ${L.state.repair}` : L.state.agent === 'reminder' ? 'reminder' : L.state.kind === 'change' ? 'change' : 'build', before: true });
   const r = await L.step();
   if (!r.waiting) return { stepped: r };
   const brief = r.message;
@@ -329,7 +384,7 @@ async function currentRound(G, s) {
   if (!s?.handed) return null;
   const cp = checkpointStore(G.game);
   if (s.handed.step === 'playtest') {
-    const name = `playtest-${s.handed.n}`, m = await cp.get(name);
+    const name = await latestPlaytest(cp), m = await cp.get(name);
     return { n: s.handed.n, checkpoint: m ? name : null, kind: 'playtest', agent: PLAYTESTER, brief: await readFile(roundFile(G, name), 'utf8').catch(() => null) };
   }
   if (isTalk(s)) return { kind: s.handed.kind, brief: null };
@@ -346,7 +401,7 @@ async function report(L, host, G, said = {}) {
   }
   const s = L.state;
   return {
-    game: p(G.game), ...said,
+    game: p(G.game), ...refusedOf(L), ...said,
     status: s.status, step: s.step, why: s.why,
     ...(round ? { round } : {}),
     ...(s.step === 'done' ? { outcome: s.outcome } : {}),
@@ -429,6 +484,7 @@ const TOOLS = [
       if (!isTalk(s) || s.step === 'done' || (s.step === 'pitch' && !s.handed)) return outOfOrder('gamesfun_step_spec', s, G);
       if (spec && pitch) return refuse('two-answers', 'Give one answer: concepts (pitch) or the locked spec (spec).', { tool: 'gamesfun_step_spec', args: { game: p(G.game) } });
       if (spec || pitch) { await mkdir(G.job, { recursive: true }); await writeFile(spec ? G.spec : G.pitch, JSON.stringify(spec ?? pitch, null, 2) + '\n'); }
+      const touched = heldOf(G).store.takeChanged();
       const L = await openTalkLoop(talkHost(G, { kind: s.kind, idea: await readFile(G.idea, 'utf8').catch(() => null), resume: true }));
       const ran = [];
       if (L.state.step === 'pitch') { await L.step(); ran.push('pitch'); }
@@ -438,7 +494,16 @@ const TOOLS = [
       }
       const answer = L.mem.answer ?? await readAnswer(G);
       if (L.state.step === 'deliver') { await L.step(); ran.push('deliver'); }
-      const out = { game: p(G.game), ran, valid: !answer.errors, outcome: L.state.outcome, status: L.state.status, step: L.state.step, next: nextOf(L.state, G) };
+      // Locked: the spec's text is held in this process from here on. It is the checked answer's; a file that is no
+      // longer that answer (written between the check and now) is written again from it.
+      if (L.state.outcome === 'locked' && !answer.errors) {
+        const h = heldOf(G);
+        let text = await readFile(G.spec, 'utf8').catch(() => null), same = false;
+        try { same = text != null && JSON.stringify(JSON.parse(text)) === JSON.stringify(answer.value); } catch { /* not JSON */ }
+        if (!same) { text = JSON.stringify(answer.value, null, 2) + '\n'; await writeFile(G.spec, text); }
+        h.spec = text; h.lock = null;
+      }
+      const out = { game: p(G.game), ran, valid: !answer.errors, outcome: L.state.outcome, status: L.state.status, step: L.state.step, next: nextOf(L.state, G), ...(touched ? { refused: 'state-changed', message: STATE_CHANGED_WORDS } : {}) };
       if (answer.errors) out.problems = answer.errors.slice(0, 30);
       else if (answer.file === 'spec.json') out.spec = { file: p(G.spec), title: answer.value?.title ?? null, engine: answer.value?.engine ?? 'party', mechanics: (answer.value?.mechanics ?? []).map(m => m.id) };
       else out.concepts = (answer.value?.cards ?? []).map(c => ({ id: c.id, title: c.title, hook: c.hook, howItPlays: c.howItPlays }));
@@ -517,27 +582,33 @@ const TOOLS = [
         await rm(failure, { force: true });
         const r = await L.step();
         if (!r.waiting) return report(L, host, G, { ran: ['playtest'], playtest: L.state.playtest, ...(lines.length ? { log: lines.slice(-8) } : {}) });
-        const name = `playtest-${L.state.handed.n}`;
-        const kept = await cp.keep(name, { step: 'playtest', kind: `round ${L.state.handed.n}`, hash: await filesHash(G.game) });
-        const brief = [r.message, '', `Start the \`${PLAYTESTER}\` subagent with the line above as its whole task (it reads ${p(G.playtest)}/PLAYTEST.md itself; it must not see this conversation or the game's code).${r.model ? ` A ${r.model}-class model is enough for it.` : ''} Do not play-test the game yourself and do not change the game while it plays. When it has reported, call \`gamesfun_step_playtest\` again.`].join('\n');
-        await mkdir(G.rounds, { recursive: true });
-        await writeFile(roundFile(G, name), brief);
-        return { game: p(G.game), ran: ['playtest'], status: L.state.status, step: 'playtest', why: 'the play-tester has the round', round: { n: L.state.handed.n, checkpoint: kept.name, kind: 'playtest', agent: PLAYTESTER, ...(r.model ? { model: r.model } : {}), brief }, next: { ...again, do: where(L.state, G).do } };
+        return handPlaytest(r);
       }
       // the report must be this round's, about the files as they are
-      const k = L.state.handed, name = `playtest-${k.n}`, handedAt = Date.parse(k.at);
+      const k = L.state.handed, name = await latestPlaytest(cp), handedAt = Date.parse(k.at);
       const at = await mtime(reportFile) ?? await mtime(failure);
       if (at == null) return refuse('no-report', `The play-tester has not reported: ${p(reportFile)} is not there. Start the ${PLAYTESTER} subagent with the round's message (gamesfun_next shows it again) and call this tool when it is done.`, again, { round: await currentRound(G, L.state) });
       if (at + 1000 < handedAt) return refuse('stale-playtest', `The report in ${p(out)} is older than this play-test round (${k.at}): it is not about this version. Run the ${PLAYTESTER} subagent again.`, again);
       const then = (await cp.get(name))?.meta?.hash ?? null, now = await filesHash(G.game);
       if (then && then !== now) return refuse('stale-playtest', 'The game\'s files changed after the play-tester was given the game, so its report is about other files. Undo the change, then call this tool again.', { tool: 'gamesfun_rollback', args: { game: p(G.game), checkpoint: name } }, { hashThen: then, hashNow: now });
-      await L.step();
+      const r = await L.step();
+      // the brief was not the one the loop wrote: the report is dropped and the round handed over again
+      if (r.waiting) return handPlaytest(r);
       const pt = L.mem.pt;
       return report(L, host, G, {
         ran: ['playtest'],
         playtest: { ...L.state.playtest, failed: pt?.failedIds ?? [], blockers: (pt?.feel ?? []).filter(f => f.severity === 'blocker').map(f => f.issue), summary: pt?.summary ?? '', report: p(reportFile) },
         ...(lines.length ? { log: lines.slice(-8) } : {}),
       });
+      async function handPlaytest(r) {
+        // numbered across runs, like the rounds: a later run's play-test never overwrites an earlier one's checkpoint
+        const name = `playtest-${await cp.next('playtest')}`;
+        const kept = await cp.keep(name, { step: 'playtest', kind: `${L.state.kind === 'change' ? 'change' : 'build'}, play-test round ${L.state.handed.n}`, hash: await filesHash(G.game) });
+        const brief = [r.message, '', `Start the \`${PLAYTESTER}\` subagent with the line above as its whole task (it reads ${p(G.playtest)}/PLAYTEST.md itself; it must not see this conversation or the game's code).${r.model ? ` A ${r.model}-class model is enough for it.` : ''} Do not play-test the game yourself and do not change the game while it plays. When it has reported, call \`gamesfun_step_playtest\` again.`].join('\n');
+        await mkdir(G.rounds, { recursive: true });
+        await writeFile(roundFile(G, name), brief);
+        return { game: p(G.game), ...refusedOf(L), ran: ['playtest'], status: L.state.status, step: 'playtest', why: 'the play-tester has the round', round: { n: L.state.handed.n, checkpoint: kept.name, kind: 'playtest', agent: PLAYTESTER, ...(r.model ? { model: r.model } : {}), brief }, next: { ...again, do: where(L.state, G).do } };
+      }
     }); },
   },
   {

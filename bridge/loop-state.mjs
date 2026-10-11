@@ -3,6 +3,7 @@
 // shape changes, this function is all that follows.
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { lockFiles, lockProblems } from '../kits/research/gf-three/loop/lock.mjs';
 
 export const LOOP_STATE = ['.gf-loop', 'state.json'];
 export const LOOP_STATUSES = ['building', 'waiting-on-question', 'delivered', 'failed', 'cancelled'];
@@ -53,4 +54,16 @@ export async function readRunning(gameDir, { now = Date.now, isAlive = alive } =
     out.push({ tool: String(m.tool ?? ''), pid: m.pid, since: m.since });
   }
   return out;
+}
+
+// The locked spec, as the stop guard reads it (the library's README, "The locked spec": a stop guard can check the
+// disk without opening the loop). Reads only.
+//   problems  the locked spec files against the disk now: [{ role: 'spec' | 'game', file, how: 'edited' | 'missing' }]
+//   refusals  what the loop refused and has not yet said to the session in a round's message: [{ code, at, files?, ids? }]
+export async function readLock(gameDir) {
+  let s;
+  try { s = JSON.parse(await readFile(path.join(gameDir, ...LOOP_STATE), 'utf8')); } catch { return { problems: [], refusals: [] }; }
+  const problems = s?.lock ? await lockProblems(s.lock, lockFiles({ job: path.join(gameDir, '.gf-loop', 'job'), game: gameDir })).catch(() => []) : [];
+  const refusals = (Array.isArray(s?.refusals) ? s.refusals : []).filter(r => r && typeof r.code === 'string' && r.told !== true).map(r => ({ code: r.code, at: r.at ?? null, ...(r.files ? { files: r.files } : {}), ...(r.ids ? { ids: r.ids } : {}) }));
+  return { problems, refusals };
 }
