@@ -30,6 +30,10 @@
         "signature": { "type": "string", "description": "The launch transaction." }
       }
     },
+    "economy": {
+      "$ref": "https://games.fun/schemas/economy/1",
+      "description": "The game's economy on loot program 0.3: currencies, collectibles, pools, boxes, recipes, schedules, lotteries, stakes, contests, holds and the authority's rules. Schema: web3/economy/economy.schema.json. It replaces `shop` (web3/economy/migrate.mjs)."
+    },
     "shop": {
       "type": "object",
       "description": "Items and loot boxes on games.fun's loot program. Drafts until put on sale; collection, game and treasury appear once it is live.",
