@@ -27,9 +27,7 @@ Not promised in this version (never fail the game for these): {{NOT_PROMISED}}
 
 ## How you play
 
-```
-node {{KIT_TOOLS}}/play.mjs {{GAME}} --script {{DIR}}/scratch/<name>.json --out {{DIR}}/runs/<name>
-```
+{{PLAY_HOW}}
 
 Each run starts a fresh game with bots and prints one line per step: the phase, the round clock, your score and state, the HUD meters and hints, and each screenshot's path. **Look at your screenshots** (open the `.jpg` files) before you judge anything. A script is a JSON array of steps:
 
@@ -43,7 +41,7 @@ Each run starts a fresh game with bots and prints one line per step: the phase, 
 | `{"do":"shot","name":"first-look"}`, `{"do":"snap"}` | A screenshot; the full state (every player's score and state, the HUD text, results) |
 | `{"do":"wait","seconds":3}`, `{"do":"until","phase":"results","timeout":90}`, `{"do":"again"}` | Wait; wait for the round to end; press Play again |
 
-Keys: `Mouse`, `MouseRight`, `Space`, `ShiftLeft`, `KeyE`, `KeyF`, `KeyQ`, … A run of 60 s takes about a minute. The step list in full is at the top of `{{KIT_TOOLS}}/lib/play-script.mjs`.
+Keys: `Mouse`, `MouseRight`, `Space`, `ShiftLeft`, `KeyE`, `KeyF`, `KeyQ`, … A run of 60 s takes about a minute. {{PLAY_STEPS_AT}}
 
 **A plan** (about five runs; adapt it to the game):
 1. **First look:** start, a screenshot, a snap, wait 2 s, a screenshot. Can I tell which one is me? What is around me, and what does the HUD tell me to do? The `start` step's first screenshot is the game's home menu: does it show the title, Play, How to play, Settings and Connect wallet? In the round, does the player card (bottom left) show your health when the game has hit points, and does it drop when you are hurt?
@@ -86,4 +84,4 @@ For example (a dodgeball game, not this one):
 - `verdict` is `fail` when any promise failed or any feel issue is a `blocker`; otherwise `pass`.
 - If the game doesn't load or play at all, write `out/failure.txt` instead: one or two sentences on what you saw.
 
-Budget: about 6 minutes and 80k tokens, so about five runs. Run node through Node 24.19.0 (`source ~/.nvm/nvm.sh && nvm use 24.19.0`). Keep every scratch file in `{{DIR}}/scratch/`, never in /tmp. Never kill processes you did not start.
+Budget: about 6 minutes and 80k tokens, so about five runs. {{RUN_NODE}}Keep every scratch file in `{{DIR}}/scratch/`, never in /tmp. Never kill processes you did not start.

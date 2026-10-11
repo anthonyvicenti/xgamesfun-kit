@@ -424,6 +424,13 @@
         "note": "Bots and a seed are a round game's; M2-D replaces it with the game's own tests."
       },
       {
+        "hash": "731114f32d0d",
+        "starts": "- **Give each promise that is this game's own a small test.** ",
+        "home": "part",
+        "part": "loop:round",
+        "note": "Check 35. Not an invariant: a story or board game could be tested another way, and check 35 runs only on round games (a world's and a forge game's flows do not run it yet), which is exactly the loop:round part (brief.mjs USES: not a world, not forge). Missing tests are not a failure (the creator decides that)."
+      },
+      {
         "hash": "bf1fe68c7ab9",
         "starts": "4. Write `out/delivery.json` **last**: `{\"summary\": \"...\", \"cont",
         "home": "invariant",

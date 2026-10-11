@@ -47,6 +47,14 @@
       "text": "- **Cosmetics are the kit's** ([CONTRACT §6e]({{KIT}}/CONTRACT.md)): each player may wear their own loadout (body, hat, body colour, shot or stream colour), and the kit draws every player in it on every screen. When rules draw something in a player's colour or model, read it per player: `ctx.assets.value(slotId, fallback, { player: p })`; never copy the game's value for everyone."
     },
     {
+      "id": "own-tests",
+      "part": "loop:round",
+      "kinds": [
+        "build"
+      ],
+      "text": "- **Give each promise that is this game's own a small test.** For each of `promises.json`'s own promises (its loop, how its score moves, a mechanic as this game has it, its hook), write one `game/tests/<name>.test.json`: `{\"promise\": \"<id>\", \"why\": \"what a player sees\", \"steps\": [...]}`, where `steps` is a short play script that starts the game, does what a player does and ends in an `expect` on a path of `window.__game.snapshot()` (format: [CONTRACT §5]({{KIT}}/CONTRACT.md); an example: `{{KIT}}/regressions/broken-own-promise/score-from-paint.test.json`). verify check 35 runs them alone (`--check 35`, a few seconds) and a failing one names its promise. A game with no tests still passes."
+    },
+    {
       "id": "generated",
       "part": "assets:generated",
       "kinds": ["build"],

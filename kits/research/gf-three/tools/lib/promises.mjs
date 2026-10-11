@@ -213,7 +213,7 @@ export function derivePromises({ spec = {}, config = {} } = {}) {
 /** The promises a play-tester is asked to prove (those with a 'play' proof). */
 export const playPromises = list => (list?.promises ?? list ?? []).filter(p => p.proofs?.includes('play'));
 
-/** Reads <game>/config/game.json and the spec (`spec` path, else <game>/spec.json) and derives the list. */
+/** Reads <game>/config/game.json and the spec (`spec` path, else <game>/spec.json) and derives the list, with the proof verify:35 on each promise a test of the game names. */
 export async function promisesFor(gameDir, { spec: specFile = null } = {}) {
   const dir = resolve(gameDir);
   const read = async f => JSON.parse(await readFile(f, 'utf8'));
@@ -222,7 +222,11 @@ export async function promisesFor(gameDir, { spec: specFile = null } = {}) {
   const cf = join(dir, 'config/game.json');
   const config = existsSync(cf) ? await read(cf) : {};
   if (!existsSync(sf) && !existsSync(cf)) throw new Error(`${dir} has neither spec.json nor config/game.json`);
-  return derivePromises({ spec, config });
+  const list = derivePromises({ spec, config });
+  // A promise one of the game's own tests names is also proven by verify check 35 (tools/lib/game-tests.mjs). A game
+  // with no tests/ folder costs nothing; a test file that cannot be read is check 35's to report, not this list's.
+  if (!existsSync(join(dir, 'tests'))) return list;
+  try { return await (await import('./game-tests.mjs')).withTestProofs(dir, list); } catch { return list; }
 }
 
 /**

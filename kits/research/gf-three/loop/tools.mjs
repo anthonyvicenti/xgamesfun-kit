@@ -26,11 +26,14 @@ export async function promisesLib(kit=OWN_KIT){
   const own=resolve(kit,'tools/lib/promises.mjs');
   return load(existsSync(own)?own:resolve(OWN_KIT,'tools/lib/promises.mjs'));
 }
-/** Derives <job>/promises.json from game/config/game.json and spec.json. → the list, or null when it can't. */
-export async function writePromises(job,{kit=OWN_KIT,log}={}){
+/**
+ * Derives <job>/promises.json from the game's config/game.json and the spec. → the list, or null when it can't.
+ * The host names the folders: `game` (default <job>/game) and `spec` (default <job>/spec.json).
+ */
+export async function writePromises(job,{kit=OWN_KIT,log,game=null,spec=null}={}){
   try{
     const lib=await promisesLib(kit);
-    const list=await lib.promisesFor(resolve(job,'game'),{spec:resolve(job,'spec.json')});
+    const list=await lib.promisesFor(game?resolve(game):resolve(job,'game'),{spec:spec?resolve(spec):resolve(job,'spec.json')});
     await writeFile(resolve(job,'promises.json'),JSON.stringify(list,null,2)+'\n');
     return list;
   }catch(e){log?.(`  no promise list: ${String(e.message).split('\n')[0].slice(0,200)}`);return null;}
@@ -84,7 +87,7 @@ export function kitTools({kit=OWN_KIT,cwd=process.cwd(),log}={}){
     fix:game=>fixGame(game,{kit,log}),
     hash:game=>filesHash(game),
     ownVerify:game=>ownVerifyOf(game,kit),
-    promises:job=>writePromises(job,{kit,log}),
+    promises:(job,o={})=>writePromises(job,{kit,log,...o}),
     promisesLib:()=>promisesLib(kit),
     serve:game=>serveGame(game,{kit}),
     create:(specFile,game)=>createGame(specFile,game,{kit,cwd,log}),

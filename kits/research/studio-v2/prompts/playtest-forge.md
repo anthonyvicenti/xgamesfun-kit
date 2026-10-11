@@ -121,4 +121,4 @@ For example (another game, not this one):
 - `verdict` is `fail` when any promise failed or any feel issue is a `blocker`; otherwise `pass`.
 - If the game doesn't load or play at all, write `out/failure.txt` instead: one or two sentences on what you saw (a game that says it needs another browser has loaded: report what its screen says).
 
-Budget: about 10 minutes and 120k tokens, so about seven runs plus the phone and the friend. Run node through Node 24.19.0 (`source ~/.nvm/nvm.sh && nvm use 24.19.0`). Keep every scratch file in `{{DIR}}/scratch/`, never in /tmp. Never kill processes you did not start.
+Budget: about 10 minutes and 120k tokens, so about seven runs plus the phone and the friend. {{RUN_NODE}}Keep every scratch file in `{{DIR}}/scratch/`, never in /tmp. Never kill processes you did not start.

@@ -2,7 +2,7 @@
 // spec) and the spec check (the answer is held to its schema and the catalog; one repair round when it fails).
 // Lifted from the Studio worker's talkFlow; the checker is passed in, because the pitch's rules are the host's
 // (Studio: creator-studio/lib/pitch.mjs through tools/check-v2.mjs; a person's session: `create` checks the spec).
-import {STATE_SCHEMA,memoryStore} from './state.mjs';
+import {STATE_SCHEMA,memoryStore,cancelState} from './state.mjs';
 
 export const TALK_STEPS=['pitch','spec','deliver','done'];
 
@@ -48,6 +48,9 @@ export async function openTalkLoop(host){
     },
     async spec(){
       cp();
+      // The repair round was handed over on an earlier call and the host has done it: take it as done, so `handed`
+      // does not outlive a repaired answer that is valid (the check below then sees the repaired answer).
+      if(S.handed?.step==='spec'&&S.handed.kind==='repair'){S.handed=null;S.repaired=true;}
       let out=await host.check();
       if(out.errors&&!flags.stub&&!S.fast&&!S.repaired){
         if(!S.handed)log(`  ${S.kind} output invalid; one repair round`);
@@ -76,6 +79,11 @@ export async function openTalkLoop(host){
       S.history=[...S.history,{step:ran,next:r.next,why:r.why}].slice(-20);
       await store.save(S);
       return {ran,...r};
+    },
+    /** End the request as cancelled (status and outcome say so). → as BuildLoop's cancel(). */
+    async cancel(reason='cancelled by the host'){
+      if(!cancelState(S,reason))return {ran:'cancel',next:'done',why:S.why,outcome:S.outcome,refused:'already-ended'};
+      await store.save(S);return {ran:'cancel',next:'done',why:reason,outcome:{outcome:'cancelled'}};
     },
     async run(){for(;;){const r=await loop.step();if(r.next==='done'||r.waiting)return r;}},
   };

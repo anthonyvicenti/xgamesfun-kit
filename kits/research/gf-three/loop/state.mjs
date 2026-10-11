@@ -14,7 +14,7 @@ import {dirname,join,resolve} from 'node:path';
 
 export const STATE_SCHEMA='gf-loop/1';
 export const STATE_DIR='.gf-loop';
-export const STATUSES=['building','waiting-on-question','delivered','failed'];
+export const STATUSES=['building','waiting-on-question','delivered','failed','cancelled'];
 /** Where the state file is unless the host says otherwise. */
 export const stateFileOf=game=>resolve(game,STATE_DIR,'state.json');
 
@@ -29,6 +29,29 @@ export function fileStore(file){
       await writeFile(tmp,JSON.stringify(state,null,1)+'\n');
       await rename(tmp,file);            // one rename: a kill leaves the old state or the new one, never half a file
     },
+  };
+}
+/**
+ * A state file the host process also holds in memory, for a host whose builder can write the file (the tools host:
+ * <game>/.gf-loop/state.json is inside the folder the session works in). Keep ONE of these per state file for as long
+ * as the process lives. While it lives, load() answers from memory; a file that is no longer what the loop last saved
+ * (edited, deleted) is written again from memory, and takeChanged() says so once (REFUSALS.STATE_CHANGED). After the
+ * process restarts the memory is gone and the file is all there is: that is the limit of what a library can do.
+ */
+export function heldStore(file){
+  const base=fileStore(file);
+  let held=null,text=null,changed=false;
+  return {
+    file,
+    async load(){
+      if(!held)return base.load();
+      let disk=null;try{disk=await readFile(file,'utf8');}catch{}
+      if(disk!==text){changed=true;await base.save(held);}
+      return structuredClone(held);
+    },
+    async save(state){await base.save(state);held=structuredClone(state);text=JSON.stringify(state,null,1)+'\n';},
+    /** → true once after a load() that found the file changed. */
+    takeChanged(){const c=changed;changed=false;return c;},
   };
 }
 /**
@@ -77,7 +100,28 @@ export const REFUSALS={
   VERIFY_FAILED:'verify-failed',    // the last verify failed
   STALE_VERIFY:'stale-verify',      // the files changed after the last verify
   STALE_PLAYTEST:'stale-playtest',  // the files changed after the last play-test
+  CANCELLED:'cancelled',            // the run was ended on purpose: nothing it holds is deliverable
+  // loop integrity (lock.mjs): the game is checked against what was promised at the lock
+  SPEC_CHANGED:'spec-changed',      // a locked spec file was edited after the lock: it was put back
+  STATE_CHANGED:'state-changed',    // the state file was not what the loop last saved (heldStore): written again from memory
+  LOCK_CHANGED:'lock-changed',      // the lock in the state file is not the one the host held in memory: the host's stands
+  PROMISES_SHRUNK:'promises-shrunk',// the game stopped making a promise it made at the lock: the promise is still checked
+  NO_REPAIR:'no-repair',            // a repair round changed the spec and no file of the game: it repaired nothing
+  BRIEF_CHANGED:'brief-changed',    // the play-tester's brief was edited after the loop wrote it: the round is handed over again
 };
+
+/**
+ * End a run as cancelled (a change request that was started and rolled back, a person who gave up): status
+ * 'cancelled', step 'done', outcome 'cancelled', so a stop guard that reads `status` lets the session go. Pure on the
+ * state it is given; the loop saves it. A run that already ended (delivered, failed, waiting on a question) is left
+ * as it is. → true when the state changed.
+ */
+export function cancelState(state,reason='cancelled by the host',at=new Date().toISOString()){
+  if(state.step==='done'||state.status!=='building')return false;
+  state.status='cancelled';state.outcome='cancelled';state.step='done';state.why=reason;state.handed=null;state.updated=at;
+  state.history=[...(state.history??[]),{step:'cancel',next:'done',why:reason,at}].slice(-60);
+  return true;
+}
 
 /**
  * Is each proof on record still about the files as they are? Pure.
@@ -96,6 +140,7 @@ export function proofOf(state,hashNow){
  * A play-test that never ran is not stale proof (the host's own rules say whether a play-test is required).
  */
 export function deliverable(state,hashNow){
+  if(state.status==='cancelled')return {ok:false,code:REFUSALS.CANCELLED,next:'done',why:'this run was cancelled'};
   const p=proofOf(state,hashNow);
   if(p.verify==='none')return {ok:false,code:REFUSALS.NO_VERIFY,next:'verify',why:'no verify has run on this game'};
   if(p.verify==='stale')return {ok:false,code:REFUSALS.STALE_VERIFY,next:'verify',why:`the game's files changed after verify ${state.verify.n} (stale proof): verify again`};

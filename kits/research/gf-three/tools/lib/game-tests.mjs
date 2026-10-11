@@ -67,14 +67,19 @@ export async function loadGameTests(dir, { promises = null } = {}) {
 }
 
 /**
- * The game's promise list with what its own tests prove: a promise a test names gains the proof 'verify:35'.
- * (tools/lib/promises.mjs derives the list from the spec and the config alone; the tests are files of the game.)
+ * A promise list with what the game's own tests prove: a promise a test names gains the proof 'verify:35'. The one
+ * place that does it; promisesFor (tools/lib/promises.mjs) calls it when the game has a tests/ folder, so every
+ * caller of the promise list sees the proof. `list` is promisesFor's list before the tests are read.
  */
-export async function promisesWithTests(dir) {
-  const list = await (await import('./promises.mjs')).promisesFor(dir);
+export async function withTestProofs(dir, list) {
   const { tests } = await loadGameTests(dir, { promises: list });
   const named = new Set(tests.map(t => t.promise));
   return { ...list, promises: list.promises.map(p => (named.has(p.id) && !p.proofs.includes('verify:35') ? { ...p, proofs: [...p.proofs, 'verify:35'] } : p)) };
+}
+
+/** The game's promise list with what its own tests prove (promisesFor does this itself now; kept for its callers). */
+export async function promisesWithTests(dir) {
+  return (await import('./promises.mjs')).promisesFor(dir);
 }
 
 const SNAP = () => { try { return JSON.parse(JSON.stringify(window.__game?.snapshot?.() ?? null)); } catch { return null; } };

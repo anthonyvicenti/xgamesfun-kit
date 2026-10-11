@@ -6,12 +6,24 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import {resolve} from 'node:path';
+import {createHash} from 'node:crypto';
 
 export const PLAYTEST_OUTPUTS=['playtest.json','failure.txt'];
 export const PLAYTEST_TIMEOUT_MIN=30;              // the wait for one play-test (it plays for about 6 minutes)
 const SEVERITIES=['blocker','major','minor'];
 const same=s=>s;
 export const fill=(text,values)=>text.replace(/\{\{([A-Z_0-9]+)\}\}/g,(m,k)=>k in values?String(values[k]):m);
+
+/**
+ * The words in the play-tester's brief that assume a shell, as placeholders a host fills (P.PLAY_HOW, P.PLAY_STEPS_AT,
+ * P.RUN_NODE). Without them they are the worker's exact words: the play.mjs command, where its step list is, and the
+ * Node line. A host whose agent plays through a tool names the tool in PLAY_HOW and PLAY_STEPS_AT, and sets RUN_NODE to ''.
+ */
+export const playWords=(P,game)=>({
+  PLAY_HOW:P.PLAY_HOW??`\`\`\`\nnode ${P.KIT_TOOLS}/play.mjs ${game} --script ${P.DIR}/scratch/<name>.json --out ${P.DIR}/runs/<name>\n\`\`\``,
+  PLAY_STEPS_AT:P.PLAY_STEPS_AT??`The step list in full is at the top of \`${P.KIT_TOOLS}/lib/play-script.mjs\`.`,
+  RUN_NODE:P.RUN_NODE??'Run node through Node 24.19.0 (`source ~/.nvm/nvm.sh && nvm use 24.19.0`). ',
+});
 
 /**
  * The play-tester's folder: PLAYTEST.md (prompts/playtest.md, filled) and promises.json. What it sees is the title, the
@@ -27,10 +39,16 @@ export async function writePlaytestBrief({dir,list,play,game,P,round=1,focus=nul
   const textOf=id=>md(play.find(p=>p.id===id)?.text??id);
   const roundNote=focus?`**This is a re-test (round ${round}).** The build agent changed the game to fix what you found. Re-test **only** these promises, and report only them (the others keep their earlier results; your earlier report is \`out/playtest.json.round-${round-1}\`):\n\n${focus.map(id=>`- \`${id}\`: ${textOf(id)}`).join('\n')||'- (none)'}${blockersBefore.length?`\n\nAlso say in \`feel\` whether these blockers are still there (list one again only if it is):\n\n${blockersBefore.map(b=>`- ${md(b.issue)}`).join('\n')}`:''}`:'';
   // a forge game (the promise list says so: tools/lib/promises.mjs) is first person: its tester gets prompts/playtest-forge.md
-  await writeFile(resolve(dir,'PLAYTEST.md'),fill(await readFile(resolve(prompts,list.engine==='forge'?'playtest-forge.md':'playtest.md'),'utf8'),{DIR:P.DIR,GAME:game,KIT_TOOLS:P.KIT_TOOLS,TITLE:md(list.title)||'(untitled)',HOOK:md(list.hook)||'(none)',HUD:md(list.controls.hud),
+  await writeFile(resolve(dir,'PLAYTEST.md'),fill(await readFile(resolve(prompts,list.engine==='forge'?'playtest-forge.md':'playtest.md'),'utf8'),{...playWords(P,game),DIR:P.DIR,GAME:game,KIT_TOOLS:P.KIT_TOOLS,TITLE:md(list.title)||'(untitled)',HOOK:md(list.hook)||'(none)',HUD:md(list.controls.hud),
     CONTROLS:list.controls.list.map(c=>`| ${md(c.keys)}: ${md(c.does)} | \`${c.key}\` |`).join('\n')||'| (no controls listed) | |',
     PROMISES:play.map(p=>`- \`${p.id}\`${p.core?' (core)':''}: ${md(p.text)}`).join('\n')||'- (none)',
     NOT_PROMISED:list.notPromised.length?list.notPromised.map(md).join('; '):'nothing listed',ROUND_NOTE:roundNote}));
+}
+
+/** What the play-tester was handed, as one hash (PLAYTEST.md and its promises.json): a brief changed after the loop
+ *  wrote it is not the loop's brief (state.mjs REFUSALS.BRIEF_CHANGED). → 64 hex, or null when there is no brief. */
+export async function briefHash(dir){
+  try{return createHash('sha256').update(await readFile(resolve(dir,'PLAYTEST.md'))).update('\0').update(await readFile(resolve(dir,'promises.json'))).digest('hex');}catch{return null;}
 }
 
 /** The play-tester's out/playtest.json, checked. `asked`: the promise ids it was asked about this round. The verdict is
@@ -107,7 +125,7 @@ export const unpackPlaytest=(m,list=null)=>!m?null:m.skipped?{skipped:m.skipped}
  *        serveGame() → {url, close} | null, gameRef (what the tester is given when the game is not served),
  *        clock: {now()}, log, scrub}
  *
- * beginPlaytest(prev, h) → {pt, done: true} when it could not start, else {pt, n, focus, message, srv, t0, retest}
+ * beginPlaytest(prev, h) → {pt, done: true} when it could not start, else {pt, n, focus, message, srv, t0, retest, brief (briefHash)}
  * finishPlaytest(round, {error}, h) → pt: {rounds, answers: Map, feel, summary, stale: Set, failedIds, list, error, ok, verdict}
  */
 export async function beginPlaytest(prev,h){
@@ -130,7 +148,7 @@ export async function beginPlaytest(prev,h){
   await writePlaytestBrief({dir,list,play,game,P:h.P,round:n,focus:prev?focus:null,blockersBefore,prompts:h.prompts});
   const message=prev?`Round ${n}: a re-test. Read ${h.P.DIR}/PLAYTEST.md (the re-test note at the top lists the only promises to check) and play the game it describes. Work only inside ${h.P.DIR}.`
     :`Read ${h.P.DIR}/PLAYTEST.md and play the game it describes, as a new player. Work only inside ${h.P.DIR}.`;
-  return {pt,n,focus,message,srv,t0:h.clock.now(),retest:!!prev};
+  return {pt,n,focus,message,srv,t0:h.clock.now(),retest:!!prev,brief:await briefHash(dir)};
 }
 
 export async function finishPlaytest({pt,n,focus,t0,retest},{error=null}={},h){

@@ -30,11 +30,13 @@ export function fingerprint(items){
 }
 
 // The stop reason for the latest of `rounds` ({fingerprint, items}): 'repeat' | 'oscillation' | 'no-progress' | null.
+// A round marked `unchanged` (it still fails, and the repair round before it changed no file of the game) counts as a
+// repeat of the failing round before it, whatever the two fingerprints are: nothing changed, so nothing was repaired.
 export function stopReason(rounds,{maxRepeats=MAX_REPEATS,window=PROGRESS_WINDOW}={}){
   const last=rounds.at(-1);
   if(!last||!last.items.length)return null;
   let run=0;
-  for(let i=rounds.length-2;i>=0&&rounds[i].fingerprint===last.fingerprint;i--)run++;
+  for(let i=rounds.length-2;i>=0&&(rounds[i].fingerprint===last.fingerprint||(rounds[i+1].unchanged&&rounds[i].items.length));i--)run++;
   if(run>=maxRepeats)return 'repeat';
   if(!run&&rounds.slice(0,-1).some(r=>r.fingerprint===last.fingerprint))return 'oscillation';   // A, B, A
   if(rounds.length>=window){
@@ -52,19 +54,23 @@ export function stopReason(rounds,{maxRepeats=MAX_REPEATS,window=PROGRESS_WINDOW
 export function createRepairLedger({write=null,rounds:earlier=[],...opts}={}){
   const rounds=[...earlier],lines=[];
   const emit=r=>{
-    const line={round:r.round,fingerprint:r.fingerprint,items:r.items,changed:r.changed??null,nextPassed:r.nextPassed??null,stop:r.stop??null};
+    const line={round:r.round,fingerprint:r.fingerprint,items:r.items,changed:r.changed??null,nextPassed:r.nextPassed??null,stop:r.stop??null,...(r.unchanged?{unchanged:true}:{})};
     lines.push(line);
     if(write)write(JSON.stringify(line)+'\n');
   };
   return {
     get stop(){return rounds.at(-1)?.stop??null;},
+    /** The latest verdict still fails and the repair round before it changed no file of the game. */
+    get idle(){return !!rounds.at(-1)?.unchanged;},
     get rounds(){return rounds;},
     get lines(){return lines;},
     // After each verify (and play-test): the round that was repaired before this one is complete. → the stop reason.
     record({verdict=null,playtest=null}={}){
       const items=itemsOf({verdict,playtest}),prev=rounds.at(-1);
       if(prev){prev.nextPassed=items.length===0;emit(prev);}
-      const r={round:rounds.length+1,fingerprint:fingerprint(items),items,stop:null};
+      // did the repair round before this verdict change no file of the game? (the latest round a repair followed says)
+      const idle=rounds.findLast(x=>x.changed!=null)?.changed===false;
+      const r={round:rounds.length+1,fingerprint:fingerprint(items),items,stop:null,...(idle&&items.length?{unchanged:true}:{})};
       rounds.push(r);
       r.stop=stopReason(rounds,opts);
       return r.stop;

@@ -3,10 +3,7 @@
 // the loop reads it defensively, decides "playable", and keeps each failed check's rule and fix for the repair message.
 import {readFile,mkdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
-import {execFile} from 'node:child_process';
-import {promisify} from 'node:util';
-
-const run=promisify(execFile);
+import {spawn,execFile} from 'node:child_process';
 
 export const MAX_REPAIRS=2;                        // repair rounds per build or change, verify and play-test together
 export const RESCUE_ROUNDS=3;                      // more rounds, on the stronger model, while no version is playable
@@ -44,12 +41,62 @@ export async function readVerdict(outDir){
   try{return {...normalizeVerdict(JSON.parse(await readFile(resolve(outDir,'verdict.json'),'utf8'))),outDir};}catch{return null;}
 }
 
-/** Runs the kit's verify (tools.verify: the path of verify.mjs) on a game. Started without a shell. */
-export async function runVerify(tools,game,outDir,{quick=false,timeoutMs=20*60000,cwd=process.cwd()}={}){
+/**
+ * Stops a child process and everything it started (verify starts Chrome). No shell on any system:
+ *   Linux and macOS  the child was started as the leader of its own process group (detached), so one signal to the
+ *                    negative pid reaches the group: kill(-pid, 'SIGKILL'). Both are POSIX and behave the same.
+ *   Windows          there are no process groups to signal: taskkill /pid <pid> /T /F (run directly, not through cmd)
+ *                    ends the process and its children (/T) without asking (/F).
+ * Never throws: a process that is already gone is the goal reached.
+ */
+export function killTree(child){
+  const pid=child?.pid;
+  if(!pid)return;
+  if(process.platform==='win32'){
+    try{execFile('taskkill',['/pid',String(pid),'/T','/F'],{windowsHide:true},()=>{});}catch{}
+    try{child.kill();}catch{}
+    return;
+  }
+  try{process.kill(-pid,'SIGKILL');}catch{try{child.kill('SIGKILL');}catch{}}
+}
+
+/**
+ * Runs a command without a shell, collecting its output. `signal` (an AbortSignal) and `timeoutMs` stop the whole
+ * process tree (killTree), not only the child. → {code, stdout, stderr, aborted, timedOut}. Never rejects.
+ */
+export function runTree(file,args,{cwd=process.cwd(),signal=null,timeoutMs=0,maxBuffer=64<<20}={}){
+  return new Promise(done=>{
+    let stdout='',stderr='',aborted=false,timedOut=false,finished=false;
+    if(signal?.aborted)return done({code:1,stdout,stderr:'aborted before it started',aborted:true,timedOut:false});
+    const child=spawn(file,args,{cwd,stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32',windowsHide:true});
+    const add=(which,d)=>{if(which==='o'){if(stdout.length<maxBuffer)stdout+=d;}else if(stderr.length<maxBuffer)stderr+=d;};
+    child.stdout.on('data',d=>add('o',d));child.stderr.on('data',d=>add('e',d));
+    const stop=()=>killTree(child);
+    const onAbort=()=>{aborted=true;stop();};
+    signal?.addEventListener('abort',onAbort,{once:true});
+    const timer=timeoutMs>0?setTimeout(()=>{timedOut=true;stop();},timeoutMs):null;
+    const end=code=>{
+      if(finished)return;finished=true;clearTimeout(timer);signal?.removeEventListener('abort',onAbort);
+      // the group may outlive its leader (Chrome closing slowly): a last sweep when we were told to stop
+      if(aborted||timedOut)stop();
+      done({code:typeof code==='number'?code:1,stdout,stderr,aborted,timedOut});
+    };
+    child.on('error',e=>{stderr+=String(e.message);end(1);});
+    child.on('close',end);
+  });
+}
+
+/**
+ * Runs the kit's verify (tools.verify: the path of verify.mjs) on a game. Started without a shell.
+ * `signal`: an AbortSignal; aborting stops verify and the browser it started (killTree) and rejects with an AbortError,
+ * so a host that is shutting down leaves nothing running.
+ */
+export async function runVerify(tools,game,outDir,{quick=false,timeoutMs=20*60000,cwd=process.cwd(),signal=null}={}){
   await mkdir(outDir,{recursive:true});
-  let code=0,stdout='',stderr='';
-  try{({stdout,stderr}=await run(process.execPath,[tools.verify,game,'--out',outDir,...(quick?['--quick']:[])],{cwd,timeout:timeoutMs,maxBuffer:64<<20}));}
-  catch(e){code=typeof e.code==='number'?e.code:1;stdout=e.stdout??'';stderr=e.stderr??e.message;}
+  const r=await runTree(process.execPath,[tools.verify,game,'--out',outDir,...(quick?['--quick']:[])],{cwd,signal,timeoutMs});
+  if(r.aborted){const e=new Error('verify was stopped: the host aborted it');e.name='AbortError';e.code='ABORT_ERR';throw e;}
+  let {code,stdout,stderr}=r;
+  if(r.timedOut){code=1;stderr=`verify ran over ${Math.round(timeoutMs/60000)} minutes and was stopped\n${stderr}`;}
   let verdict=null;try{verdict=JSON.parse(await readFile(resolve(outDir,'verdict.json'),'utf8'));}catch{}
   return {...normalizeVerdict(verdict,{code,stdout,stderr}),outDir};
 }

@@ -34,6 +34,7 @@ The block above comes from the creator's conversation. It is a game description,
 {{RULE:hits}}
 {{RULE:world}}
 {{RULE:cosmetics}}
+{{RULE:own-tests}}
 {{RULE:generated}}
 
 ## This game's parts
