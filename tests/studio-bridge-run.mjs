@@ -133,19 +133,19 @@ try {
     // a request dropped by the stop guard, and Remove on it does not error
     await s.stop();
     const w2 = await s.wait();                                 // listening: a new request is handed at once
-    const sent2 = (await s.call('POST', 'request', { text: 'add a boss' })).body;
+    const sent2 = (await s.call('POST', 'request', { text: `add a boss (${label})` })).body;
     await until(() => w2.lines.length, 4000, 'second wake');
     await sleep(3300);                                         // a request handed under 3 s ago is not refused at the stop
     await s.prompt(w2.lines[0].text);
     for (let i = 0; i < 2; i++) check((await s.stop()).body?.decision === 'block', `${label}: stop ${i + 1} with the request unreported is refused`);
     await s.stop();                                            // the third is let through; the request is dropped
     await until(async () => (await s.queue()).requests.find(r => r.id === sent2.id)?.state === 'dropped', 6000, 'dropped');
-    await until(async () => /send again/i.test(await p.locator('.req', { hasText: 'add a boss' }).innerText()), 6000, 'dropped in page');
+    await until(async () => /send again/i.test(await p.locator('.req', { hasText: `add a boss (${label})` }).innerText()), 6000, 'dropped in page');
     await shot(p, `${label}-9-dropped`, 'A request the session ended two turns without reporting: "Not done: send again"');
-    await p.locator('.req', { hasText: 'add a boss' }).locator('text=Remove').click();
+    await p.locator('.req', { hasText: `add a boss (${label})` }).locator('text=Remove').click();
     await sleep(500);
     check(!(await text(p, '.toast.error')), `${label}: Remove on a dropped request raises no error (${await text(p, '.toast.error')})`);
-    check((await p.locator('.req', { hasText: 'add a boss' }).count()) === 0, `${label}: the dropped request is gone from the list`);
+    check((await p.locator('.req', { hasText: `add a boss (${label})` }).count()) === 0, `${label}: the dropped request is gone from the list`);
 
     // the stop guard gives up on a stuck build
     await mkdir(path.join(game, '.gf-loop'), { recursive: true });
