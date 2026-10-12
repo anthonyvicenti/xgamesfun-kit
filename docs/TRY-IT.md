@@ -209,7 +209,7 @@ takes a few minutes. When it is done, the game in the page has changed.
 
 ![A request typed in the page, done by the session](try-it/session-request-done.jpg)
 
-**If it goes wrong, send us:** a screenshot of the Session tab, and what your agent's terminal shows. If the tab says
+**If it goes wrong, send us:** a screenshot of the conversation (the left side of the studio), and what your agent's terminal shows. If the tab says
 "No session connected yet", say so: that means the page and your agent did not find each other.
 
 ### 4. Answer a permission question in the page
@@ -220,7 +220,7 @@ takes a few minutes. When it is done, the game in the page has changed.
 Run this command: node --version > out.txt
 ```
 
-**You should see:** the question appears in your terminal, and also in the Session tab with two buttons, **Allow** and
+**You should see:** the question appears in your terminal, and also in the studio's conversation with two buttons, **Allow** and
 **Deny**. Click **Allow** in the page. The agent goes on, and the terminal's question goes away. Ask again and click
 **Deny**. The agent is told no.
 
@@ -323,7 +323,7 @@ do not want what it was doing.
 
 ![The Build tab: the steps so far, and the copies you can roll back to](try-it/build-roll-back.jpg)
 
-**If it goes wrong, send us:** a screenshot of the Build tab, what the agent said next, and the file
+**If it goes wrong, send us:** a screenshot of the conversation (where the build's steps and roll-back points are), what the agent said next, and the file
 `games/<name>/.gf-loop/state.json`.
 
 ### 8. Make the board game example

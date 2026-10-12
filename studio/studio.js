@@ -302,7 +302,7 @@ async function main() {
     document.title = `${project.name} · XGames.fun Studio`;
     const empty = $('#product-empty');
     empty.hidden = false;
-    empty.innerHTML = '<div class="product-empty-inner"><div class="product-empty-mark" aria-hidden="true"></div><h2>Your game appears here once it is made</h2><p>Your session pitches a few takes first. Pick one in the conversation and it makes the game from it: then you can play it here and change it with the tools.</p></div>';
+    empty.innerHTML = '<div class="product-empty-inner"><div class="product-empty-mark" aria-hidden="true"></div><h2>Your game appears here once it is made</h2><p>Your session pitches a few takes first, in the conversation. Pick one and it makes the game from it: then you play it here and change it with the tools.</p></div>';
     return;
   }
 

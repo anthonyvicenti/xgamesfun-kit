@@ -61,7 +61,7 @@ export function stageOf(loop, { made = false, pitch = null } = {}) {
 
 export function mountChat(root, ctx) {
   const events = [], answered = new Set(), removed = new Set();
-  let queueRaw = null, build = null, setup = null, context = null, lastKey = '';
+  let queueRaw = null, build = null, setup = null, context = null, lastKey = '', picked = null;
 
   // ---- the parts ----
   const status = el('div', { className: 'chat-status', role: 'status', 'aria-live': 'polite' });
@@ -185,17 +185,21 @@ export function mountChat(root, ctx) {
         for (const b of e.currentTarget.parentElement.children) b.setAttribute('aria-pressed', String(b.dataset.option === o.id));
       } } }, o.label)))));
     const waiting = v?.status === 'waiting-on-question';
-    const cards = p.cards.map(c => el('article', { className: 'concept', 'data-card': c.id },
+    if (!waiting) picked = null;
+    const cards = p.cards.map(c => el('article', { className: 'concept', 'data-card': c.id, 'aria-current': picked === c.id ? 'true' : null },
       el('h3', {}, c.title), el('p', { className: 'concept-hook' }, c.hook),
       el('p', { className: 'concept-how' }, c.howItPlays),
-      el('p', { className: 'muted small' }, c.players),
-      c.v1?.has?.length ? el('div', { className: 'concept-v1' }, el('b', {}, 'In v1: '), c.v1.has.join(' · ')) : null,
-      c.v1?.notYet?.length ? el('div', { className: 'concept-v1 muted' }, el('b', {}, 'Not yet: '), c.v1.notYet.join(' · ')) : null,
-      waiting ? el('button', { type: 'button', className: 'concept-go', on: { click: async e => {
+      el('details', { className: 'concept-more' }, el('summary', {}, 'What is in it'),
+        el('p', { className: 'muted small' }, c.players),
+        c.v1?.has?.length ? el('div', { className: 'concept-v1' }, el('b', {}, 'In v1: '), c.v1.has.join(' · ')) : null,
+        c.v1?.notYet?.length ? el('div', { className: 'concept-v1 muted' }, el('b', {}, 'Not yet: '), c.v1.notYet.join(' · ')) : null),
+      waiting && picked === c.id ? el('div', { className: 'concept-picked small' }, 'Your pick: sent to your session') : null,
+      waiting && !picked ? el('button', { type: 'button', className: 'concept-go', on: { click: async e => {
         e.currentTarget.disabled = true;
+        picked = c.id; lastKey = '';
         const list = (p.questions ?? []).map(q => { const o = q.options.find(x => x.id === answers.get(q.id)) ?? q.options[0]; return { id: q.id, question: q.text, option: o?.id, answer: o?.label }; });
         try { await submit(choiceRequest(c, list, folder()), { selection: null }); ctx.toast(`Sent: make "${c.title}"`, 'ok'); }
-        catch (err) { ctx.toast(err.message, 'error'); e.currentTarget.disabled = false; }
+        catch (err) { ctx.toast(err.message, 'error'); picked = null; lastKey = ''; paint(); }
       } } }, 'Make this one') : null));
     return bubble('them card wide', [
       el('div', { className: 'msg-title' }, waiting ? 'Your session pitched these. Pick one:' : 'The concepts'),
@@ -255,12 +259,12 @@ export function mountChat(root, ctx) {
     if (build?.idea) items.push({ at: 0, node: bubble('me idea', [el('div', { className: 'req-text' }, wordsOf(build.idea))], { 'data-part': 'idea' }) });
     const ideaShown = build?.idea ? wordsOf(build.idea).trim() : null;
     for (const r of q.requests) { if (ideaShown && wordsOf(r.text).trim() === ideaShown) continue; items.push(...requestView(r)); }
-    for (const e of events) { const w = describeEvent(e); if (w) items.push({ at: when(e.at), node: line(w, e.at, { 'data-type': e.kind }) }); }
+    for (const e of events) { const w = describeEvent(e)?.replace(/mcp__[a-z0-9-]+__/gi, ''); if (w) items.push({ at: when(e.at), node: line(w, e.at, { 'data-type': e.kind }) }); }
     if (v.present) for (const h of v.history) items.push({ at: when(h.at), node: line(`${h.step} → ${h.next}${h.why ? `: ${h.why}` : ''}`, h.at, { className: 'msg-line step' }) });
     for (const cp of build?.checkpoints ?? []) items.push({ at: when(cp.at), node: line(el('span', {}, cp.label ?? `Round ${cp.round ?? cp.id}`, ' ', el('button', { type: 'button', className: 'linkish', on: { click: () => rollback(cp) } }, 'Roll back to this')), cp.at, { className: 'msg-line checkpoint' }) });
     if (v.status !== 'waiting-on-question') { const folded = pitchView(build?.pitch, v); if (folded) items.push({ at: 1, node: folded }); }
     items.sort((a, b) => a.at - b.at);
-    const key = JSON.stringify([q.requests.map(r => [r.id, r.state, r.note, r.text]), c.guard?.why ?? null, c.mode, events.length, build?.loop?.updated ?? build?.loop?.step, build?.loop?.status, (build?.checkpoints ?? []).length, build?.verdict?.run, !!build?.pitch, made, c.state, setup?.connected, removed.size, answered.size, q.permissions.length]);
+    const key = JSON.stringify([q.requests.map(r => [r.id, r.state, r.note, r.text]), c.guard?.why ?? null, c.mode, events.length, build?.loop?.updated ?? build?.loop?.step, build?.loop?.status, (build?.checkpoints ?? []).length, build?.verdict?.run, !!build?.pitch, made, c.state, setup?.connected, removed.size, answered.size, q.permissions.length, picked]);
     if (key === lastKey) return;
     lastKey = key;
     const stick = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 40;

@@ -78,8 +78,14 @@ JSON (or raw bytes for a Blob or ArrayBuffer) and resolves to the parsed JSON or
 `wallet` (`studio/wallet.js`) is `{ list(), connect(name?), disconnect(), account, address, wallet, feature(name),
 onChange(fn) }` over the standard's `wallet-standard:app-ready` / `register-wallet` events; `toast(msg, kind?)` with
 kind `'ok'` or `'error'`. `mount` may return a cleanup function. Tabs are listed by `GET /api/studio/tabs` and mounted
-when first opened. The studio lists them on a rail in groups (Make, Edit, Test, Launch), each group in `order`;
-an optional `group` (a word) puts a tab under that heading, and a tab without one goes under More. The look is one
+when first opened. The page is the conversation on the left (`studio/chat.js`: the person's requests, their session's
+steps, the build loop's concepts, stages and verdicts, permission questions, one box to ask) and the product on the right:
+the game preview with the tabs as tools in a bar over it, the open one in an inspector beside it. The tools are grouped
+(Edit, Test, Launch), each group in `order`; an optional `group` (a word) puts a tab under that heading, and a tab
+without one goes under More. With no game open (`gamesfun dev` with no folder) the page is the start page
+(`studio/start.js`): describe a game (the idea goes to the session and starts the build loop on a fresh `games/<name>`),
+open one of yours, or start from an example. The dev server's open game can change while it runs: routes read
+`ctx.gameDir` at each request (null when none is open) and may listen with `ctx.onGame(fn)`. The look is one
 design system in `studio/studio.css` (its header lists the tokens and the classes a tab uses). *Extra* in `ctx`: `preview` (`reload()`, `show(path)`) and `on(event, fn)` for
 dev-server events (`game` when the game's files change, `verify`, and any `ctx.events.send` from a route).
 
