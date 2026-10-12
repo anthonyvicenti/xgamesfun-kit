@@ -1,14 +1,18 @@
-// A game that still has a `shop` (gf-web3 2.0.0 and earlier) and no `economy`: the economy it stands for, so every
-// call reads one shape. The parts are exactly what web3/economy/migrate.mjs `migrateShop` writes (a test holds the
-// two together); that module reads files with node:fs, so the game page cannot import it.
+// The one shop migration: a `shop` section of gamesfun.json (gf-web3 2.0.0 and earlier: one currency, collectible
+// items, boxes of items) → an `economy` section on loot 0.3. Pure, browser-safe (no Node import, no file read), so
+// the game page (gf-web3 reads an old shop as the economy it stands for) and the kit's tools
+// (web3/economy/migrate.mjs, which adds the file read and write) share this one function.
 //
-// One difference, on purpose: a shop gf-web3 2.0.0 published is already on the loot program 0.3 (its game is the 0.3
-// address of its collection), so it stays live here (`live`); a shop of 0.1/0.2 is not, and is kept as `previous`,
-// as the migration keeps it.
+// Where the shop was live:
+// - on loot 0.1/0.2 (its game is not the 0.3 address of its collection): a new program, so it is not live on 0.3.
+//   Its addresses are kept under `economy.previous`, and the economy goes live fresh (a new collection and game).
+// - on loot 0.3 (gf-web3 2.0.0 put it there): with `keepLive`, the game page plays it where it is (`economy.live`).
+//   Without it (the file migration and the publish flow) it is kept as `previous` too, as the migration always did.
+// A shop currency on Token-2022 stays `token-2022`; anything else is `spl-token`.
 import { lootPda } from '../chain/loot.js';
 import { fromUnits, WSOL } from './spec.js';
 
-/** A key from a name: "Golden Sword!" → "golden-sword", unique within `taken` (migrate.mjs keyFrom). */
+/** A key from a name: "Golden Sword!" → "golden-sword", unique within `taken`. */
 export function keyFrom(name, taken = new Set(), fallback = 'part') {
   let base = String(name ?? '')
     .toLowerCase()
@@ -23,10 +27,25 @@ export function keyFrom(name, taken = new Set(), fallback = 'part') {
   return key;
 }
 
-/** The economy a config's shop stands for, or null when it has none (or already has an economy). */
-export function economyFromShop(config) {
-  const shop = config?.shop;
-  if (!shop || config.economy) return null;
+/** True when a shop's game is the loot 0.3 game of its collection (gf-web3 2.0.0 published it on 0.3). */
+export function shopOnLoot03(shop) {
+  if (!shop?.collection || !shop?.game) return false;
+  try {
+    return lootPda.game(shop.collection) === shop.game;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The config with its `shop` turned into an `economy`. Returns { config, changed, notes }. A config that already has
+ * an economy, or has no shop, comes back unchanged. `keepLive`: a shop already on loot 0.3 stays live (see above).
+ */
+export function migrateShop(config, { keepLive = false } = {}) {
+  const notes = [];
+  if (!config?.shop) return { config, changed: false, notes: ['There is no shop to move.'] };
+  if (config.economy) return { config, changed: false, notes: ['This game already has an economy; its shop was left as it is.'] };
+  const shop = config.shop;
   const cur = shop.currency ?? { mint: WSOL, symbol: 'SOL', decimals: 9, native: true };
   const tokenKeys = new Set();
   const tokens = [];
@@ -45,7 +64,7 @@ export function economyFromShop(config) {
       ...(same ? { name: linked.name } : {}),
       symbol: String(cur.symbol).slice(0, 10),
       decimals: cur.decimals,
-      program: same ? linked.program : (cur.program ?? 'spl-token'),
+      program: same ? linked.program : cur.program === 'token-2022' ? 'token-2022' : 'spl-token',
       ...(same && linked.source === 'launched' ? { venue: 'games.fun' } : {}),
     });
   }
@@ -98,9 +117,21 @@ export function economyFromShop(config) {
     items,
     boxes,
   };
-  const onLoot03 = shop.collection && shop.game && lootPda.game(shop.collection) === shop.game;
-  if (onLoot03) economy.live = { game: shop.game, collection: shop.collection, ...(shop.treasury ? { treasury: shop.treasury } : {}) };
-  else if (shop.collection || shop.game)
+  if (keepLive && shopOnLoot03(shop)) {
+    economy.live = { game: shop.game, collection: shop.collection, ...(shop.treasury ? { treasury: shop.treasury } : {}) };
+    notes.push(`The shop is live on loot program 0.3 (collection ${shop.collection}); it stays live where it is.`);
+  } else if (shop.collection || shop.game) {
     economy.previous = { program: '0.2', ...(shop.collection ? { collection: shop.collection } : {}), ...(shop.game ? { game: shop.game } : {}), ...(shop.treasury ? { treasury: shop.treasury } : {}) };
-  return economy;
+    notes.push(`The shop was live on loot program 0.2 (collection ${shop.collection ?? 'unknown'}). Program 0.3 is a new program: the economy goes live fresh, with a new collection; the old one is kept under economy.previous.`);
+  }
+  notes.push(`Moved ${items.length} item${items.length === 1 ? '' : 's'} and ${boxes.length} box${boxes.length === 1 ? '' : 'es'} into the economy, priced in ${tokens[0].symbol ?? 'SOL'}.`);
+  const { shop: _, ...rest } = config;
+  return { config: { ...rest, economy }, changed: true, notes };
+}
+
+/** The economy a config's shop stands for in the game page (a 0.3 shop stays live), or null when it has none (or
+ * already has an economy). */
+export function economyFromShop(config) {
+  const moved = migrateShop(config, { keepLive: true });
+  return moved.changed ? moved.config.economy : null;
 }

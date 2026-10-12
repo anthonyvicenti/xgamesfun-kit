@@ -18,7 +18,7 @@ import { readEconomy } from '../web3/gf-web3/econ/spec.js';
 import { createGfWeb3 } from '../web3/gf-web3/index.js';
 import { economyState, parseActionId, playerActions } from '../web3/economy/actions.mjs';
 import { migrateShop } from '../web3/economy/migrate.mjs';
-import { economyFromShop } from '../web3/gf-web3/econ/shop.js';
+import { economyFromShop, migrateShop as migrateShopInKit } from '../web3/gf-web3/econ/shop.js';
 import { freshKeypair } from '../web3/node/ed25519.mjs';
 import { fakeChain } from './web3/fake-chain.mjs';
 
@@ -177,16 +177,29 @@ describe('a game that still has a shop', () => {
     items: [{ id: 1, name: 'Golden Hat', rarity: 'Rare', price: '50000000', maxSupply: 0, soulbound: false, listed: true }, { id: 2, name: 'Ice Skin', rarity: 'Epic', price: '0', maxSupply: 0, soulbound: false, listed: true }],
     boxes: [{ id: 1, name: 'Mystery Box', price: '10000000', entries: [{ item: 1, weight: 60 }, { item: 2, weight: 40 }], listed: true }],
   };
-  it('reads as the economy migrate.mjs makes of it, live where gf-web3 2.0.0 put it live on 0.3', () => {
+  it('reads through the one migration: live where gf-web3 2.0.0 put it live on 0.3, previous for 0.1/0.2', () => {
     const config = { version: 1, network: 'devnet', shop };
+    assert.equal(migrateShop, migrateShopInKit, 'migrate.mjs re-exports the in-game kit’s function: one migration, no copy');
     const { live, ...mine } = economyFromShop(config);
     const { previous, ...theirs } = migrateShop(config).config.economy;
-    assert.deepEqual(mine, theirs);
+    assert.deepEqual(mine, theirs, 'the page and the file migration make the same parts');
     assert.deepEqual(live, { game: shop.game, collection, treasury: collection });
-    assert.equal(previous.game, shop.game, 'the migration keeps it as previous; the kit plays it where it is');
+    assert.equal(previous.game, shop.game, 'the file migration keeps it as previous; the kit plays it where it is');
+    assert.deepEqual(migrateShop(config, { keepLive: true }).config.economy.live, live, 'keepLive is the page’s reading');
     const old = economyFromShop({ version: 1, network: 'devnet', shop: { ...shop, game: 'FWVap91111111111111111111111111111111111111' } });
     assert.equal(old.live, undefined, 'a 0.1/0.2 shop is not live on 0.3');
+    assert.equal(old.previous.game, 'FWVap91111111111111111111111111111111111111');
     assert.equal(economyFromShop({ version: 1, network: 'devnet', shop, economy: { name: 'x' } }), null, 'an economy wins');
+    assert.equal(economyFromShop({ version: 1, network: 'devnet' }), null, 'no shop, nothing');
+  });
+  it('keeps a Token-2022 shop currency on token-2022', () => {
+    const mint = '7MJWx2uYB3D7VrUKZ7xQ5n3qeaJ2uGmCcAm1L8ZnXrfX';
+    const t22 = { ...shop, currency: { mint, symbol: 'FEE', decimals: 6, native: false, program: 'token-2022' } };
+    const e = economyFromShop({ version: 1, network: 'devnet', shop: t22 });
+    assert.deepEqual(e.tokens, [{ key: 'fee', source: 'existing', mint, symbol: 'FEE', decimals: 6, program: 'token-2022' }]);
+    assert.equal(e.items[0].price, '50', 'prices in the coin’s own decimals');
+    const classic = economyFromShop({ version: 1, network: 'devnet', shop: { ...t22, currency: { ...t22.currency, program: undefined } } });
+    assert.equal(classic.tokens[0].program, 'spl-token');
   });
 });
 
