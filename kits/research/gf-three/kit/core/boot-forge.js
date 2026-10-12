@@ -391,7 +391,7 @@ export async function boot({ rules = {} } = {}) {
       const c = forge.drawnCamera(), cp = Math.cos(c.pitch), seen = session.watching ? players.api.watched() : null;
       return { mode: 'first', yaw: (seen ?? me).yaw ?? null, pitch: (seen ?? me).pitch ?? null, cursorMode: !!input.cursorMode, cursor: input.cursorMode || null, aimFree: !!input.aimFree,
         eye: [c.x, c.y, c.z].map(r3), dir: [-Math.sin(c.yaw) * cp, Math.sin(c.pitch), -Math.cos(c.yaw) * cp].map(r3), sensitivity: cam.sensitivity ?? 0.0024, lookScale: input.lookScale ?? 1, invertY: !!input.invertY,
-        crosshair: !!ui.crosshairOn, lockRefused: !!input.lockRefused, locked: !!input.locked, fullscreen: hud.fullscreen?.() ?? null };
+        crosshair: !!ui.crosshairOn, lockRefused: !!input.lockRefused, locked: !!input.locked, following: !!input.following, fullscreen: hud.fullscreen?.() ?? null };
     };
     /** Where a world point is on this screen, in CSS pixels (check 34: a viewer's nameplates sit over the characters). */
     const screenOf = (x, y, z) => { const v = project(forge.drawnCamera(), { x, y, z }, innerWidth / innerHeight); return v ? { x: r2((v.x * 0.5 + 0.5) * innerWidth), y: r2((-v.y * 0.5 + 0.5) * innerHeight), front: true } : { x: -1, y: -1, front: false }; };

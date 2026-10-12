@@ -3,8 +3,8 @@
  "about": "A sparse mirror of the games.fun repository at one commit: the kits games are built on and the tools that create and verify them. Written by scripts/sync-kits.mjs; never edited by hand (fix the kit in games.fun and sync again). tests/kits.test.mjs checks kits/ against this file.",
  "source": {
   "repo": "games.fun",
-  "commit": "3c1b61c51fa3571b70d8c1032cd333b413fd9e14",
-  "date": "2026-10-11T23:15:57-07:00"
+  "commit": "640f1ba803400e10b3dd2f8d9ca3efc605be3afa",
+  "date": "2026-10-12T01:28:26-07:00"
  },
  "kits": {
   "gf-three": {
@@ -75,7 +75,7 @@
  },
  "totals": {
   "files": 1184,
-  "bytes": 36999487,
+  "bytes": 37006723,
   "excluded": 152,
   "excludedBy": {
    "Meshy-generated (licence tier unconfirmed)": 3,
@@ -199,7 +199,7 @@
  ],
  "closure": {
   "files": 137,
-  "bytes": 2286781,
+  "bytes": 2289567,
   "modules": [
    "creator-studio/lib/asset-kinds.mjs",
    "creator-studio/lib/code-literals.mjs",
@@ -351,13 +351,13 @@
    "path": "research/gf-three/CONTRACT.md",
    "why": "gf-three API: what rules.js and config are written against",
    "files": 1,
-   "bytes": 180444
+   "bytes": 181838
   },
   {
    "path": "research/gf-three/kit",
    "why": "gf-three kit, vendored into each game as gf/three/",
    "files": 225,
-   "bytes": 2097444
+   "bytes": 2100500
   },
   {
    "path": "research/gf-three/library",
@@ -839,7 +839,7 @@
   "research/gf-scenic/tools/lib/vendor/three/examples/jsm/tsl/utils/SoftParticles.js": "e79cc1a2ac697217c8ed9fbb4983fed012fb63848f96fb5fca0869676ee65eb3",
   "research/gf-scenic/tools/lib/vendor/three/examples/jsm/tsl/utils/SpecularHelpers.js": "cce8b1cffde0b7f7966a062d0d05b97318ce180f411c76fe3e25ebbef49e4220",
   "research/gf-scenic/tools/lib/vendor/three/examples/jsm/tsl/utils/TAAUtils.js": "eb744737027b4e1bc1ddb3168733051d93e12c7ab85c1b365e1726c345fc134d",
-  "research/gf-three/CONTRACT.md": "d56b29cff1f7e33f97e99edc4bfe59dc811187d242b8cc9c924341d8c77b34aa",
+  "research/gf-three/CONTRACT.md": "41acd3a15dd588d5f44da3ac5326a27a89044306487208fd637d0be704f14d5c",
   "research/gf-three/README.md": "3f9600c27fb5347d795d0bacbba08f5bcd188bfd925b14abed7910b9782c3567",
   "research/gf-three/character-bench/assets.json": "98d33abdba9511a5f2dc42a213777b1ff907723e41abdb40ec4f2bb83c0e48cd",
   "research/gf-three/character-bench/bench.js": "31a851777b0beb1237ed7031069a8b1b5c8f447b4dceb791a58a64a0172c360d",
@@ -867,11 +867,11 @@
   "research/gf-three/kit/controller/slots.js": "c2bcd550e706fb7fd6bdcfd2fceef2e876e20bdaddbae0bd7598ce97478d479e",
   "research/gf-three/kit/core/README.md": "a50fd9a52926aaac7f9444b65a9aca1d3d8d0c84243ee356f5e03116c93b4926",
   "research/gf-three/kit/core/aim.js": "8ff6e43492f18c55f16eb74b85b8bd46b947ba7825f6d4bddf13aa0402b39273",
-  "research/gf-three/kit/core/boot-forge.js": "f7f608defbc2742f208ecf5fae9009ab6997f0c3572b971a1ee91ba808365113",
-  "research/gf-three/kit/core/boot.js": "00884187831fe4e330b17389f09c8907d489714d662169fbcd56487473708af2",
+  "research/gf-three/kit/core/boot-forge.js": "5cf07e592cb08754fb7058ddfadadb3e7d846a9a8424bf84f38dd828d6621910",
+  "research/gf-three/kit/core/boot.js": "30daf1cfe6f5877a7730481f9c586072fbc53ab29a4b043d51df77e97d2e724a",
   "research/gf-three/kit/core/fair-logic.js": "93d0fa5cc73a9eb761df51c06aa64112345161ca452dbc0322d2b40493458105",
   "research/gf-three/kit/core/fair.js": "c6904b7b8acf2e77bbdafbc6af2b96437d9e3379bc65a8310aefb6d0a96fe3d2",
-  "research/gf-three/kit/core/input.js": "7bc13cef73ba67abe06928b60c8d2f3c68aa3c65d3b0e5b2f55ae9b5c86102c3",
+  "research/gf-three/kit/core/input.js": "943d70ff2d94d6c105c49247f53168306cbb7629db978fc75939be3f6e2a039f",
   "research/gf-three/kit/core/live-slots.js": "eca6add2c2693ee25263521235e6b576fac60bfdd49643ede41c20965279d269",
   "research/gf-three/kit/core/quality.js": "6b412202882f2e134b72aa10a79e088affcefc996413e47a9ae99600e4150c9f",
   "research/gf-three/kit/core/refusals.js": "329902bd16d7beeb5803abb401608023af1f07cadb32dfc3dfae2a040acadc70",
@@ -1350,7 +1350,7 @@
   "research/gf-three/tools/lib/controls-check.mjs": "29bc5b8cc5a6b00d8c59bb2e787b58d87b3460b04fb5908ad5c746fb5d3877c1",
   "research/gf-three/tools/lib/dressing-fix.mjs": "ffa9dc438619a2c3c10fb2b663ca13c1b9737543dd7b9340fbb2f161deea2b3f",
   "research/gf-three/tools/lib/dressing.mjs": "588c0b13a23ccb15eb217fda760d9564e87c57ba7d99a87e1dfb072dd65c8b4e",
-  "research/gf-three/tools/lib/embed-check.mjs": "2aef3adc61a08fce1212e1cfe6552dd7922d4f147d408c728948755f5aa06d47",
+  "research/gf-three/tools/lib/embed-check.mjs": "2df83b52e1599932369b3e3f372538de415f92322e22c1a99efe636a4bc03dec",
   "research/gf-three/tools/lib/fair-check.mjs": "bdf3f593d58e95af4749afe646e32349244c0a5ebbb755b37c91a8bd724a1849",
   "research/gf-three/tools/lib/fix-lib.mjs": "e4464102b73d33f18c387f6b1147d45c50de09176617688a02fa06df6e637db3",
   "research/gf-three/tools/lib/flat-png.mjs": "5ad7393c1302eb530d1d502875d86050ba96be27a85f50683b37dd017fa98f73",
@@ -1658,7 +1658,7 @@
   "research/gf-three/tools/lib/vendor/three/examples/jsm/utils/WorkerPool.js": "5ac7095fd566bc9ae48376055fd66edf27cb9ebbf9e1269dc206bfd4933ae9eb",
   "research/gf-three/tools/lib/verdict.mjs": "3b03b80f07bd5dec1c19935685dec370c8e30dee6b5e48bda1e841b3741440d0",
   "research/gf-three/tools/lib/world-check.mjs": "44b054be8d708e0cd2f153e4e6978ffc919acb711724bcf5630f1e4fadf4c752",
-  "research/gf-three/tools/lib/worlds-check.mjs": "add7b34bc057c3216313d344339dbe99a518d87d684166f91b9ca758d2961120",
+  "research/gf-three/tools/lib/worlds-check.mjs": "42e5a1355faeeef0077bd2e86aaf6bef2fd084e21b7a415a013b01ee9075b6e3",
   "research/gf-three/tools/lib/worlds-net-check.mjs": "3bf56a5bc66a5521664e96ce40ae690955bf369351e12936875a157f719ca7b0",
   "research/gf-three/tools/lib/worlds-room-check.mjs": "0490ff4756cd7b4ce20d1405980fe8e5576917ce4720537fc887c013a9f1767e",
   "research/gf-three/tools/lib/worlds-watch-check.mjs": "288108abf8655a6b9433711abc4ad553d36d7133df103a32cbcb08d1d691356c",

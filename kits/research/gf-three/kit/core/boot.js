@@ -350,7 +350,7 @@ export async function boot({ rules = {} } = {}) {
       camera: () => JSON.parse(JSON.stringify({ mode: camMode, yaw: me.controller?.rig?.yaw ?? null, pitch: me.controller?.rig?.pitch ?? null, cursorMode: !!input.cursorMode,
         cursor: input.cursorMode || null, aimFree: !!input.aimFree, eye: [camera.position.x, camera.position.y, camera.position.z].map(v => Math.round(v * 1000) / 1000),
         dir: camera.getWorldDirection(new THREE.Vector3()).toArray().map(v => Math.round(v * 1000) / 1000),      // where the view looks (check 34: a viewer sees as the streamer does) sensitivity: me.controller?.rig?.settings?.sensitivity ?? null, lookScale: input.lookScale ?? 1, invertY: !!input.invertY,
-        crosshair: !!ui.crosshairOn, lockRefused: !!input.lockRefused, locked: !!input.locked, fullscreen: hud.fullscreen?.() ?? null })),
+        crosshair: !!ui.crosshairOn, lockRefused: !!input.lockRefused, locked: !!input.locked, following: !!input.following, fullscreen: hud.fullscreen?.() ?? null })),
       sight: ids => sight({ renderer, scene, camera }, ids),       // verify check 15: a slot's share of this player's view
       // where a world point is on this screen (verify check 34: a viewer's nameplates sit over the characters)
       project: (x, y, z) => screenOf({ x, y, z }),

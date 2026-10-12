@@ -12,8 +12,12 @@
 //   - clicks the game: the frame refuses the lock, and the camera stays the game's own;
 //   - the full-screen button is offered; a click makes the game full screen;
 //   - in full screen, a drag turns the camera (a third or first camera; others don't look with the mouse) and W moves;
-//   - a world in first person (CONTRACT §9): there a click on a block builds on it (where the lock is refused, the aim
-//     follows the cursor; the bare page is a practice copy, so nothing is saved);
+//   - in full screen, a camera that looks with the mouse (cursor mode off) follows it with no button held, keeps turning
+//     while the cursor rests at the screen's edge, and stops when it comes back (the creator in a post on X, 2026-10-12:
+//     "Controls for Potatoes Zombie game is still bad on full screen in X. The mouse doesnt want to follow at all";
+//     research/foundations/evidence/x-post-fullscreen-mouse-follow-2026-10-12/report.json);
+//   - a world in first person (CONTRACT §9): there a click on a block builds on it (in full screen the camera follows the
+//     mouse and the crosshair aims, as under the lock; the bare page is a practice copy, so nothing is saved);
 //   - the button again leaves full screen;
 //   - no console errors but the browser's own refusal of the lock.
 import { createServer } from 'node:http';
@@ -22,6 +26,9 @@ import { holdsBody, whereIs } from './part-signs.mjs';
 import { walkOf } from './flat-reads.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// the turn between two yaws, the short way round (a turn past ±π is not a turn of 2π)
+const turn = (a, b) => (Number.isFinite(a) && Number.isFinite(b) ? Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a))) : 0);
+const f2 = v => (Number.isFinite(v) ? v.toFixed(2) : String(v));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
 
 export const CARD = 480;
@@ -91,6 +98,21 @@ export async function checkEmbed({ newPage, url, game = {}, flat = null, log = (
           const y1 = (await cam())?.yaw;
           const turned = Number.isFinite(y0) && Number.isFinite(y1) ? Math.abs(y1 - y0) : 0;
           step('in full screen a drag turns the camera', turned > 0.2, `yaw ${Number.isFinite(y0) ? y0.toFixed(2) : y0} → ${Number.isFinite(y1) ? y1.toFixed(2) : y1}`);
+          if (!c1.cursorMode || c1.cursor === 'look') {
+            // the mouse alone, no button: the camera follows it; at the screen's edge it keeps turning; back in the
+            // middle it stops
+            await p.mouse.move(vp.width * 0.5, vp.height * 0.5, { steps: 4 }); await sleep(300);
+            const f0 = (await cam())?.yaw;
+            await p.mouse.move(vp.width * 0.7, vp.height * 0.5, { steps: 12 }); await sleep(300);
+            const f1 = (await cam())?.yaw;
+            step('in full screen the camera follows the mouse with no button held', turn(f0, f1) > 0.15, `yaw ${f2(f0)} → ${f2(f1)}`);
+            await p.mouse.move(vp.width - 2, vp.height * 0.5, { steps: 6 }); await sleep(200);
+            const e0 = (await cam())?.yaw; await sleep(800); const e1 = (await cam())?.yaw;
+            step('in full screen a cursor resting at the screen\'s edge keeps turning the camera', turn(e0, e1) > 0.3, `yaw ${f2(e0)} → ${f2(e1)} in 0.8 s at the edge`);
+            await p.mouse.move(vp.width * 0.5, vp.height * 0.5, { steps: 6 }); await sleep(200);
+            const m0 = (await cam())?.yaw; await sleep(600); const m1 = (await cam())?.yaw;
+            step('back in the middle the camera holds still', turn(m0, m1) < 0.05, `yaw ${f2(m0)} → ${f2(m1)} in 0.6 s`);
+          }
         } else warnings.push(`plays inside a post: the ${camera} camera does not look with the mouse; the drag step is skipped`);
         // a part that holds the body (it owns player.control by its manifest: a board with a cursor) reports the
         // player's mark instead (players[].mark, tools/lib/part-signs.mjs): W must move that
@@ -106,7 +128,9 @@ export async function checkEmbed({ newPage, url, game = {}, flat = null, log = (
           if (spot) await actOn(as, faces(spot).ground);
           const placed = spot ? await until(() => fr.evaluate(s => window.__game.voxelAt(s.x, s.top, s.z) || null, spot), 2000, 'the block').catch(() => 0) : 0;
           const c = await cam();
-          step('a click on a block builds there (the aim follows the cursor)', placed > 0 && c?.aimFree && !c?.crosshair, spot ? `cell ${spot.x},${spot.top},${spot.z} = ${placed}; aim free ${c?.aimFree}, crosshair ${c?.crosshair}` : 'no spot on screen');
+          const follows = !!c?.following;
+          step(follows ? 'a click on a block builds there (the crosshair aims; the camera follows the mouse)' : 'a click on a block builds there (the aim follows the cursor)',
+            placed > 0 && (follows ? !c?.aimFree && c?.crosshair : c?.aimFree && !c?.crosshair), spot ? `cell ${spot.x},${spot.top},${spot.z} = ${placed}; aim free ${c?.aimFree}, crosshair ${c?.crosshair}, following ${follows}` : 'no spot on screen');
         }
         if (shot) await shot(p, 'post-fullscreen');
         await F.locator('#gf-fullscreen').click({ timeout: 4000 }).catch(() => {});
@@ -119,7 +143,7 @@ export async function checkEmbed({ newPage, url, game = {}, flat = null, log = (
   } catch (e) { if (!fail.length) fail.push(e.message); }
   finally { await T.ctx.close().catch(() => {}); await new Promise(r => server.close(r)); }
   const ok = fail.length === 0 && steps.length > 0;
-  const detail = ok ? `in a ${CARD}×${CARD} post frame that refuses the lock: the camera stays ${camera}, the full-screen button works${looks ? ', a drag turns the camera' : ''}, ${key} moves` : fail.join('; ');
+  const detail = ok ? `in a ${CARD}×${CARD} post frame that refuses the lock: the camera stays ${camera}, the full-screen button works${looks ? ', a drag turns the camera' : ''}${looks && !record.afterClick?.cursorMode ? ', the camera follows the mouse with no button and turns at the edge' : ''}, ${key} moves` : fail.join('; ');
   log(`embed: ${ok ? 'ok' : 'FAIL'} ${detail.slice(0, 200)}`);
   return { ok, detail, record, warnings };
 }
