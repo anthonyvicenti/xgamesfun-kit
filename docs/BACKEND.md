@@ -76,6 +76,11 @@ A paused project (free projects pause after a week without use) is said plainly:
 | Windows | A DPAPI-encrypted file (PowerShell `ConvertFrom-SecureString`, this user only) |
 | Anywhere else, or `GAMESFUN_SECRET_STORE=file` | A 0600 file in the user's config folder (`%APPDATA%\gamesfun`, `~/Library/Application Support/gamesfun`, `$XDG_CONFIG_HOME/gamesfun`) |
 
+It is the kit's only secret store: `lib/credentials.mjs` (the games.fun sign-in, `gamesfun login`) keeps its token
+here too, under `publish-<16 hex>`; the backend's names are `backend-supabase`, `backend-supabase-app`,
+`supabase-db-<ref>`, `railway-token` and `railway-client`, so the two never overwrite each other
+(`tests/secret-store-shared.test.mjs`).
+
 The file store is the one run on Linux in the tests. The keychain and DPAPI paths have not been run on macOS or
 Windows yet.
 

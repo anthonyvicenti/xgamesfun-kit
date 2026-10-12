@@ -43,10 +43,13 @@ publish token for 30 days. The kit keeps it outside every game and outside this 
 | System | Where |
 |---|---|
 | macOS | your login keychain |
-| Linux | your keyring (Secret Service, through `secret-tool`) when it is installed; otherwise a file only you can read, `~/.config/gamesfun/credentials.json` |
-| Windows | a file in your profile, encrypted for your Windows user (DPAPI), `%APPDATA%\gamesfun\credentials.json` |
+| Linux | your keyring (Secret Service, through `secret-tool`) when it is installed and a session bus runs; otherwise a file only you can read under `~/.config/gamesfun/secrets/` |
+| Windows | a file in your profile, encrypted for your Windows user (DPAPI), under `%APPDATA%\gamesfun\secrets\` |
 
-`GAMESFUN_CREDENTIALS=file` always uses the file. On a machine without a browser (SSH, a container),
+The kit has one secret store, `lib/secret-store.mjs` (docs/BACKEND.md), shared with the backend's sign-ins; the
+token is kept there under `publish-<16 hex>`, a name no backend sign-in uses. `credentials.json` in the same folder
+holds only the public part (which games.fun, which email, until when).
+`GAMESFUN_CREDENTIALS=file` (or `GAMESFUN_SECRET_STORE=file`) always uses the file. On a machine without a browser (SSH, a container),
 `npx gamesfun login --code` prints a link to open anywhere and asks for the code it shows. Only approve a sign-in you
 started yourself.
 
