@@ -171,6 +171,8 @@ describe('studio Economy tab on core’s dev server, in Chrome (fake chain)', { 
     await card.locator('[data-path="lotteries:weekly|places"]').fill('50, 30, 20');
     await until(async () => !(await tab().getByTestId('econ-go-live').isDisabled()));
     assert.equal(await card.getByTestId('econ-refusal').count(), 0);
+    await until(async () => (await tab().getByTestId('econ-cost-oracle').count()) > 0);
+    assert.match(await tab().getByTestId('econ-cost-oracle').textContent(), /MagicBlock’s oracle 0\.0005 SOL for the random number/, 'what the cost is made of names the oracle’s fee');
   });
 
   it('a link from the agent (#economy?flow=economy) opens the tab and offers "Put it live", without starting anything', async (t) => {

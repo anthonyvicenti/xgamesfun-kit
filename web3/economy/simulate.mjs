@@ -6,7 +6,7 @@
 // odds as written (stock odds start where the table starts), and one ticket per lottery purchase. Shares of a
 // pool are worked out continuously, so a pool that pays a share of itself settles at a level instead of emptying.
 // It is a guide, not a promise: the full simulation (LiteSVM, later) runs the real program.
-import { ESCROW_LAMPORTS, FEES, LAMPORTS_PER_SOL, RENT_PER_BYTE, SIGNATURE_FEE, destination, model, sharesOf, toBps, toSeconds, weights } from './model.mjs';
+import { ESCROW_LAMPORTS, FEES, LAMPORTS_PER_SOL, ORACLE_FEE, RENT_PER_BYTE, SIGNATURE_FEE, destination, model, sharesOf, toBps, toSeconds, weights } from './model.mjs';
 
 const DAY = 86_400;
 const DEFAULT_PER_DAY = 100;
@@ -14,6 +14,8 @@ const sol = (lamports) => Number(lamports) / Number(LAMPORTS_PER_SOL);
 const PLAYER_FEE = sol(FEES.player);
 const PROJECT_FEE = sol(FEES.project);
 const NETWORK_FEE = sol(SIGNATURE_FEE);
+/** MagicBlock's oracle, per random number: a box's open (the player), a lottery's draw, a `roll` (model.mjs ORACLE_FEE). */
+const ORACLE = sol(ORACLE_FEE);
 /** A purchase line in a lottery's list: 40 bytes of rent the buyer pays and first place gets (lottery.rs). */
 const TICKET_LINE = sol(40n * RENT_PER_BYTE);
 /** A collectible's Core account, paid from the order's escrow: "about 0.004 SOL" (constants.rs ESCROW_LAMPORTS). */
@@ -40,8 +42,8 @@ export function simulate(economy, { now = 0 } = {}) {
   const flowOut = (pool, by, amount) => amount && pools.get(pool)?.out.push({ by, perDay: amount });
   const rateOut = (pool, by, perDayShare, to) => perDayShare && pools.get(pool)?.rate.push({ by, perDay: perDayShare, ...(to ? { to } : {}) });
 
-  const players = { pay: {}, get: {}, fees: 0, network: 0, rent: 0 };
-  const creator = { treasury: {}, fees: 0, network: 0 };
+  const players = { pay: {}, get: {}, fees: 0, network: 0, rent: 0, oracle: 0 };
+  const creator = { treasury: {}, fees: 0, network: 0, oracle: 0 };
   const burned = {};
   const accounts = {};
   const platform = { player: 0, project: 0 };
@@ -119,10 +121,15 @@ export function simulate(economy, { now = 0 } = {}) {
     add(players.get, token, opens * value);
     for (const [t, v] of Object.entries(other)) add(players.get, t, opens * v);
     playerAction(opens);
+    players.oracle += opens * ORACLE;
     const collectibles = outcomes.filter((o) => o.gives === 'item').reduce((n, o) => n + o.chance / 100, 0);
     players.rent += opens * collectibles * COLLECTIBLE_RENT;
     creator.network += opens * NETWORK_FEE; // the settle, by whoever sends it
     const known = !unpriced.length && !shares.length && !Object.keys(other).length;
+    // What one open really takes from the player's wallet: the price, games.fun's fee, the oracle's and the network's.
+    const isSol = Boolean(m.tokens.get(token)?.wsol);
+    const extrasSol = PLAYER_FEE + ORACLE + NETWORK_FEE;
+    const realCost = { price, token, playerFeeSol: PLAYER_FEE, oracleSol: ORACLE, networkSol: NETWORK_FEE, extrasSol: round(extrasSol), ...(isSol ? { totalSol: round(price + extrasSol) } : {}) };
     return {
       key: b.key,
       name: b.name,
@@ -136,6 +143,9 @@ export function simulate(economy, { now = 0 } = {}) {
       alsoPays: other,
       unpriced,
       playerFee: PLAYER_FEE,
+      oracleFee: ORACLE,
+      realCost,
+      ...(isSol && known && price ? { returnOfRealCostPercent: round((value / (price + extrasSol)) * 100, 4) } : {}),
     };
   });
 
@@ -245,6 +255,7 @@ export function simulate(economy, { now = 0 } = {}) {
     players.rent += tickets * TICKET_LINE;
     const places = (l.places ?? [100]).map(Number);
     creator.network += ((1 + places.length) * NETWORK_FEE * DAY) / every; // the draw and each place's payment
+    creator.oracle += (ORACLE * DAY) / every; // the draw asks the oracle; whoever sends it (the game's keeper) pays
     return { key: l.key, name: l.name, price, token: ticketToken, potToken, ticketsPerDay: tickets, ticketsPerRound: round(perRound, 4), roundDays: round(every / DAY, 4), places, cutPercent: num(l.cutPercent) };
   });
 
@@ -255,6 +266,7 @@ export function simulate(economy, { now = 0 } = {}) {
     creator.fees += rate * PROJECT_FEE;
     platform.project += rate * PROJECT_FEE;
     creator.network += rate * NETWORK_FEE;
+    if (d.does === 'roll') creator.oracle += rate * ORACLE;
     if ((d.does === 'payout' || d.does === 'burn') && d.pool) {
       if (d.percent !== undefined) {
         rateOut(d.pool, `decision:${d.key}`, rate * ((toBps(d.percent) ?? 0) / 10_000));
@@ -404,13 +416,14 @@ export function simulate(economy, { now = 0 } = {}) {
     contests,
     pools: poolRows,
     perDay: {
-      players: { pay: totals(players.pay), getBack: totals(players.get), playerFeesSol: round(players.fees), networkFeesSol: round(players.network), rentSol: round(players.rent) },
-      creator: { treasury: totals(creator.treasury), projectFeesSol: round(creator.fees), networkFeesSol: round(creator.network) },
+      players: { pay: totals(players.pay), getBack: totals(players.get), playerFeesSol: round(players.fees), oracleFeesSol: round(players.oracle), networkFeesSol: round(players.network), rentSol: round(players.rent) },
+      creator: { treasury: totals(creator.treasury), projectFeesSol: round(creator.fees), oracleFeesSol: round(creator.oracle), networkFeesSol: round(creator.network) },
+      oracle: { totalSol: round(players.oracle + creator.oracle) },
       platform: { playerFeesSol: round(platform.player), projectFeesSol: round(platform.project), totalSol: round(platform.player + platform.project) },
       burned: totals(burned),
       accounts: totals(accounts),
     },
-    fees: { playerSol: PLAYER_FEE, projectSol: PROJECT_FEE, networkPerSignatureSol: NETWORK_FEE, escrowSol: sol(ESCROW_LAMPORTS), ticketLineRentSol: round(TICKET_LINE), collectibleRentSol: COLLECTIBLE_RENT },
+    fees: { playerSol: PLAYER_FEE, projectSol: PROJECT_FEE, oracleSol: ORACLE, networkPerSignatureSol: NETWORK_FEE, escrowSol: sol(ESCROW_LAMPORTS), ticketLineRentSol: round(TICKET_LINE), collectibleRentSol: COLLECTIBLE_RENT },
     notes,
   };
 }
@@ -426,7 +439,8 @@ export function explain(sim, economy) {
     const edge = b.houseEdgePercent !== null ? `; the house keeps ${n(b.houseEdgePercent)}% of each price` : '';
     const also = Object.entries(b.alsoPays).map(([t, v]) => `${n(v)} ${sym(t)}`);
     const back = b.returnPercent !== null ? `${n(b.expectedBack)} ${sym(b.token)} on average (${n(b.returnPercent)}%)${also.length ? ` and ${also.join(', ')}` : ''}` : `${also.join(', ') || 'nothing'} on average`;
-    lines.push(`Box “${b.name}”: costs ${n(b.price)} ${sym(b.token)} (+${n(b.playerFee)} SOL player fee), gives back ${back}${edge}.`);
+    const all = b.realCost?.totalSol !== undefined ? `; ${n(b.realCost.totalSol)} SOL in all with the network fee` : `; ${n(b.realCost?.extrasSol)} SOL on top with the network fee`;
+    lines.push(`Box “${b.name}”: costs ${n(b.price)} ${sym(b.token)} (+${n(b.playerFee)} SOL player fee, +${n(b.oracleFee)} SOL to MagicBlock’s oracle for the roll${all}), gives back ${back}${edge}.`);
     for (const o of b.outcomes) lines.push(`  ${n(o.chance)}%: ${o.gives === 'pay' ? `${n(o.amount)} ${sym(o.token)} from ${o.pool}` : o.gives === 'share' ? `${o.percent}% of ${o.pool}` : o.gives === 'item' ? `${o.item}${o.worth !== null ? ` (worth ${n(o.worth)})` : ' (no value given)'}` : o.gives}`);
     if (b.unpriced.length) lines.push(`  Give ${b.unpriced.join(', ')} a "value" to count them in the return.`);
   }
@@ -448,7 +462,11 @@ export function explain(sim, economy) {
   }
   const d = sim.perDay;
   const list = (map) => Object.entries(map).map(([k, v]) => `${n(v)} ${sym(k)}`).join(', ') || 'nothing';
-  lines.push(`Each day players pay ${list(d.players.pay)} and get back ${list(d.players.getBack)} on average (items at the value you gave them), plus ${n(d.players.playerFeesSol)} SOL in player fees and ${n(d.players.networkFeesSol)} SOL in network fees.`);
+  lines.push(`Each day players pay ${list(d.players.pay)} and get back ${list(d.players.getBack)} on average (items at the value you gave them), plus ${n(d.players.playerFeesSol)} SOL in player fees, ${n(d.players.oracleFeesSol)} SOL to MagicBlock’s oracle and ${n(d.players.networkFeesSol)} SOL in network fees.`);
+    if (d.creator.oracleFeesSol) {
+      const what = [sim.lotteries.length ? 'lottery draws' : null, m.decisions.some((x) => x.does === 'roll' && Number(x.perDay) > 0) ? 'the authority’s rolls' : null].filter(Boolean).join(' and ');
+      lines.push(`The oracle also takes about ${n(d.creator.oracleFeesSol)} SOL a day for ${what}, from whoever sends them (the game’s keeper or the authority).`);
+    }
   lines.push(`The treasury gets ${list(d.creator.treasury)} a day; burned: ${list(d.burned)}. games.fun’s fees: ${n(d.platform.totalSol)} SOL a day.`);
   for (const note of sim.notes) lines.push(note);
   return lines.join('\n');

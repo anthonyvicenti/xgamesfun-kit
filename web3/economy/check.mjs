@@ -25,6 +25,7 @@ import {
   utf8Bytes,
 } from './model.mjs';
 import { BUDGET, MAX_TRANSACTION_BYTES, transactionSize } from './txsize.mjs';
+import { simulate } from './simulate.mjs';
 import { validate } from './validate.mjs';
 
 const label = (part) => `“${part?.name ?? part?.key}”`;
@@ -295,6 +296,8 @@ export function check(economy, { network = 'devnet', now = Math.floor(Date.now()
 
   // ---- boxes
   let chance = false;
+  /** Fixed prizes from a pool, for the seed check below. */
+  const prizes = [];
   for (const b of m.boxes) {
     const where = `economy.boxes.${b.key}`;
     const tok = token(b.currency, `${where}.currency`);
@@ -335,7 +338,20 @@ export function check(economy, { network = 'devnet', now = Math.floor(Date.now()
         }
         if (o.gives === 'share' && !(percent(o.percent, `${at}.percent`) > 0)) refuse('E-ODDS', `${at}.percent`, `An outcome of ${label(b)} pays a share of 0% (catalog.rs BadEntries).`, 'Give it a percent above 0.');
       }
+      if (o.gives === 'pay' && o.pool && m.pool.get(o.pool)) prizes.push({ box: b, at, pool: m.pool.get(o.pool), amount: Number(o.amount) });
       if (o.gives === 'burn' && tok?.wsol) refuse('E-WSOL-BURN', at, `${label(b)} is paid in SOL, and wrapped SOL cannot be burned (catalog.rs).`, 'Make that outcome "nothing", or send its share somewhere.');
+    }
+    // A prize bigger than what its pool holds at the first open (its seed, plus this open's own share) cannot be paid
+    // yet: the roll skips it and lands on another outcome (PROGRAM-0.3.md "The roll skips … a prize its pool does not hold").
+    const biggest = new Map();
+    for (const z of prizes.filter((x) => x.box === b)) if (!(biggest.get(z.pool.key)?.amount >= z.amount)) biggest.set(z.pool.key, z);
+    for (const z of biggest.values()) {
+      const p = z.pool;
+      const sym = m.tokens.get(p.currency)?.symbol ?? p.currency;
+      const seed = Number(p.seed ?? 0);
+      const ownShare = (b.currency ?? m.currencyKey) === p.currency ? (Number(b.price) * sharesOf(b.split).filter((x) => x.kind === 'pool' && x.key === p.key).reduce((n, x) => n + (x.bps ?? 0), 0)) / 10_000 : 0;
+      if (Number.isFinite(z.amount) && seed + ownShare < z.amount)
+        warn('W-PRIZE-SEED', `economy.pools.${p.key}.seed`, `“${p.key}” starts with ${+seed.toFixed(9)} ${sym}${ownShare ? ` (and ${+ownShare.toFixed(9)} more from each open)` : ''}, but a win in ${label(b)} pays ${z.amount} ${sym}: the first winner gets nothing until the pool fills, because the program skips a prize its pool cannot pay and the roll lands on another outcome.`, `Seed “${p.key}” with at least ${+(z.amount - ownShare).toFixed(9)} ${sym}; more rides out a run of wins (the simulation suggests how much).`);
     }
     if (b.stockOdds && !outcomes.some((o) => o.gives === 'item' && m.item.get(o.item)?.supply > 0))
       warn('W-ODDS', `${where}.stockOdds`, `${label(b)} has odds that shrink with stock, but none of its items has a limited supply, so nothing changes.`, 'Give its items a supply, or turn stockOdds off.');
@@ -544,6 +560,26 @@ export function check(economy, { network = 'devnet', now = Math.floor(Date.now()
   }
   for (const key of Object.keys(m.scenario.staked ?? {})) if (!m.stake.has(key)) warn('W-SCENARIO', `economy.scenario.staked.${key}`, `The scenario stakes in “${key}”, which is not a stake.`, 'Remove it, or fix the name.');
   if (typeof m.authority === 'string' && m.authority !== 'owner' && !isAddress(m.authority)) refuse('E-SCHEMA', 'economy.keys.authority', 'The authority is not an address.', 'Write "owner" or a wallet’s public address.');
+
+  // ---- pools that run dry at the scenario's rates. E-POOL-DRY refuses a pool nothing ever fills (the program could
+  // never pay from it); one that is filled but pays out faster drains and then skips or fails what it owes: a warning.
+  if (!refusals.length) {
+    let sim = null;
+    try {
+      sim = simulate(economy, { now });
+    } catch {
+      sim = null;
+    }
+    for (const p of sim?.pools ?? []) {
+      if (p.lasts !== 'runs dry' || !(p.lastsDays < sim.scenario.days)) continue;
+      const sym = m.tokens.get(p.token)?.symbol ?? p.token;
+      const days = sim.scenario.days;
+      const short = p.outPerDay - p.inPerDay;
+      const need = !p.outs.some((o) => o.percentPerDay !== undefined) && short > 0 ? +(short * days).toFixed(6) : null;
+      const takers = p.outs.map((o) => o.by).join(', ');
+      warn('W-POOL-RUNS-DRY', `economy.pools.${p.key}`, `At the scenario’s rates “${p.key}” pays out ${+p.outPerDay.toFixed(6)} ${sym} a day (${takers}) and takes in ${+p.inPerDay.toFixed(6)}: its seed of ${p.seed} ${sym} is gone on day ${p.lastsDays} of ${days}. After that what it owes is skipped or fails until money comes in.`, `Seed it with ${need !== null ? `at least ${need} ${sym} (${days} days at that rate)` : 'more'}, fill it with a share of a sale (a split to "pool:${p.key}") or a schedule, or pay less from it.`);
+    }
+  }
 
   return result();
 }

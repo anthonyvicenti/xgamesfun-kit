@@ -16,7 +16,11 @@
 // origin. Nothing secret ever reaches the game: its frame gets labels, prices, amounts and the short address.
 //
 // econMessages() is the one adapter between gf-web3's economyState() and the gf:host / gf:economy shapes; it is pure,
-// so the tests run it in Node.
+// so the tests run it in Node. Amounts the player reads (HUD lines, what is to claim) are rounded for people by the
+// Economy tab's own formatter (economy-parts.js amountText: at most four decimals, "<0.0001" for a dust amount);
+// gf-web3's state keeps them exact.
+
+import { roundAmounts } from './tabs/web3/economy-parts.js';
 
 const ID = /^[A-Za-z0-9_.:-]{1,64}$/;
 /** The kinds gf-three draws (kit/net/host.js ECON_KINDS); gf-web3's `pay` is a purchase there. */
@@ -59,7 +63,7 @@ export function econMessages({ economy = {}, actions = [], state = null, last = 
   }
   for (const [id, c] of claimable) {
     const known = actions.find((a) => a.id === id);
-    offer({ id, kind: 'claim', label: cut(known?.label ?? 'Claim your prize', 60), says: cut(c.says, 140), where: 'results' });
+    offer({ id, kind: 'claim', label: cut(known?.label ?? 'Claim your prize', 60), says: cut(roundAmounts(c.says), 140), where: 'results' });
   }
 
   // the HUD lines and the state entries they show
@@ -69,7 +73,7 @@ export function econMessages({ economy = {}, actions = [], state = null, last = 
   const stakes = [];
   const line = (id, kind, label, list, entry) => {
     lines.push({ id, kind, label: cut(label, 60), says: '', where: 'hud' });
-    if (entry) list.push({ id, text: cut(entry, 60) });
+    if (entry) list.push({ id, text: cut(roundAmounts(entry), 60) });
   };
   const currency = economy.currency ?? 'sol';
   const bal = state?.balances?.[currency];
@@ -93,7 +97,7 @@ export function econMessages({ economy = {}, actions = [], state = null, last = 
   };
   const message = {
     type: 'gf:economy', v: 1, balances, tickets, stakes,
-    claimable: [...claimable.values()].filter((c) => seen.has(c.id)).map((c) => ({ id: c.id, text: cut(c.says, 60) })),
+    claimable: [...claimable.values()].filter((c) => seen.has(c.id)).map((c) => ({ id: c.id, text: cut(roundAmounts(c.says), 60) })),
     pending: pending.filter((id) => ID.test(id)), error: cut(error, 200),
   };
   return { host, economy: message, offered };

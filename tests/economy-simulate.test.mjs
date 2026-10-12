@@ -33,6 +33,17 @@ test('coin-flip arena, worked by hand', () => {
   // The house swings by √(1000 × (0.5 × 0.176² − 0.088²)) = √7.744 ≈ 2.7828 SOL a day; a seed of 5 is under three weeks' swing.
   near(pool(sim, 'house').swingPerDay, Math.sqrt(7.744), 'swing', 1e-5);
   assert.ok(sim.notes.some((n) => n.includes('skips that prize')));
+  // MagicBlock's oracle takes 0.0005 SOL a roll from the player: a flip really costs 0.1 + 0.002 + 0.0005 + 0.000005
+  // (one signature) = 0.102505 SOL, and gives back 0.088 of it: 85.8495%. 1,000 flips: 0.5 SOL a day to the oracle.
+  assert.equal(flip.oracleFee, 0.0005);
+  assert.deepEqual(flip.realCost, { price: 0.1, token: 'sol', playerFeeSol: 0.002, oracleSol: 0.0005, networkSol: 0.000005, extrasSol: 0.002505, totalSol: 0.102505 });
+  near(flip.returnOfRealCostPercent, (0.088 / 0.102505) * 100, 'return of the real cost', 1e-4);
+  near(sim.perDay.players.oracleFeesSol, 0.5, 'oracle, players');
+  // The weekly draw asks the oracle once a week, paid by whoever sends it: 0.0005 / 7 a day.
+  near(sim.perDay.creator.oracleFeesSol, 0.0005 / 7, 'oracle, the draw');
+  near(sim.perDay.oracle.totalSol, 0.5 + 0.0005 / 7, 'oracle in all');
+  assert.equal(sim.fees.oracleSol, 0.0005);
+  assert.match(explain(sim, fixture('coin-flip-arena')), /\+0\.0005 SOL to MagicBlock’s oracle for the roll; 0\.102505 SOL in all/);
 });
 
 test('halving seasons, worked by hand', () => {
@@ -74,10 +85,13 @@ test('scorched treasury, starforce and the duel arena, worked by hand', () => {
   near(pool(star, 'jackpot').settlesAt, 40, 'jackpot');
   // Each box: 0.4 × 0.15 + 0.45 × 0.05 in swords, and 0.005 × 10% × 40 from the jackpot = 0.1025 SOL.
   near(star.boxes[0].alsoPays.sol, 0.1025, 'starforce box');
-  // Mission rewards: 20 successes × 2 USDC a day from a seed of 100, nothing in: 2.5 days.
+  // Mission rewards: 20 successes × 2 USDC a day out; in, 90% of 10 ships × 5 USDC = 45 a day. It grows by 5 a day
+  // from its seed of 100: 250 after 30 days. (Before the ships fed it, nothing came in and it lasted 2.5 days.)
   const duel = pool(simulate(fixture('duel-arena'), { now: NOW }), 'mission-rewards');
-  assert.equal(duel.lasts, 'runs dry');
-  near(duel.lastsDays, 2.5, 'lasts');
+  near(duel.inPerDay, 45, 'mission rewards in');
+  near(duel.outPerDay, 40, 'mission rewards out');
+  assert.equal(duel.lasts, 'grows');
+  near(duel.after, 250, 'after 30 days');
 });
 
 for (const name of fixtureNames())
@@ -104,4 +118,20 @@ test('the arena costs what its accounts and signatures add up to', () => {
   const open = c.actions.find((a) => a.action.startsWith('open'));
   assert.equal(open.feeSol, 0.002);
   assert.equal(open.deposits[0].sol, 0.00230124, 'the 325-byte order');
+  // The oracle's 0.0005 SOL a roll: on the open (the player) and on the draw (whoever sends it); not on a ticket.
+  assert.equal(open.oracleSol, 0.0005);
+  assert.equal(c.actions.find((a) => a.action === 'ask for a draw').oracleSol, 0.0005);
+  assert.equal(c.actions.find((a) => a.action.startsWith('buy tickets')).oracleSol, undefined);
+  assert.equal(c.fees.oracleSol, 0.0005);
+});
+
+test('a roll the authority asks for pays the oracle too', () => {
+  const spec = structuredClone(fixture('duel-arena'));
+  spec.decisions.push({ key: 'lucky', when: 'a mission picks its loot', does: 'roll', signedBy: 'server', perDay: 10 });
+  const row = cost(spec, { now: NOW }).actions.find((a) => a.part === 'decision:lucky');
+  assert.equal(row.oracleSol, 0.0005);
+  assert.equal(row.feeSol, 0.00001);
+  const sim = simulate(spec, { now: NOW });
+  near(sim.perDay.creator.oracleFeesSol, 0.005, '10 rolls a day');
+  assert.match(explain(sim, spec), /the authority’s rolls/);
 });

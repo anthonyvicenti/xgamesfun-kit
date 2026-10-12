@@ -9,7 +9,7 @@
 // The page never signs: the dev server prepares, the creator's wallet signs here, the server sends.
 import { explorer, pictureUrl, short } from './web3/client.js';
 import { approvalPanel, choosePicture, fill, h, keepFresh, note, requestBanner, styles, tabContext, walletChip } from './web3/ui.js';
-import { SECTIONS, addPart, fmt, isLivePart, nameOf, notesByPart, parseAmount, parseDuration, parseNumber, parseNumberList, parseWhole, parseWordList, partId, removePart, sectionOf, symbolOf } from './web3/economy-parts.js';
+import { SECTIONS, addPart, amountText, fmt, isLivePart, nameOf, notesByPart, parseAmount, parseDuration, parseNumber, parseNumberList, parseWhole, parseWordList, partId, removePart, sectionOf, symbolOf } from './web3/economy-parts.js';
 import { LEGEND, drawFlow, econStyles, edgeColour } from './web3/economy-view.js';
 
 const DEBOUNCE_MS = 450;
@@ -530,11 +530,11 @@ export default {
       const sym = (k) => symbolOf(spec, k);
       if (section === 'pools') {
         const bal = (status?.pools ?? []).find((x) => (x.key !== undefined && x.key === part.key) || (Number.isInteger(part.index) && x.index === part.index));
-        if (bal) lines.push(h('span', {}, 'Holds now: ', h('b', {}, `${fmt(Number(bal.balance))} ${sym(part.currency)}`)));
+        if (bal) lines.push(h('span', {}, 'Holds now: ', h('b', {}, `${amountText(bal.amount ?? bal.balance)} ${sym(part.currency)}`)));
         if (s) lines.push(h('span', {}, h('b', {}, `${fmt(s.inPerDay)} in, ${fmt(s.outPerDay)} out`), ` a day · it ${lastsWords(s)}`), s.swingPerDay ? h('span', { class: 'dim' }, `Luck moves it about ±${fmt(s.swingPerDay)} ${sym(part.currency)} a day.`) : null);
       } else if (section === 'boxes' && s) {
         lines.push(h('span', {}, 'A roll gives back ', h('b', {}, `${fmt(s.expectedBack)} ${sym(s.token)}`), ` on average (${fmt(s.returnPercent)}% of its price)`),
-          h('span', {}, 'The house keeps ', h('b', {}, `${fmt(s.houseEdgePercent)}%`), ` · players also pay games.fun’s ${fmt(s.playerFee)} SOL fee a roll`));
+          h('span', {}, 'The house keeps ', h('b', {}, `${fmt(s.houseEdgePercent)}%`), ` · players also pay games.fun’s ${fmt(s.playerFee)} SOL fee${s.oracleFee ? ` and the oracle’s ${fmt(s.oracleFee)} SOL` : ''} a roll${s.realCost?.totalSol !== undefined ? ` (${fmt(s.realCost.totalSol)} SOL a roll in all)` : ''}`));
         if (s.unpriced?.length) lines.push(h('span', { class: 'dim' }, `Items with no price or value aren’t counted: ${s.unpriced.join(', ')}.`));
       } else if (section === 'lotteries' && s) {
         const perWeek = s.roundDays ? (s.potBeforeDraw * 7) / s.roundDays : s.potBeforeDraw;
@@ -823,7 +823,8 @@ export default {
         setup?.notes?.length || setup?.accounts?.length
           ? h('details', {}, h('summary', {}, 'What the cost is made of'),
               h('ul', { class: 'econ-receipts' }, (setup.accounts ?? []).map((a) => h('li', {}, `${a.approx ? 'about ' : ''}${fmt(a.sol)} SOL: ${a.what}`)), (setup.notes ?? []).map((n) => h('li', { class: 'dim' }, n))),
-              (c.actions ?? []).length ? h('p', { class: 'dim' }, 'While it runs, each player action also costs the player games.fun’s fee (', fmt(c.actions[0].feeSol), ' SOL) and a network fee.') : null)
+              (c.actions ?? []).length ? h('p', { class: 'dim' }, 'While it runs, each player action also costs the player games.fun’s fee (', fmt(c.actions[0].feeSol), ' SOL) and a network fee.') : null,
+              (c.actions ?? []).some((a) => a.oracleSol) ? h('p', { class: 'dim', 'data-testid': 'econ-cost-oracle' }, 'Anything left to chance (opening a box, drawing a lottery, a roll) also pays MagicBlock’s oracle ', fmt(c.fees?.oracleSol ?? c.actions.find((a) => a.oracleSol).oracleSol), ' SOL for the random number, from whoever asks: the player for a box.') : null)
           : null);
     }
 

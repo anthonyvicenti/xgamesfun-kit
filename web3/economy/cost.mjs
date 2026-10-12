@@ -4,7 +4,7 @@
 // Rent is (bytes + 128) × 5,080 lamports (model.mjs); the loot program's own accounts are sized byte for byte from
 // its IDL, others (a Core collection, a token's name record) roughly, and marked so.
 import { compile } from './compile.mjs';
-import { ESCROW_LAMPORTS, FEES, LAMPORTS_PER_SOL, SIGNATURE_FEE, model, rent } from './model.mjs';
+import { ESCROW_LAMPORTS, FEES, LAMPORTS_PER_SOL, ORACLE_FEE, SIGNATURE_FEE, model, rent } from './model.mjs';
 import { round } from './simulate.mjs';
 
 const sol = (lamports) => round(Number(lamports) / Number(LAMPORTS_PER_SOL));
@@ -47,15 +47,19 @@ export function setupCost(plan, economy) {
   };
 }
 
-/** What each action costs whoever signs it while the economy runs. */
+/**
+ * What each action costs whoever signs it while the economy runs: games.fun's fee, the network's, and for anything
+ * that asks MagicBlock's oracle for a random number (a box's open, a lottery's draw, the authority's `roll`) the
+ * oracle's own 0.0005 SOL (`oracleSol`, model.mjs ORACLE_FEE).
+ */
 export function actionCosts(economy) {
   const m = model(economy);
   const rows = [];
-  const row = (part, action, who, fee, deposits = [], extra) => rows.push({ part, action, who, feeSol: sol(fee), networkSol: sol(SIGNATURE_FEE), deposits, ...(extra ? { note: extra } : {}) });
+  const row = (part, action, who, fee, deposits = [], extra, oracle = 0n) => rows.push({ part, action, who, feeSol: sol(fee), ...(oracle ? { oracleSol: sol(oracle) } : {}), networkSol: sol(SIGNATURE_FEE), deposits, ...(extra ? { note: extra } : {}) });
   const back = (what, lamports, when) => ({ what, sol: sol(lamports), back: when });
   const order = [back('the order', rent(PLAY_ACCOUNTS.Order), 'at settle or refund'), back('the escrow', ESCROW_LAMPORTS, 'at settle, less a collectible’s rent (about 0.004 SOL) when it gives one')];
   for (const it of m.items) if (Number(it.price ?? 0) > 0) row(`item:${it.key}`, `buy “${it.name}”`, 'player', FEES.player, order);
-  for (const b of m.boxes) row(`box:${b.key}`, `open “${b.name}”`, 'player', FEES.player, order, 'The first buyer in each currency also opens the game’s vault for it (about 0.0015 SOL, kept).');
+  for (const b of m.boxes) row(`box:${b.key}`, `open “${b.name}”`, 'player', FEES.player, order, 'The first buyer in each currency also opens the game’s vault for it (about 0.0015 SOL, kept).', ORACLE_FEE);
   for (const p of m.payments) row(`payment:${p.key}`, `pay “${p.name}”`, 'player', FEES.player);
   for (const r of m.recipes) {
     const made = (r.out ?? []).filter((l) => l.gives === 'item').length;
@@ -72,10 +76,13 @@ export function actionCosts(economy) {
     row(`contest:${c.key}`, `open “${c.name}”`, 'authority', FEES.project, [back('the contest and its pot', rent(1 + 32 + 4 + 1 + 32 + 32 + 8 + 8 + 32 + 1 + 1 + 4 + 8 + 8 + 4 + 4 + 8 * c.sides) + rent(165), 'when it closes')]);
     row(`contest:${c.key}`, `decide “${c.name}”`, 'authority', FEES.project);
   }
-  for (const d of m.decisions) row(`decision:${d.key}`, d.when, 'authority', FEES.project);
+  for (const d of m.decisions) row(`decision:${d.key}`, d.when, 'authority', FEES.project, [], d.does === 'roll' ? 'The roll asks MagicBlock’s oracle, which takes its own fee from the authority.' : undefined, d.does === 'roll' ? ORACLE_FEE : 0n);
   if (m.boxes.length || m.items.length) row('orders', 'settle an order', 'anyone (the game’s keeper, or the player)', 0n);
   if (m.schedules.length) row('schedules', 'run a schedule when it is due', 'anyone', 0n);
-  if (m.lotteries.length) row('lotteries', 'ask for a draw, pay a place', 'anyone', 0n, [], 'The draw asks MagicBlock’s oracle; whatever that request costs its sender was not measured.');
+  if (m.lotteries.length) {
+    row('lotteries', 'ask for a draw', 'anyone (the game’s keeper, or a player)', 0n, [], 'The draw asks MagicBlock’s oracle for the winning numbers; the oracle takes its fee from whoever sends the draw.', ORACLE_FEE);
+    row('lotteries', 'pay a place', 'anyone', 0n);
+  }
   return rows;
 }
 
@@ -83,7 +90,7 @@ export function actionCosts(economy) {
 export function cost(economy, { now = Math.floor(Date.now() / 1000), network = 'devnet' } = {}) {
   const plan = compile(economy, { now, network });
   if (!plan.ok) return plan;
-  return { ok: true, setup: setupCost(plan, economy), actions: actionCosts(economy), fees: { playerSol: sol(FEES.player), projectSol: sol(FEES.project) } };
+  return { ok: true, setup: setupCost(plan, economy), actions: actionCosts(economy), fees: { playerSol: sol(FEES.player), projectSol: sol(FEES.project), oracleSol: sol(ORACLE_FEE) } };
 }
 
 /** The cost in plain words. */
@@ -95,7 +102,7 @@ export function explainCost(c) {
   lines.push('While it runs:');
   for (const r of c.actions) {
     const deposits = r.deposits.map((d) => `${d.sol} SOL for ${d.what} (back: ${d.back})`).join('; ');
-    lines.push(`  ${r.action} (${r.who}): ${r.feeSol ? `${r.feeSol} SOL fee + ` : ''}${r.networkSol} SOL network${deposits ? `; ${deposits}` : ''}${r.note ? `. ${r.note}` : ''}`);
+    lines.push(`  ${r.action} (${r.who}): ${r.feeSol ? `${r.feeSol} SOL fee + ` : ''}${r.oracleSol ? `${r.oracleSol} SOL to the oracle + ` : ''}${r.networkSol} SOL network${deposits ? `; ${deposits}` : ''}${r.note ? `. ${r.note}` : ''}`);
   }
   for (const n of s.notes) lines.push(n);
   return lines.join('\n');

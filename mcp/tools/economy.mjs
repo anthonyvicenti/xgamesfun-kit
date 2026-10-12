@@ -256,7 +256,7 @@ export function explainEconomy(economy, { now = Math.floor(Date.now() / 1000) } 
     const src = m.box.get(b.key);
     const back = b.returnPercent !== null ? `gives back ${num(b.expectedBack)} ${sym(b.token)} on average (${num(b.returnPercent)}% of its price; the house keeps ${num(b.houseEdgePercent)}%)` : 'gives back what its items are worth to the player';
     const outs = b.outcomes.map((o) => `${num(o.chance)}% ${o.gives === 'pay' ? `${num(o.amount)} ${sym(o.token)} from “${o.pool}”` : o.gives === 'share' ? `${o.percent}% of “${o.pool}”` : o.gives === 'item' ? `${o.item}` : o.gives === 'burn' ? 'burned' : 'nothing'}`).join(', ');
-    actions.push(`Open “${b.name}”: ${num(b.price)} ${sym(b.token)} + ${fee} SOL player fee; ${back}. Odds: ${outs}. The money: ${src.outcomes.some((o) => o.gives === 'burn') ? 'on a burn, all of it is burned; otherwise ' : ''}${splitWords(src.split, m)}.`);
+    actions.push(`Open “${b.name}”: ${num(b.price)} ${sym(b.token)} + ${fee} SOL player fee + ${num(b.oracleFee)} SOL to MagicBlock’s oracle for the roll${b.realCost?.totalSol !== undefined ? ` (${num(b.realCost.totalSol)} SOL in all with the network fee)` : ''}; ${back}. Odds: ${outs}. The money: ${src.outcomes.some((o) => o.gives === 'burn') ? 'on a burn, all of it is burned; otherwise ' : ''}${splitWords(src.split, m)}.`);
   }
   for (const p of sim.payments) actions.push(`Pay “${p.name}”: ${num(p.amount)} ${sym(p.token)} + ${fee} SOL player fee. The money: ${splitWords(m.payments.find((x) => x.key === p.key)?.split, m)}.`);
   for (const r of sim.recipes) actions.push(`Craft “${r.name}”: ${r.takes.join(' + ') || 'nothing'} → ${r.gives.join(' + ') || 'nothing'} (+ ${fee} SOL player fee).`);
@@ -273,7 +273,7 @@ export function explainEconomy(economy, { now = Math.floor(Date.now() / 1000) } 
     const ins = [...(p.ins.length ? [by(p.ins)] : []), ...moves].join(', ') || 'nothing';
     return `“${p.key}” (${sym(p.token)}): starts at ${num(p.seed)}; in: ${ins}; out: ${by(p.outs)}; it ${fate}.`;
   }));
-  section('What runs by itself', [...sim.schedules.map((s) => `“${m.schedules.find((x) => x.key === s.key)?.name ?? s.key}” ${s.says}; anyone can run it when it is due.`), ...sim.lotteries.map((l) => `“${l.name}” is drawn every ${num(l.roundDays)} days by MagicBlock’s oracle; anyone can ask for the draw and pay the places.`)]);
+  section('What runs by itself', [...sim.schedules.map((s) => `“${m.schedules.find((x) => x.key === s.key)?.name ?? s.key}” ${s.says}; anyone can run it when it is due.`), ...sim.lotteries.map((l) => `“${l.name}” is drawn every ${num(l.roundDays)} days by MagicBlock’s oracle; anyone can ask for the draw (${num(sim.fees.oracleSol)} SOL to the oracle) and pay the places.`)]);
   const authority = play.filter((s) => s.signer === 'authority');
   section(`What only the authority signs while it runs (${m.authority === 'owner' ? 'your wallet, from the studio page' : `the key ${m.authority}`})`, authority.map((s) => `${s.says} (${s.part}, ${s.ix}).`));
 
@@ -285,7 +285,7 @@ export function explainEconomy(economy, { now = Math.floor(Date.now() / 1000) } 
   const d = sim.perDay;
   const list = (map) => Object.entries(map).map(([k, v]) => `${num(v)} ${sym(k)}`).join(', ') || 'nothing';
   lines.push('', `Each day, if ${Object.entries(sim.scenario.perDay).map(([k, v]) => `${v} × ${k}`).join(', ') || `${sim.scenario.defaultPerDay} of each thing`} happen${Object.keys(sim.scenario.perDay).length ? ` (anything else ${sim.scenario.defaultPerDay})` : ''}`);
-  lines.push(`- Players pay ${list(d.players.pay)} and get back ${list(d.players.getBack)} on average, plus ${num(d.players.playerFeesSol)} SOL in player fees.`);
+  lines.push(`- Players pay ${list(d.players.pay)} and get back ${list(d.players.getBack)} on average, plus ${num(d.players.playerFeesSol)} SOL in player fees${d.players.oracleFeesSol ? ` and ${num(d.players.oracleFeesSol)} SOL to MagicBlock’s oracle` : ''}.`);
   lines.push(`- Your treasury gets ${list(d.creator.treasury)}; burned: ${list(d.burned)}; games.fun’s fees: ${num(d.platform.totalSol)} SOL.`);
   for (const n of sim.notes) lines.push(`- ${n}`);
 

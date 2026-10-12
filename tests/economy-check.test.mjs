@@ -145,3 +145,34 @@ test('a craft’s size estimate is never below what the program’s own test mea
   assert.ok(eight >= 888 && eight <= 888 + 80, `eight for one: ${eight}`);
   assert.ok(wide >= 1154 && wide <= 1232, `wide: ${wide}`);
 });
+
+test('a prize bigger than its pool’s seed warns, naming the seed it needs; the open’s own share counts', () => {
+  const e = structuredClone(fixture('coin-flip-arena'));
+  const house = e.pools.find((p) => p.key === 'house');
+  house.seed = 0.05;
+  // 0.05 + 88% of the 0.1 flip = 0.138 at the first roll, short of the 0.176 win.
+  const w = check(e, { now: NOW }).warnings.find((x) => x.code === 'W-PRIZE-SEED');
+  assert.ok(w, 'warns');
+  assert.equal(w.where, 'economy.pools.house.seed');
+  assert.match(w.message, /starts with 0\.05 SOL \(and 0\.088 more from each open\), but a win in “Coin flip” pays 0\.176 SOL: the first winner gets nothing until the pool fills/);
+  assert.match(w.fix, /Seed “house” with at least 0\.088 SOL/);
+  house.seed = 0.088; // 0.088 + 0.088 = 0.176: the first win is paid
+  assert.ok(!check(e, { now: NOW }).warnings.some((x) => x.code === 'W-PRIZE-SEED'));
+  // A prize pool nothing feeds from the box: the seed alone has to cover it.
+  e.boxes[0].split = e.boxes[0].split.filter((s) => s.to !== 'pool:house');
+  house.seed = 0.1;
+  assert.match(check(e, { now: NOW }).warnings.find((x) => x.code === 'W-PRIZE-SEED').fix, /at least 0\.176 SOL/);
+});
+
+test('a pool that empties within the scenario’s days warns with the day and the fixes', () => {
+  const e = structuredClone(fixture('coin-flip-arena'));
+  e.boxes[0].outcomes[0].amount = 0.25; // 500 wins × 0.25 = 125 out, 88 in: 37 a day short of a seed of 5
+  const w = check(e, { now: NOW }).warnings.find((x) => x.code === 'W-POOL-RUNS-DRY');
+  assert.ok(w);
+  assert.equal(w.where, 'economy.pools.house');
+  assert.match(w.message, /“house” pays out 125 SOL a day \(box:flip\) and takes in 88: its seed of 5 SOL is gone on day 0\.14 of 30/);
+  assert.match(w.fix, /at least 1110 SOL \(30 days at that rate\)/);
+  assert.match(w.fix, /a split to "pool:house"/);
+  assert.match(w.fix, /pay less from it/);
+  assert.equal(check(e, { now: NOW }).ok, true, 'a warning, not a refusal: the program pays until the pool is empty');
+});

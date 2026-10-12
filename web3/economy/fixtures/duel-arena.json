@@ -9,9 +9,9 @@
   "collection": { "name": "Duel Arena" },
   "items": [
     { "key": "arena-deed", "name": "Arena Deed", "price": 100, "supply": 1, "rarity": "Legendary" },
-    { "key": "ship", "name": "Scout Ship", "price": 5 }
+    { "key": "ship", "name": "Scout Ship", "price": 5, "split": [{ "to": "pool:mission-rewards", "percent": 90 }] }
   ],
-  "pools": [{ "key": "mission-rewards", "currency": "usdc", "seed": 100, "about": "Pays missions that succeed." }],
+  "pools": [{ "key": "mission-rewards", "currency": "usdc", "seed": 100, "about": "Pays missions that succeed; 90% of every ship sold fills it." }],
   "contests": [
     {
       "key": "duel",

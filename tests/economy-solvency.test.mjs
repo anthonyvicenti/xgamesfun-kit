@@ -4,9 +4,9 @@
 // question is `gamesfun economy check --devnet` (web3/node/economy-check.mjs), whose obligations() is tested here on
 // the offline fake chain.
 //
-// A fixture that fails is reported, not hidden: it is listed in KNOWN below with what fails, which keeps it visible
-// as a TODO in every run's output (node:test counts it, prints why, and does not fail the run on it) until the
-// fixture or the simulation is fixed. A fixture that starts failing and is not listed fails the run.
+// Every fixture must pass; none is excused. (duel-arena failed until 2026-10-12: "mission-rewards" paid 40 USDC a day
+// with nothing coming in. 90% of each ship sold now fills it. The devnet run in tests/web3/devnet/economies-result.json
+// put the earlier version live, without that share.) The checker says the same to a creator: W-POOL-RUNS-DRY.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { encodeAccount } from '../web3/gf-web3/chain/borsh.js';
@@ -15,16 +15,12 @@ import { NATIVE_MINT, TOKEN_PROGRAM } from '../web3/gf-web3/chain/pda.js';
 import { concat, uintLE } from '../web3/gf-web3/chain/bytes.js';
 import { addressBytes } from '../web3/gf-web3/chain/base58.js';
 import { rpcClient } from '../web3/gf-web3/rpc.js';
+import { check } from '../web3/economy/check.mjs';
 import { simulate } from '../web3/economy/simulate.mjs';
 import { obligations } from '../web3/node/economy-check.mjs';
 import { freshKeypair } from '../web3/node/ed25519.mjs';
 import { fixture, fixtureNames, NOW } from './economy/helpers.mjs';
 import { fakeChain } from './web3/fake-chain.mjs';
-
-/** Fixtures whose pools owe more than they hold at the expected rates (reported to the parent on 2026-10-11). */
-const KNOWN = {
-  'duel-arena': 'pool "mission-rewards" pays 40 USDC a day with nothing coming in: its seed of 100 runs dry on day 2.5 of 30',
-};
 
 /** What fails the invariant for one economy: [] when it holds. */
 export function solvency(economy) {
@@ -48,8 +44,7 @@ export function solvency(economy) {
 
 describe('every fixture: the pools never owe more than they hold at the expected rates', () => {
   for (const name of fixtureNames()) {
-    const known = KNOWN[name];
-    it(name, known ? { todo: `known: ${known}` } : {}, () => {
+    it(name, () => {
       const problems = solvency(fixture(name));
       assert.deepEqual(problems, [], `${name}: ${problems.join('; ')}`);
     });
@@ -60,6 +55,19 @@ describe('every fixture: the pools never owe more than they hold at the expected
     e.boxes[0].outcomes[0].amount = 0.25;           // 50% × 0.25 = 0.125 out of every flip, 0.088 in
     assert.match(solvency(e).join(), /pool "house" pays .* runs dry on day/);
     assert.deepEqual(solvency(fixture('coin-flip-arena')), []);
+  });
+
+  it('the old duel arena (no share into "mission-rewards") is caught by the invariant and by the checker', () => {
+    const e = structuredClone(fixture('duel-arena'));
+    delete e.items.find((i) => i.key === 'ship').split;
+    assert.match(solvency(e).join(), /pool "mission-rewards" pays 40 a day against 0 coming in: its seed of 100 runs dry on day 2\.5 of 30/);
+    const w = check(e, { now: NOW }).warnings.find((x) => x.code === 'W-POOL-RUNS-DRY');
+    assert.ok(w, 'the checker warns');
+    assert.equal(w.where, 'economy.pools.mission-rewards');
+    assert.match(w.message, /day 2\.5 of 30/);
+    assert.match(w.fix, /at least 1200 USDC/);
+    assert.match(w.fix, /pool:mission-rewards/);
+    assert.ok(!check(fixture('duel-arena'), { now: NOW }).warnings.some((x) => x.code === 'W-POOL-RUNS-DRY'));
   });
 });
 

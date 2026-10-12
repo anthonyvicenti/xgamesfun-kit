@@ -22,6 +22,7 @@ import { pendingRewards, readTokenAccount, winnerCount } from '../gf-web3/econ/c
 import { readEconomy as readSpec } from '../gf-web3/econ/spec.js';
 import { createGfWeb3 } from '../gf-web3/index.js';
 import { explorerUrl } from '../gf-web3/network.js';
+import { ORACLE_FEE } from '../economy/model.mjs';
 import { freshKeypair, keypairFromSecret } from './ed25519.mjs';
 
 export const DEVNET_GENESIS = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
@@ -69,7 +70,7 @@ async function sendAs(rpc, signer, instructions) {
 
 /**
  * What one landed transaction cost its fee payer outside the economy: the network fee, and what MagicBlock's oracle
- * queue took for a roll (0.0005 SOL a request on devnet, 2026-10-11; the kit's cost model does not count it yet).
+ * queue took for a roll (web3/economy/model.mjs ORACLE_FEE, 0.0005 SOL a request; the open's check compares the two).
  */
 async function txCosts(rpc, signature) {
   for (let i = 0; i < 5; i++) {
@@ -209,7 +210,7 @@ async function checkedOpen({ rpc, kit, e, box, player, platformFee }) {
   const movedPlayer = afterLamports - beforeLamports;
   return {
     outcome: r.outcome?.says ?? r.says, won: prize > 0n || r.outcome?.kind === 'item', price, prize, prizePool, signatures: r.signatures,
-    player: { before: beforeLamports, after: afterLamports, moved: movedPlayer, expected: expectedPlayer, networkFees: fees, oracleFee: oracle, unexplained: movedPlayer - expectedPlayer, ok: movedPlayer === expectedPlayer },
+    player: { before: beforeLamports, after: afterLamports, moved: movedPlayer, expected: expectedPlayer, networkFees: fees, oracleFee: oracle, oracleAsCosted: oracle === ORACLE_FEE, unexplained: movedPlayer - expectedPlayer, ok: movedPlayer === expectedPlayer },
     pools, ok: movedPlayer === expectedPlayer && Object.values(pools).every((p) => p.ok),
   };
 }

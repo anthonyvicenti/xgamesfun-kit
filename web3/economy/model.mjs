@@ -8,6 +8,15 @@ import { PROGRAM_ID } from './idl.mjs';
 
 /** The two flat fees, in lamports (constants.rs PLAYER_FEE_LAMPORTS, PROJECT_FEE_LAMPORTS; PROGRAM-0.3.md "The fee"). */
 export const FEES = Object.freeze({ player: 2_000_000n, project: 10_000n });
+/**
+ * What MagicBlock's VRF oracle queue (Cuj97ggr…, ephemeral-vrf-sdk 0.17.2 consts.rs DEFAULT_QUEUE) takes for each
+ * random number asked of it: VRF_LAMPORTS_COST = 500,000 lamports, 0.0005 SOL (magicblock-labs/ephemeral-vrf,
+ * api/src/consts.rs; the high-priority queue's 800,000 is not the one loot uses). Paid by whoever asks: the player
+ * on `open_box` (order.rs), whoever sends `draw_lottery` (lottery.rs, its `payer`), the authority on `roll`
+ * (roll.rs). Measured on devnet on 2026-10-11: 500,000 lamports per open (economy check --devnet,
+ * tests/web3/devnet/proof-economy-check.json `oracleFee`).
+ */
+export const ORACLE_FEE = 500_000n;
 /** Put in an order's escrow on every purchase; what the collectible and the fee don't use goes back (constants.rs). */
 export const ESCROW_LAMPORTS = 6_000_000n;
 /** Rent: (bytes + 128) × 5,080 lamports. Read with `solana rent` on devnet and mainnet-beta on 2026-10-11. */

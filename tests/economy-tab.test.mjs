@@ -7,7 +7,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { check } from '../web3/economy/check.mjs';
 import { keepLive, starterEconomy } from '../web3/node/economy-routes.mjs';
-import { SECTIONS, addPart, flowGraph, layoutFlow, notesByPart, parseAmount, parseDuration, parseNumber, partOfWhere, removePart } from '../studio/tabs/web3/economy-parts.js';
+import { SECTIONS, addPart, amountText, flowGraph, layoutFlow, notesByPart, parseAmount, parseDuration, parseNumber, partOfWhere, removePart, roundAmounts } from '../studio/tabs/web3/economy-parts.js';
 import { linkAsks } from '../studio/tabs/economy.js';
 import { makeGame, post, request, serve } from './web3/helpers.mjs';
 
@@ -165,6 +165,18 @@ describe('POST /economy/check, /simulate and /cost: what the tab shows beside th
 });
 
 describe('the tab’s parts (studio/tabs/web3/economy-parts.js)', () => {
+  it('amountText: the one formatter for amounts people read (the tab and the host bridge)', () => {
+    const cases = [
+      ['0.368812502', '0.3688'], [0.368812502, '0.3688'], ['0.176', '0.176'], ['1.234000', '1.234'], ['0.00005', '0.0001'],
+      ['0.000049', '<0.0001'], ['0.000001', '<0.0001'], [1e-9, '<0.0001'], ['0', '0'], [0, '0'], ['0.00000', '0'],
+      ['1234.56789', '1,234.5679'], ['5', '5'], ['99.99995', '100'], ['-0.00001', '-<0.0001'], ['-2.5', '-2.5'],
+      ['5000000000', '5,000,000,000'], [null, ''], [undefined, ''], ['abc', 'abc'],
+    ];
+    for (const [input, out] of cases) assert.equal(amountText(input), out, String(input));
+    assert.equal(roundAmounts('Player won 0.368812502 SOL; pot 0.3 SOL; 0.000001 SOL earned'), 'Player won 0.3688 SOL; pot 0.3 SOL; <0.0001 SOL earned');
+    assert.equal(roundAmounts('Box 12 at slot 400123'), 'Box 12 at slot 400123', 'whole numbers stay');
+  });
+
   it('every "Add …" makes a part that passes the checker, from nothing and next to the fixtures', async () => {
     for (const base of [null, 'coin-flip-arena', 'blind-forge', 'duel-arena']) {
       for (const s of SECTIONS) {

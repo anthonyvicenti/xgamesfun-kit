@@ -62,6 +62,32 @@ export function fmt(n) {
   return Number(n.toFixed(digits)).toLocaleString('en-US', { maximumFractionDigits: digits });
 }
 
+/**
+ * An amount for people (a balance, a pool, a prize): at most four decimals, rounded half up, trailing zeros
+ * dropped, thousands grouped, and never 0 for an amount that is not: "0.368812502" → "0.3688", "0.000001" →
+ * "<0.0001", "1234.5" → "1,234.5". Takes a number or exact decimal text (no float error on text). The one
+ * formatter for amounts the Economy tab and the host bridge (studio/host-bridge.js) show; fmt() stays for the
+ * spec's own numbers (a 0.00001 SOL fee is exact there).
+ */
+export function amountText(value) {
+  if (value === null || value === undefined || value === '') return '';
+  const text = typeof value === 'number' ? (Number.isFinite(value) ? (Math.abs(value) < 1e21 ? value.toFixed(12) : String(value)) : '–') : String(value).trim();
+  const m = /^([-+]?)(\d*)(?:\.(\d*))?$/.exec(text);
+  if (!m || (m[2] === '' && !m[3])) return text;
+  const [, sign, whole = '', fraction = ''] = m;
+  const kept = BigInt((whole || '0') + fraction.padEnd(4, '0').slice(0, 4)) + (fraction[4] >= '5' ? 1n : 0n);
+  const nonZero = /[1-9]/.test(whole + fraction);
+  const minus = sign === '-' && nonZero ? '-' : '';
+  if (kept === 0n) return nonZero ? `${minus}<0.0001` : '0';
+  const digits = kept.toString().padStart(5, '0');
+  const int = digits.slice(0, -4).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const frac = digits.slice(-4).replace(/0+$/, '');
+  return `${minus}${int}${frac ? `.${frac}` : ''}`;
+}
+
+/** Every long decimal in a sentence for people ("Player won 0.368812502 SOL" → "Player won 0.3688 SOL"); shorter ones stay. */
+export const roundAmounts = (text) => String(text ?? '').replace(/(?<![\w.])\d[\d,]*\.\d{5,}(?![\w.])/g, (n) => amountText(n.replace(/,/g, '')));
+
 // ---------------------------------------------------------------- tokens and names
 
 export function tokenOf(spec, key) {

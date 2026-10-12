@@ -74,7 +74,11 @@ what wearing it changes.
 - A **box or payment in a currency other than the game's** must send all of each payment somewhere (its split adds
   up to 100%).
 - **Prizes paid from a pool** need something filling it (a seed, a split, a schedule): `E-POOL-DRY` otherwise. The
-  simulation says how big a seed rides out a bad week; pass that on.
+  simulation says how big a seed rides out a bad week; pass that on. A pool that pays out faster than it fills and
+  empties within the scenario's days is `W-POOL-RUNS-DRY` (it names the day and the seed that lasts); a box prize
+  bigger than its pool's seed plus the open's own share is `W-PRIZE-SEED` (the first winner would get nothing).
+- **Chance costs the oracle's fee**: every box open, lottery draw and `roll` pays MagicBlock's oracle 0.0005 SOL,
+  from whoever asks (the player for a box). The cost and the simulation count it; say it with the price.
 - **A token the game mints** (`source: "game"`) is how points, tickets, attempts and shards work; an existing coin
   needs its mint address and decimals from the creator (ask; never guess an address).
 - **Decisions and contests need the authority** while the game runs (`W-AUTHORITY`): by default that is the

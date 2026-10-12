@@ -132,7 +132,9 @@ test('check, simulate, cost and explain on every fixture and eval reference', as
     assert.equal((await call('economy_explain', { example: name })).text, e.text, `${name}: the same words every time`);
   }
   const flip = await call('economy_explain', { example: 'coin-flip-arena' });
-  assert.match(flip.text, /Open “Coin flip”: 0\.1 SOL \+ 0\.002 SOL player fee; gives back 0\.088 SOL on average \(88% of its price/);
+  assert.match(flip.text, /Open “Coin flip”: 0\.1 SOL \+ 0\.002 SOL player fee \+ 0\.0005 SOL to MagicBlock’s oracle for the roll \(0\.102505 SOL in all with the network fee\); gives back 0\.088 SOL on average \(88% of its price/);
+  assert.match(flip.text, /plus 2\.22 SOL in player fees and 0\.5 SOL to MagicBlock’s oracle/);
+  assert.match(flip.text, /anyone can ask for the draw \(0\.0005 SOL to the oracle\) and pay the places/);
   assert.match(flip.text, /88% to the pool “house”, 10% to the pool “pot”, 2% to the pool “backers”/);
   assert.match(flip.text, /About 5\.01\d+ SOL in all/);
 });

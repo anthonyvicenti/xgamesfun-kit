@@ -71,7 +71,7 @@ describe('econMessages: economyState → gf:host and gf:economy', () => {
     assert.equal(entries.find((e) => e.id === 'hud:balance:sol').text, '1.234 SOL');
     assert.equal(entries.find((e) => e.id === 'hud:box:flip').text, 'You won 0.176 SOL!');
     assert.match(entries.find((e) => e.id === 'hud:lottery:weekly').text, /^2 · pot 0\.3 SOL · draw due now$/);
-    assert.match(entries.find((e) => e.id === 'hud:stake:backers').text, /^1\.5 ARENA staked · 0\.000001 SOL earned · locked$/);
+    assert.match(entries.find((e) => e.id === 'hud:stake:backers').text, /^1\.5 ARENA staked · <0\.0001 SOL earned · locked$/, 'dust is never shown as 0');
     const results = m.host.economy.actions.filter((a) => a.where === 'results');
     assert.deepEqual(results.map((a) => a.id).sort(), ['lottery:weekly:claim', 'stake:backers:claim']);
     assert.ok(results.every((a) => a.kind === 'claim'));
@@ -80,6 +80,17 @@ describe('econMessages: economyState → gf:host and gf:economy', () => {
     assert.deepEqual(m.economy.pending, ['box:flip:open']);
     assert.ok(m.economy.error.length <= 200);
     assert.ok(m.offered.find((a) => a.id === 'lottery:weekly:tickets').asks.count, 'the page keeps what an action asks');
+  });
+
+  it('amounts in the HUD are rounded for people: four decimals at most, never 0 for dust', () => {
+    const reads = { now: 1_800_000_000, balances: { sol: '368812502' }, stakes: { backers: { staked: '1500000', pending: '0', since: 0, lock: 0 } } };
+    const state = economyState(economy, reads, player);
+    assert.equal(state.balances.sol.amount, '0.368812502 SOL', 'gf-web3 keeps it exact');
+    const m = econMessages({ economy, actions: playerActions(economy), state, last: { 'box:flip': 'You won 0.176000001 SOL!' }, unclaimed: ['box:flip'] });
+    const entries = [...m.economy.balances, ...m.economy.stakes];
+    assert.equal(entries.find((e) => e.id === 'hud:balance:sol').text, '0.3688 SOL');
+    assert.equal(entries.find((e) => e.id === 'hud:box:flip').text, 'You won 0.176 SOL!');
+    assert.equal(entries.find((e) => e.id === 'hud:stake:backers').text, '1.5 ARENA staked · 0 SOL earned');
   });
 
   it('a box whose roll came late is claimable; a payment is a purchase; nothing past 32 actions', () => {
