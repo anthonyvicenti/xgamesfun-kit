@@ -62,7 +62,7 @@ playbook) and the skills in `skills/`.
 
 | Command | |
 |---|---|
-| `npx gamesfun examples` | complete example games to start from: `soak-squad` (a party round), `giant-four` (a turn-based board game), `isle-run` (a scenic action run) |
+| `npx gamesfun examples` | complete example games to start from: `soak-squad` (a party round), `giant-four` (a turn-based board game), `isle-run` (a scenic action run), `coin-hop` (a 2D platformer) |
 | `npx gamesfun catalog [--all]` | what the kit can build: loops (how a game is played), mechanics, worlds, looks, bodies, props |
 | `npx gamesfun create <dir> --from <example>` or `--spec <spec.json>` | make a game |
 | `npx gamesfun dev [dir]` | the studio, live reload and local multiplayer (127.0.0.1 only); a game on multiplayer kit 1.6.4 or newer opens its rooms online ([docs/ONLINE.md](docs/ONLINE.md); `GAMESFUN_ONLINE=off` keeps them on this machine) |

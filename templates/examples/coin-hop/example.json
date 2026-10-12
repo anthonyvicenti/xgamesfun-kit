@@ -1,0 +1,11 @@
+{
+  "title": "Coin Hop",
+  "summary": "A 2D platformer seen from the side: ledges, jumps and coins on a tile map written in the spec.",
+  "engine": "flat",
+  "verified": {
+    "result": "PASS 22/22 with --quick (9 skipped by --quick)",
+    "kits": "af50624fd",
+    "date": "2026-10-11",
+    "how": "npx gamesfun create <dir> --from coin-hop, npx gamesfun verify <dir> --quick (133 s), by hand (Linux, Chrome on the graphics card); the smoke test runs it too"
+  }
+}

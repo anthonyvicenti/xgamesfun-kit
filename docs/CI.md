@@ -282,6 +282,13 @@ run them), so `.github/ci-profile.json` no longer lists them and `tests/ci.test.
 vendors gf-multiplayer 1.6.5 (`KIT_VERSION`), so the workflow's games now exercise 1.6.4's and 1.6.5's changes. The
 sections above keep the 1.6.3 and 1.6.4 wording as the record of those runs.
 
+### Kits synced to games.fun af50624fd (2026-10-11)
+
+`create` vendors gf-multiplayer 1.6.6 (the host's Lock room, a round alone). Flat games pass `verify --quick` 22 of 22 by
+hand on Linux with a graphics card (`coin-hop` and `coin-dash`, 133 and 137 s), and the smoke test runs all four
+examples (the party, scenic, board and flat ones: `coin-hop` is new). The workflow still runs the party, scenic and
+board examples only; the flat one has not run on a runner.
+
 ## 8. What a person on a real Windows machine or a Mac still has to try by hand
 
 A runner is a virtual machine without a real graphics card, and it ran the profile only. None of this has been done on
