@@ -183,4 +183,5 @@ and anything that failed. Never claim a check passed that you did not run.
 ## Web3 (Solana items, loot boxes, shop, token)
 
 Covered by the `gamesfun-web3*` skills and the web3 commands when they are present in this checkout
-(`npx gamesfun help`). Devnet only. The kit never holds a private key: wallets sign in the person's own browser.
+(`npx gamesfun help`). A game's economy (shop, boxes, lotteries, stakes, crafting, schedules, contests) from a
+sentence: the `gamesfun-economy` skill and the `economy_*` tools. Devnet only. The kit never holds a private key: wallets sign in the person's own browser.
