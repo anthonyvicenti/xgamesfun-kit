@@ -19,7 +19,7 @@ test('.github/ci-profile.json is a valid verify --profile file, and skips only c
   assert.equal(profile.run, undefined, 'the file names what it skips; everything else runs');
 });
 
-test('the workflow runs the profile through the real flag for both engines, macOS only off pull requests, one system or job by hand', async () => {
+test('the workflow runs the profile through the real flag for both engines, Linux only unless a run by hand names another system, one system or job by hand', async () => {
   const wf = await readFile(at('.github/workflows/check.yml'), 'utf8');
   assert.ok(!wf.includes('GF_VERIFY_PROFILE'), 'no gate variable');
   assert.equal(wf.match(/verify games\/ci(-scenic)? --quick --profile \.github\/ci-profile\.json/g)?.length, 2);
@@ -27,14 +27,17 @@ test('the workflow runs the profile through the real flag for both engines, macO
   assert.match(wf, /--from giant-four/); assert.match(wf, /verify games\/ci-board --quick --profile \.github\/ci-profile\.json/, 'the turn-based board example runs under the profile too');
   assert.match(wf, /doctor --skip-graphics/);
   assert.ok(!wf.includes('continue-on-error'), 'no step may fail quietly: a check that cannot run on a runner leaves the profile by name, with its reason');
-  const matrices = wf.match(/os: \$\{\{ fromJSON\(github\.event_name == 'pull_request'[\s\S]*?\) \}\}/g) ?? [];
+  // the free minutes ran out on 2026-10-12 (macOS 69 %): push, pull request and a run by hand without -f system= are Linux only
+  assert.match(wf, /system:[\s\S]*?default: linux\n/, 'a run by hand defaults to Linux');
+  const matrices = wf.match(/os: \$\{\{ fromJSON\(github\.event_name != 'workflow_dispatch'[\s\S]*?\) \}\}/g) ?? [];
   assert.equal(matrices.length, 2, 'one matrix per job');
   for (const m of matrices) {
-    const [pr, ...rest] = m.split('||'), all = rest.at(-1);
-    assert.ok(!/macos/.test(pr) && /ubuntu/.test(pr) && /windows/.test(pr), 'pull requests: Linux and Windows');
-    assert.ok(/ubuntu/.test(all) && /windows/.test(all) && /macos/.test(all), 'pushes to main and by hand: macOS too');
+    const [auto, ...rest] = m.split('||'), fallback = rest.at(-1);
+    assert.ok(/ubuntu/.test(auto) && !/windows|macos/.test(auto), 'pushes to main and pull requests: Linux only');
+    assert.ok(/ubuntu/.test(fallback) && !/windows|macos/.test(fallback), 'by hand without a system: Linux only');
+    assert.ok(m.includes(`inputs.system == 'all' && '["ubuntu-latest","windows-latest","macos-latest"]'`), 'system=all runs all three');
     // by hand, one system alone (so a fix for Windows does not pay for macOS)
-    for (const [input, os] of [['linux', 'ubuntu-latest'], ['windows', 'windows-latest'], ['macos', 'macos-latest']]) assert.ok(m.includes(`inputs.system == '${input}' && '["${os}"]'`), `system=${input} runs ${os} alone`);
+    for (const [input, os] of [['windows', 'windows-latest'], ['macos', 'macos-latest']]) assert.ok(m.includes(`inputs.system == '${input}' && '["${os}"]'`), `system=${input} runs ${os} alone`);
   }
   for (const job of ['party', 'scenic']) assert.ok(wf.includes(`if: github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == '${job}'`), `job=${job} runs alone`);
   // every system's Chrome is named, and each job reads its own
