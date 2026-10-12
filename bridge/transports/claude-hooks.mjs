@@ -9,6 +9,7 @@
 // hook(event, input) answers with exactly what Claude Code reads from a hook: null (an empty 200) or the JSON output
 // object for that event. Documentation: https://code.claude.com/docs/en/hooks.md (fetched 2026-10-11).
 import { protocolWords } from '../../plugin/scripts/lib.mjs';
+import { requestMessage } from '../core.mjs';
 
 export const claudeHooks = {
   id: 'claude-hooks', agent: 'claude-code', built: true,
@@ -34,8 +35,13 @@ export const claudeHooks = {
           bridge.event('prompt', { ...b, text: input.prompt });
           // A session the plugin was loaded into after it started (/reload-plugins), or one older than this studio,
           // never ran SessionStart here: it learns the protocol and its id with its first prompt instead.
-          if (options.url && bridge.introduce(b.session)) return { body: { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: protocolWords(options.url, b.session) } } };
-          return { body: null };
+          const said = [];
+          if (options.url && bridge.introduce(b.session)) said.push(protocolWords(options.url, b.session, { kit: options.kit }));
+          // Requests the stop guard went quiet about (it reminds once, then stalls them): the person's own prompt in the
+          // terminal is what brings them back, once.
+          const stalled = bridge.stalledFor(b.session);
+          if (stalled.length) said.push(requestMessage(stalled, { session: b.session, kit: options.kit, heading: 'Still open from the studio page, not reported yet' }));
+          return { body: said.length ? { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: said.join('\n\n') } } : null };
         }
         case 'PreToolUse': bridge.event('tool-start', { ...b, tool: input.tool_name, input: input.tool_input }); return { body: null };
         case 'PostToolUse': bridge.event('tool-end', { ...b, tool: input.tool_name, input: input.tool_input, ok: true }); return { body: null };

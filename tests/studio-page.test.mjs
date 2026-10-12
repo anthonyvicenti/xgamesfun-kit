@@ -6,14 +6,16 @@ import path from 'node:path';
 import { startDevServer } from '../server/index.mjs';
 import { tempGame } from './helpers.mjs';
 import { sessionDriver } from './stubs/session-driver.mjs';
-import { IDLE_HINT, TERMINAL_NOTE, connection, describeEvent, inputLine, modeNote, normalizeEvent, readQueue, requestWords } from '../studio/lib/session.js';
+import { IDLE_HINT, LISTENER_IDLE_HINT, NONE_HINT, STALLED_HINT, TERMINAL_NOTE, connection, describeEvent, inputLine, modeNote, normalizeEvent, readQueue, requestWords } from '../studio/lib/session.js';
 import { loopView, playtestNotes } from '../studio/lib/loop-state.js';
 import { pendingChanges, sliderRange, tunables } from '../studio/lib/tune.js';
 
 test('request states are in words a person understands', () => {
   assert.match(requestWords('waiting').label, /Waiting for your session/);
   assert.match(requestWords('handed').label, /Handed over/);
-  assert.match(requestWords('seen').label, /seen/);
+  assert.match(requestWords('seen').label, /on it/);
+  assert.match(requestWords('stalled').label, /Waiting for your session.*Type go/);
+  assert.equal(readQueue({ requests: [{ id: 'x', state: 'handed', stalled: true }] }).requests[0].words.label, requestWords('stalled').label, 'a stalled request reads as waiting for the session, never as being worked on');
   assert.equal(requestWords('done').label, 'Done');
   assert.match(requestWords('dropped').label, /send again/i);
   assert.equal(requestWords('waiting').editable, true);
@@ -54,8 +56,25 @@ test('connection: what the contract says for each session state', () => {
   assert.equal(connection(readQueue(s({}))).state, 'working');
   const idle = connection(readQueue(s({ state: 'idle' })));
   assert.equal(idle.state, 'idle');
-  assert.match(idle.hint, /Press Enter in the terminal/);
-  assert.match(IDLE_HINT, /reconnect/);
+  assert.equal(idle.hint, IDLE_HINT);
+  assert.match(IDLE_HINT, /Type go in its terminal/);
+  assert.doesNotMatch(NONE_HINT, /reload-plugins/, 'no session yet: the step needs no plugin and no reload');
+  assert.match(NONE_HINT, /session wait/);
+  // a session that only the terminal listener reaches (no plugin): never "working" without a request it holds
+  const t = o => ({ sessions: [{ id: 'a', state: 'working', connected: false, primary: true, channel: 'terminal', agent: 'claude-code', ...o.s }], requests: o.r ?? [] });
+  assert.equal(connection(readQueue(t({ s: { connected: true, listening: 'listener' } }))).state, 'listening');
+  assert.match(connection(readQueue(t({ s: { connected: true, listening: 'listener', agent: 'terminal' } }))).hint, /Codex waits for its next turn/, 'an agent that may not wake says so');
+  const gone = connection(readQueue(t({ s: {} })));
+  assert.equal(gone.state, 'idle', 'its listener closed and it holds nothing: not listening, not working');
+  assert.equal(gone.hint, LISTENER_IDLE_HINT);
+  const busy = connection(readQueue(t({ s: { tools: 'cli' }, r: [{ id: 'r1', session: 'a', state: 'seen' }] })));
+  assert.equal(busy.state, 'working');
+  assert.equal(busy.open, 1);
+  assert.match(busy.toolsNote, /terminal commands/);
+  const stalled = connection(readQueue(t({ s: { state: 'idle' }, r: [{ id: 'r1', session: 'a', state: 'handed', stalled: true }] })));
+  assert.equal(stalled.state, 'stalled');
+  assert.equal(stalled.hint, STALLED_HINT);
+  assert.equal(connection(readQueue(t({ r: [{ id: 'r1', session: 'a', state: 'done' }] }))).state, 'idle', 'a done request is not work in hand');
   assert.equal(connection(readQueue(s({ state: 'idle', connected: true }))).state, 'listening', 'an open wait reaches an idle session');
   const m = connection(readQueue(s({ permissionMode: 'acceptEdits' })));
   assert.equal(m.mode, 'acceptEdits');
@@ -275,7 +294,7 @@ test('the stop guard: a building game refuses the stop three times, then the ses
   } finally { await rm(path.join(game.dir, '.gf-loop'), { recursive: true, force: true }); s.closeAll(); await s.end(); }
 });
 
-test('a request the session ends two turns without reporting is dropped, and the page offers to send it again', async () => {
+test('a request the session ends two turns without reporting is reminded once, then stalls (not dropped); the page says it waits for the session', async () => {
   const s = await sessionDriver(base, { id: 'drop-1', cwd: game.dir });
   try {
     await s.start();
@@ -283,11 +302,14 @@ test('a request the session ends two turns without reporting is dropped, and the
     const r = (await s.call('POST', 'request', { text: 'add a boss' })).body;
     await until(() => w.lines.length);
     await new Promise(res => setTimeout(res, 3200));   // the rule: a request handed less than 3 s ago is not refused at the stop
-    for (let i = 0; i < 2; i++) assert.equal((await s.stop()).body.decision, 'block');
-    await s.stop();
-    const mine = readQueue(await s.queue()).requests.find(x => x.id === r.id);
-    assert.equal(mine.state, 'dropped');
-    assert.equal(mine.words.again, true);
+    assert.equal((await s.stop()).body.decision, 'block');
+    for (let i = 0; i < 3; i++) assert.notEqual((await s.stop()).body?.decision, 'block', 'quiet after one reminder');
+    const q = readQueue(await s.queue());
+    const mine = q.requests.find(x => x.id === r.id);
+    assert.equal(mine.state, 'handed');
+    assert.equal(mine.stalled, true);
+    assert.match(mine.words.label, /Waiting for your session/);
+    assert.equal(connection({ ...q, sessions: q.sessions.filter(x => x.id === 'drop-1').map(x => ({ ...x, primary: true })) }).state, 'stalled');
   } finally { s.closeAll(); await s.end(); }
 });
 

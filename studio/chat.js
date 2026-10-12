@@ -236,8 +236,8 @@ export function mountChat(root, ctx) {
 
   function paintStatus() {
     const c = connection(readQueue(queueRaw));
-    const words = { listening: 'Your session is listening', working: 'Your session is working', idle: 'Your session is idle', none: 'No session connected' }[c.state];
-    const tone = c.state === 'idle' ? 'warn' : c.state === 'none' ? 'wait' : 'ok';
+    const words = { listening: 'Your session is listening', working: 'Your session is working', idle: 'Your session is not listening', stalled: 'Waiting for your session', none: 'No session listening' }[c.state];
+    const tone = c.state === 'idle' || c.state === 'stalled' ? 'warn' : c.state === 'none' ? 'wait' : 'ok';
     status.dataset.state = c.state;
     status.replaceChildren(el('span', { className: `dot ${tone}` }), el('span', {}, words));
     status.title = c.hint;
@@ -246,7 +246,6 @@ export function mountChat(root, ctx) {
   /** The words for "no session yet": only the step that is left (connect has run here: reload the plugins). */
   function noneHint() {
     if (setup?.connected && setup.plugin) return RELOAD_HINT;
-    if (setup?.connected) return 'Your agent has the kit\'s tools. Start a new session of it in the kit folder and say hi: it appears here.';
     return NONE_HINT;
   }
 
@@ -278,8 +277,11 @@ export function mountChat(root, ctx) {
 
     // what is happening now, under the thread
     live.replaceChildren();
-    if (c.state === 'none') live.append(el('div', { className: 'conn', 'data-state': 'none', 'data-part': 'connect' }, el('span', { className: 'dot wait' }), el('strong', {}, 'No session connected yet'), el('div', { className: 'small' }, noneHint())));
-    else if (c.state === 'idle') live.append(el('div', { className: 'conn', 'data-state': 'idle' }, el('span', { className: 'dot warn' }), el('strong', {}, 'Your session is idle'), el('div', { className: 'small' }, c.hint)));
+    if (c.state === 'none') live.append(el('div', { className: 'conn', 'data-state': 'none', 'data-part': 'connect' }, el('span', { className: 'dot wait' }), el('strong', {}, q.requests.some(r => r.state === 'waiting') ? 'Nothing is being made yet: no session is listening' : 'No session is listening yet'), el('div', { className: 'small' }, noneHint())));
+    else if (c.state === 'idle') live.append(el('div', { className: 'conn', 'data-state': 'idle' }, el('span', { className: 'dot warn' }), el('strong', {}, q.requests.some(r => r.state === 'waiting') ? 'Your request is waiting: your session is not listening' : 'Your session is not listening'), el('div', { className: 'small' }, c.hint)));
+    else if (c.state === 'stalled') live.append(el('div', { className: 'conn', 'data-state': 'stalled' }, el('span', { className: 'dot warn' }), el('strong', {}, 'Waiting for your session'), el('div', { className: 'small' }, c.hint)));
+    else if (c.state === 'working' && c.open) live.append(el('div', { className: 'conn', 'data-state': 'working' }, el('span', { className: 'dot ok' }), el('strong', {}, 'Your session is working on your request'), el('div', { className: 'small' }, c.hint)));
+    if (c.toolsNote) live.append(el('p', { className: 'muted small', 'data-part': 'tools' }, c.toolsNote));
     if (c.guard) live.append(el('div', { className: 'conn', 'data-tone': 'warn' }, el('span', { className: 'dot warn' }, ''), el('strong', {}, `The build is waiting for you${c.guard.why ? `: ${c.guard.why}` : ''}`)));
     if (c.mode) live.append(el('p', { className: 'muted small' }, modeNote(c.mode)));
     if (build?.elsewhere) live.append(el('p', { className: 'error-box' }, `Your session is working on another game: ${build.elsewhere.name}. The studio shows ${ctx.project()?.name ?? 'this one'}; open that one from All games to follow it.`));

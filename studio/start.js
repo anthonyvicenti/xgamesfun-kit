@@ -54,7 +54,8 @@ export function mountStart(root, ctx) {
     try {
       const p = await ctx.api('studio/new', { idea });
       const r = await sessionApi('request', { text: ideaRequest(idea, `games/${p.name}`) });
-      ctx.toast(r.session ? 'Sent to your session: it starts with a pitch' : 'Saved for your session: it gets it as soon as one is connected', 'ok');
+      // say only what is true now: handed to a session that listens, or waiting for one
+      ctx.toast(r.state === 'handed' ? 'Handed to your session: it starts with a pitch' : r.session ? 'Saved: your session gets it when it listens again' : 'Saved: no session is listening yet, so nothing is being made. It waits for your session', r.state === 'handed' ? 'ok' : '');
       box.value = '';
       await ctx.open(p.project);
     } catch (e) { note.textContent = `Not sent: ${e.message}`; }
@@ -77,10 +78,11 @@ export function mountStart(root, ctx) {
     let q = null;
     try { q = await sessionApi('queue'); } catch { /* no bridge */ }
     const c = connection(readQueue(q));
-    const hint = setup?.connected && setup.plugin ? RELOAD_HINT : setup?.connected ? 'Start a new session of your agent in the kit folder and say hi.' : NONE_HINT;
+    const hint = c.state === 'none' && setup?.connected && setup.plugin ? RELOAD_HINT : c.hint;
+    const words = { none: 'No session is listening yet. ', listening: 'Your session is listening: what you send reaches it at once. ', working: 'Your session is working. ', idle: 'Your session is connected but not listening. ', stalled: 'Waiting for your session. ' }[c.state];
     session.dataset.state = c.state;
-    session.replaceChildren(el('span', { className: `dot ${c.state === 'none' ? 'wait' : c.state === 'idle' ? 'warn' : 'ok'}` }),
-      c.state === 'none' ? el('span', {}, el('b', {}, 'No agent session connected yet. '), hint) : el('span', {}, { listening: 'Your session is listening.', working: 'Your session is connected (busy right now).', idle: 'Your session is connected; press Enter in its terminal to wake it.' }[c.state]));
+    session.replaceChildren(el('span', { className: `dot ${c.state === 'none' ? 'wait' : c.state === 'idle' || c.state === 'stalled' ? 'warn' : 'ok'}` }),
+      el('span', {}, el('b', {}, words), c.state === 'listening' && !c.hint.startsWith('Its') ? '' : hint, c.toolsNote ? ` ${c.toolsNote}` : ''));
   }
   async function paint() {
     let home;

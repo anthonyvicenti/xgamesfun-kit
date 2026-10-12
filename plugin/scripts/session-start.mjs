@@ -10,5 +10,5 @@ try {
   run = await findRun({ cwd: input.cwd });
   if (run) await post(run, '/api/session/hook/SessionStart', input, { timeoutMs: 3000 });
 } catch { run = null; }
-if (run) console.log(protocolWords(run.url, input.session_id));
+if (run) console.log(protocolWords(run.url, input.session_id, { kit: run.kit ?? null }));
 process.exit(0);

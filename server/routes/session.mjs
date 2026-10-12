@@ -19,7 +19,7 @@ export default async function register(router, ctx) {
   const token = randomBytes(24).toString('base64url');
   const wait = await waitForm(ctx.kitRoot);
   const bridge = createBridge({ gameDir: ctx.gameDir, kitRoot: ctx.kitRoot });
-  const transport = openTransport(process.env.GAMESFUN_BRIDGE_TRANSPORT || 'claude-hooks', bridge, { wait, url: ctx.url });
+  const transport = openTransport(process.env.GAMESFUN_BRIDGE_TRANSPORT || 'claude-hooks', bridge, { wait, url: ctx.url, kit: ctx.kitRoot });
   const streams = new Set();
 
   const sameToken = given => {
@@ -71,8 +71,18 @@ export default async function register(router, ctx) {
     res.writeHead(200, { ...BASE_HEADERS, 'content-type': 'application/json; charset=utf-8' });
     res.end(out ? JSON.stringify(out) : '');
   }));
+  // The kit's terminal commands, run by a session with or without the plugin (`gamesfun tool`, `gamesfun session`):
+  // each tool call says so here, so the page follows a build whose session has no hooks. Body: { session, cwd, agent,
+  // tool, input, ok }. Kinds: tool-start, tool-end.
+  router.post('/cli/:kind', guard(async (req, res, { kind }) => {
+    const b = await body(req);
+    if (!['tool-start', 'tool-end'].includes(kind)) throw new HttpError(404, `no cli event ${kind}`);
+    if (typeof b.session !== 'string' || !b.session || typeof b.tool !== 'string') throw new HttpError(400, 'a cli event names its session and tool');
+    bridge.event(kind, { session: b.session, cwd: typeof b.cwd === 'string' ? b.cwd : null, agent: typeof b.agent === 'string' ? b.agent : undefined, via: 'cli', tool: b.tool, input: b.input ?? null, ok: b.ok !== false });
+    return { ok: true };
+  }));
   router.get('/wait', guard((req, res) => {
-    const form = req.query.get('form') === 'monitor' ? 'monitor' : 'rewake';
+    const form = ['monitor', 'listener'].includes(req.query.get('form')) ? req.query.get('form') : 'rewake';
     let beat = null;
     const handle = {
       form,
@@ -80,7 +90,7 @@ export default async function register(router, ctx) {
       end: () => { clearInterval(beat); if (!res.writableEnded) res.end(); },
     };
     let close;
-    try { close = bridge.openWait(req.query.get('session') || null, handle, { cwd: req.query.get('cwd') || null }); } catch (e) { if (e instanceof BridgeError) throw new HttpError(e.status, e.message); throw e; }
+    try { close = bridge.openWait(req.query.get('session') || null, handle, { cwd: req.query.get('cwd') || null, agent: req.query.get('agent') || undefined }); } catch (e) { if (e instanceof BridgeError) throw new HttpError(e.status, e.message); throw e; }
     if (!res.headersSent) { res.writeHead(200, { ...BASE_HEADERS, 'content-type': 'application/x-ndjson; charset=utf-8' }); res.flushHeaders(); }
     // a blank line every 25 s: the wait knows the server is there, and nothing in between gives up on a silent body
     beat = setInterval(() => { if (!res.writableEnded) res.write('\n'); }, HEARTBEAT_MS);
@@ -90,7 +100,7 @@ export default async function register(router, ctx) {
   }));
 
   // ---- the run file: how the plugin and the tools find this server ---------------------------------------------
-  const entry = { url: ctx.url, token, run: bridge.run, pid: process.pid, game: ctx.gameDir, wait, started: Date.now() };
+  const entry = { url: ctx.url, token, run: bridge.run, pid: process.pid, game: ctx.gameDir, wait, started: Date.now(), kit: ctx.kitRoot };
   await recordRun(ctx.kitRoot, entry);
   // the studio opened another game (or a new idea's folder): the bridge and the run file follow, so the plugin and the
   // tools find this server for that game
