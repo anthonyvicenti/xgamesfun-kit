@@ -119,6 +119,18 @@ describe('studio Economy tab on core’s dev server, in Chrome (fake chain)', { 
     assert.ok(!tabs.includes('Token') && !tabs.includes('Shop'), tabs.join());
   });
 
+  it('has no title or wallet button of its own: it points at the header’s Connect wallet, which connects the wallet it signs with', async (t) => {
+    if (!browser) return t.skip('no browser');
+    await page.getByRole('tab', { name: 'Economy' }).click();
+    await tab().getByTestId('econ-flow').waitFor();
+    assert.equal(await tab().locator('h1, h2').count(), 0, 'the rail names the tab');
+    assert.equal(await tab().getByRole('button', { name: /connect a wallet/i }).count(), 0, 'one wallet button: the header’s');
+    assert.match(await tab().getByTestId('econ-wallet-note').innerText(), /Connect a wallet to put it live: Connect wallet, at the top of the studio/);
+    await page.locator('#wallet-btn').click();
+    await until(async () => (await tab().getByTestId('econ-wallet-note').count()) === 0);
+    assert.match(await page.locator('#wallet-btn').innerText(), /Wallet /);
+  });
+
   it('launches the game’s token from its part, through ctx.wallet, and the economy keeps its mint', async (t) => {
     if (!browser) return t.skip('no browser');
     await page.getByRole('tab', { name: 'Economy' }).click();

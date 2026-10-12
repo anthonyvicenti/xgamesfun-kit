@@ -11,8 +11,11 @@ const svg = (tag, attrs = {}, ...children) => {
 };
 
 /** The colour of each kind of line and box, as theme variables. */
-const EDGE = { pay: '--accent', payout: '--good', burn: '--bad', treasury: '--warn', lock: '--muted', item: '--accent-2', move: '--accent' };
-const NODE = { players: '--text', pool: '--accent', winners: '--good', places: '--good', stakers: '--good', treasury: '--warn', burn: '--bad', account: '--muted', item: '--accent-2' };
+// --econ-item is the second accent mixed half and half with the text colour (the tab's CSS below): the studio's lime
+// alone is too pale on the light theme's white. A box with no colour of its own (a part) is outlined in --muted, which
+// reads at 3:1 or more on both themes' cards (--line, its old outline, was about 1.2:1).
+const EDGE = { pay: '--accent', payout: '--good', burn: '--bad', treasury: '--warn', lock: '--muted', item: '--econ-item', move: '--accent' };
+const NODE = { players: '--text', pool: '--accent', winners: '--good', places: '--good', stakers: '--good', treasury: '--warn', burn: '--bad', account: '--muted', item: '--econ-item' };
 const colour = (name, fallback = '#8b7cff') => `var(${name}, ${fallback})`;
 const clip = (text, px, size) => {
   const max = Math.max(4, Math.floor(px / (size * 0.56)));
@@ -53,7 +56,7 @@ export function drawFlow(spec, width, { onPick = () => {}, live = new Map(), sel
       ...(n.part ? { role: 'button', tabindex: 0, 'aria-label': `${n.label}: open its card`, 'data-part': id } : {}),
     },
     svg('title', {}, `${n.label}${n.sub ? `: ${n.sub}` : ''}`),
-    svg('rect', { width: n.w, height: n.h, rx: 9, style: `stroke:${colour(NODE[n.kind] ?? '--line', '#2a3140')}` }),
+    svg('rect', { width: n.w, height: n.h, rx: 9, style: `stroke:${colour(NODE[n.kind] ?? '--muted', '#9aa4b5')}` }),
     svg('text', { x: 9, y: 18, class: 'econ-node-label', style: `font-size:${big}px` }, clip(n.label, n.w - (state ? 28 : 16), big)),
     svg('text', { x: 9, y: 34, class: 'econ-node-sub', style: `font-size:${big - 2}px` }, clip(n.sub, n.w - 16, big - 2)),
     state ? svg('circle', { cx: n.w - 12, cy: 13, r: 4.5, class: `econ-dot ${state}` }, svg('title', {}, state === 'live' ? 'Live' : 'Changed since it went live')) : null);
@@ -84,7 +87,7 @@ export const LEGEND = [
 export const edgeColour = (kind) => colour(EDGE[kind]);
 
 const CSS = `
-.gfw3.econ{max-width:none;gap:12px}
+.gfw3.econ{max-width:none;gap:12px;--econ-item:color-mix(in srgb,var(--accent-2,#b9f26c) 50%,var(--text,#e8ecf3))}
 .gfw3 .econ-flow{display:block;max-width:100%;height:auto;overflow:visible}
 .gfw3 .econ-caption{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;fill:var(--muted,#9aa4b5);paint-order:stroke;stroke:var(--panel-2,#161a22);stroke-width:5px;stroke-linejoin:round}
 .gfw3 .econ-edge{fill:none;stroke-width:2;opacity:.8}
@@ -108,7 +111,7 @@ const CSS = `
 .gfw3 .econ-kind{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted,#9aa4b5);border:1px solid var(--line,#2a3140);border-radius:999px;padding:1px 8px}
 .gfw3 .econ-key{font-family:var(--mono,ui-monospace,monospace);font-size:11px;color:var(--muted,#9aa4b5)}
 .gfw3 .econ-state{font-size:12px;margin-left:auto}.gfw3 .econ-state.live{color:color-mix(in srgb,var(--good,#4fd18b) 65%,var(--text,#e8ecf3))}.gfw3 .econ-state.changed{color:color-mix(in srgb,var(--warn,#c58a00) 65%,var(--text,#e8ecf3))}
-.gfw3 .w3-badge.dev{color:color-mix(in srgb,var(--warn,#ffcf5a) 60%,var(--text,#e8ecf3))}.gfw3 .econ-state.draft{color:var(--muted,#9aa4b5)}
+.gfw3 .econ-state.draft{color:var(--muted,#9aa4b5)}
 .gfw3 .econ-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 10px}
 .gfw3 .econ-fields label.field{font-size:12px}
 .gfw3 .econ-fields label.field.wide{grid-column:1/-1}

@@ -257,6 +257,8 @@ describe('the host bridge in the studio, end to end on the fake chain (Chrome)',
     await tab.getByTestId('approve').click();
     await tab.getByTestId('econ-status').waitFor({ timeout: 30_000 });
     assert.ok(signed.some((s) => s.kind === 'transaction'), 'the wallet signed the setup');
+    assert.match(await page.locator('#wallet-btn').innerText(), /Wallet /, 'Put it live connected the studio’s one wallet, shown in the header');
+    assert.equal(await tab.getByTestId('econ-wallet-note').count(), 0);
     const config = JSON.parse(await readFile(path.join(game.gameDir, 'gamesfun.json'), 'utf8'));
     assert.equal(config.economy.live.game, lootPda.game(config.economy.live.collection));
     const status = await page.evaluate(async () => (await fetch('/api/web3/economy/status', { cache: 'no-store' })).json());

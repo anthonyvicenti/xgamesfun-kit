@@ -8,7 +8,7 @@
 //   - what is live, the pools' balances and the latest receipts (GET /economy/status)
 // The page never signs: the dev server prepares, the creator's wallet signs here, the server sends.
 import { explorer, pictureUrl, short } from './web3/client.js';
-import { approvalPanel, choosePicture, fill, h, keepFresh, note, requestBanner, styles, tabContext, walletChip } from './web3/ui.js';
+import { approvalPanel, choosePicture, fill, h, keepFresh, note, requestBanner, styles, tabContext } from './web3/ui.js';
 import { SECTIONS, addPart, amountText, fmt, isLivePart, nameOf, notesByPart, parseAmount, parseDuration, parseNumber, parseNumberList, parseWhole, parseWordList, partId, removePart, sectionOf, symbolOf } from './web3/economy-parts.js';
 import { LEGEND, drawFlow, econStyles, edgeColour } from './web3/economy-view.js';
 import { createDecide } from './web3/economy-decide.js';
@@ -814,6 +814,18 @@ export default {
       flowBox.replaceChildren(drawFlow(spec, width, { onPick: pick, live: liveMap(), selected }));
     }
 
+    /**
+     * Where the wallet stands, when it is not connected yet: the header's "Connect wallet" connects it (the studio's one
+     * wallet button), and "Put it live" asks the wallet to connect first anyway. Nothing when a wallet is connected.
+     */
+    function walletNote() {
+      if (t.wallet.address()) return null;
+      const none = typeof ctx?.wallet?.list === 'function' && !ctx.wallet.list().length;
+      return h('p', { class: 'dim', 'data-testid': 'econ-wallet-note' }, none
+        ? 'No Solana wallet in this browser yet. Install one (Phantom, Solflare, Backpack…) and reload, then connect it with Connect wallet at the top of the studio to put it live.'
+        : 'Connect a wallet to put it live: Connect wallet, at the top of the studio. Or press Put it live, and your wallet asks first.');
+    }
+
     function goCard() {
       const c = analysis.cost;
       const why = whyNot();
@@ -831,6 +843,7 @@ export default {
           h('div', { class: 'w3-row', style: 'align-items:center' },
             h('button', { class: 'primary', 'data-testid': 'econ-go-live', disabled: Boolean(why), title: why || 'One approval in your wallet', onclick: goLive }, status?.live ? 'Put the changes live' : 'Put it live'))),
         why ? h('p', { class: refusals().length ? 'note error' : 'dim', 'data-testid': 'econ-go-why', role: 'status' }, why, ' ', firstRefusal ? h('button', { class: 'linkish', onclick: showRefusal }, 'Show me') : null) : h('p', { class: 'dim' }, 'One approval in your wallet sets up everything below on devnet. Your wallet owns it, not games.fun.'),
+        walletNote(),
         setup?.notes?.length || setup?.accounts?.length
           ? h('details', {}, h('summary', {}, 'What the cost is made of'),
               h('ul', { class: 'econ-receipts' }, (setup.accounts ?? []).map((a) => h('li', {}, `${a.approx ? 'about ' : ''}${fmt(a.sol)} SOL: ${a.what}`)), (setup.notes ?? []).map((n) => h('li', { class: 'dim' }, n))),
@@ -859,6 +872,7 @@ export default {
           h('strong', {}, 'Your agent asked to put the economy live'),
           h('p', { class: 'dim' }, 'Look it over below first. Nothing happens until you press the button and approve in your wallet.'),
           why ? h('p', { class: refusals().length ? 'note error' : 'dim' }, why) : null,
+          walletNote(),
           h('div', { class: 'w3-row' },
             h('button', { class: 'primary', 'data-testid': 'econ-asked-go', disabled: Boolean(why), onclick: () => ((asked = null), goLive()) }, status?.live ? 'Put the changes live' : 'Put it live'),
             h('button', { onclick: forget }, 'Not now')));
@@ -916,11 +930,9 @@ export default {
       // keep the caret where the creator is typing
       const active = document.activeElement;
       const focus = root.contains(active) && active.dataset?.path ? { path: active.dataset.path, start: active.selectionStart, end: active.selectionEnd } : null;
-      const header = h('div', { class: 'w3-bar' },
-        h('div', {}, h('h2', {}, 'Economy'), h('span', { class: 'w3-badge dev' }, 'Devnet · test money only')),
-        walletChip(t, (error) => (error ? (message = { kind: 'error', text: error }) : null, render())));
+      // the tab's title and the wallet button are the studio's (the rail's "Economy", the header's Connect wallet)
       if (flow) {
-        fill(root, header, message ? note(message.kind, message.text) : null,
+        fill(root, message ? note(message.kind, message.text) : null,
           approvalPanel(t, flow, {
             onDone: (view) => {
               const kind = view?.kind ?? flow?.kind;
@@ -944,8 +956,7 @@ export default {
       }
       const requests = ['economy', 'publish', 'launch'].flatMap((kind) => requestBanner(t, state, kind, { onReview: (r) => start({ requestId: r.id }), onDone: refresh }));
       fill(root,
-        header,
-        h('p', { class: 'dim', style: 'margin:0' }, `Everything ${state.game?.title ?? 'the game'} sells, pays and burns, in one place. Change any number and the rest follows. Nothing is live until you approve it in your wallet.`),
+        h('p', { class: 'dim', style: 'margin:0', 'data-testid': 'econ-intro' }, `Everything ${state.game?.title ?? 'the game'} sells, pays and burns, in one place. Change any number and the rest follows. Nothing is live until you approve it in your wallet. On devnet: test money only.`),
         message ? note(message.kind, message.text) : null,
         state.chainError ? note('error', state.chainError) : null,
         saveError ? h('div', { class: 'note error', role: 'alert', 'data-testid': 'econ-save-error' }, saveError) : null,

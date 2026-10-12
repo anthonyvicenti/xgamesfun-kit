@@ -1,7 +1,9 @@
 // Screenshots of the studio's Economy tab, in real Chrome on real dev servers: three example games, each given an
 // economy from web3/economy/fixtures (coin-flip-arena, blind-forge, duel-arena), at desktop width (1440) and phone
-// width (390), in the light and the dark theme. The chain is not read: the live state (GET /economy/status, built by
-// the economy publish work) is stubbed in the page for the "live" shots, and the notes say so.
+// width (390), in the light and the dark theme (chosen the way the studio shell chooses it: ?theme=light|dark wins for
+// the visit, then localStorage gamesfun.theme, else dark; the OS setting no longer decides it). The chain is not read:
+// the live state (GET /economy/status, built by the economy publish work) is stubbed in the page for the "live" shots,
+// and the notes say so.
 // Run through the graphics-card gate (the preview is the game):  gpu-run.sh node tests/economy-shots.mjs <out dir> [first port]
 // Writes <out>/*.png and <out>/shots.json.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -74,8 +76,11 @@ async function page(id, w, h, scheme, { live = false, hash = '' } = {}) {
       localStorage.setItem('gamesfun.tab', 'economy');
     } catch {}
   });
-  await p.goto(`http://127.0.0.1:${servers[id].srv.port}/studio/${hash}`, { waitUntil: 'load' });
+  // the shell's theme: ?theme= for this visit (studio/index.html reads it before the first paint)
+  await p.goto(`http://127.0.0.1:${servers[id].srv.port}/studio/?theme=${scheme}${hash}`, { waitUntil: 'load' });
   await p.locator('.panel:not([hidden]) [data-testid="econ-flow"]').waitFor({ timeout: 20_000 });
+  const theme = await p.evaluate(() => document.documentElement.dataset.theme);
+  if (theme !== scheme) problems.push(`${id} ${w}: asked for the ${scheme} theme, the page shows ${theme}`);
   await sleep(1500);
   return p;
 }
