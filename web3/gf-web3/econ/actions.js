@@ -77,7 +77,8 @@ const entryDefault = (t) => (t?.wsol ? '0.01' : '1');
 /**
  * The list of buttons a game would show: [{ id, part, kind, label, price?, says, where, asks? }].
  * - `kind`: buy | openBox | pay | craft | buyTickets | stake | unstake | hold | enter | claim
- * - `price`: { amount (whole units, text), currency (symbol) }, when the action has one fixed price
+ * - `price`: { amount (whole units, text), currency (symbol) }, when the action has one fixed price; the kit shows it
+ *   beside the label, so `says` never repeats it
  * - `where`: menu | pause | results | hud (the spec has no field for it: claim goes to results, the rest to menu)
  * - `asks`: { count | amount: { default, min?, says } }: a number the page may ask the player for; the default works
  */
@@ -91,18 +92,18 @@ export function playerActions(economy) {
     const t = e.currency;
     const normal = it.kind === 'normal';
     const moves = it.rise ? ' The price rises with each sale.' : it.fall ? ' The price falls until someone buys.' : '';
-    add({ id: `item:${it.key}:buy`, part: `item:${it.key}`, kind: 'buy', label: `Buy ${it.name}`, price: money(it.price, t), says: `Buy one ${it.name} for ${words(it.price, t)}.${moves} ${normal ? 'The game delivers it.' : 'It is yours, in your wallet.'}` });
+    add({ id: `item:${it.key}:buy`, part: `item:${it.key}`, kind: 'buy', label: `Buy ${it.name}`, price: money(it.price, t), says: `${normal ? 'The game delivers it.' : 'It is yours, in your wallet.'}${moves}` });
   }
   for (const b of e.boxes) {
     if (b.active === false) continue;
     const t = e.priceToken(b);
     const odds = chances(b.outcomes ?? []);
     const table = (b.outcomes ?? []).map((o, i) => `${odds[i]}% ${outcomeWords(o, e, b)}`).join(', ');
-    add({ id: `box:${b.key}:open`, part: `box:${b.key}`, kind: 'openBox', label: b.name, price: money(b.price, t), says: `Pay ${words(b.price, t)}${b.rise ? ' (it rises with each one)' : ''}: ${table}.` });
+    add({ id: `box:${b.key}:open`, part: `box:${b.key}`, kind: 'openBox', label: b.name, price: money(b.price, t), says: `${table}.${b.rise ? ' The price rises with each one.' : ''}` });
   }
   for (const p of e.payments) {
     const t = e.token(p.currency);
-    add({ id: `payment:${p.key}:pay`, part: `payment:${p.key}`, kind: 'pay', label: p.name, price: money(p.amount, t), says: `Pay ${words(p.amount, t)} for ${p.name}.` });
+    add({ id: `payment:${p.key}:pay`, part: `payment:${p.key}`, kind: 'pay', label: p.name, price: money(p.amount, t), says: `Pays for ${p.name}.` });
   }
   for (const r of e.recipes) {
     if (r.active === false) continue;
@@ -114,7 +115,7 @@ export function playerActions(economy) {
     const places = (l.places ?? [100]).map(pct).join(' / ');
     add({
       id: `lottery:${l.key}:tickets`, part: `lottery:${l.key}`, kind: 'buyTickets', label: `Tickets: ${l.name}`, price: money(l.price, t),
-      says: `${words(l.price, t)} a ticket${l.ticketCurrency ? ' (burned)' : ''}. Drawn every ${span(l.every)}; the pot is paid ${places}.`,
+      says: `Drawn every ${span(l.every)}; the pot is paid ${places}.${l.ticketCurrency ? ' Tickets are burned.' : ''}`,
       asks: { count: { default: 1, min: 1, says: 'How many tickets?' } },
     });
     add({ id: `lottery:${l.key}:claim`, part: `lottery:${l.key}`, kind: 'claim', label: `Draw and pay: ${l.name}`, says: 'Start the draw when it is due, then pay every winner. Free apart from network fees.' });

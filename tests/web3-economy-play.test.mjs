@@ -144,7 +144,7 @@ describe('playerActions and economyState', () => {
     const flip = playerActions(fixture('coin-flip-arena'));
     assert.deepEqual(flip.map((a) => a.id), ['box:flip:open', 'lottery:weekly:tickets', 'lottery:weekly:claim', 'stake:backers:stake', 'stake:backers:unstake', 'stake:backers:claim']);
     assert.deepEqual(flip[0].price, { amount: '0.1', currency: 'SOL' });
-    assert.equal(flip[0].says, 'Pay 0.1 SOL: 50% win 0.176 SOL, 50% nothing.');
+    assert.equal(flip[0].says, '50% win 0.176 SOL, 50% nothing.', 'the price is in `price`; says never repeats it');
     assert.deepEqual(flip[1].asks, { count: { default: 1, min: 1, says: 'How many tickets?' } });
     const duel = playerActions(fixture('duel-arena')).filter((a) => a.kind === 'enter');
     assert.deepEqual(duel.map((a) => [a.id, a.label]), [['contest:duel:enter:0', 'Back Red'], ['contest:duel:enter:1', 'Back Blue']]);
