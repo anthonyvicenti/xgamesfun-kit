@@ -10,7 +10,9 @@ import { freeName, slugOf } from '../server/routes/studio.mjs';
 import { createGame } from '../lib/create.mjs';
 import { tempDir } from './helpers.mjs';
 import { recordConnected } from '../commands/connect.mjs';
-import { MARK, STAGES, choiceRequest, compose, ideaRequest, stageOf, wordsOf } from '../studio/chat.js';
+import { CHANGE_IDEAS, MARK, STAGES, choiceRequest, compose, ideaRequest, stageOf, wordsOf } from '../studio/chat.js';
+import { cardState, iconFor, paletteOf, titleCardSvg, titleCardUrl } from '../studio/lib/pictures.js';
+import { pickShot } from '../server/routes/pictures.mjs';
 
 const root = await tempDir();
 after(() => root.cleanup());
@@ -36,7 +38,7 @@ test('no game open: the start page has nothing to play, and every game route say
   assert.deepEqual(home.games, []);
   assert.ok(home.examples.some(e => e.id === 'soak-squad'), 'the examples are offered');
   assert.equal(typeof home.setup.connected, 'boolean');
-  for (const f of ['index.html', 'studio.js', 'chat.js', 'start.js', 'studio.css']) assert.equal((await fetch(`${base}/studio/${f}`)).status, 200, f);
+  for (const f of ['index.html', 'studio.js', 'chat.js', 'start.js', 'studio.css', 'talk.css', 'lib/pictures.js', 'lib/connect-picture.js']) assert.equal((await fetch(`${base}/studio/${f}`)).status, 200, f);
 });
 
 test('a new idea: a folder name from its words, opened before anything is written; the conversation follows the loop; the game appears once made', async () => {
@@ -102,15 +104,93 @@ test('the conversation\'s words: the person\'s words first, the line for their s
   assert.equal(compose('hi', ''), 'hi');
 });
 
-test('the stages a person follows, from the loop state', () => {
-  assert.equal(STAGES.length, 7);
+test('the stages a person follows, from the loop state: pitch, pick, build, check, play-test, deliver', () => {
+  assert.deepEqual(STAGES.map(s => s.label), ['Pitch', 'Pick', 'Build', 'Check', 'Play-test', 'Deliver']);
+  assert.ok(STAGES.every(s => /^[MLHVCSQTAZmlhvcsqtaz0-9 .,-]+$/.test(s.icon)), 'each stage has an icon path (no markup)');
   assert.equal(stageOf(null).index, -1, 'no loop (an example): no stages shown');
-  assert.deepEqual(stageOf({ kind: 'pitch', status: 'building', step: 'pitch' }), { index: 0, waiting: false, done: false });
-  assert.deepEqual(stageOf({ kind: 'pitch', status: 'waiting-on-question', step: 'done', outcome: 'pitched' }), { index: 0, waiting: true, done: false });
+  assert.deepEqual(stageOf({ kind: 'pitch', status: 'building', step: 'pitch' }), { index: 0, waiting: false, done: false, failed: false });
+  assert.deepEqual(stageOf({ kind: 'pitch', status: 'waiting-on-question', step: 'done', outcome: 'pitched' }), { index: 1, waiting: true, done: false, failed: false }, 'the concepts wait on the person: Pick, in amber');
+  assert.equal(stageOf({ kind: 'pitch', status: 'building', step: 'pitch' }, { pitch: { cards: [] } }).index, 2, 'picked: the session works on it again');
   assert.equal(stageOf({ kind: 'refine', status: 'building', step: 'done', outcome: 'locked' }).index, 2);
-  assert.equal(stageOf({ kind: 'build', status: 'building', step: 'agent' }).index, 3);
-  assert.equal(stageOf({ kind: 'build', status: 'building', step: 'verify' }).index, 4);
-  assert.deepEqual(stageOf({ kind: 'build', status: 'delivered', step: 'done' }), { index: 6, waiting: false, done: true });
+  assert.equal(stageOf({ kind: 'build', status: 'building', step: 'agent' }).index, 2);
+  assert.equal(stageOf({ kind: 'build', status: 'building', step: 'verify' }).index, 3);
+  assert.equal(stageOf({ kind: 'build', status: 'building', step: 'playtest' }).index, 4);
+  assert.equal(stageOf({ kind: 'build', status: 'failed', step: 'repair' }).failed, true);
+  assert.deepEqual(stageOf({ kind: 'build', status: 'delivered', step: 'done' }), { index: 5, waiting: false, done: true, failed: false });
+  assert.ok(CHANGE_IDEAS.length >= 3 && CHANGE_IDEAS.every(t => t.length < 40), 'the empty conversation offers a few short changes to tap');
+});
+
+test('pictures: title cards from words and colours, icons from words, a state chip a game', () => {
+  assert.equal(iconFor('Tag in a haunted house: one ghost'), 'ghost');
+  assert.equal(iconFor('A backyard pillow fight'), 'pillow');
+  assert.equal(iconFor('A side-on platformer where we race to grab coins'), 'coin');
+  assert.equal(iconFor('Bumper boats in a pool'), 'water');
+  assert.equal(iconFor('A backyard water fight'), 'water', 'a water fight is water, not swords');
+  assert.equal(iconFor('something else entirely'), 'pad');
+  // own colours first, words next, a hashed hue last; only #hex is ever taken
+  assert.deepEqual(paletteOf('x', ['#4f7cff', '#ff5ea8', 'red; background:url(x)']), ['#4f7cff', '#ff5ea8']);
+  assert.equal(paletteOf('a sunset race')[0], '#ff8a5c');
+  assert.deepEqual(paletteOf('same words'), paletteOf('same words'), 'the same words draw the same card');
+  assert.notDeepEqual(paletteOf('Pillow Brawl: bop your friends'), paletteOf('Feather Frenzy: grab the feathers'), 'two concepts about pillows still differ');
+  const svgText = titleCardSvg({ words: '<script>alert(1)</script> "quoted"', colours: ['"/><script>'] });
+  assert.doesNotMatch(svgText, /script|quoted|alert/, 'no words reach the markup');
+  assert.match(svgText, /^<svg [^>]*viewBox="0 0 320 180"/);
+  assert.match(titleCardSvg({ words: 'x', shape: 'banner' }), /viewBox="0 0 320 110"/);
+  assert.match(titleCardUrl({ words: 'x' }), /^data:image\/svg\+xml;charset=utf-8,/);
+  const st = g => cardState(g).label;
+  assert.equal(st({ made: true, loop: null }), 'Made');
+  assert.equal(st({ made: true, loop: { kind: 'build', status: 'delivered' } }), 'Made');
+  assert.equal(st({ made: false, loop: { kind: 'pitch', status: 'waiting-on-question' } }), 'Being pitched');
+  assert.equal(cardState({ made: false, loop: { kind: 'pitch', status: 'waiting-on-question' } }).tone, 'warn', 'waiting on the person: amber');
+  assert.equal(st({ made: false, loop: { kind: 'build', status: 'building', step: 'agent' } }), 'Building');
+  assert.equal(st({ made: true, loop: { kind: 'change', status: 'building', step: 'verify' } }), 'Building');
+  assert.equal(cardState({ made: true, loop: { kind: 'build', status: 'failed' } }).tone, 'bad');
+});
+
+test('the pictures route: the newest verify screenshot of a game, its colours; refuses names that are not a game folder', async () => {
+  assert.equal(pickShot(['01-menu.jpg', '02-first-look.jpg', '03-playing.jpg', 'verdict.json']), '03-playing.jpg');
+  assert.equal(pickShot(['01-menu.jpg', '24-no-webgpu.jpg', 'x-world.png']), 'x-world.png');
+  assert.equal(pickShot(['01-menu.jpg', 'verdict.json']), null, 'a menu is not the game');
+  assert.equal(pickShot(['.hidden-playing.jpg']), null);
+  const dir = path.join(games, 'pic-game');
+  await createGame(dir, { from: 'coin-hop' });
+  let all = (await call('/api/pictures')).body;
+  assert.equal(all.games['pic-game'].picture, null, 'no verify run yet: the page draws a title card');
+  assert.ok(all.games['pic-game'].colours.includes('#4f7cff'), 'the game\'s own palette');
+  assert.ok('soak-squad' in all.examples);
+  assert.equal((await fetch(`${base}/api/pictures/game/pic-game`)).status, 404);
+  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  for (const n of [1, 3]) { await mkdir(path.join(dir, 'evidence', `verify-${n}`), { recursive: true }); await writeFile(path.join(dir, 'evidence', `verify-${n}`, '03-playing.jpg'), Buffer.concat([jpg, Buffer.from([n])])); }
+  await mkdir(path.join(dir, 'evidence', 'verify-4'), { recursive: true });
+  await writeFile(path.join(dir, 'evidence', 'verify-4', 'verdict.json'), '{}');      // the newest run has no picture: the one before it
+  all = (await call('/api/pictures')).body;
+  assert.equal(all.games['pic-game'].picture, '/api/pictures/game/pic-game?v=verify-3');
+  const r = await fetch(`${base}${all.games['pic-game'].picture}`);
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'image/jpeg');
+  assert.equal(Buffer.from(await r.arrayBuffer()).at(-1), 3, 'the newest run');
+  // path tricks: only a game folder name, only files found by listing, never a link out of the folder
+  // (fetch itself folds %2E%2E into .., which lands on the listing: a list of names, never a file)
+  for (const bad of ['..%2F..%2Fetc', '%2E%2E', '.hidden', 'a%5Cb', '%2e%2e%2f%2e%2e%2fsecret.jpg']) {
+    const res = await fetch(`${base}/api/pictures/game/${bad}`);
+    assert.doesNotMatch(res.headers.get('content-type') ?? '', /^image\//, bad);
+    assert.ok([200, 400, 404].includes(res.status), `${bad}: ${res.status}`);
+  }
+  assert.equal((await fetch(`${base}/api/pictures/game/pic-game/..%2F..`)).status, 404);
+  assert.equal((await fetch(`${base}/api/pictures/example/..%2Fcoin-hop`)).status, 404);
+  assert.equal((await fetch(`${base}/api/pictures/example/coin-hop`)).status, 404, 'the kit\'s examples have no picture of their own yet');
+  const { symlink } = await import('node:fs/promises');
+  const out = path.join(root.dir, 'secret.jpg');
+  await writeFile(out, 'secret');
+  await mkdir(path.join(dir, 'evidence', 'verify-9'), { recursive: true });
+  let linked = true;
+  try { await symlink(out, path.join(dir, 'evidence', 'verify-9', '03-playing.jpg')); } catch { linked = false; }   // Windows without the right
+  if (linked) {
+    assert.equal((await call('/api/pictures')).body.games['pic-game'].picture, '/api/pictures/game/pic-game?v=verify-3', 'a link is never served');
+    const body = Buffer.from(await (await fetch(`${base}/api/pictures/game/pic-game`)).arrayBuffer()).toString();
+    assert.doesNotMatch(body, /secret/);
+  }
+  assert.equal((await fetch(`${base}/api/pictures/game/pic-game`, { method: 'POST', headers: { origin: base } })).status, 405, 'read only');
 });
 
 test('connect leaves a record the studio reads (the one step left), and --remove takes it away', async () => {

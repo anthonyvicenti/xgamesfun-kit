@@ -3,9 +3,15 @@
 
 const STEP_WORDS = {
   pitch: 'Choosing a pitch', spec: 'Checking the spec', create: 'Making the game folder', agent: 'Your session is writing the game',
-  fix: 'Applying automatic fixes', verify: 'Running verify', playtest: 'The play-tester is playing', repair: 'Your session is repairing what failed',
+  fix: 'Applying automatic fixes', verify: 'Running the health check', playtest: 'The play-tester is playing', repair: 'Your session is repairing what failed',
   deliver: 'Handing the game over', done: 'Finished',
 };
+/** A loop step's short name, for the thread's "this → next" lines. */
+const STEP_NAMES = {
+  pitch: 'Pitch', spec: 'Spec check', create: 'Game folder', agent: 'Writing the game', fix: 'Automatic fixes', verify: 'Health check',
+  playtest: 'Play-test', repair: 'Repair', deliver: 'Delivery', done: 'Done',
+};
+export const stepName = step => STEP_NAMES[step] ?? String(step ?? '');
 const STATUS_WORDS = { building: 'Building', 'waiting-on-question': 'Waiting for your answer', delivered: 'Delivered', failed: 'Stopped: it did not work out', cancelled: 'Cancelled: you rolled back' };
 
 /** A delivered outcome that is not a plain "delivered", as the status line names it (the loop library's outcomeOf). */

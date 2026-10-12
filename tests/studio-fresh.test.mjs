@@ -67,7 +67,15 @@ describe('the studio shows no game before the first prompt', { skip: !chromium &
     await v.page.locator('#start-input').waitFor();
     assert.equal(await v.page.evaluate(() => document.documentElement.dataset.view), 'start');
     assert.equal(await v.page.locator('.product').isVisible(), false, 'the game side is not on the page');
-    assert.equal(await v.page.locator('.start-games .empty').textContent(), 'No games yet. Describe one above, or start from an example below.');
+    assert.equal(await v.page.locator('.start-games .empty p').textContent(), 'No games yet. Describe one above, or start from an example.');
+    assert.equal(await v.page.locator('.start-games .empty svg').count(), 1, 'an empty state with a picture');
+    // every example is a picture card (no example ships a picture yet: a title card drawn from its words)
+    await v.page.locator('[data-example] .gc-img').first().waitFor();
+    assert.ok((await v.page.locator('[data-example] .gc-img').evaluateAll(is => is.map(i => i.src))).every(s => s.startsWith('data:image/svg+xml')));
+    // the connect picture: no session, a grey light, the one command with Copy
+    await v.page.locator('[data-part=session] .session-pic[data-light=off]').waitFor();
+    assert.equal(await v.page.locator('[data-part=session] .sp-code').textContent(), 'node bin/gamesfun.mjs session wait');
+    assert.equal(await v.page.locator('[data-part=session] .sp-copy').textContent(), 'Copy');
     // the examples are a choice the person makes, never a preview
     assert.ok(await v.page.locator('[data-example="soak-squad"]').count());
     await noGame(v, 'fresh start page');
@@ -82,6 +90,7 @@ describe('the studio shows no game before the first prompt', { skip: !chromium &
     const v = await open();
     await v.page.locator('.game-card[data-game]').nth(1).waitFor();
     assert.deepEqual((await v.page.locator('.game-card[data-game]').evaluateAll(cs => cs.map(c => c.dataset.game))).sort(), ['four-up', 'water-fight']);
+    assert.deepEqual(await v.page.locator('.game-card[data-game] .gc-state').evaluateAll(cs => cs.map(c => c.textContent)), ['Made', 'Made'], 'each card says its state');
     await noGame(v, 'start page with two games');
     // a reload is still the start page: nothing was opened for the person
     await v.page.reload();
