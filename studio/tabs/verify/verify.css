@@ -1,0 +1,107 @@
+/* Health check (studio/tabs/verify.js): a scorecard on the studio's tokens (studio/studio.css). Scoped under .health. */
+.health { --hc-good: var(--good); --hc-bad: var(--bad); --hc-run: var(--lav); }
+
+/* the score: a ring, the headline in words, the history */
+.health .hc-score { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s4); align-items: center; margin-bottom: var(--s4); }
+.health .hc-ring { position: relative; width: 104px; height: 104px; flex: none; }
+.health .hc-ring-svg { width: 100%; height: 100%; display: block; }
+.health .hc-ring-track { fill: none; stroke: var(--surface-3); stroke-width: 9; }
+.health .hc-ring-fill { fill: none; stroke: var(--faint); stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray .4s ease; }
+.health .hc-ring[data-tone=good] .hc-ring-fill { stroke: var(--hc-good); }
+.health .hc-ring[data-tone=bad] .hc-ring-fill { stroke: var(--hc-bad); }
+.health .hc-ring[data-tone=run] .hc-ring-fill { stroke: var(--hc-run); }
+.health .hc-ring[data-tone=run] .hc-ring-svg { animation: hc-breathe 1.6s ease-in-out infinite; }
+@keyframes hc-breathe { 50% { opacity: .75; } }
+@media (prefers-reduced-motion: reduce) { .health .hc-ring[data-tone=run] .hc-ring-svg { animation: none; } }
+.health .hc-ring-words { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+.health .hc-ring-words b { font-size: 22px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.health .hc-ring-words small { font-size: var(--fs-xs); color: var(--muted); margin-top: 2px; }
+.health .hc-head { min-width: 0; }
+.health h3.hc-words { margin: 0 0 4px; font-size: var(--fs-xl); font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--ink); line-height: 1.2; }
+.health h3.hc-words[data-tone=good] { color: var(--hc-good); }
+.health h3.hc-words[data-tone=bad], .health h3.hc-words[data-tone=stopped] { color: var(--hc-bad); }
+.health .hc-sub { margin: 0; color: var(--ink-2); font-size: var(--fs-md); line-height: 1.45; }
+.health .hc-sub.bad { color: var(--hc-bad); margin-top: 4px; }
+
+.health .hc-history { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: var(--s2); }
+.health .hc-chip { display: inline-flex; align-items: center; gap: 5px; min-height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.health .hc-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.health .hc-chip[data-tone=good] i { background: var(--hc-good); }
+.health .hc-chip[data-tone=bad] i { background: var(--hc-bad); }
+.health .hc-chip:hover { border-color: var(--lav-line); color: var(--ink); }
+.health .hc-chip[aria-pressed=true] { border-color: var(--lav); background: var(--lav-soft); color: var(--ink); }
+
+/* the empty state: a picture and one sentence */
+.health .hc-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s3); padding: var(--s4) var(--s3); border: 1px dashed var(--line-strong); border-radius: var(--r-lg); }
+.health .hc-empty-art { width: 200px; max-width: 70%; height: auto; }
+.health .hc-empty-art .a-screen { fill: var(--stage); stroke: var(--line-strong); stroke-width: 2; }
+.health .hc-empty-art .a-hill { stroke: var(--lav); stroke-width: 3; }
+.health .hc-empty-art .a-sun { fill: var(--lime-soft); stroke: var(--lime); stroke-width: 2; }
+.health .hc-empty-art .a-card { fill: var(--surface-2); stroke: var(--line-strong); stroke-width: 2; }
+.health .hc-empty-art .a-clip { fill: var(--surface-3); stroke: var(--line-strong); stroke-width: 2; }
+.health .hc-empty-art .a-tick { stroke: var(--good); stroke-width: 3; }
+.health .hc-empty-art .a-line { stroke: var(--faint); stroke-width: 3; }
+
+/* the buttons and, while a check runs, the progress bar */
+.health .hc-actions { margin-bottom: var(--s4); }
+.health .hc-actions button:first-child svg { fill: currentColor; }
+.health .hc-progress { margin: calc(-1 * var(--s2)) 0 var(--s4); }
+.health .hc-progress-track { height: 8px; border-radius: var(--r-pill); background: var(--surface-3); overflow: hidden; }
+.health .hc-progress-fill { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--lav), var(--lime)); transition: width .8s ease; }
+.health .hc-progress-words { margin-top: 6px; }
+
+/* the run's screenshots: a filmstrip, one enlarged in place */
+.health .hc-shots { margin-bottom: var(--s4); min-width: 0; }
+.health .hc-strip-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); margin-bottom: 6px; font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
+.health .hc-strip-head .small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.health .hc-strip { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 6px; scroll-snap-type: x proximity; }
+.health .hc-shot { flex: none; padding: 0; min-height: 0; width: 96px; aspect-ratio: 16 / 9; border-radius: var(--r-sm); border: 2px solid transparent; background: var(--stage); overflow: hidden; cursor: zoom-in; scroll-snap-align: start; }
+.health .hc-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.health .hc-shot:hover { border-color: var(--lav-line); }
+.health .hc-shot[aria-pressed=true] { border-color: var(--lav); }
+.health .hc-large { margin: 0 0 var(--s2); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--stage); }
+.health .hc-large img { width: 100%; display: block; cursor: zoom-out; max-height: 60vh; object-fit: contain; }
+.health .hc-large figcaption { display: flex; align-items: center; gap: 6px; padding: 6px; background: var(--surface-2); font-size: var(--fs-sm); color: var(--ink-2); }
+.health .hc-large figcaption span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health .hc-large figcaption button.icon { width: 28px; min-height: 28px; }
+
+/* the categories: a card each, failures first and open */
+.health .hc-cats { display: flex; flex-direction: column; gap: var(--s2); }
+.health .hc-cat { background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--faint); border-radius: var(--r-md); }
+.health .hc-cat[data-state=pass] { border-left-color: var(--hc-good); }
+.health .hc-cat[data-state=fail] { border-left-color: var(--hc-bad); }
+.health .hc-cat > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: var(--s2); align-items: center; padding: 10px 12px; cursor: pointer; list-style: none; }
+.health .hc-cat > summary::-webkit-details-marker { display: none; }
+.health .hc-cat-ico { display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--r-md); background: var(--surface-3); color: var(--ink-2); }
+.health .hc-cat[data-state=pass] .hc-cat-ico { color: var(--hc-good); background: var(--good-soft); }
+.health .hc-cat[data-state=fail] .hc-cat-ico { color: var(--hc-bad); background: var(--bad-soft); }
+.health .hc-cat-name { font-weight: 700; font-size: var(--fs-base); min-width: 0; }
+.health .hc-dots { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; max-width: 90px; }
+.health .hc-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.health .hc-dots i[data-state=pass] { background: var(--hc-good); }
+.health .hc-dots i[data-state=fail] { background: var(--hc-bad); }
+.health .hc-cat-count { font-size: var(--fs-sm); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.health .hc-cat[data-state=fail] .hc-cat-count { color: var(--hc-bad); font-weight: 700; }
+.health .hc-list { list-style: none; margin: 0; padding: 0 12px 8px; }
+.health .hc-check { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: var(--s2); align-items: start; padding: 7px 0; border-top: 1px solid var(--line); font-size: var(--fs-md); }
+.health .hc-st { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-3); color: var(--muted); }
+.health .hc-check[data-state=pass] .hc-st { background: var(--good-soft); color: var(--hc-good); }
+.health .hc-check[data-state=fail] .hc-st { background: var(--bad-soft); color: var(--hc-bad); }
+.health .hc-check[data-state=fail] { grid-template-columns: 22px minmax(0, 1fr); }
+.health .hc-title { color: var(--ink); line-height: 20px; }
+.health .hc-check[data-state=fail] .hc-title { font-weight: 700; }
+.health .hc-means { margin: 2px 0 var(--s2); color: var(--ink-2); line-height: 1.45; }
+.health .hc-fix { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.health .hc-saw p { margin: 4px 0 0; overflow-wrap: anywhere; color: var(--ink-2); }
+
+/* Details for the agent */
+.health .hc-details { margin-top: var(--s5); }
+.health .hc-details code { font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.health .hc-raw-list { margin-bottom: var(--s3); }
+
+@media (max-width: 480px) {
+  .health .hc-score { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .health .hc-history { justify-content: center; }
+  .health .hc-dots { display: none; }
+  .health .hc-cat > summary { grid-template-columns: auto minmax(0, 1fr) auto; }
+}
