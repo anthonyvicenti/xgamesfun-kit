@@ -527,7 +527,9 @@ export const tools = [
       if (economyStatus === undefined) {
         try {
           economyStatus = (await import('../../web3/node/economy.mjs')).economyStatus ?? null;
-        } catch {
+        } catch (e) {
+          // not written yet: say so; anything else (a bug in it) is the real error
+          if (e.code !== 'ERR_MODULE_NOT_FOUND' || !String(e.message).includes('economy.mjs')) throw e;
           economyStatus = null;
         }
       }
