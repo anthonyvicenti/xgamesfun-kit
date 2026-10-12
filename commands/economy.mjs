@@ -11,6 +11,7 @@ import { compile } from '../web3/economy/compile.mjs';
 import { cost, explainCost } from '../web3/economy/cost.mjs';
 import { migrateFile } from '../web3/economy/migrate.mjs';
 import { explain, simulate } from '../web3/economy/simulate.mjs';
+import { explainFull, simulateFull } from '../web3/economy/sim/index.mjs';
 import { economyStatus, publishPlan, readEconomy } from '../web3/node/economy.mjs';
 import { KIT_ROOT, studioUrl } from '../web3/node/game-dir.mjs';
 import { queueRequest } from '../web3/node/requests.mjs';
@@ -29,6 +30,11 @@ const usage = `Usage: gamesfun economy <action> [game-dir] [--spec <file>] [--js
               (open orders, stakes, lottery places, contest pots) and what is left goes back to your key's wallet.
               [--tries <n>] opens per box until a win (4)  [--budget <SOL>]  [--out <file>] the record (JSON)
   simulate    What each box, ticket and craft is worth, how long each pool lasts, who pays what
+              --full: run the real loot program in LiteSVM with synthetic players for the scenario's days and show
+              its numbers beside the quick ones (needs devnet once for the programs, then cached; LiteSVM installs
+              into your cache folder on first use). Without them it says so and shows the quick simulation.
+              [--players <n>] (20)  [--days <n>] (the scenario's)  [--seed <text>]  [--program <loot.so>] a local
+              build of program/loot instead of the deployed bytes  [--offline] use only the cache
   cost        What going live costs (rent, fees, seeds) and what each action costs while it runs
   plan        The setup, instruction by instruction, split into the transactions your wallet approves
   migrate     Move the game's shop into an economy (shows it; --write saves gamesfun.json)
@@ -151,13 +157,28 @@ async function checkDevnet(target, values) {
   return record.verdict === 'ok' ? 0 : 1;
 }
 
+/** `economy simulate --full`: the real program in LiteSVM beside the quick simulation (web3/economy/sim). */
+async function simulateFullCommand(economy, values) {
+  const count = (v, name) => {
+    if (v === undefined) return undefined;
+    const n = Number(v);
+    if (!(n > 0)) throw new UsageError(`--${name} takes a number above 0.`);
+    return n;
+  };
+  const log = values.json ? () => {} : (line) => process.stderr.write(`${line}\n`);
+  const r = await simulateFull(economy, { players: count(values.players, 'players') ?? 20, days: count(values.days, 'days'), seed: values.seed, program: values.program && path.resolve(values.program), offline: values.offline, log });
+  if (values.json) printJson(r);
+  else console.log(r.mode === 'full' ? explainFull(r) : `${r.why}\n\n${explain(r.quick, economy)}`);
+  return 0;
+}
+
 export default {
   name: 'economy',
   summary: "check, simulate and cost a game's economy; its setup plan (devnet)",
   usage,
   run: (args) =>
     guard(async () => {
-      const { values, positionals } = parse(args, { spec: { type: 'string' }, write: { type: 'boolean' }, picture: { type: 'string' }, devnet: { type: 'boolean' }, key: { type: 'string' }, tries: { type: 'string' }, budget: { type: 'string' }, out: { type: 'string' }, ...decideOptions }, usage);
+      const { values, positionals } = parse(args, { spec: { type: 'string' }, write: { type: 'boolean' }, picture: { type: 'string' }, devnet: { type: 'boolean' }, key: { type: 'string' }, tries: { type: 'string' }, budget: { type: 'string' }, out: { type: 'string' }, full: { type: 'boolean' }, players: { type: 'string' }, days: { type: 'string' }, seed: { type: 'string' }, program: { type: 'string' }, offline: { type: 'boolean' }, ...decideOptions }, usage);
       const [action, target] = positionals;
       if (!action) throw new UsageError(usage);
       if (action === 'publish') return publish(target, values);
@@ -189,6 +210,7 @@ export default {
         else console.log(`${describe({ refusals: verdict.refusals, warnings: [] })}\n\nFix these first (npx gamesfun economy check).`);
         return 1;
       }
+      if (action === 'simulate' && values.full) return simulateFullCommand(economy, values);
       if (action === 'simulate') {
         const sim = simulate(economy, { now: Math.floor(Date.now() / 1000) });
         if (values.json) printJson(sim);

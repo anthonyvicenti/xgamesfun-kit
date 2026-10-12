@@ -6,7 +6,7 @@
 // odds as written (stock odds start where the table starts), and one ticket per lottery purchase. Shares of a
 // pool are worked out continuously, so a pool that pays a share of itself settles at a level instead of emptying.
 // It is a guide, not a promise: the full simulation (LiteSVM, later) runs the real program.
-import { ESCROW_LAMPORTS, FEES, LAMPORTS_PER_SOL, ORACLE_FEE, RENT_PER_BYTE, SIGNATURE_FEE, destination, model, sharesOf, toBps, toSeconds, weights } from './model.mjs';
+import { ESCROW_LAMPORTS, FEES, LAMPORTS_PER_SOL, ORACLE_FEE, RENT_PER_BYTE, SIGNATURE_FEE, destination, model, sharesOf, toBps, toSeconds, toTime, weights } from './model.mjs';
 
 const DAY = 86_400;
 const DEFAULT_PER_DAY = 100;
@@ -18,8 +18,15 @@ const NETWORK_FEE = sol(SIGNATURE_FEE);
 const ORACLE = sol(ORACLE_FEE);
 /** A purchase line in a lottery's list: 40 bytes of rent the buyer pays and first place gets (lottery.rs). */
 const TICKET_LINE = sol(40n * RENT_PER_BYTE);
-/** A collectible's Core account, paid from the order's escrow: "about 0.004 SOL" (constants.rs ESCROW_LAMPORTS). */
-const COLLECTIBLE_RENT = 0.004;
+/**
+ * A collectible's Core account, paid from the order's escrow: its rent (a Core asset of about 190 bytes at 5,080
+ * lamports a byte) plus Metaplex Core's creation fee of 0.0015 SOL, which the account keeps. The full simulation
+ * measured 0.00309 to 0.00313 SOL across the fixtures (2026-10-12); this was "about 0.004" before.
+ */
+const COLLECTIBLE_RENT = 0.0031;
+/** What a collectible a recipe burns gives back: its rent less one byte's (Core leaves a 1-byte account that keeps
+ * the creation fee). 189 bytes × 5,080 lamports, measured by the full simulation. */
+const BURN_REFUND = 0.00096;
 const num = (v) => (v === undefined || v === null ? 0 : Number(v));
 export const round = (x, digits = 9) => (Number.isFinite(x) ? Number(x.toFixed(digits)) : x);
 
@@ -28,6 +35,41 @@ const add = (into, token, amount) => {
   if (!amount) return;
   into[token] = (into[token] ?? 0) + amount;
 };
+
+/** Prices are capped here so a price that compounds without end stays a number. */
+const PRICE_CAP = 1e18;
+
+/**
+ * What `perDay` sales a day over `days` pay, one every 1/perDay of a day (the first half a gap in), with the part's
+ * rise and fall exactly as the program prices them (state.rs `Fall::sell`): each sale pays the price fallen since the
+ * later of the fall's start and the last sale, and the price after it is what was paid plus the rise.
+ * { count, average, first, last }, in whole units.
+ */
+export function salePrices(part, perDay, days, fallStartsAfter = 0) {
+  const listed = num(part.price);
+  const count = Math.round(perDay * days);
+  if (!count || (!part.rise && !part.fall)) return { count, average: listed, first: listed, last: listed };
+  const gap = DAY / perDay;
+  const growth = num(part.rise?.growthPercent) / 100;
+  const step = num(part.rise?.step);
+  const every = part.fall ? toSeconds(part.fall.every) : 0;
+  const floor = num(part.fall?.floor);
+  let price = listed;
+  let since = fallStartsAfter;
+  let total = 0;
+  let first;
+  let paid = listed;
+  for (let k = 0; k < count; k++) {
+    const at = (k + 0.5) * gap;
+    paid = price;
+    if (part.fall && every && at > since && price > floor) paid = Math.max(floor, price - Math.floor((at - since) / every) * num(part.fall.step));
+    since = Math.max(since, at);
+    first ??= paid;
+    total += paid;
+    price = Math.min(PRICE_CAP, paid + paid * growth + step);
+  }
+  return { count, average: total / count, first, last: paid };
+}
 
 export function simulate(economy, { now = 0 } = {}) {
   const m = model(economy, { now });
@@ -50,6 +92,16 @@ export function simulate(economy, { now = 0 } = {}) {
   const notes = [];
   /** Prizes that are a share of a pool: counted for players once each pool's level is known. */
   const sharePrizes = [];
+  /** Shares of a pool that are burned (a schedule, a decision): counted once each pool's level is known. */
+  const shareBurns = [];
+  /** Seconds from going live to a fall's start. */
+  const fallStart = (part) => (part.fall?.start && part.fall.start !== 'publish' ? Math.max(0, toTime(part.fall.start, now) - now) : 0);
+  /** What a rising or falling price really comes to, in words. */
+  const priceNote = (part, sold) => {
+    if (!part.rise && !part.fall) return;
+    const said = `“${part.name}”’s price ${part.rise && part.fall ? 'rises with each sale and falls with time' : part.rise ? 'rises with each sale' : 'falls with time and starts again after each sale'}: over the scenario’s ${sold.count} sales it averages ${round(sold.average, 6)} (the first ${round(sold.first, 6)}, the last ${round(sold.last, 6)}), and the money below counts that.`;
+    notes.push(sold.last >= 10 * num(part.price) ? `${said} It ends ${sold.last >= PRICE_CAP ? 'beyond any price' : `${round(sold.last / num(part.price), 1)} times`} where it started: players stop buying long before that. A smaller growth keeps it in reach.` : said);
+  };
 
   /** Where `amount` of `token` goes under `split`, per day: pools, burns, accounts, the treasury. */
   const carryOut = (split, token, amount, by) => {
@@ -72,10 +124,12 @@ export function simulate(economy, { now = 0 } = {}) {
   // ---- boxes
   const boxes = m.boxes.map((b) => {
     const token = b.currency ?? game;
-    const price = num(b.price);
+    const opens = perDay('box', b.key);
+    // A price that rises or falls is counted at what the scenario's opens really pay, on average.
+    const sold = salePrices(b, opens, days, fallStart(b));
+    const price = sold.average;
     const w = weights(b);
     const total = w.reduce((a, x) => a + x, 0) || 1;
-    const opens = perDay('box', b.key);
     let value = 0;
     let burnChance = 0;
     const unpriced = [];
@@ -120,20 +174,23 @@ export function simulate(economy, { now = 0 } = {}) {
     add(players.pay, token, opens * price);
     add(players.get, token, opens * value);
     for (const [t, v] of Object.entries(other)) add(players.get, t, opens * v);
-    playerAction(opens);
+    // Two signatures: the open, then the claim (settle), both from the player's wallet as gf-web3's openBox does
+    // (the full simulation measured it: before 2026-10-12 this counted the settle as the creator's).
+    playerAction(opens, 2);
     players.oracle += opens * ORACLE;
     const collectibles = outcomes.filter((o) => o.gives === 'item').reduce((n, o) => n + o.chance / 100, 0);
     players.rent += opens * collectibles * COLLECTIBLE_RENT;
-    creator.network += opens * NETWORK_FEE; // the settle, by whoever sends it
     const known = !unpriced.length && !shares.length && !Object.keys(other).length;
     // What one open really takes from the player's wallet: the price, games.fun's fee, the oracle's and the network's.
     const isSol = Boolean(m.tokens.get(token)?.wsol);
-    const extrasSol = PLAYER_FEE + ORACLE + NETWORK_FEE;
-    const realCost = { price, token, playerFeeSol: PLAYER_FEE, oracleSol: ORACLE, networkSol: NETWORK_FEE, extrasSol: round(extrasSol), ...(isSol ? { totalSol: round(price + extrasSol) } : {}) };
+    const extrasSol = PLAYER_FEE + ORACLE + 2 * NETWORK_FEE;
+    const realCost = { price: round(price), token, playerFeeSol: PLAYER_FEE, oracleSol: ORACLE, networkSol: round(2 * NETWORK_FEE), extrasSol: round(extrasSol), ...(isSol ? { totalSol: round(price + extrasSol) } : {}) };
+    priceNote(b, sold);
     return {
       key: b.key,
       name: b.name,
-      price,
+      price: num(b.price),
+      ...(price !== num(b.price) ? { averagePrice: round(price) } : {}),
       token,
       opensPerDay: opens,
       outcomes,
@@ -154,14 +211,20 @@ export function simulate(economy, { now = 0 } = {}) {
     .filter((it) => num(it.price) > 0)
     .map((it) => {
       const sales = perDay('item', it.key);
-      const price = num(it.price);
+      const sold = salePrices(it, sales, days, fallStart(it));
+      const price = sold.average;
+      priceNote(it, sold);
       carryOut(it.split, game, sales * price, `item:${it.key}`);
       add(players.pay, game, sales * price);
-      playerAction(sales);
-      if ((it.kind ?? 'collectible') === 'collectible') players.rent += sales * COLLECTIBLE_RENT;
-      creator.network += sales * NETWORK_FEE;
-      const rises = it.rise ? price * (num(it.rise.growthPercent) / 100) + num(it.rise.step) : 0;
-      return { key: it.key, name: it.name, price, token: game, salesPerDay: sales, ...(rises ? { nextPrice: round(price + rises) } : {}), ...(it.supply ? { soldOutInDays: round(it.supply / (sales || Infinity), 2) } : {}) };
+      // A collectible is paid, then claimed: two signatures from the player (gf-web3's buy). A normal item is
+      // settled by the game once its backend delivered it: the second signature is the game's.
+      const collectible = (it.kind ?? 'collectible') === 'collectible';
+      playerAction(sales, collectible ? 2 : 1);
+      if (collectible) players.rent += sales * COLLECTIBLE_RENT;
+      else creator.network += sales * NETWORK_FEE;
+      const listed = num(it.price);
+      const rises = it.rise ? listed * (num(it.rise.growthPercent) / 100) + num(it.rise.step) : 0;
+      return { key: it.key, name: it.name, price: listed, ...(price !== listed ? { averagePrice: round(price) } : {}), token: game, salesPerDay: sales, ...(rises ? { nextPrice: round(listed + rises) } : {}), ...(it.supply ? { soldOutInDays: round(it.supply / (sales || Infinity), 2) } : {}) };
     });
 
   // ---- payments
@@ -180,6 +243,7 @@ export function simulate(economy, { now = 0 } = {}) {
     const takes = [];
     const gives = [];
     for (const line of r.in ?? []) {
+      if (line.takes === 'burn') players.rent -= crafts * (line.count ?? 1) * BURN_REFUND;
       if (line.takes !== 'pay') {
         takes.push(`${line.takes === 'burn' ? `${line.count ?? 1} × ` : ''}${line.item}${line.takes === 'burn' ? ' (burned)' : line.takes === 'renew' ? ' (renewed)' : ' (kept)'}`);
         continue;
@@ -229,7 +293,10 @@ export function simulate(economy, { now = 0 } = {}) {
         return { key: s.key, does: 'issue', perDay: round(runs * amount), token: m.pool.get(s.pool)?.currency, says: `mints ${round(runs * amount)} ${symbol(m.pool.get(s.pool)?.currency)} a day into ${s.pool}${halving}`, mintsInAll: Number.isFinite(totalEver) ? round(totalEver) : null };
       }
       const share = (toBps(s.percent) ?? 0) / 10_000;
-      if (s.does === 'burn') rateOut(s.pool, `schedule:${s.key}`, runs * share);
+      if (s.does === 'burn') {
+        rateOut(s.pool, `schedule:${s.key}`, runs * share);
+        shareBurns.push({ pool: s.pool, rate: runs * share });
+      }
       else rateOut(s.from, `schedule:${s.key}`, runs * share, s.to);
       return { key: s.key, does: s.does, percentPerDay: round(runs * s.percent, 6), says: `${s.does === 'burn' ? 'burns' : `moves to ${s.to}`} ${s.percent}% of ${s.does === 'burn' ? s.pool : s.from} every ${round(every / 3600, 3)} h` };
     });
@@ -271,6 +338,7 @@ export function simulate(economy, { now = 0 } = {}) {
       if (d.percent !== undefined) {
         rateOut(d.pool, `decision:${d.key}`, rate * ((toBps(d.percent) ?? 0) / 10_000));
         if (d.does === 'payout') sharePrizes.push({ pool: d.pool, rate: rate * ((toBps(d.percent) ?? 0) / 10_000) });
+        else shareBurns.push({ pool: d.pool, rate: rate * ((toBps(d.percent) ?? 0) / 10_000) });
       }
       else flowOut(d.pool, `decision:${d.key}`, rate * num(d.amount));
       const token = m.pool.get(d.pool)?.currency;
@@ -398,10 +466,14 @@ export function simulate(economy, { now = 0 } = {}) {
     const box = prize.box && boxes.find((b) => b.key === prize.box);
     if (box) add(box.alsoPays, row?.token, round(prize.perOpen * level));
   }
+  // A share burned is burned at the pool's level, as a share prize is paid (found by the full simulation: a burn
+  // schedule's tokens were missing from what is burned a day).
+  for (const b of shareBurns) {
+    const row = poolRows.find((r) => r.key === b.pool);
+    add(burned, row?.token, b.rate * (row ? (row.settlesAt ?? row.seed) : 0));
+  }
   for (const t of m.tokens.values())
     if (t.powers?.transferFeePercent > 0) notes.push(`${t.symbol} keeps ${t.powers.transferFeePercent}% of every transfer: pools, prizes, stakes and the treasury receive that much less than shown here.`);
-  for (const part of [...m.items, ...m.boxes])
-    if (part.fall) notes.push(`“${part.name}”’s price falls by ${part.fall.step} every ${part.fall.every}${part.fall.floor !== undefined ? `, never below ${part.fall.floor}` : ''}, and starts again after each sale; this counts every sale at its full ${part.price}.`);
 
   const totals = (map) => Object.fromEntries(Object.entries(map).map(([k, v]) => [k, round(v)]));
   return {
@@ -423,7 +495,7 @@ export function simulate(economy, { now = 0 } = {}) {
       burned: totals(burned),
       accounts: totals(accounts),
     },
-    fees: { playerSol: PLAYER_FEE, projectSol: PROJECT_FEE, oracleSol: ORACLE, networkPerSignatureSol: NETWORK_FEE, escrowSol: sol(ESCROW_LAMPORTS), ticketLineRentSol: round(TICKET_LINE), collectibleRentSol: COLLECTIBLE_RENT },
+    fees: { playerSol: PLAYER_FEE, projectSol: PROJECT_FEE, oracleSol: ORACLE, networkPerSignatureSol: NETWORK_FEE, escrowSol: sol(ESCROW_LAMPORTS), ticketLineRentSol: round(TICKET_LINE), collectibleRentSol: COLLECTIBLE_RENT, burnRefundSol: BURN_REFUND },
     notes,
   };
 }

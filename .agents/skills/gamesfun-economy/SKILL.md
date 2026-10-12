@@ -41,7 +41,10 @@ The tools are the `economy_*` MCP tools (on with `GAMESFUN_WEB3=1`). Without the
 4. **Check it**: `economy_check {"spec": …}`. Fix every refusal; read every warning.
 5. **Simulate it and explain it**: `economy_simulate`, then `economy_explain`. Tell the creator, in a few short
    lines, what each play costs and is worth, how the pools fill and drain, what setting it up costs, what they must
-   decide while it runs, and the chance flag: `references/telling-the-creator.md`.
+   decide while it runs, and the chance flag: `references/telling-the-creator.md`. Before it goes live, or when
+   the numbers matter (a box's return, a pool that must last), run `economy_simulate {"full": true}` too: the real
+   program with synthetic players, its numbers beside the quick ones. Tell the creator every flagged row in words;
+   if it says it could not run (offline, no devnet yet), say so and go on with the quick simulation.
 6. **Iterate on what they say.** "Make mythics 0.5%", "a bigger seed": change the spec, check, simulate, explain
    again. Don't save until they are happy.
 7. **Save it**: `economy_save {"game": "games/<name>", "spec": …}`. It writes only a spec that checks; a live

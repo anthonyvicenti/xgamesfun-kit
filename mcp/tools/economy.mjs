@@ -16,6 +16,7 @@ import { cost, explainCost } from '../../web3/economy/cost.mjs';
 import { CASES, referenceOf } from '../../web3/economy/evals/score.mjs';
 import { LIMITS, isAddress, model, sharesOf } from '../../web3/economy/model.mjs';
 import { explain, round, simulate } from '../../web3/economy/simulate.mjs';
+import { explainFull, simulateFull } from '../../web3/economy/sim/index.mjs';
 import { playSteps } from '../../web3/economy/steps.mjs';
 import { SCHEMA } from '../../web3/economy/validate.mjs';
 import { networkConfig } from '../../web3/gf-web3/network.js';
@@ -35,6 +36,13 @@ export const seams = { status: undefined };
 const kitRoot = (ctx) => ctx?.kitRoot ?? KIT_ROOT;
 const envOf = (ctx) => ctx?.env ?? process.env;
 const nowOf = (ctx) => ctx?.now ?? Math.floor(Date.now() / 1000);
+
+/** economy_simulate with `full: true` (web3/economy/sim): the real program beside the quick simulation. */
+async function fullSimulation(economy, input, from, ctx) {
+  const r = await (ctx?.simulateFull ?? simulateFull)(economy, { players: input.players ?? 20, days: input.days, seed: input.seed, now: nowOf(ctx) });
+  if (r.mode !== 'full') return { ok: true, from, mode: 'quick', text: `${r.why}\n\n${explain(r.quick, economy)}`, ...(input.json ? { simulation: r.quick } : {}) };
+  return { ok: true, from, mode: 'full', text: explainFull(r), flagged: r.flagged, compare: r.compare, notes: r.notes, ...(input.json ? { full: r.full, quick: r.quick } : {}) };
+}
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const num = (x) => (Number.isFinite(x) ? String(round(x, 6)) : String(x));
 
@@ -395,13 +403,17 @@ export const tools = [
     name: 'economy_simulate',
     annotations: readOnly,
     description:
-      'The quick simulation of an economy (expected values from the spec alone, instant): what each box, ticket and craft gives back against its price, the house edge, each pool’s money in and out per day and whether it runs dry, settles or grows, what players, the creator’s treasury and games.fun’s fees get each day. `scenario` overrides the spec’s own (how many of each a day: {"perDay": {"box:flip": 1000}}, "days", "staked"). Refuses a spec with refusals (run economy_check). Returns { text, summary } (`json: true` adds every row). Read-only.',
+      'The quick simulation of an economy (expected values from the spec alone, instant): what each box, ticket and craft gives back against its price, the house edge, each pool’s money in and out per day and whether it runs dry, settles or grows, what players, the creator’s treasury and games.fun’s fees get each day. `scenario` overrides the spec’s own (how many of each a day: {"perDay": {"box:flip": 1000}}, "days", "staked"). Refuses a spec with refusals (run economy_check). Returns { text, summary } (`json: true` adds every row). `full: true` runs the full simulation instead: the real loot program in LiteSVM, synthetic players doing the scenario through the in-game kit’s own calls for its days, and each of its numbers beside the quick one, flagged where they differ by more than chance (takes seconds to minutes; needs devnet once for the program bytes, cached after, and installs LiteSVM into the user’s cache folder on first use; without them it says so and returns the quick simulation). Signs nothing with a real key and sends nothing to any network.',
     inputSchema: {
       type: 'object',
       properties: {
         ...SOURCE,
         scenario: { type: 'object', description: 'What to assume instead of the spec’s scenario: { "days": 30, "perDay": { "<kind>:<key>": n }, "staked": { "<stake key>": amount } }.' },
         json: { type: 'boolean', description: 'Also return every row of the simulation.' },
+        full: { type: 'boolean', description: 'Run the full simulation (the real program in LiteSVM) and compare it with the quick one.' },
+        players: { type: 'integer', minimum: 1, maximum: 200, description: 'Full simulation: how many synthetic players (20).' },
+        days: { type: 'number', exclusiveMinimum: 0, maximum: 365, description: 'Full simulation: how many days (the scenario’s).' },
+        seed: { type: 'string', description: 'Full simulation: the seed of its randomness (the same seed gives the same run).' },
       },
       additionalProperties: false,
     },
@@ -410,6 +422,7 @@ export const tools = [
       const economy = input.scenario ? { ...base, scenario: { ...(base.scenario ?? {}), ...input.scenario, perDay: { ...(base.scenario?.perDay ?? {}), ...(input.scenario.perDay ?? {}) } } } : base;
       const verdict = check(economy, { now: nowOf(ctx) });
       if (!verdict.ok) return refusalResult(verdict, from);
+      if (input.full) return fullSimulation(economy, input, from, ctx);
       const sim = simulate(economy, { now: nowOf(ctx) });
       const summary = {
         boxes: sim.boxes.map((b) => ({ key: b.key, price: b.price, returnPercent: b.returnPercent, houseEdgePercent: b.houseEdgePercent })),
