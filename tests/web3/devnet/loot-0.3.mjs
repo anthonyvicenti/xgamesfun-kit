@@ -1,13 +1,22 @@
-// K0's devnet proof: today's shop on the loot program 0.3, from the kit's own code only. The creator side goes
-// through the same drafts and publish flow the studio's Shop tab drives (flow engine: the server prepares, the wallet
-// signs, the server checks and sends); the player side goes through the in-game kit gf-web3 with a Wallet Standard
-// wallet object. A local test key stands in for each wallet: in the product the person's own wallet signs in the page.
+// K0's devnet proof: the shop example on the loot program 0.3, from the kit's own code only. The creator side goes
+// through what the studio's Economy tab does: the spec saved into gamesfun.json (saveEconomy, the tab's PUT /economy),
+// then the `economy` flow (the flow engine: the server prepares, the wallet signs, the server checks and sends); the
+// player side goes through the in-game kit gf-web3 with a Wallet Standard wallet object. A local test key stands in
+// for each wallet: in the product the person's own wallet signs in the page. After it goes live, everything is read
+// from the economy section (`economy.live`: game, collection, treasury; `economy.live.published`: what is on chain).
 //
-//   1. the shop example (two items, a box, priced in SOL) is published: uploads, then collection + game + items + box
+//   1. the shop example as an economy (two items, a box, priced in SOL) goes live: uploads, then collection + game +
+//      items + box
 //   2. a player buys an item (pay, then claim) and opens the box (MagicBlock's oracle rolls it on devnet, then claim)
 //   3. a forced refund: the creator edits the box in the same transaction the player opens it, so the oracle's roll
 //      finds another version of the box, the order fails, and the player gets it back at once (gf-web3 finish)
-//   4. a shop priced in a Token-2022 coin that keeps 1% of every transfer: published, and an item bought and claimed
+//   4. an old-style shop priced in a Token-2022 coin that keeps 1% of every transfer, drafted with the shop drafts
+//      (drafts.mjs, as a game made before the economy has it): the flow moves it into the economy (the coin stays
+//      Token-2022) and puts it live, and an item is bought and claimed
+//
+// `node --input-type=module -e "await import('./tests/web3/devnet/loot-0.3.mjs')"` loads it without running it (the
+// run starts only as the program Node was started with); the offline parts (the economy, the box re-upsert) are
+// exported for that.
 //
 // Devnet only (the kit refuses any other network; this script also checks devnet's genesis hash). The keys are
 // read from files named by environment variables, never printed or written:
@@ -28,11 +37,13 @@ import { compileMessage, readTransaction, signersOf, wireTransaction } from '../
 import { createGfWeb3 } from '../../../web3/gf-web3/index.js';
 import { explorerUrl, networkConfig } from '../../../web3/gf-web3/network.js';
 import { rpcClient } from '../../../web3/gf-web3/rpc.js';
-import { boxOnChainArgs } from '../../../web3/node/chain.mjs';
-import { saveBox, saveItem, setCurrency } from '../../../web3/node/drafts.mjs';
+import { isMain } from '../../../lib/main.mjs';
+import { check } from '../../../web3/economy/check.mjs';
+import { saveItem, setCurrency } from '../../../web3/node/drafts.mjs';
+import { saveEconomy } from '../../../web3/node/economy-routes.mjs';
 import { freshKeypair, keypairFromSecret } from '../../../web3/node/ed25519.mjs';
 import { createFlowEngine } from '../../../web3/node/flow-engine.mjs';
-import { publishFlow } from '../../../web3/node/flows.mjs';
+import { economyFlow } from '../../../web3/node/flows.mjs';
 import { png } from '../helpers.mjs';
 
 const DEVNET_GENESIS = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
@@ -137,15 +148,51 @@ const ownerOf = async (asset) => {
   return account ? parseCoreAsset(account.data).owner : null;
 };
 
-/** Publish a game folder's shop with the creator's key answering the flow. */
+/** The shop example as an economy: SOL, a hat for sale with a look, a skin only in the box, the box's odds by rarity. */
+export const proofEconomy = () => ({
+  version: 1,
+  network: 'devnet',
+  name: 'Proof Brawl',
+  currency: 'sol',
+  tokens: [{ key: 'sol', source: 'sol' }],
+  collection: { name: 'Proof Brawl Items', royaltyPercent: 5 },
+  items: [
+    { key: 'golden-hat', name: 'Golden Hat', kind: 'collectible', rarity: 'Rare', price: '0.01', picture: 'assets/hat.png', look: { values: { 'character.tint.player': '#ffcc00' } } },
+    { key: 'ice-skin', name: 'Ice Skin', kind: 'collectible', rarity: 'Epic', price: '0', picture: 'assets/skin.png' },
+  ],
+  boxes: [
+    { key: 'mystery-box', name: 'Mystery Box', price: '0.005', outcomes: [{ gives: 'item', item: 'golden-hat', weight: 10 }, { gives: 'item', item: 'ice-skin', weight: 4 }] },
+  ],
+});
+
+/** A box's args exactly as the program holds it now: upserting them again changes nothing but the box's version. */
+export const sameBoxArgs = ({ price, currency, rise, fall, stock_odds, active, shares, entries }) => ({ price, currency, rise, fall, stock_odds, active, shares, entries });
+
+/** What is live, read from the economy section (a shop is gone once it goes live: the flow moves it in). */
+export function liveOf(config) {
+  const e = config.economy ?? {};
+  const live = e.live ?? {};
+  const published = live.published ?? {};
+  const onChain = (list, key) => (published[list] ?? []).some((p) => p.key === key);
+  return {
+    economy: e, live, game: live.game, collection: live.collection, treasury: live.treasury,
+    currency: (e.tokens ?? []).find((t) => t.key === e.currency),
+    items: (e.items ?? []).map((i) => ({ id: i.id, key: i.key, name: i.name, uri: i.uri, onChain: onChain('items', i.key) })),
+    boxes: (e.boxes ?? []).map((b) => ({ id: b.id, key: b.key, onChain: onChain('boxes', b.key) })),
+    shopLeft: config.shop !== undefined,
+  };
+}
+
+/** Put a game folder's economy live (a shop moves into it first) with the creator's key answering the flow. */
 async function publish(dir, creator) {
   const engine = createFlowEngine();
-  const flow = engine.start(await publishFlow({ gameDir: dir, rpc, network }, creator.address));
+  const flow = engine.start(await economyFlow({ gameDir: dir, rpc, network }, creator.address));
   const done = await approveAll(engine, flow, creator);
   const config = await readConfig(dir);
   const landed = done.results.join(' ').match(/[1-9A-HJ-NP-Za-km-z]{80,90}/g) ?? [];
-  const game = config.shop.game ? decodeLoot(LootAccount.Game, (await rpc.account(config.shop.game)).data) : null;
-  return { config, results: done.results, signatures: landed, game };
+  const live = liveOf(config);
+  const game = live.game ? decodeLoot(LootAccount.Game, (await rpc.account(live.game)).data) : null;
+  return { config, live, results: done.results, signatures: landed, game };
 }
 
 // ---------------------------------------------------------------- a Token-2022 coin with a 1% transfer fee
@@ -183,35 +230,32 @@ async function main() {
   const start = { creator: await rpc.balance(creator.address), player: await rpc.balance(player.address) };
   await step('wallets on devnet', async () => ({ creatorLamports: String(start.creator), playerLamports: String(start.player), ok: start.creator > 300_000_000n && start.player > 150_000_000n }));
 
-  // 1. The shop example, published.
+  // 1. The shop example as an economy, saved the way the Economy tab saves it, then put live.
   const shopDir = await gameFolder('shop', 'Proof Brawl');
-  const ctx = { gameDir: shopDir, rpc, network };
-  const shop = await step('the shop example is published: uploads, then collection + loot game + 2 items + 1 box in one approval', async () => {
-    await setCurrency(ctx, { currency: 'SOL' });
-    await saveItem(ctx, { name: 'Golden Hat', picture: 'assets/hat.png', rarity: 'Rare', price: '0.01', look: { values: { 'character.tint.player': '#ffcc00' } } });
-    await saveItem(ctx, { name: 'Ice Skin', picture: 'assets/skin.png', rarity: 'Epic' });
-    await saveBox(ctx, { name: 'Mystery Box', price: '0.005' });
+  const shop = await step('the shop example as an economy goes live: uploads, then collection + loot game + 2 items + 1 box in one approval', async () => {
+    await saveEconomy(shopDir, proofEconomy());
     const out = await publish(shopDir, creator);
-    const s = out.config.shop;
+    const s = out.live;
     return {
       collection: s.collection, game: s.game, treasury: s.treasury, signatures: out.signatures, results: out.results,
       gameOnChain: out.game && { owner: out.game.owner, authority: out.game.authority, mint: out.game.mint, treasury: out.game.treasury },
-      items: s.items.map((i) => ({ id: i.id, name: i.name, uri: i.uri, listed: i.listed })), boxes: s.boxes.map((b) => ({ id: b.id, listed: b.listed })),
-      ok: Boolean(out.game) && out.game.owner === creator.address && s.items.every((i) => i.listed) && s.boxes.every((b) => b.listed),
+      items: s.items, boxes: s.boxes,
+      ok: Boolean(out.game) && out.game.owner === creator.address && s.items.length === 2 && s.items.every((i) => i.onChain) && s.boxes.length === 1 && s.boxes.every((b) => b.onChain),
     };
   });
   if (!shop?.ok) return;
   const config = await readConfig(shopDir);
+  const { game: liveGame, boxes: liveBoxes } = liveOf(config);
   const kit = kitFor(config, player);
 
   // 2. A player buys and opens a box.
   await step('a player buys Golden Hat: pay (buy_item), then claim (settle mints the collectible)', async () => {
-    const r = await kit.shop.buy(1);
+    const r = await kit.shop.buy('golden-hat');
     const owner = await ownerOf(r.asset);
     return { order: r.order, asset: r.asset, assetOwner: owner, signatures: r.signatures, receipts: await Promise.all(r.signatures.map(receipts)), explorer: r.signatures.map(tx), ok: owner === player.address };
   });
   await step('the player opens Mystery Box: pay and roll (open_box), MagicBlock’s oracle rolls it on devnet, then claim (settle)', async () => {
-    const r = await kit.openBox(1);
+    const r = await kit.openBox('mystery-box');
     const owner = r.asset ? await ownerOf(r.asset) : null;
     return { order: r.order, item: r.item.name, serial: r.item.serial, asset: r.asset, assetOwner: owner, signatures: r.signatures, receipts: await Promise.all(r.signatures.map(receipts)), explorer: r.signatures.map(tx), ok: owner === player.address };
   });
@@ -222,11 +266,12 @@ async function main() {
 
   // 3. A forced refund: the box is edited in the transaction that opens it, so the roll finds another version.
   await step('a forced refund: the creator edits the box in the transaction the player opens it in; the roll fails, the player refunds at once', async () => {
-    const game = config.shop.game;
-    const box = decodeLoot(LootAccount.Box, (await rpc.account(lootPda.box(game, 1))).data);
+    const game = liveGame;
+    const boxId = liveBoxes[0].id;
+    const box = decodeLoot(LootAccount.Box, (await rpc.account(lootPda.box(game, boxId))).data);
     const nonce = newNonce();
-    const open = openBoxIxs({ player: player.address, game, mint: box.currency ?? decodeLoot(LootAccount.Game, (await rpc.account(game)).data).mint, boxId: 1, box, nonce });
-    const edit = upsertBoxIx({ owner: creator.address, game, boxId: 1, args: boxArgs(boxOnChainArgs(config.shop.boxes[0])) });
+    const open = openBoxIxs({ player: player.address, game, mint: box.currency ?? decodeLoot(LootAccount.Game, (await rpc.account(game)).data).mint, boxId, box, nonce });
+    const edit = upsertBoxIx({ owner: creator.address, game, boxId, args: boxArgs(sameBoxArgs(box)) });
     const opened = await send(withSolWrap(player.address, 'So11111111111111111111111111111111111111112', box.price, [...open.instructions, edit]), [player, creator]);
     let order = null;
     for (let i = 0; i < 90 && (!order || order.status === 'Pending'); i++) {
@@ -254,19 +299,21 @@ async function main() {
   coin.drop();
   if (!coinStep) return finishRun(start, creator, player);
   const coinDir = await gameFolder('token-2022-shop', 'Proof Coin Shop');
-  const coinShop = await step('a shop priced in the Token-2022 coin is published', async () => {
+  const coinShop = await step('an old-style shop priced in the Token-2022 coin moves into the economy and goes live (the coin stays Token-2022)', async () => {
     const c = { gameDir: coinDir, rpc, network };
     await setCurrency(c, { currency: coinStep.mint });
     await saveItem(c, { name: 'Coin Crown', picture: 'assets/hat.png', rarity: 'Legendary', price: '10' });
     const out = await publish(coinDir, creator);
-    return { game: out.config.shop.game, treasury: out.config.shop.treasury, currency: out.config.shop.currency, signatures: out.signatures, ok: out.config.shop.currency.program === 'token-2022' && out.config.shop.items[0].listed };
+    const s = out.live;
+    return { game: s.game, treasury: s.treasury, currency: s.currency, items: s.items, shopLeft: s.shopLeft, signatures: out.signatures, ok: !s.shopLeft && s.currency?.program === 'token-2022' && s.currency?.mint === coinStep.mint && s.items[0]?.onChain === true };
   });
   if (coinShop?.ok) {
     await step('the player buys Coin Crown in the Token-2022 coin (the Memo program rides along); the treasury gets what the coin’s fee leaves', async () => {
       const coinConfig = await readConfig(coinDir);
-      const before = await tokenAmount(coinConfig.shop.treasury);
-      const r = await kitFor(coinConfig, player).shop.buy(1);
-      const got = (await tokenAmount(coinConfig.shop.treasury)) - before;
+      const { treasury } = liveOf(coinConfig);
+      const before = await tokenAmount(treasury);
+      const r = await kitFor(coinConfig, player).shop.buy('coin-crown');
+      const got = (await tokenAmount(treasury)) - before;
       const owner = await ownerOf(r.asset);
       const extras = await transferExtras(rpc, coinStep.mint);
       // 10 coins: 1% stays withheld on the way into the vault, 1% of the rest on the way to the treasury.
@@ -281,14 +328,17 @@ async function finishRun(start, creator, player) {
   result.lamportsSpent = { creator: String(start.creator - (await rpc.balance(creator.address))), player: String(start.player - (await rpc.balance(player.address))) };
 }
 
-try {
-  await main();
-} catch (error) {
-  result.steps.push({ name: 'run', ok: false, error: error.message });
-  console.error(error);
+if (isMain(import.meta)) {
+  try {
+    if (!check(proofEconomy(), { now: Math.floor(Date.now() / 1000) }).ok) throw new Error('The proof economy does not check: run the offline check in tests/web3-economy-play.test.mjs.');
+    await main();
+  } catch (error) {
+    result.steps.push({ name: 'run', ok: false, error: error.message });
+    console.error(error);
+  }
+  result.finishedAt = new Date().toISOString();
+  result.ok = result.steps.length > 0 && result.steps.every((s) => s.ok);
+  await writeFile(path.join(here, 'loot-0.3-result.json'), `${JSON.stringify(result, null, 2)}\n`);
+  console.log(result.ok ? 'K0 devnet proof: every step passed' : 'K0 devnet proof: some steps failed', '→ tests/web3/devnet/loot-0.3-result.json');
+  process.exitCode = result.ok ? 0 : 1;
 }
-result.finishedAt = new Date().toISOString();
-result.ok = result.steps.length > 0 && result.steps.every((s) => s.ok);
-await writeFile(path.join(here, 'loot-0.3-result.json'), `${JSON.stringify(result, null, 2)}\n`);
-console.log(result.ok ? 'K0 devnet proof: every step passed' : 'K0 devnet proof: some steps failed', '→ tests/web3/devnet/loot-0.3-result.json');
-process.exitCode = result.ok ? 0 : 1;

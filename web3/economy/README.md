@@ -1,8 +1,22 @@
 # web3/economy: a game's economy as one spec
 
-A game's economy is the `economy` section of its `gamesfun.json`. It says what the game's money and collectibles are, where they flow, and which rules run by themselves on games.fun's loot program 0.3 (devnet). The schema is `economy.schema.json`; `fixtures/coin-flip-arena.json` is a whole example.
+A game's economy is the `economy` section of its `gamesfun.json`. It says what the game's money and collectibles are, where they flow, and which rules run by themselves on games.fun's loot program 0.3 (devnet). The schema is `economy.schema.json`; `fixtures/coin-flip-arena.json` is a whole example. It replaced the old `shop` section, and the studio's Economy tab replaced the Token and Shop tabs (a shop is part of the economy; launching the game's token is one of its parts).
 
 Plain ES modules, no build step, no dependencies. Nothing here signs or talks to the chain.
+
+## What a creator does
+
+From a sentence to a live economy, on devnet, without ever handing anyone a key:
+
+1. **Say it.** "A coin-flip arena: 2% house edge to people who stake, and a weekly lottery fed by 10% of every flip." The agent (the `gamesfun-economy` skill) starts from the nearest of the 100 ideas (`ideas.json`) and writes the spec, keeping the sentence in `prompt`. Or build it by hand in the studio's **Economy tab**.
+2. **Read what it does.** The checker refuses what the program cannot do (each refusal names its fix) and flags chance that pays tokens; the quick simulation says what each play costs and is worth and how long each pool lasts; the cost says what going live costs. The agent tells it in plain words (`economy_explain`); the Economy tab shows the same beside the parts.
+3. **Change it until it is right.** "Make the house edge 3%", "a bigger seed": change, check, simulate again. Every number is a slot (`slots.mjs`).
+4. **Save it** into the game's `gamesfun.json`: `economy_save` writes only a spec that checks; the tab saves a moment after each change, once it has the schema's shape.
+5. **Put it live.** The agent hands over the studio link (`economy_publish`); the creator opens the Economy tab, looks over every step and its cost, presses **Put it live** and approves in their own wallet. What lands is written back as it lands.
+6. **Play it.** The game shows the economy's buttons in the kit's own menu and HUD (a buy, a box, tickets, a stake, a claim), offered by the page that hosts the game, which signs with the player's wallet. The game's code holds none of it.
+7. **Watch it and decide.** `economy status` (and the tab) shows each part on chain, the pools and the recent receipts. A rule only the game can judge (a payout, a contest's winner) is signed by the authority; preparing those for the creator's wallet exists (`economy_decide`), the page that signs them comes next (K4).
+
+## What is here
 
 | File | Does |
 | --- | --- |
@@ -12,11 +26,21 @@ Plain ES modules, no build step, no dependencies. Nothing here signs or talks to
 | `simulate.mjs` | the quick simulation: what each box, ticket and craft is worth, how long each pool lasts, who pays what |
 | `cost.mjs` | what going live costs: each account's rent, each call's fee, network fees |
 | `compile.mjs` | the setup plan: the program's instructions in order, split into transactions that fit; `diff` for a change |
-| `migrate.mjs` | today's `shop` section → an `economy` section (`gamesfun economy migrate --write`; `gamesfun upgrade` does it by default, `--dry-run` shows it; the publish flow and `economyStatus` move a shop on read) |
+| `actions.mjs` | `playerActions(economy)`: what a player can do, as the buttons the kit draws (`{ id, part, kind, label, price, says, where, asks }`); `economyState(economy, reads, player)`: the state the page sends the game. Re-exports the in-game kit's `gf-web3/econ/actions.js`, so the tools and the game never disagree |
+| `migrate.mjs` | an old `shop` section → an `economy` section: `migrateFile` (`gamesfun economy migrate --write`; `gamesfun upgrade` does it by default, `--dry-run` shows it; the publish flow, the Economy tab and `economyStatus` move a shop on read). The pure `migrateShop` is the in-game kit's (`gf-web3/econ/shop.js`, browser-safe), so gf-web3 reads an old shop through the same function (with `keepLive`, a shop gf-web3 2.0.0 already put on loot 0.3 stays live there) |
 | `slots.mjs` | every number in the spec as a value slot |
+| `ideas.json` | the 100 economies of games.fun's `research/gf-economy/ECONOMIES-100.md`, each with how it fits loot 0.3 (`economy_examples` searches them) |
+| `fixtures/` | eleven whole economies on real devnet addresses (below) |
+| `evals/` | the 20 frozen prompts for the agent (`cases.json`), reference specs and `score.mjs` (the `gamesfun-economy` skill's `references/evals.md`) |
 | `model.mjs`, `steps.mjs`, `txsize.mjs`, `idl.mjs` | the shared parts: units and the program's numbers; one setup step per instruction; transaction sizes; loot 0.3's IDL (`loot-0.3.json`, trimmed from the deployed program's) |
 
-From a terminal: `npx gamesfun economy check|simulate|cost|plan|migrate|publish|status [game-dir]` (`--spec <file>` for a spec outside a game, `--json` for machines). `publish` never signs: it leaves a request and prints the studio link where the creator's wallet approves it (`--picture <file>` for a token launched on games.fun's curve with it). `status` reads the economy back from devnet.
+**From a terminal:** `npx gamesfun economy check|simulate|cost|plan|migrate|publish|status [game-dir]` (`--spec <file>` for a spec outside a game, `--json` for machines). `publish` never signs: it leaves a request and prints the studio link where the creator's wallet approves it (`--picture <file>` for a token launched on games.fun's curve with it). `status` reads the economy back from devnet. Being built: `economy check --devnet`, the same check read against devnet itself.
+
+**The agent tools** (`mcp/tools/economy.mjs`, on with `GAMESFUN_WEB3=1`; skill `gamesfun-economy`): `economy_catalog` (the parts and their fields), `economy_examples` (the 100 ideas and the fixtures), `economy_check`, `economy_simulate`, `economy_cost`, `economy_explain` (the plain-words summary), `economy_save` (only a spec that checks; a live economy keeps its ids), `economy_publish` (the studio link; never signs), `economy_status` and `economy_decide` (a decision prepared for the creator's wallet). None signs or asks for a key.
+
+**The Economy tab** (`studio/tabs/economy.js`, off unless web3 is on or the game has a `gamesfun.json`): the money flow drawn, the parts with every number editable, the quick simulation and the checker's notes beside them, the cost, **Put it live** (the `economy` flow below), then the live state and the receipts. Its routes (`web3/node/economy-routes.mjs`, under `/api/web3`): GET and POST `/economy` (read and save the spec), POST `/economy/check`, `/economy/simulate`, `/economy/cost`; `GET /economy/status` is `economyStatus`. `#economy?flow=economy` (the link `economy_publish` returns) opens it with Put it live offered.
+
+**In the game** (gf-three CONTRACT §6g W2): the game's code holds no wallet or economy code. The page that hosts the game runs gf-web3, which reads this section and has one call per thing a player signs (`gfWeb3.economy.buy`, `openBox`, `pay`, `craft`, `buyTickets`, `stake`, `unstake`, `hold`, `enter`, `claim`, and `act(id)` for any entry of `playerActions`; the reads `actions()`, `state()`, `pools()`, `boxOdds()`, `lottery()`, `stakePosition()`, `contest()`, `receipts()`; `skills/gamesfun-web3/references/api.md`). The page offers the actions to the game in `gf:host` → `economy.actions` and its state in `gf:economy`; the kit's menu, pause menu, results card and HUD draw them, and a click comes back as `gf:econ-action`. The studio preview's side of that bridge is being built. `tests/web3/devnet/play.mjs` plays a small economy on devnet through `gfWeb3.economy` only (`play-result.json`).
 
 ## Going live (`web3/node/economy.mjs`, `web3/node/flows.mjs`)
 
@@ -101,3 +125,15 @@ Ten economies from `research/gf-economy/ECONOMIES-100.md` (games.fun) and the co
 | `starforce` | #22 | a recipe that gives an attempt token; a box in that token whose outcomes are an item, the same item again, a burn, and a share of the jackpot |
 
 Every address is a real devnet one: USDC-dev, MAIN-dev, the Token-2022 coin of the 0.3 devnet run (`7MJWx2u…`), and the accounts `tests/web3/devnet/economies.mjs --make-fixtures` made on 2026-10-12 (`economies-fixtures-result*.json`): the pump.fun-style TILE mint `Cywvs…`, the stud `3rzrH…` and the arena deed `9rAE9…` (Core collectibles held by test wallets), the partners' accounts (the launchpad partner wallet's wrapped SOL `6U3Xn…`, a test wallet's MAIN-dev `3pVhH…`) and the duel arena's authority, the launchpad keeper wallet `Hby5B…`. No fixture needs a secret.
+
+## Where it stands (the phases of games.fun's `research/gf-economy/KIT-PLAN.md`)
+
+| Phase | Built | Not yet |
+| --- | --- | --- |
+| K0, the program and the old shop | the kit on loot 0.3 (devnet `88Labq6t…`), Token-2022 allowed; devnet proof `tests/web3/devnet/loot-0.3.mjs`, 9 of 9 steps on 2026-10-11 (its script now goes through the economy; not run again since) | the CI devnet run |
+| K1, the spec and its tools | everything in the tables above; every fixture went live on devnet through the economy flow (`economies-result.json`, 13 of 13) | `economy check --devnet` (being built) |
+| K2, economies in games | the in-game calls (`gfWeb3.economy`, devnet play proof `play.mjs`, 12 of 12); the kit's menu and HUD draw offered actions (gf-three §6g W2, verify check 22: built in games.fun on a branch, not yet in this checkout's `kits/`) | W2 in `kits/` (the next kit sync); the studio preview's side of the page bridge (being built); an example game of each kind carrying an economy |
+| K3, the agent and the page | the `economy_*` tools, the `gamesfun-economy` skill, the Economy tab, the 20 frozen evals | the build loop learning the economy (pitch, spec, deliver); a scored eval run |
+| K4, decisions | decisions prepared for the creator's wallet (`economy_decide`) | the page that signs them, the local keeper, the full simulation |
+
+The kit's `playerActions` also lists a `pay` action for a payment part; gf-three's W2 offer accepts nine kinds without `pay`, so the kit's menu drops it until one of the two changes.

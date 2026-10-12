@@ -54,6 +54,18 @@ The tools are the `economy_*` MCP tools (on with `GAMESFUN_WEB3=1`). Without the
    (a payout, a contest's winner, a held item's fate), `economy_decide` prepares a link for the creator's wallet;
    the page that signs it is still being built, so say it is prepared, not done.
 
+## In the game: nothing to write
+
+The game's agent writes no wallet or economy code. The spec is the design; the buttons come for free. The page that
+hosts the game offers the economy's actions to it through `gf:host` → `economy.actions` (each `{ id, kind, label,
+price, says, where }`, from `playerActions(economy)` in `web3/economy/actions.mjs`), and the kit's home menu, pause
+menu, results card and HUD draw them (gf-three CONTRACT §6g W2). A click only tells the page; the page signs with the
+player's wallet (`gfWeb3.economy.*`, page side only) and sends the new state. So a button's name is its part's
+`name`, and what it says comes from the spec's prices and odds: to change a button, change the spec. Never add a shop
+overlay, a `gf/web3/` import or a price to `rules.js`; rules never see the economy, and a game is never scored by
+what someone paid. Which items a player owns and **Wear** are in the kit's wallet view too; an item's `look` says
+what wearing it changes.
+
 ## Things to get right
 
 - A **stake takes everything in its rewards pool**: give each stake a pool of its own, fed by splits or a schedule.
@@ -73,4 +85,4 @@ The tools are the `economy_*` MCP tools (on with `GAMESFUN_WEB3=1`). Without the
 - From a sentence to a spec, with a worked example: `references/sentence-to-spec.md`
 - Telling the creator what they get: `references/telling-the-creator.md`
 - The frozen evals (20 prompts) and how to score a run: `references/evals.md`
-- Wiring the economy into the game (buttons, HUD, a player's own moves): the `gamesfun-web3` skill.
+- How the buttons reach the game, item looks, and a game that still has an old `shop`: the `gamesfun-web3` skill.

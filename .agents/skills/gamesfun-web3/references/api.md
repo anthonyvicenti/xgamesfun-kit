@@ -1,7 +1,13 @@
-# gf-web3 API (`gf/web3/index.js`, version 2.1.0)
+# gf-web3 API (`gf/web3/index.js`, version 2.1.0): the page's side
+
+**A game's own code never calls this.** gf-web3 is what the page that hosts a game runs: it connects the player's
+wallet and signs their moves when they press an economy button the kit drew (gf-three CONTRACT §6g W2:
+`gf:econ-action` → `gfWeb3.economy.act(id)` → a new `gf:economy`). The agent that builds a game writes no wallet or
+economy code (`buy-button.md`). Read this to build or debug a page, or to read an older game whose `rules.js` already
+imports it.
 
 ```js
-import gfWeb3 from './gf/web3/index.js';   // from rules.js; create and upgrade keep gf/web3/ current
+import gfWeb3 from './gf/web3/index.js';   // in the page (create and upgrade keep a game's gf/web3/ copy current)
 ```
 
 | Call | Returns | Notes |

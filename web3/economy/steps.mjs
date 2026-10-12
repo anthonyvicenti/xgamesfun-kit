@@ -202,7 +202,7 @@ export function setupSteps(economy, { now = 0 } = {}) {
   const steps = [];
   const push = (step, creates = []) => steps.push({ ...step, creates });
 
-  // Tokens: a curve launch runs in the token tab (its own approval); a token the game mints is made here.
+  // Tokens: a curve launch runs in its own approval (the token part of the Economy tab); a token the game mints is made here.
   for (const t of m.tokens.values()) {
     if (t.source === 'curve' && t.mint.startsWith('@'))
       push({ id: `token:${t.key}`, program: 'launch', ix: 'launch_on_curve', args: { name: t.name, symbol: t.symbol }, accounts: {}, signer: 'owner', signers: [owner], alone: true, says: `Launch ${t.symbol} on games.fun’s curve (the token launch, its own approval), then put its mint in the economy.` });

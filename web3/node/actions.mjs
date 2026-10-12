@@ -1,7 +1,7 @@
 // What the web3 CLI and the MCP tools do, shared: each action returns { text, data, approve? }. Drafts (items,
 // boxes, the shop's currency, linking a token) change gamesfun.json directly. Anything that signs or spends
-// (launching a token, putting the shop on sale) becomes a request the creator approves in the studio with their own
-// wallet: `approve` says where. Nothing here signs or holds a key.
+// (launching a token, putting the shop on sale) becomes a request the creator approves in the studio's Economy tab
+// with their own wallet: `approve` says where. Nothing here signs or holds a key.
 import path from 'node:path';
 import { findItem } from '../gf-web3/config.js';
 import { fromUnits, gamePath, ticker, text, toUnits } from '../gf-web3/rules.js';
@@ -27,10 +27,10 @@ export async function web3Action(action, sub, values, { kitRoot = KIT_ROOT, cwd 
   const ctx = { gameDir, rpc: chain.rpc, network: chain.network };
   const approve = async (kind, input, summary) => {
     const request = await queueRequest(kitRoot, { kind, gameDir, input, from, summary });
-    const tab = kind === 'launch' ? 'token' : 'shop';
+    // The Economy tab shows both requests (a token launch is one part of the economy; the shop is part of it too).
+    const tab = 'economy';
     const url = await studioUrl({ gameDir, kitRoot, env });
-    const label = tab === 'token' ? 'Token' : 'Shop';
-    const where = url ? `${url} (the ${label} tab)` : `the studio's ${label} tab (start it with: npx gamesfun dev ${rel})`;
+    const where = url ? `${url}#economy (the Economy tab)` : `the studio's Economy tab (start it with: npx gamesfun dev ${rel})`;
     return {
       approve: { requestId: request.id, url, tab, step: `Open ${where} and press "Review and approve". Your wallet shows every step before anything is signed.` },
       text: `${summary}\nWaiting for your approval: open ${where} and press "Review and approve". Nothing is signed until you approve it in your wallet.`,
