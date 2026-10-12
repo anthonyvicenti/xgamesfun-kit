@@ -141,6 +141,44 @@ Not settled from the repository itself:
 7. **Chromium** downloaded by Playwright and sharp's libvips (LGPL-3.0): not shipped by this repository; mentioned only.
 
 
+## The loot program's source (`program/`)
+
+games.fun's loot program 0.3 (the Solana program every economy runs on, devnet `88Labq6t…KXqM`), copied from games.fun
+`launchpad/loot` at commit `66e896f97` and published with the kit under its MIT licence (creator decision 4,
+2026-10-11/12; `program/LICENSE` is the same text). `program/README.md` says how to build it and check it against devnet.
+Its Rust dependencies are not committed; `cargo` fetches them, at the versions in `program/loot/Cargo.lock`:
+
+| Crate | Version | Licence | Used for |
+| --- | --- | --- | --- |
+| anchor-lang, anchor-spl | 1.1.2 | Apache-2.0 | the program framework and SPL token calls (in the deployed program) |
+| ephemeral-rollups-sdk, ephemeral-vrf-sdk (MagicBlock) | 0.17.2 | MIT | asking MagicBlock's VRF oracle for randomness (in the deployed program) |
+| magicblock-delegation-program-api, magicblock-magic-program-api | 3.1.0, 0.10.1 | MIT | pulled in by the MagicBlock SDK |
+| solana-sha256-hasher | 3.1.0 | Apache-2.0 | ticket and terms hashes (in the deployed program) |
+| litesvm | 0.10.0 | Apache-2.0 | the program's tests only |
+| mpl-core (Metaplex) | 0.12.1 | Metaplex NFT Open Source License 1.0 (Apache-style, with restrictions on modifying Metaplex's code) | the program's tests only (building Core instructions); the deployed program calls Core through its own `core_cpi.rs` |
+| solana-* crates, spl-token-2022-interface | 2.x to 3.x, 2.1.0 | Apache-2.0 | the program's tests only |
+| borsh | 1.x | MIT OR Apache-2.0 | the program's tests only |
+
+Not in `program/`: the upstream programs the tests load (`tests/fixtures/*.so`, dumped from devnet by
+`scripts/fetch-fixtures.sh` onto the machine that runs them). The program data snapshots under `tests/fixtures/venue/`
+and `tests/fixtures/v1/` are public devnet account bytes.
+
+## The full simulation (`web3/economy/sim/`)
+
+Nothing new is installed with the kit. On first use of `gamesfun economy simulate --full` (or `economy_simulate` with
+`full: true`) it installs, into the user's cache folder (never the kit's `node_modules`, never into a game):
+
+| Package | Version | Licence | How |
+| --- | --- | --- | --- |
+| litesvm (and its prebuilt native module, `litesvm-<platform>`) | 1.5.0 | MIT | the local Solana the simulation runs the real program in; Linux and macOS builds only |
+| its dependencies (@solana/kit 8.4.0 and 42 small @solana packages, @solana-program/token and system) | as npm resolves them for litesvm 1.5.0 | MIT (49), Apache-2.0 (2) | used by LiteSVM's own wrapper; the kit's code does not import them |
+
+It also reads, once, from devnet into the same cache folder, and runs locally: the loot program 0.3 (games.fun's own,
+MIT, checked against the deploy record's sha256), Metaplex Core and Metaplex Token Metadata (Metaplex NFT Open Source
+License 1.0), and MagicBlock's VRF program (Business Source License 1.1: copying and non-production use allowed, MIT
+from 2029-12-01). None of these binaries is committed or shipped; a simulation on the user's own machine is
+non-production use.
+
 ## web3 (`web3/`, `server/routes/web3.mjs`, `commands/web3.mjs`, `mcp/tools/web3.mjs`, `studio/tabs/{token,shop}.js`)
 
 The Solana layer has **no runtime npm dependencies**. Its Solana code is written in the kit's own plain ES modules,

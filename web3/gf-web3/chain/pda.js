@@ -27,11 +27,20 @@ export function createProgramAddress(seeds, programId) {
   return isOnCurve(hash) ? null : encodeBase58(hash);
 }
 
+/** Addresses found already: the curve check is slow in plain BigInt, and the same few PDAs are asked for again. */
+const found = new Map();
+
 /** The canonical PDA and its bump: the highest bump whose address is off the curve. */
 export function findProgramAddress(seeds, programId) {
+  const key = `${programId}:${seeds.map((s) => Array.from(s).join(',')).join('|')}`;
+  if (found.has(key)) return found.get(key);
   for (let bump = 255; bump >= 0; bump--) {
     const address = createProgramAddress([...seeds, Uint8Array.of(bump)], programId);
-    if (address) return [address, bump];
+    if (address) {
+      if (found.size >= 20_000) found.clear();
+      found.set(key, [address, bump]);
+      return [address, bump];
+    }
   }
   throw new Error('No program address for these seeds');
 }

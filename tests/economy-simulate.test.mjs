@@ -33,17 +33,35 @@ test('coin-flip arena, worked by hand', () => {
   // The house swings by √(1000 × (0.5 × 0.176² − 0.088²)) = √7.744 ≈ 2.7828 SOL a day; a seed of 5 is under three weeks' swing.
   near(pool(sim, 'house').swingPerDay, Math.sqrt(7.744), 'swing', 1e-5);
   assert.ok(sim.notes.some((n) => n.includes('skips that prize')));
-  // MagicBlock's oracle takes 0.0005 SOL a roll from the player: a flip really costs 0.1 + 0.002 + 0.0005 + 0.000005
-  // (one signature) = 0.102505 SOL, and gives back 0.088 of it: 85.8495%. 1,000 flips: 0.5 SOL a day to the oracle.
+  // MagicBlock's oracle takes 0.0005 SOL a roll from the player: a flip really costs 0.1 + 0.002 + 0.0005 + 2 × 0.000005
+  // (two signatures: the open and the claim, both the player's in gf-web3's openBox; the full simulation measured
+  // 0.10251 SOL a flip) = 0.10251 SOL, and gives back 0.088 of it. 1,000 flips: 0.5 SOL a day to the oracle.
   assert.equal(flip.oracleFee, 0.0005);
-  assert.deepEqual(flip.realCost, { price: 0.1, token: 'sol', playerFeeSol: 0.002, oracleSol: 0.0005, networkSol: 0.000005, extrasSol: 0.002505, totalSol: 0.102505 });
-  near(flip.returnOfRealCostPercent, (0.088 / 0.102505) * 100, 'return of the real cost', 1e-4);
+  assert.deepEqual(flip.realCost, { price: 0.1, token: 'sol', playerFeeSol: 0.002, oracleSol: 0.0005, networkSol: 0.00001, extrasSol: 0.00251, totalSol: 0.10251 });
+  near(flip.returnOfRealCostPercent, (0.088 / 0.10251) * 100, 'return of the real cost', 1e-4);
   near(sim.perDay.players.oracleFeesSol, 0.5, 'oracle, players');
   // The weekly draw asks the oracle once a week, paid by whoever sends it: 0.0005 / 7 a day.
   near(sim.perDay.creator.oracleFeesSol, 0.0005 / 7, 'oracle, the draw');
   near(sim.perDay.oracle.totalSol, 0.5 + 0.0005 / 7, 'oracle in all');
   assert.equal(sim.fees.oracleSol, 0.0005);
-  assert.match(explain(sim, fixture('coin-flip-arena')), /\+0\.0005 SOL to MagicBlock’s oracle for the roll; 0\.102505 SOL in all/);
+  assert.match(explain(sim, fixture('coin-flip-arena')), /\+0\.0005 SOL to MagicBlock’s oracle for the roll; 0\.10251 SOL in all/);
+});
+
+test('the settle of a box and the claim of a collectible are the player’s signatures (found by the full simulation)', () => {
+  // gf-web3's openBox and buy sign twice from the player's wallet: pay (and roll), then claim. The full simulation
+  // (web3/economy/sim) measured 2 signatures a flip; the quick one counted the claim as the creator's until 2026-10-12.
+  const flips = simulate(fixture('coin-flip-arena'), { now: NOW });
+  // 1,000 flips × 2 + 100 ticket purchases + 10 stake actions, each 0.000005 SOL.
+  near(flips.perDay.players.networkFeesSol, (2000 + 100 + 10) * 0.000005, 'players’ network fees');
+  // The creator's side: the weekly draw and its three payments, nothing for the flips.
+  near(flips.perDay.creator.networkFeesSol, (4 * 0.000005) / 7, 'creator’s network fees');
+  const shop = simulate(
+    { ...fixture('sacrifice-raffle'), items: [{ key: 'blade', name: 'Blade', price: 0.01 }, { key: 'scroll', name: 'Scroll', kind: 'normal', price: 0.01 }], recipes: [], lotteries: [], scenario: { days: 30, perDay: { 'item:blade': 10, 'item:scroll': 10 } } },
+    { now: NOW },
+  );
+  // A collectible: pay and claim, both the player's. A normal item: the player pays, the game settles.
+  near(shop.perDay.players.networkFeesSol, (10 * 2 + 10) * 0.000005, 'players, shop');
+  near(shop.perDay.creator.networkFeesSol, 10 * 0.000005, 'creator, shop');
 });
 
 test('halving seasons, worked by hand', () => {
@@ -63,15 +81,40 @@ test('halving seasons, worked by hand', () => {
 
 test('blind forge, worked by hand', () => {
   const sim = simulate(fixture('blind-forge'), { now: NOW });
-  // 0.6 × 2 + 0.25 × 5 + 0.1 × 20 + 0.04 × 60 + 0.01 × 200 = 8.85 FORGE back per 10: 88.5%, the house keeps 11.5%.
+  // 0.6 × 2 + 0.25 × 5 + 0.1 × 20 + 0.04 × 60 + 0.01 × 200 = 8.85 FORGE back per box.
   near(sim.boxes[0].expectedBack, 8.85, 'expected back');
-  near(sim.boxes[0].houseEdgePercent, 11.5, 'house edge');
-  // 200 boxes × 10 × 5% = 100 a day to the pot, plus 50 tickets × 1 × 95% = 47.5; the treasury gets 1,900 + 2.5 (the cut).
-  near(pool(sim, 'pot').inPerDay, 147.5, 'pot in');
-  near(sim.perDay.creator.treasury.forge, 1902.5, 'treasury');
-  // A week's pot: 1,032.5, paid 70/30.
-  assert.deepEqual(sim.lotteries[0].prizes, [722.75, 309.75]);
+  // The price rises 0.5% a sale from 10: 200 a day for 30 days is 6,000 sales, which pay on average
+  // 10 × (1.005^6000 − 1) / (0.005 × 6000) FORGE (found by the full simulation: this was counted at 10 each, and
+  // 400 sales in two days had already paid three times that).
+  const average = (10 * (1.005 ** 6000 - 1)) / (0.005 * 6000);
+  near(sim.boxes[0].averagePrice / average, 1, 'average price', 1e-9);
+  assert.equal(sim.boxes[0].price, 10);
+  near(sim.boxes[0].houseEdgePercent, (1 - 8.85 / average) * 100, 'house edge');
+  // 200 boxes × the average × 5% a day to the pot, plus 50 tickets × 1 × 95% = 47.5.
+  near(pool(sim, 'pot').inPerDay / (200 * average * 0.05 + 47.5), 1, 'pot in', 1e-9);
+  assert.ok(sim.notes.some((n) => n.startsWith('“Forge box”’s price rises with each sale: over the scenario’s 6000 sales')));
+  assert.ok(sim.notes.some((n) => n.includes('players stop buying long before that')));
   assert.ok(sim.notes.some((n) => n.includes('keeps 1% of every transfer')));
+});
+
+test('a price that falls with time or rises with each sale is counted at what the sales pay (found by the full simulation)', () => {
+  const sim = simulate(fixture('falling-drop'), { now: NOW });
+  // The drop hero starts at 2 SOL and falls 0.05 a minute to 0.2. Three sales a day, eight hours apart, the first
+  // four hours in: by then it has fallen 12 SOL, so it sells at its floor, and starts again from what was paid.
+  const hero = sim.items.find((i) => i.key === 'drop-hero');
+  near(hero.averagePrice, 0.2, 'drop hero');
+  // The clone rises 5% a sale from 0.1: 20 a day for 30 days is 600 sales.
+  const clone = sim.items.find((i) => i.key === 'clone');
+  near(clone.averagePrice / ((0.1 * (1.05 ** 600 - 1)) / (0.05 * 600)), 1, 'clone', 1e-9);
+  // A price without rise or fall is its price.
+  const flat = simulate(fixture('coin-flip-arena'), { now: NOW });
+  assert.equal(flat.boxes[0].averagePrice, undefined);
+});
+
+test('a share of a pool that a schedule burns counts in what is burned a day (found by the full simulation)', () => {
+  // Embers burns 1% a day of 100,000 MAIN: 1,000 MAIN a day at its seed, the level the quick simulation counts shares at.
+  const sim = simulate(fixture('scorched-treasury'), { now: NOW });
+  near(sim.perDay.burned.main, 1000, 'burned a day');
 });
 
 test('scorched treasury, starforce and the duel arena, worked by hand', () => {

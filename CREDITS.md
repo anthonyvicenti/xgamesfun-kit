@@ -56,6 +56,12 @@ today. If it is ever shipped, the credit line is:
 - [ws](https://github.com/websockets/ws) (MIT), for the local signaling server.
 - The npm packages the tools use (the Model Context Protocol SDK, Playwright) and their dependencies, all permissive;
   see THIRD_PARTY.md.
+- The loot program's source (`program/`) stands on [Anchor](https://github.com/solana-foundation/anchor) (Apache-2.0),
+  [MagicBlock](https://github.com/magicblock-labs)'s ephemeral rollups and VRF SDKs (MIT) and the Solana and SPL crates
+  (Apache-2.0); its tests on [LiteSVM](https://github.com/LiteSVM/litesvm) (Apache-2.0) and
+  [Metaplex Core](https://github.com/metaplex-foundation/mpl-core) (Metaplex NFT Open Source License).
+- The full economy simulation runs the program in LiteSVM's npm package (MIT), installed on first use into the user's
+  cache folder, with Metaplex Core and Token Metadata and MagicBlock's VRF program as deployed on devnet.
 
 ## How a game made with the kit carries these credits
 

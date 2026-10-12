@@ -33,6 +33,8 @@ The kit includes work by others, each under its own licence. The full list, file
 | Art by Kenney, Quaternius, Kay Lousberg (KayKit), Poly Haven, games.fun | CC0 | Nothing. Credit is kind but not required. |
 | Ten props by Poly Pizza creators | **CC BY 3.0** | **Credit the author, the title and a link, and say you changed it.** The exact lines are in [CREDITS.md](../CREDITS.md). If you keep one of these files in your game, keep its credit. If you swap the file for your own, you may drop the credit. |
 | The tools' npm dependencies | MIT, ISC, BSD, Apache-2.0 | They stay on your computer; they are not part of your game. |
+| The loot program's Rust source (`program/`) | MIT (games.fun's own); its crates Apache-2.0 and MIT, its tests also use Metaplex Core's crate (Metaplex NFT Open Source License) | Nothing for your game: it runs on chain, your game does not carry it. |
+| The full economy simulation's LiteSVM (installed on first use into your cache folder) and the Metaplex and MagicBlock programs it reads from devnet | MIT; Metaplex NFT Open Source License; MagicBlock's VRF under the Business Source License 1.1 (non-production use allowed) | Nothing: they stay in your cache folder, for simulating on your own machine. |
 
 Your own game (your `rules.js`, `config/`, your own art and sounds) is yours. You choose its licence. What you did not
 write inside it (the kit and the library art) keeps the terms above.
