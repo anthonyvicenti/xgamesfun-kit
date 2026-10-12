@@ -11,7 +11,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { normalizeVerdict } from '../kits/research/gf-three/loop/index.mjs';
+import { normalizeVerdict, PITCH_PLAY_STEP } from '../kits/research/gf-three/loop/index.mjs';
 import { checkpointStore, gameFiles, treeHash } from '../lib/checkpoint.mjs';
 import { KIT_ROOT, KITS } from '../lib/paths.mjs';
 import { tempDir } from './helpers.mjs';
@@ -194,8 +194,12 @@ const RULES_NEEDS = [
   { feature: 'a car each player drives', support: 'approximated', by: ['rules'], how: 'rules move the player faster and call it a car', core: false },
 ];
 const IDEA = 'dodgeball with friends, everyone against everyone, a point for every hit, and a car each player drives';
+// The creator, 2026-10-12: "we should never refuse any idea because its not a part of the kit. The kit is just a
+// harness". kits/ synced from a games.fun commit with that change (the pitch step names spec.made) sends a system of its
+// own back as a part to build; an older kits/ asked for "missing" and v1.notYet. Drop the older branch after the sync.
+const BUILDS = PITCH_PLAY_STEP.join(' ').includes('spec.made');
 
-test('the second reader is a tool round: one question per "rules" claim goes to the session, and a claim its reader calls a missing system is refused', async t => {
+test('the second reader is a tool round: one question per "rules" claim goes to the session, and a claim its reader calls a system of its own is sent back to be built', async t => {
   const b = await bench(t);
   await b.call('gamesfun_step_pitch', { idea: IDEA });
   const pitch = await pitchWith(RULES_NEEDS);
@@ -218,14 +222,27 @@ test('the second reader is a tool round: one question per "rules" claim goes to 
     { id: car.id, answer: '{"verdict": "system", "why": "a car needs vehicle physics and controls the kit does not have"}' },
   ] });
   assert.equal(r.valid, false); assert.equal(r.round.kind, 'repair');
-  assert.match(r.round.brief, /\$\.play\.needs\[2\]: a second reader, asked only whether "a car each player drives" is something rules\.js can do, says it is a system the kit lacks/);
-  assert.match(r.round.brief, /mark it "missing"/);
+  if (BUILDS) {
+    assert.match(r.round.brief, /\$\.play\.needs\[2\]: a second reader, asked only whether "a car each player drives" is something rules\.js can do, says it is a system of its own the kit has no part for/);
+    assert.match(r.round.brief, /make the row "build", declare the part in card 1's spec\.made/);
+    assert.doesNotMatch(r.round.brief, /mark it "missing"/);
+  } else {
+    assert.match(r.round.brief, /\$\.play\.needs\[2\]: a second reader, asked only whether "a car each player drives" is something rules\.js can do, says it is a system the kit lacks/);
+    assert.match(r.round.brief, /mark it "missing"/);
+  }
   assert.equal(r.secondReader.read, true);
   assert.deepEqual(r.secondReader.reads.map(x => x.verdict), ['rules', 'system']);
 
-  // the repair: the car is marked missing and said first. The reading of the score claim is kept: nothing is asked again
-  const fixed = await pitchWith([RULES_NEEDS[0], RULES_NEEDS[1], { feature: 'a car each player drives', support: 'missing', by: [], how: 'the kit has no vehicles', core: false }]);
-  fixed.cards[0].v1.notYet = ['a car each player drives'];
+  // the repair: the car is a part card 1 builds (an older kits/: marked missing). The reading of the score claim is kept:
+  // nothing is asked again
+  const fixed = await pitchWith([RULES_NEEDS[0], RULES_NEEDS[1], BUILDS
+    ? { feature: 'a car each player drives', support: 'build', by: ['car'], how: 'card 1 builds arcade car physics in rules.js', core: false }
+    : { feature: 'a car each player drives', support: 'missing', by: [], how: 'the kit has no vehicles', core: false }]);
+  if (BUILDS) {
+    fixed.cards[0].spec.made = [{ id: 'car', kind: 'system', what: 'a car each player drives, with its own steering and grip', state: 'cars' }];
+    fixed.play.build = [{ part: 'car', note: 'arcade car physics written in rules.js on the kit\'s bodies' }];
+    fixed.reply = 'The kit gives the arena, the throws and the results; this build makes a car each player drives new.';
+  } else fixed.cards[0].v1.notYet = ['a car each player drives'];
   r = await b.call('gamesfun_step_spec', { pitch: fixed });
   assert.equal(r.valid, true, JSON.stringify(r.problems ?? r.round)); assert.equal(r.outcome, 'pitched');
   assert.equal(r.secondReader.read, true); assert.equal(r.secondReader.claims, 1);

@@ -5,7 +5,7 @@ instead of running `npx gamesfun …` in a terminal (both work; the playbook use
 
 | Tool | Does |
 |---|---|
-| `gamesfun_catalog` | what the kit can build (sections: mechanics, worlds, looks, bodies, props, clips, fair, spec) |
+| `gamesfun_catalog` | what the kit has (sections: loops, mechanics, worlds, looks, bodies, props, clips, fair, spec, made); what it lacks, a game builds itself |
 | `gamesfun_examples`, `gamesfun_games` | the example games; the games in `games/` |
 | `gamesfun_create` | make a game from an example (`from`) or a spec file (`spec`) |
 | `gamesfun_verify` | verify a game (quick by default; `check` for one check); streams progress |

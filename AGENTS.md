@@ -32,13 +32,18 @@ other. Iterate on what the person says after playing.
 
 ### 1. Pitch (skill: `make-a-game`)
 
-Read the catalog first: `npx gamesfun catalog --all` (loops, mechanics and their params, world templates and sizes,
-looks, bodies, props). **Decide how the idea is played before the cards**: which loop it needs (a timed round, taking
-turns, a match of rounds, endless, a world that stays), by who acts when and not by theme; when the kit has no such
-loop, say so first and name the closest one. The skill has the step, and `gamesfun_step_spec` checks it. Then offer the person **2–3 concepts that differ in how they play**, not only in theme. For each:
-a title, a one-line hook, how it plays (2–3 sentences), what is in v1 and what is not yet, and the mechanics it uses.
-When the person names an existing game ("a game like X"), the first concept is the faithful take: its signature loop
-mapped onto the kit's mechanics, with anything the kit can't do listed as not yet.
+**The kit is a harness, never the limit of an idea** (the creator, 2026-10-12: "we should never refuse any idea because
+its not a part of the kit. The kit is just a harness and should only be an assistant to any research, exploring, and
+new features that get built"). Read the catalog first: `npx gamesfun catalog --all` (loops, mechanics and their params,
+world templates and sizes, looks, bodies, props, and `made`): use a kit part where one fits. What the kit has no part
+for (a timing mechanic, a loop of its own, a vehicle, a shop), the game builds itself: research a base (the kit's
+examples and mechanics folders, upstream code with a permissive licence), declare it in the spec's `made`, and write it
+in `rules.js`. **Decide how the idea is played before the cards**: which loop it needs (a timed round, taking turns, a
+match of rounds, endless, a world that stays, or one of its own), by who acts when and not by theme. The skill has the
+step, and `gamesfun_step_spec` checks it. Then offer the person **2–3 concepts that differ in how they play**, not only
+in theme. For each: a title, a one-line hook, how it plays (2–3 sentences), what the kit provides and what this build
+makes new, and the mechanics it uses. When the person names an existing game ("a game like X"), the first concept is
+the faithful take: its signature loop, on the kit's parts where they fit and on parts of its own where they do not.
 
 Ask at most 3 short questions, and only ones that change the game (round length, teams or free-for-all, what the
 characters look like). Give each a default. Zero questions is fine.
@@ -46,9 +51,10 @@ characters look like). Give each a default. Zero questions is fine.
 ### 2. Lock a spec
 
 When the person picks (or says "build it"), write the spec as JSON, e.g. `games/<name>.spec.json`. It must validate
-against `kits/research/studio-v2/game-spec.schema.json` (`create` checks it and refuses one that doesn't). Use only
-catalog values: the `loop` (a ready one), mechanic ids and params, `world.template` and `world.size`, `look.preset`,
-body ids. Put the
+against `kits/research/studio-v2/game-spec.schema.json` (`create` checks it and says what to change). Kit values come
+from the catalog: the `loop` the session runs on (a ready one), mechanic ids and params, `world.template` and
+`world.size`, `look.preset`, body ids. A part the kit has none for goes in `made` (`{id, kind, what, input, state,
+build}`): `create` writes its stub in `rules.js`, and verify presses its `input`. Put the
 person's own words in `prompt`. Every role gets its own body; players are beans only for cute or party ideas.
 
 ### 3. Create
@@ -138,7 +144,7 @@ Choose the smallest edit that does what the person asked:
 | their own model, picture or sound in place of one | a file slot: `npx gamesfun slots set <id> --file <path>` (same kind of file) |
 | one more item like one the game has (a weapon), a rename, one taken out | its table slot (`assets.json → items` names it, e.g. `mechanic.melee.weapons`): write the whole list with `npx gamesfun slots set <id> @table.json`. The kit checks every entry and gives a new one its own picture and slots. No code |
 | a new rule, win or lose condition, behaviour | `rules.js` and the config it reads |
-| something the kit can't do (not in the catalog) | the closest thing, and say plainly what you left out |
+| something the kit has no part for (not in the catalog) | build it in `rules.js` (a base first: the kit's examples and mechanics, permissive upstream code), add it to the spec's `made`, and say plainly what is new |
 
 Keep what they didn't ask about as it is. Then verify again.
 

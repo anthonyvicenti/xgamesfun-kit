@@ -23,7 +23,7 @@ async function reachable(url) {
 export const tools = [
   {
     name: 'gamesfun_catalog',
-    description: 'What the gf-three kit can build: loops (how a game is played: a timed round, turns, a match, endless …), mechanics (with their params), world templates and sizes, look presets, character bodies, props, clips, fair-play defaults. Every game spec must stay inside it. Default sections: loops, mechanics and worlds.',
+    description: 'What the gf-three kit has: loops (how a game is played: a timed round, turns, a match, endless …), mechanics (with their params), world templates and sizes, look presets, character bodies, props, clips, fair-play defaults, and `made` (how a game makes a part the kit has none for). A library to use where it fits, never the limit of an idea: what the kit lacks, the game builds (spec.made). Default sections: loops, mechanics, worlds and made.',
     inputSchema: { type: 'object', properties: { sections: { type: 'array', items: { type: 'string', enum: SECTIONS }, description: `Any of ${SECTIONS.join(', ')}` }, json: { type: 'boolean', description: 'Return the raw catalog JSON for the sections (large)' } } },
     async handler({ sections, json }) {
       const c = await catalog();

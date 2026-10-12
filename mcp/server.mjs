@@ -34,7 +34,7 @@ export const offered = (name, env = process.env) => !OPTIONAL_TOOLS.some(o => na
 export const INSTRUCTIONS = [
   'gamesfun builds multiplayer three.js browser games on games.fun\'s gf-three kit. Read AGENTS.md in the kit root first.',
   'A build runs through the build loop, and the tools hold its order: call gamesfun_next {"game": "games/<name>"} first (also after a restart: it picks a build up at the right step), then the tool each answer names: gamesfun_step_pitch → gamesfun_step_spec → gamesfun_step_create → (you write rules.js; gamesfun_verify is your own quick check) → gamesfun_step_fix → gamesfun_step_verify → gamesfun_step_playtest → gamesfun_step_deliver. A tool called out of order is refused with the right one. gamesfun_rollback undoes an agent round; gamesfun_change starts a change to a delivered game; gamesfun_requests brings the studio page\'s requests.',
-  'gamesfun_catalog lists what the kit can build; gamesfun_dev_start plays a game with two tabs.',
+  'gamesfun_catalog lists what the kit has (a library; what it lacks, the game builds); gamesfun_dev_start plays a game with two tabs.',
 ].join(' ');
 
 /** Run the gamesfun CLI as a child (keeps long browser runs and their output out of this process). */
