@@ -14,7 +14,7 @@ From a sentence to a live economy, on devnet, without ever handing anyone a key:
 4. **Save it** into the game's `gamesfun.json`: `economy_save` writes only a spec that checks; the tab saves a moment after each change, once it has the schema's shape.
 5. **Put it live.** The agent hands over the studio link (`economy_publish`); the creator opens the Economy tab, looks over every step and its cost, presses **Put it live** and approves in their own wallet. What lands is written back as it lands.
 6. **Play it.** The game shows the economy's buttons in the kit's own menu and HUD (a buy, a box, tickets, a stake, a claim), offered by the page that hosts the game, which signs with the player's wallet. The game's code holds none of it.
-7. **Watch it and decide.** `economy status` (and the tab) shows each part on chain, the pools and the recent receipts. A rule only the game can judge (a payout, a contest's winner) is signed by the authority; preparing those for the creator's wallet exists (`economy_decide`), the page that signs them comes next (K4).
+7. **Watch it and decide.** `economy status` (and the tab) shows each part on chain, the pools and the recent receipts. A rule only the game can judge (a payout, a contest's winner) is signed by the authority: the creator's wallet from the Economy tab (its decision card and Decide section; `economy_decide` and `gamesfun economy decide` return the link), or the local keeper for a game that decides often (Decisions, below).
 
 ## What is here
 
@@ -30,7 +30,7 @@ From a sentence to a live economy, on devnet, without ever handing anyone a key:
 | `migrate.mjs` | an old `shop` section → an `economy` section: `migrateFile` (`gamesfun economy migrate --write`; `gamesfun upgrade` does it by default, `--dry-run` shows it; the publish flow, the Economy tab and `economyStatus` move a shop on read). The pure `migrateShop` is the in-game kit's (`gf-web3/econ/shop.js`, browser-safe), so gf-web3 reads an old shop through the same function (with `keepLive`, a shop gf-web3 2.0.0 already put on loot 0.3 stays live there) |
 | `slots.mjs` | every number in the spec as a value slot |
 | `ideas.json` | the 100 economies of games.fun's `research/gf-economy/ECONOMIES-100.md`, each with how it fits loot 0.3 (`economy_examples` searches them) |
-| `fixtures/` | eleven whole economies on real devnet addresses (below) |
+| `fixtures/` | twelve whole economies on real devnet addresses (below) |
 | `evals/` | the 20 frozen prompts for the agent (`cases.json`), reference specs and `score.mjs` (the `gamesfun-economy` skill's `references/evals.md`) |
 | `model.mjs`, `steps.mjs`, `txsize.mjs`, `idl.mjs` | the shared parts: units and the program's numbers; one setup step per instruction; transaction sizes; loot 0.3's IDL (`loot-0.3.json`, trimmed from the deployed program's) |
 
@@ -48,6 +48,26 @@ From a sentence to a live economy, on devnet, without ever handing anyone a key:
 - Flow kind `economy` (`POST /api/web3/flow/start { kind: 'economy', wallet }`; the old `publish` starts it too) puts everything the economy still needs live: a token launched on the curve first (its own uploads and transaction), item pictures and details to Arweave, then every setup transaction in one wallet approval (more only when it takes more than 12). Each transaction is written to `gamesfun.json` as it lands: each part's program id, a new token's mint, `live.game`, `live.collection`, `live.treasury`, `live.at`, `live.transactions` (signatures) and `live.published`, the spec as it is on chain. The next publish sends only `diff(live.published, spec)`; "publish" in the spec always means `live.at`.
 - `economyStatus(gameDir, opts)` and `GET /api/web3/economy/status`: each part on chain or not and whether it still matches the spec, each pool's balance, the recent receipts.
 - Devnet proof: `tests/web3/devnet/economies.mjs` puts every fixture live through the same flow and reads it back (`economies-result.json`).
+
+## Decisions (`web3/node/decide.mjs`, `decide-flows.mjs`, `decide-routes.mjs`, `keeper.mjs`)
+
+What only the game knows is signed by the game's authority: `payout`, `burn`, `issue`, `make`, `award` (a hold) and a contest's `open_contest` and `decide` are built (`unmake`, `set` and `roll` are refused with `D-NOT-YET`). One builder, `prepareDecision({ economy, request, rpc, signer, ledger, by, now })`, checks a request against the spec and the chain and returns the instructions with a plain-words summary (`says`), its numbers and its refusals (each a code, what it means, its fix). The page, the keeper, `gamesfun economy decide` and `economy_decide` all use it.
+
+**A request** (`readRequest`): `{ decision: "<key>" | "contest:<key>" | "hold:<key>", id?, to?, amount? | percent?, side?, open?, asset?, attempt?, says? }`. `id` is the game's own name for the result (a run, a match): each is decided once (`D-SAME-ID`). `attempt` is the signature of the transaction that paid for the attempt. A private key anywhere in it, the attempt included, is refused.
+
+**A request is a claim.** It comes from code in the player's browser: a player can post "I cleared the level" from the console, and in a room any peer can. So the spec says what a claim must show and how much any claim can move, and the page and the keeper enforce it:
+
+- `proof: { payment, after?, within? }`: the claim must name a successful top-level `pay` on this game, by the receiver, of that payment's whole amount in its currency, split exactly as the spec says (a `pay` that sends its shares back to the player is refused), with the program's `Paid` receipt, at least `after` and at most `within` before the claim (by the chain's block time), and never paid before (the ledger, and the `PaidOut` receipts of the pool's last 25 transactions: the payout carries the attempt's reference). Refusals: `D-PROOF-MISSING`, `-NOT-FOUND`, `-FAILED`, `-NOT-PAY`, `-EARLY`, `-LATE`, `-USED`.
+- `caps: { each, perPlayerPerDay, perDay }` in whole units, counted from the ledger over 24 hours (`D-CAP-EACH`, `-PLAYER`, `-DAY`). A payout, issue or make the keeper signs must have `each` and `perDay` (`E-KEEPER-CAPS`); without `proof` the checker warns that anyone can collect it up to its caps (`W-KEEPER-PROOF`).
+- And always: the amount at most the decision's own (`D-AMOUNT`), the pool holds it (`D-POOL-SHORT`), the receiver is a wallet and not the game's own account (`D-TO`), the signer is the game's authority on chain (`D-SIGNER`).
+
+What an attacker can still get: a player who really paid for an attempt can claim a clear they did not make, once per attempt, after `after`, up to the caps. So a prize above an attempt's price is a bet that the proof is enough; the replay or a quorum of peers is not checked yet. These are the page's and the keeper's own rules: the program trusts the authority's signature and checks nothing else ("we always trust project auth").
+
+**From the page:** the Economy tab reads `#economy?decide=<key>&to=&amount=&percent=&side=&asset=&attempt=&id=&open=` and shows the decision card (what, the numbers, the checks, "Sign in my wallet": flow kind `decide`, the receipt after). The Decide section lists who decides, the spec's decisions, contests open or awaiting a result, collectibles on hold, and the latest ledger lines; it has "Let my keeper decide" and "Take it back" (flow kind `authority`: one owner-signed `update_game`, written into `keys.authority` and `live.published.keys`, so a later publish does not undo it). Routes: `GET /economy/decisions`, `POST /economy/decide/check`, `POST /economy/decide-request`.
+
+**The local keeper:** `gamesfun economy keeper --new-key <file>` writes a fresh keypair file (0600) and prints only its address; it refuses a path inside the game, the kit or any git checkout, and never overwrites. `gamesfun economy keeper [game] --key <file>` (or `GAMESFUN_KEEPER_KEY`) runs it: it signs only decisions the spec gives it (`"signedBy": "keeper"`, else `D-NOT-KEEPER`), one at a time, with the same checks, and logs every request, done, refused or failed, to `.gamesfun/web3/decisions/<game>.jsonl` (also the page's decisions; the caps count both). It listens on 127.0.0.1 behind a token kept in its status file (`.gamesfun/web3/keeper/`), which the dev server reads: `POST /api/web3/economy/decide-request` (same-origin, as every web3 route) hands it a request.
+
+**What the game would send (not in gf-three yet).** The game's host copy knows the result. gf-three has no message for it, so the kit adds none: today a page or a script posts the request to the dev server. The proposed shape for gf-three's page bridge, game to page: `{ type: 'gf:econ-claim', id, decision, player, attempt, says }`, sent by the host copy only, where `player` is the winner's wallet as the page's wallet bar knows it and `attempt` the signature the page got back from `economy.pay`. The page must check before forwarding: it comes from the game frame, the page itself made that payment for that wallet in this session, and the keeper repeats every check above. Requests from games on games.fun's /play page need a relay to the creator's keeper (a queue on the play host the keeper polls); not built.
 
 ## How to write one
 
@@ -110,7 +130,7 @@ Chance has a third fee, not the program's: **MagicBlock's oracle takes 0.0005 SO
 
 ## The fixtures
 
-Ten economies from `research/gf-economy/ECONOMIES-100.md` (games.fun) and the coin-flip arena of `KIT-PLAN.md` §1. The tests check, simulate and compile all of them.
+Ten economies from `research/gf-economy/ECONOMIES-100.md` (games.fun), the coin-flip arena of `KIT-PLAN.md` §1 and the level ladder of K4. The tests check, simulate and compile all of them.
 
 | Fixture | From the list | What it exercises |
 | --- | --- | --- |
@@ -125,6 +145,7 @@ Ten economies from `research/gf-economy/ECONOMIES-100.md` (games.fun) and the co
 | `falling-drop` | #92, #40, #74, #20 | a price that falls, a price that rises, payments with a share to an account, a share that burns |
 | `duel-arena` | #69, #47 (needs the authority) | a contest with a share for a collectible's holder and a burn; a hold; decisions signed by a separate authority key; 90% of each ship sold fills the mission rewards (added 2026-10-12: before, they paid 40 USDC a day with nothing coming in and ran dry on day 2.5; the devnet run in `economies-result.json` put that earlier version live) |
 | `starforce` | #22 | a recipe that gives an attempt token; a box in that token whose outcomes are an item, the same item again, a burn, and a share of the jackpot |
+| `level-ladder` | KIT-PLAN K4 (#52) | a payment per attempt, 80% into a prize pool; the prize on the last level paid by the keeper (`signedBy: keeper`), only for a paid attempt at least 20 s old (`proof`), within `caps`; devnet proof `tests/web3/devnet/ladder.mjs` |
 
 Every address is a real devnet one: USDC-dev, MAIN-dev, the Token-2022 coin of the 0.3 devnet run (`7MJWx2u…`), and the accounts `tests/web3/devnet/economies.mjs --make-fixtures` made on 2026-10-12 (`economies-fixtures-result*.json`): the pump.fun-style TILE mint `Cywvs…`, the stud `3rzrH…` and the arena deed `9rAE9…` (Core collectibles held by test wallets), the partners' accounts (the launchpad partner wallet's wrapped SOL `6U3Xn…`, a test wallet's MAIN-dev `3pVhH…`) and the duel arena's authority, the launchpad keeper wallet `Hby5B…`. No fixture needs a secret.
 
@@ -136,6 +157,6 @@ Every address is a real devnet one: USDC-dev, MAIN-dev, the Token-2022 coin of t
 | K1, the spec and its tools | everything in the tables above; every fixture went live on devnet through the economy flow (`economies-result.json`, 13 of 13) | |
 | K2, economies in games | the in-game calls (`gfWeb3.economy`, devnet play proof `play.mjs`, 12 of 12); the kit's menu and HUD draw offered actions (gf-three §6g W2 in `kits/`, verify check 22); the page bridge in the studio preview and `studio/play.html`; devnet proof in a real kit game (`proof-real-game.mjs`, coin-hop, 2026-10-12) | a paid button's price at window heights of 660 px or less (gf-three's menu hides the line under the label there); an example game of each kind carrying an economy |
 | K3, the agent and the page | the `economy_*` tools, the `gamesfun-economy` skill, the Economy tab, the 20 frozen evals | the build loop learning the economy (pitch, spec, deliver); a scored eval run |
-| K4, decisions | decisions prepared for the creator's wallet (`economy_decide`) | the page that signs them, the local keeper, the full simulation |
+| K4, decisions | one decision builder (`web3/node/decide.mjs`) checked against the spec's rules; the Economy tab's decision card and Decide section (flow kinds `decide` and `authority`); the local keeper (`gamesfun economy keeper`); the level ladder fixture and its devnet proof (`tests/web3/devnet/ladder.mjs`, `ladder-result.json`, 2026-10-11) | the full simulation (econ-sim); claims from a game played on games.fun's /play page reaching the creator's keeper (below) |
 
 The kit's `playerActions` also lists a `pay` action for a payment part; gf-three's W2 offer accepts nine kinds without `pay`, so the kit's menu drops it until one of the two changes.

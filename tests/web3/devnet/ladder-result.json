@@ -1,0 +1,363 @@
+{
+  "network": "devnet",
+  "program": "88Labq6tdVnBQsjHSfic6qqgvo5b9NGmy99AYj7KVXqM",
+  "startedAt": "2026-10-12T04:35:59.800Z",
+  "fixture": "web3/economy/fixtures/level-ladder.json (seeds at 1/100)",
+  "steps": [
+    {
+      "name": "put the level ladder live through the economy flow (test-creator approving; the prize pool seeded with 0.005 SOL)",
+      "at": "2026-10-12T04:36:01.999Z",
+      "ok": true,
+      "game": "AvZnM9QPzussgGjVyaGjTRZHbDzCpQmYq7Jf29fL77hf",
+      "explorer": "https://explorer.solana.com/address/AvZnM9QPzussgGjVyaGjTRZHbDzCpQmYq7Jf29fL77hf?cluster=devnet",
+      "signatures": [
+        "2ddPKUpaQi7DuGwoNt8MohW76zotJRVQ3CJyDzszL2DC3qG1DCWXPcvGzpXmiqaqZkUJaRiHw51KNwXKWxBGMzGG"
+      ],
+      "links": [
+        "https://explorer.solana.com/tx/2ddPKUpaQi7DuGwoNt8MohW76zotJRVQ3CJyDzszL2DC3qG1DCWXPcvGzpXmiqaqZkUJaRiHw51KNwXKWxBGMzGG?cluster=devnet"
+      ]
+    },
+    {
+      "name": "make a fresh keeper key with newKeeperKey (`gamesfun economy keeper --new-key`) in a temp folder outside the repo, and fund it with 0.01 SOL from test-creator",
+      "at": "2026-10-12T04:36:03.574Z",
+      "ok": true,
+      "keeper": "DGTtBrMgnyagebZ3Pkw4VaiNxdkjPXaenk1qaf7xQDTq",
+      "keyFileOutsideRepo": true,
+      "signature": "3dkfdXESqKTZ7HtJTehFvwDUs7zqDqvtStzAsskPeQh9JHmfq739y5Pqp2CJt2kKvpP7PecBbspqUpWJgLiSRa6F",
+      "explorer": "https://explorer.solana.com/tx/3dkfdXESqKTZ7HtJTehFvwDUs7zqDqvtStzAsskPeQh9JHmfq739y5Pqp2CJt2kKvpP7PecBbspqUpWJgLiSRa6F?cluster=devnet"
+    },
+    {
+      "name": "\"Let my keeper decide\": one update_game approved by test-creator",
+      "at": "2026-10-12T04:36:05.410Z",
+      "ok": true,
+      "authorityOnChain": "DGTtBrMgnyagebZ3Pkw4VaiNxdkjPXaenk1qaf7xQDTq",
+      "specAuthority": "DGTtBrMgnyagebZ3Pkw4VaiNxdkjPXaenk1qaf7xQDTq",
+      "signatures": [
+        "3Urp9Ytdgr3aQNmcB7EGr84cNtarX5J7y2kM1wVWSSPXYkQv4a44BNNmC37UJTiyv3r9kD8YNvgNSqn1HKEgH2dp"
+      ],
+      "links": [
+        "https://explorer.solana.com/tx/3Urp9Ytdgr3aQNmcB7EGr84cNtarX5J7y2kM1wVWSSPXYkQv4a44BNNmC37UJTiyv3r9kD8YNvgNSqn1HKEgH2dp?cluster=devnet"
+      ]
+    },
+    {
+      "name": "the keeper runs (loopback listener, as `gamesfun economy keeper --key` runs it)",
+      "at": "2026-10-12T04:36:05.411Z",
+      "ok": true,
+      "url": "http://127.0.0.1:39375"
+    },
+    {
+      "name": "test-buyer-1 pays three attempts (0.01 SOL each, 80% into the prize pool) through gf-web3 economy.pay",
+      "at": "2026-10-12T04:36:12.771Z",
+      "ok": true,
+      "attempts": [
+        "4y5wbvF5KPjwfXAm5wjFJHwEa2XNtLKeRQ9UdD8AWB879gK4AXwjm97gnC2XgbEPBdLmaQLFRXCWi9duNitgNw1S",
+        "2onStc8wPM46tShpsYyxT9GPZf59w6dMqftxZyyrnJ58JiQrHL5UdQ26epwKz1gP2WAapRLmscLxRG5iwy9WwXjB",
+        "3nbVVgXM92bEviNgSdaVMnhyDAncAQyWyQujfvext7uqUZxQErgR71v6M56BW9WDHYCQFXAzenNgwYJGed4rhMGT"
+      ],
+      "links": [
+        "https://explorer.solana.com/tx/4y5wbvF5KPjwfXAm5wjFJHwEa2XNtLKeRQ9UdD8AWB879gK4AXwjm97gnC2XgbEPBdLmaQLFRXCWi9duNitgNw1S?cluster=devnet",
+        "https://explorer.solana.com/tx/2onStc8wPM46tShpsYyxT9GPZf59w6dMqftxZyyrnJ58JiQrHL5UdQ26epwKz1gP2WAapRLmscLxRG5iwy9WwXjB?cluster=devnet",
+        "https://explorer.solana.com/tx/3nbVVgXM92bEviNgSdaVMnhyDAncAQyWyQujfvext7uqUZxQErgR71v6M56BW9WDHYCQFXAzenNgwYJGed4rhMGT?cluster=devnet"
+      ],
+      "prizePool": {
+        "before": 0.005,
+        "after": 0.029
+      }
+    },
+    {
+      "name": "too early: attempt 3, claimed at once (the spec says no one clears the ladder in under 20 s)",
+      "at": "2026-10-12T04:36:44.432Z",
+      "ok": true,
+      "request": {
+        "id": "run-3",
+        "to": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+        "attempt": "3nbVVgXM92bEviNgSdaVMnhyDAncAQyWyQujfvext7uqUZxQErgR71v6M56BW9WDHYCQFXAzenNgwYJGed4rhMGT",
+        "says": "cleared the last level"
+      },
+      "decided": false,
+      "codes": [
+        "D-PROOF-EARLY"
+      ],
+      "says": "Claimed 1 seconds after the attempt was paid; the economy says no one gets there in under 20 seconds. Fix: If it is real, claim again after 19 more seconds; the rule is \"proof.after\" in the spec.",
+      "text": "Claimed 1 seconds after the attempt was paid; the economy says no one gets there in under 20 seconds. Fix: If it is real, claim again after 19 more seconds; the rule is \"proof.after\" in the spec.",
+      "signature": null,
+      "explorer": null
+    },
+    {
+      "name": "the real one: test-buyer-1 cleared the last level on attempt 1",
+      "at": "2026-10-12T04:36:44.432Z",
+      "ok": true,
+      "request": {
+        "id": "run-1",
+        "to": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+        "attempt": "4y5wbvF5KPjwfXAm5wjFJHwEa2XNtLKeRQ9UdD8AWB879gK4AXwjm97gnC2XgbEPBdLmaQLFRXCWi9duNitgNw1S",
+        "says": "cleared the last level"
+      },
+      "decided": true,
+      "codes": [],
+      "says": "Pay 0.02 SOL from the pool “prize” to 43QB…66gc (the player who cleared it)",
+      "text": "Pay 0.02 SOL from the pool “prize” to 43QB…66gc (the player who cleared it). https://explorer.solana.com/tx/mJkkFBAXDjNh2eucDXRto255MVXx2yXxroBA4miwdiBsTULqQfi9L2Q7nrL2TU7NJW9iLKu4ETyzo64BesaQBx7?cluster=devnet",
+      "signature": "mJkkFBAXDjNh2eucDXRto255MVXx2yXxroBA4miwdiBsTULqQfi9L2Q7nrL2TU7NJW9iLKu4ETyzo64BesaQBx7",
+      "explorer": "https://explorer.solana.com/tx/mJkkFBAXDjNh2eucDXRto255MVXx2yXxroBA4miwdiBsTULqQfi9L2Q7nrL2TU7NJW9iLKu4ETyzo64BesaQBx7?cluster=devnet"
+    },
+    {
+      "name": "a duplicate: the same attempt reported again under another id",
+      "at": "2026-10-12T04:36:44.432Z",
+      "ok": true,
+      "request": {
+        "id": "run-1b",
+        "to": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+        "attempt": "4y5wbvF5KPjwfXAm5wjFJHwEa2XNtLKeRQ9UdD8AWB879gK4AXwjm97gnC2XgbEPBdLmaQLFRXCWi9duNitgNw1S",
+        "says": "cleared the last level"
+      },
+      "decided": false,
+      "codes": [
+        "D-PROOF-USED",
+        "D-POOL-SHORT"
+      ],
+      "says": "That attempt (4y5w…Nw1S) was already paid for: Pay 0.02 SOL from the pool “prize” to 43QB…66gc (the player who cleared it) (mJkk…QBx7). Fix: One attempt, one claim: pay for another attempt. The pool “prize” holds 0.009 SOL; this needs 0.02. Fix: Wait until it fills, or ask for less.",
+      "text": "That attempt (4y5w…Nw1S) was already paid for: Pay 0.02 SOL from the pool “prize” to 43QB…66gc (the player who cleared it) (mJkk…QBx7). Fix: One attempt, one claim: pay for another attempt. The pool “prize” holds 0.009 SOL; this needs 0.02. Fix: Wait until it fills, or ask for less.",
+      "signature": null,
+      "explorer": null
+    },
+    {
+      "name": "over the limit: attempt 2 claiming 0.05 SOL (the spec pays 0.02, caps.each 0.02)",
+      "at": "2026-10-12T04:36:44.432Z",
+      "ok": true,
+      "request": {
+        "id": "run-2",
+        "to": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+        "attempt": "2onStc8wPM46tShpsYyxT9GPZf59w6dMqftxZyyrnJ58JiQrHL5UdQ26epwKz1gP2WAapRLmscLxRG5iwy9WwXjB",
+        "amount": "0.05",
+        "says": "cleared the last level"
+      },
+      "decided": false,
+      "codes": [
+        "D-AMOUNT",
+        "D-POOL-SHORT",
+        "D-CAP-EACH",
+        "D-CAP-PLAYER"
+      ],
+      "says": "0.05 SOL is more than the 0.02 SOL the economy says for “a player clears the last level”. Fix: Ask for at most 0.02. The pool “prize” holds 0.009 SOL; this needs 0.05. Fix: Wait until it fills, or ask for less. 0.05 SOL is over this decision’s cap of 0.02 SOL each time. Fix: Ask for at most 0.02; the cap is \"caps.each\" in the spec. 43QB…66gc already got 0.02 SOL from it in the last 24 hours; the cap is 0.04 a day each. Fix: Wait a day; the cap is \"caps.perPlayerPerDay\" in the spec.",
+      "text": "0.05 SOL is more than the 0.02 SOL the economy says for “a player clears the last level”. Fix: Ask for at most 0.02. The pool “prize” holds 0.009 SOL; this needs 0.05. Fix: Wait until it fills, or ask for less. 0.05 SOL is over this decision’s cap of 0.02 SOL each time. Fix: Ask for at most 0.02; the cap is \"caps.each\" in the spec. 43QB…66gc already got 0.02 SOL from it in the last 24 hours; the cap is 0.04 a day each. Fix: Wait a day; the cap is \"caps.perPlayerPerDay\" in the spec.",
+      "signature": null,
+      "explorer": null
+    },
+    {
+      "name": "forged: test-buyer-2, who never paid, claims with test-buyer-1’s attempt 2",
+      "at": "2026-10-12T04:36:44.432Z",
+      "ok": true,
+      "request": {
+        "id": "run-x",
+        "to": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+        "attempt": "2onStc8wPM46tShpsYyxT9GPZf59w6dMqftxZyyrnJ58JiQrHL5UdQ26epwKz1gP2WAapRLmscLxRG5iwy9WwXjB",
+        "says": "cleared the last level"
+      },
+      "decided": false,
+      "codes": [
+        "D-PROOF-NOT-PAY",
+        "D-POOL-SHORT"
+      ],
+      "says": "2onS…wXjB is not a paid “An attempt at the ladder” for ACJC…hfXF: it was paid by 43QB…66gc, not by ACJC…hfXF. Fix: Claim with the transaction in which ACJC…hfXF paid for “An attempt at the ladder”. The pool “prize” holds 0.009 SOL; this needs 0.02. Fix: Wait until it fills, or ask for less.",
+      "text": "2onS…wXjB is not a paid “An attempt at the ladder” for ACJC…hfXF: it was paid by 43QB…66gc, not by ACJC…hfXF. Fix: Claim with the transaction in which ACJC…hfXF paid for “An attempt at the ladder”. The pool “prize” holds 0.009 SOL; this needs 0.02. Fix: Wait until it fills, or ask for less.",
+      "signature": null,
+      "explorer": null
+    },
+    {
+      "name": "forged: an invented attempt",
+      "at": "2026-10-12T04:36:44.432Z",
+      "ok": true,
+      "request": {
+        "id": "run-y",
+        "to": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+        "attempt": "3kTDd1zuXjfzWPMUgwqdJrGcymjGZgVhTutcWap1LHXMysx4xBDe6u8dumqmBv5AFZ3vCZKTCWWsxhA2jagmDgkr",
+        "says": "cleared the last level"
+      },
+      "decided": false,
+      "codes": [
+        "D-PROOF-NOT-FOUND",
+        "D-POOL-SHORT"
+      ],
+      "says": "No confirmed transaction 3kTD…Dgkr on devnet: the attempt was never paid, or not yet. Fix: Pay for the attempt first, then claim with its signature. The pool “prize” holds 0.009 SOL; this needs 0.02. Fix: Wait until it fills, or ask for less.",
+      "text": "No confirmed transaction 3kTD…Dgkr on devnet: the attempt was never paid, or not yet. Fix: Pay for the attempt first, then claim with its signature. The pool “prize” holds 0.009 SOL; this needs 0.02. Fix: Wait until it fills, or ask for less.",
+      "signature": null,
+      "explorer": null
+    },
+    {
+      "name": "only the real claim moved money: 0.02 SOL into test-buyer-1’s SOL token account",
+      "at": "2026-10-12T04:36:44.522Z",
+      "ok": true,
+      "received": 0.02,
+      "prizePoolNow": 0.009
+    },
+    {
+      "name": "test-buyer-1 closes its SOL token account (the prize arrives as wrapped SOL)",
+      "at": "2026-10-12T04:36:46.135Z",
+      "ok": true,
+      "signature": "3Ua7Ps5WCDP7H8VgLCk6Jgp8wKGdRgr3LNoPbAKii25X51qVjsvhEE6jTCN5Egt3tBTxALwHJUK1JVJvzmDML6KD",
+      "explorer": "https://explorer.solana.com/tx/3Ua7Ps5WCDP7H8VgLCk6Jgp8wKGdRgr3LNoPbAKii25X51qVjsvhEE6jTCN5Egt3tBTxALwHJUK1JVJvzmDML6KD?cluster=devnet"
+    },
+    {
+      "name": "\"Take it back\": one update_game approved by test-creator; the owner decides again",
+      "at": "2026-10-12T04:36:48.159Z",
+      "ok": true,
+      "authorityOnChain": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+      "specAuthority": "owner",
+      "signatures": [
+        "3v8y54Y6BfTZouPrrhXQ97X5PETPjndVxv7CkFfghYVcf39mZJmZWSCyTDboxYUaoDBJFT5mb6MMZs7E5Qy8VhSm"
+      ],
+      "links": [
+        "https://explorer.solana.com/tx/3v8y54Y6BfTZouPrrhXQ97X5PETPjndVxv7CkFfghYVcf39mZJmZWSCyTDboxYUaoDBJFT5mb6MMZs7E5Qy8VhSm?cluster=devnet"
+      ]
+    },
+    {
+      "name": "after Take it back: the keeper is refused",
+      "at": "2026-10-12T04:36:53.055Z",
+      "ok": true,
+      "request": {
+        "id": "run-2c",
+        "to": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+        "attempt": "2onStc8wPM46tShpsYyxT9GPZf59w6dMqftxZyyrnJ58JiQrHL5UdQ26epwKz1gP2WAapRLmscLxRG5iwy9WwXjB"
+      },
+      "decided": false,
+      "codes": [
+        "D-SIGNER",
+        "D-POOL-SHORT"
+      ],
+      "says": "This game’s decisions are signed by your wallet, not DGTt…QDTq. Fix: Let the keeper decide: the Economy tab’s \"Let my keeper decide\" (one approval in your wallet). The pool “prize” holds 0.009 SOL; this needs 0.02. Fix: Wait until it fills, or ask for less.",
+      "text": "This game’s decisions are signed by your wallet, not DGTt…QDTq. Fix: Let the keeper decide: the Economy tab’s \"Let my keeper decide\" (one approval in your wallet). The pool “prize” holds 0.009 SOL; this needs 0.02. Fix: Wait until it fills, or ask for less.",
+      "signature": null,
+      "explorer": null
+    },
+    {
+      "name": "the Economy tab’s Decide section reads it back (GET /economy/decisions)",
+      "at": "2026-10-12T04:36:53.144Z",
+      "ok": true,
+      "authority": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+      "keeperRunning": true,
+      "recent": 7
+    },
+    {
+      "name": "the keeper’s leftover SOL goes back to test-creator",
+      "at": "2026-10-12T04:36:57.423Z",
+      "ok": true,
+      "returned": 0.00849156,
+      "signature": "SxfSsj5mqQkVdg75QkXQngPaSCWw5iE5CU2jEKjTRew1rhFEZzu3pUdLL2h94ibDgzTMkZryC6MfsPjY7TUKMBs",
+      "explorer": "https://explorer.solana.com/tx/SxfSsj5mqQkVdg75QkXQngPaSCWw5iE5CU2jEKjTRew1rhFEZzu3pUdLL2h94ibDgzTMkZryC6MfsPjY7TUKMBs?cluster=devnet"
+    },
+    {
+      "name": "the temp folder with the keeper key is deleted",
+      "at": "2026-10-12T04:36:57.424Z",
+      "ok": true,
+      "deleted": true
+    }
+  ],
+  "wallets": {
+    "creator": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+    "buyer": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+    "stranger": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF"
+  },
+  "balancesBefore": {
+    "creator": 0.282017077,
+    "buyer": 0.325244062
+  },
+  "ledger": [
+    {
+      "at": "2026-10-12T04:36:12.774Z",
+      "decision": "ladder-prize",
+      "requestId": "run-3",
+      "to": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+      "attempt": "3nbVVgXM92bEviNgSdaVMnhyDAncAQyWyQujfvext7uqUZxQErgR71v6M56BW9WDHYCQFXAzenNgwYJGed4rhMGT",
+      "verdict": "refused",
+      "reasons": [
+        "D-PROOF-EARLY"
+      ],
+      "by": "keeper"
+    },
+    {
+      "at": "2026-10-12T04:36:31.282Z",
+      "decision": "ladder-prize",
+      "requestId": "run-1",
+      "to": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+      "amount": "0.02",
+      "symbol": "SOL",
+      "attempt": "4y5wbvF5KPjwfXAm5wjFJHwEa2XNtLKeRQ9UdD8AWB879gK4AXwjm97gnC2XgbEPBdLmaQLFRXCWi9duNitgNw1S",
+      "verdict": "done",
+      "signature": "mJkkFBAXDjNh2eucDXRto255MVXx2yXxroBA4miwdiBsTULqQfi9L2Q7nrL2TU7NJW9iLKu4ETyzo64BesaQBx7",
+      "by": "keeper"
+    },
+    {
+      "at": "2026-10-12T04:36:34.122Z",
+      "decision": "ladder-prize",
+      "requestId": "run-1b",
+      "to": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+      "attempt": "4y5wbvF5KPjwfXAm5wjFJHwEa2XNtLKeRQ9UdD8AWB879gK4AXwjm97gnC2XgbEPBdLmaQLFRXCWi9duNitgNw1S",
+      "verdict": "refused",
+      "reasons": [
+        "D-PROOF-USED",
+        "D-POOL-SHORT"
+      ],
+      "by": "keeper"
+    },
+    {
+      "at": "2026-10-12T04:36:34.490Z",
+      "decision": "ladder-prize",
+      "requestId": "run-2",
+      "to": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+      "attempt": "2onStc8wPM46tShpsYyxT9GPZf59w6dMqftxZyyrnJ58JiQrHL5UdQ26epwKz1gP2WAapRLmscLxRG5iwy9WwXjB",
+      "verdict": "refused",
+      "reasons": [
+        "D-AMOUNT",
+        "D-POOL-SHORT",
+        "D-CAP-EACH",
+        "D-CAP-PLAYER"
+      ],
+      "by": "keeper"
+    },
+    {
+      "at": "2026-10-12T04:36:35.713Z",
+      "decision": "ladder-prize",
+      "requestId": "run-x",
+      "to": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+      "attempt": "2onStc8wPM46tShpsYyxT9GPZf59w6dMqftxZyyrnJ58JiQrHL5UdQ26epwKz1gP2WAapRLmscLxRG5iwy9WwXjB",
+      "verdict": "refused",
+      "reasons": [
+        "D-PROOF-NOT-PAY",
+        "D-POOL-SHORT"
+      ],
+      "by": "keeper"
+    },
+    {
+      "at": "2026-10-12T04:36:43.971Z",
+      "decision": "ladder-prize",
+      "requestId": "run-y",
+      "to": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+      "attempt": "3kTDd1zuXjfzWPMUgwqdJrGcymjGZgVhTutcWap1LHXMysx4xBDe6u8dumqmBv5AFZ3vCZKTCWWsxhA2jagmDgkr",
+      "verdict": "refused",
+      "reasons": [
+        "D-PROOF-NOT-FOUND",
+        "D-POOL-SHORT"
+      ],
+      "by": "keeper"
+    },
+    {
+      "at": "2026-10-12T04:36:48.160Z",
+      "decision": "ladder-prize",
+      "requestId": "run-2c",
+      "to": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+      "attempt": "2onStc8wPM46tShpsYyxT9GPZf59w6dMqftxZyyrnJ58JiQrHL5UdQ26epwKz1gP2WAapRLmscLxRG5iwy9WwXjB",
+      "verdict": "refused",
+      "reasons": [
+        "D-SIGNER",
+        "D-POOL-SHORT"
+      ],
+      "by": "keeper"
+    }
+  ],
+  "balancesAfter": {
+    "creator": 0.270906717,
+    "buyer": 0.310712502
+  },
+  "finishedAt": "2026-10-12T04:36:57.603Z",
+  "verdict": "ok"
+}

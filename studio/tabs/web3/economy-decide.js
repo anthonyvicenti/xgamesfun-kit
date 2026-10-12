@@ -154,7 +154,7 @@ export function createDecide(ctx) {
               h('button', { 'data-testid': 'econ-keeper-give', disabled: !wallet || wallet !== info.owner, title: wallet === info.owner ? 'One approval in your wallet' : 'Connect the owner’s wallet', onclick: () => start({ kind: 'authority', input: { authority: keeperAddress } }) }, 'Let my keeper decide'))
           : h('div', { class: 'w3-row' },
               h('button', { 'data-testid': 'econ-keeper-take', disabled: !wallet || wallet !== info.owner, title: wallet === info.owner ? 'One approval in your wallet' : 'Connect the owner’s wallet', onclick: () => start({ kind: 'authority', input: { authority: 'owner' } }) }, 'Take it back'),
-              h('span', { class: 'dim' }, 'Your wallet signs the game’s decisions again; the keeper can no longer pay out.'))),
+              h('span', { class: 'dim' }, 'Then your wallet signs the game’s decisions again, and the keeper can no longer pay out.'))),
       own.length ? h('div', {}, h('strong', {}, 'The economy’s decisions'),
         h('ul', { class: 'econ-receipts' }, own.map((d) => h('li', {},
           `${d.when}: ${d.does}${d.pool ? ` from “${d.pool}”` : ''}${d.amount !== null ? ` ${d.amount} ${d.symbol}` : d.percent !== null ? ` ${d.percent}%` : ''}${d.signedBy === 'keeper' ? ' · your keeper signs' : ''}`,

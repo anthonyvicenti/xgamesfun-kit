@@ -337,7 +337,7 @@ export async function prepareDecision({ economy, request, rpc, signer, ledger = 
   if (!gameAccount) return (refuse('D-NOT-LIVE', `The game ${short(e.game)} is not on devnet.`, 'Put the economy live first.'), done({ decision }));
   const game = decodeLoot(LootAccount.Game, gameAccount.data);
   if (signer && game.authority !== signer)
-    refuse('D-SIGNER', `This game’s decisions are signed by ${game.authority === game.owner ? 'your wallet' : `the key ${short(game.authority)}`}, not ${short(signer)}.`,
+    refuse('D-SIGNER', `This game’s decisions are signed by ${game.authority === game.owner ? (by === 'keeper' ? 'the owner’s wallet' : 'your wallet') : `the key ${short(game.authority)}`}, not ${short(signer)}.`,
       by === 'keeper' ? 'Let the keeper decide: the Economy tab’s "Let my keeper decide" (one approval in your wallet).' : game.authority === game.owner ? `Connect ${short(game.owner)}.` : 'Your keeper decides for this game: post the request to it, or press "Take it back" in the Economy tab first.');
   if (game.suspended) refuse('D-SUSPENDED', 'games.fun has suspended this game: payouts and decisions are refused by the program.', 'Ask games.fun.');
   if (signer && by === 'keeper') {

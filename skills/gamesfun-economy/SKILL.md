@@ -51,8 +51,12 @@ The tools are the `economy_*` MCP tools (on with `GAMESFUN_WEB3=1`). Without the
    link (`#economy?flow=economy`). Tell them to open it and press "Put it live"; their wallet shows every step and
    its cost. You publish nothing yourself.
 9. **After it is live**: `economy_status` (pools, parts on chain, receipts). For a decision only the game knows
-   (a payout, a contest's winner, a held item's fate), `economy_decide` prepares a link for the creator's wallet;
-   the page that signs it is still being built, so say it is prepared, not done.
+   (a payout, a contest's winner, a held item's fate), `economy_decide` returns the Economy tab link where the
+   creator reads the checks and presses "Sign in my wallet" (say it is prepared, not done). For a game that decides
+   often, the creator's local keeper signs instead: they make its key on their own machine
+   (`npx gamesfun economy keeper --new-key <file outside the game>`, which prints only its address), press "Let my
+   keeper decide" in the Economy tab, and run `npx gamesfun economy keeper --key <file>`. Never ask for or handle
+   that key.
 
 ## In the game: nothing to write
 
@@ -83,6 +87,11 @@ what wearing it changes.
   needs its mint address and decimals from the creator (ask; never guess an address).
 - **Decisions and contests need the authority** while the game runs (`W-AUTHORITY`): by default that is the
   creator's own wallet, signing from the studio page.
+- **A claim from the game is not proof.** The game runs in the player's browser: anyone there can post "I cleared
+  it". A payout the keeper signs (`"signedBy": "keeper"`) must have `caps` (`each`, `perPlayerPerDay`, `perDay`;
+  `E-KEEPER-CAPS`) and should have `proof` (`{ "payment": "<the attempt they pay for>", "after": "<the least time a
+  clear takes>" }`, else `W-KEEPER-PROOF`): the keeper then pays only an attempt the receiver paid on chain, once.
+  Keep the prize at or under what the caps allow, and tell the creator what a cheater can still get (the caps).
 
 ## More
 
