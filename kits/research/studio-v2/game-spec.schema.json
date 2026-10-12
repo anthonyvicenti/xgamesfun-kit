@@ -73,6 +73,8 @@
       "rating": { "enum": ["E", "T", "PG-13"], "default": "T" },
       "notes": { "type": "string", "maxLength": 400, "description": "How the pitch kept it within policy (PLAN §7)." } } },
     "notInV1": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 120 } },
-    "accept": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 160 }, "description": "Checks the creator will judge; verify adds its own." }
+    "accept": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 160 }, "description": "Checks the creator will judge; verify adds its own." },
+    "economy": { "type": "object", "required": ["in"], "additionalProperties": false, "description": "Optional, only in a session with web3 on (gamesfun-kit: GAMESFUN_WEB3=1): the game has an economy on devnet. A reference, never a copy: the economy itself is the `economy` section of the game's gamesfun.json, which the kit's economy_save writes (only one its checker passes), the Economy tab edits and going live writes its addresses into. The build loop's lock holds the economy as agreed while a run builds the game, and delivery hands over the approval link (research/gf-three/loop/economy.mjs; README 'The economy').", "properties": {
+      "in": { "const": "gamesfun.json", "description": "The file in the game's folder whose `economy` section is this game's economy." } } }
   }
 }

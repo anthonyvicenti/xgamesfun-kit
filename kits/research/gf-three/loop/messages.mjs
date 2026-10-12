@@ -74,7 +74,7 @@ export const ownVerifyReminder=(own,paths,{tools=null,who='The worker'}={})=>{
 
 /**
  * What the agent is told when the loop refused something it did to the proof (lock.mjs; the codes are state.mjs
- * REFUSALS). `refusals`: [{code, files?: ['spec' | 'game'], ids?: [promise ids]}]. Each says what to do instead.
+ * REFUSALS). `refusals`: [{code, files?: ['spec' | 'game' | 'economy'], ids?: [promise ids]}]. Each says what to do instead.
  * '' when there is none. Said once, before the round's own message.
  */
 export function refusalNote(refusals,{paths,who='The worker',tools=null}={}){
@@ -82,7 +82,7 @@ export function refusalNote(refusals,{paths,who='The worker',tools=null}={}){
   const L=lay(paths),has=code=>refusals.filter(r=>r.code===code),lines=[];
   const spec=has('spec-changed');
   if(spec.length){
-    const roles=new Set(spec.flatMap(r=>r.files??[])),files=[...(roles.has('spec')?[L.spec]:[]),...(roles.has('game')?[`${L.game}/spec.json`]:[])];
+    const roles=new Set(spec.flatMap(r=>r.files??[])),files=[...(roles.has('spec')?[L.spec]:[]),...(roles.has('game')?[`${L.game}/spec.json`]:[]),...(roles.has('economy')?[`the economy in ${L.game}/gamesfun.json`]:[])];
     lines.push(`- The locked spec was changed after it was locked (${files.join(', ')||L.spec}), and ${who.replace(/^The /,'the ')} put it back. The spec is the plan the person agreed to, and the game is verified and play-tested against it as locked: editing it passes no check and drops no promise. Make the game do what the spec says. If a part of the plan can't be built, leave the spec alone: ${tools?.ask?`ask the person with the tool ${tools.ask}`:`write ${L.questions} so the person decides`}, or name what is not there yet in ${L.delivery}.`);
   }
   if(has('state-changed').length)lines.push('- The loop\'s state file was changed by something other than the loop, and was written again from the copy the loop holds in memory. The steps, the verdicts and the counts are the loop\'s to write.');

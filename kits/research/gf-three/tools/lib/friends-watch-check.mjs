@@ -8,7 +8,8 @@
 //   says 1 watching. A message sent to the relay as a viewer closes that socket (1008). J reloads: J's stream carries on,
 //   on the same link. X watches in a frame the size of a post: beside Join its bar offers Start a room and Play solo,
 //   all inside the frame and clear of the full-screen button; Start a room takes X to the friends page, where X hosts a
-//   room of its own. V presses Join: the room's own link, and V joins that room. W watches; J stops; W's bar says the
+//   room of its own. V presses Join: the room's own link, and V joins that room, clicking Join while the lobby's backdrop
+//   is still loading the character clips (held until the click), so the friends page swaps the frame mid-load. W watches; J stops; W's bar says the
 //   stream ended, with Play and no stray words; W presses Play solo: the game's own page, nobody else in it. K, J on
 //   another day (a new browser), opens the streamer link J copied from the share sheet, hosts a room and goes live from
 //   the waiting room: the same link as before, the secret gone from the address bar and kept out of localStorage, and
@@ -48,6 +49,8 @@ const overlap = (a, b) => !!a && !!b && a.x < b.x + b.width && b.x < a.x + a.wid
 
 export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = () => {} } = {}) {
   const mp = JSON.parse(await readFile(join(dir, 'multiplayer.json'), 'utf8'));
+  // the character clips the game lists (a gf-three character game; forge lists none): V's Join is clicked while they load
+  const clips = /"(assets\/clips\/[^"]+\.glb)"/.exec(await readFile(join(dir, 'assets.json'), 'utf8').catch(() => ''))?.[1] ?? null;
   const record = { steps: [], shots: [] }, warnings = [];
   const step = (name, ok, detail = '') => { record.steps.push({ name, ok: !!ok, detail }); log(`${ok ? 'pass' : 'FAIL'} watch ${name}: ${detail}`); return !!ok; };
   if (mp.mode !== 'live') return { ok: false, detail: `multiplayer.json mode is ${mp.mode}, not live`, record, warnings };
@@ -200,12 +203,27 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
     ok = step('Start a room: the viewer hosts a room of their own', !!own && own.code !== hs.code && !ownUrl.searchParams.has('watch') && !ownUrl.searchParams.has('join'), own ? `${ownUrl.href}; X hosts ${own.code} (the stream's room is ${hs.code})` : `${ownUrl.href}; no room`) && ok;
     await X.ctx.close().catch(() => {});
     // ---- V joins while live: the room's own link ----
+    // A player who clicks Join at once: the lobby's backdrop is still loading when the friends page gives the frame the
+    // round's page, which cancels the backdrop's loads. The backdrop's clips are held until the click, so that happens on
+    // every run (the corpus saw it now and then: token-call-centre, Recess Rumble, 2026-10-11), and a game that reports
+    // its own cancelled loads fails "no console errors" with V's page named.
+    let held = false, release = () => {};
+    const gate = new Promise(r => { release = r; });
+    if (clips) await V.ctx.route(`**/${clips}`, async r => {
+      let backdrop = false; try { backdrop = /gf_mode=backdrop/.test(r.request().frame().url()); } catch {}
+      if (backdrop) { held = true; await gate; }
+      await r.continue().catch(() => {});      // the backdrop's page may be gone by then
+    });
     await V.page.click('#mp-watch-join');
     await until(async () => (await snap(V.page))?.phase === 'home', 30000, "V's Host / Join screen");
     const joinUrl = V.page.url();
+    const backdropOn = clips && await until(async () => /gf_mode=backdrop/.test(frameOf(V)?.url() ?? '') || null, 3000, 'the backdrop').catch(() => null);
+    if (backdropOn) await until(async () => held || null, 15000, 'the backdrop loading its clips').catch(() => {});
     await V.page.click('#gfp-join');
+    setTimeout(release, 1000);
     const inRoom = await until(async () => { const s = await snap(V.page); return s?.phase === 'room' && s.code === hs.code ? s : null; }, 30000, 'V in the room').catch(() => null);
-    ok = step('Join opens the room\'s own link and the viewer joins that room', !!inRoom && new URL(joinUrl).searchParams.get('join') === hs.code, `${joinUrl}; V's room ${inRoom?.code ?? '(none)'} (the host's ${hs.code})`) && ok;
+    release();
+    ok = step('Join opens the room\'s own link and the viewer joins that room', !!inRoom && new URL(joinUrl).searchParams.get('join') === hs.code, `${joinUrl}; V's room ${inRoom?.code ?? '(none)'} (the host's ${hs.code})${!clips ? '' : held ? '; Join clicked while the backdrop was loading its clips' : '; the backdrop never asked for its clips before Join'}`) && ok;
     // ---- W watches; J stops; W sees the end ----
     const Wv = await open('viewer 2');
     await Wv.page.goto(live.link, { waitUntil: 'load' });

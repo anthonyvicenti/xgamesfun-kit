@@ -215,9 +215,10 @@
      "about": {
       "enum": [
        "together",
-       "body"
+       "body",
+       "economy"
       ],
-      "description": "Only on the two questions the pitch step holds (play.together, play.body). together: how friends play (against each other, together, in teams, taking turns, each on their own board). body: what each player is on screen when the game has no character to walk (a board, a cursor, a vehicle, a hand of cards). Leave it out on any other question."
+      "description": "Only on the questions the pitch step holds (play.together, play.body, play.economy). together: how friends play (against each other, together, in teams, taking turns, each on their own board). body: what each player is on screen when the game has no character to walk (a board, a cursor, a vehicle, a hand of cards). economy: only in a session with web3 on, whether the game comes with the economy play.economy names (one option keeps it, one leaves it out). Leave it out on any other question."
      }
     }
    }
@@ -316,6 +317,39 @@
        "minLength": 2,
        "maxLength": 120,
        "description": "Only when what is not character: the creator's own words that say how each player is shown on screen, copied exactly from the prompt (checked). Leave it out when they do not say: then one question asks (about: body)."
+      }
+     }
+    },
+    "economy": {
+     "type": "object",
+     "required": [
+      "what",
+      "price"
+     ],
+     "additionalProperties": false,
+     "description": "Only in a session with web3 on (gamesfun-kit: GAMESFUN_WEB3=1), and only when the creator's words ask for an economy (from) or the pitch offers one as a question (about: economy). The creator reads one sentence the loop builds from these fields (research/gf-three/loop/economy.mjs economyWords): what it is, the price, how to drop it, and, when it pays for clears, what a cheater can still do. The locked spec then references the economy saved in gamesfun.json.",
+     "properties": {
+      "what": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 240,
+       "description": "One plain sentence: what players pay and what they can win."
+      },
+      "price": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80,
+       "description": "What putting it live costs, in SOL, from economy_cost (e.g. \"about 0.05 SOL\")."
+      },
+      "clears": {
+       "type": "boolean",
+       "description": "True when the economy pays a player for a result the game reports (clearing a level, winning a run) after they paid for the attempt (checked against the draft in gamesfun.json, else against the creator's words)."
+      },
+      "from": {
+       "type": "string",
+       "minLength": 2,
+       "maxLength": 120,
+       "description": "The creator's own words that ask for an economy, copied exactly from the prompt (checked). Leave it out when they do not ask: then one question offers it (about: economy)."
       }
      }
     },

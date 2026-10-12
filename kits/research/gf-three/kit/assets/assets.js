@@ -28,6 +28,15 @@ import * as gf from '../../gf-assets.js';
 import { refuse } from '../core/refusals.js';
 import { assets as base, S, isUrl, slotOf } from './core.js';
 
+// A page that is going away cancels its own loads, and that is not a broken slot: the friends page gives the frame a
+// round's page while the lobby's backdrop is still loading (a late joiner's Join), and the backdrop's fetches reject with
+// "Failed to fetch". pagehide comes first (Chrome 148: navigate, beforeunload, pagehide, then the cancelled fetch
+// rejects, every time), so from then on a slot whose load fails never settles: nothing of the leaving page runs on and
+// nothing is logged. A page kept for the back button (persisted) is not leaving.
+let leaving = false;
+globalThis.addEventListener?.('pagehide', e => { if (!e.persisted) leaving = true; });
+const failed = (cache, id, file, e) => { cache.delete(id); if (leaving) return new Promise(() => {}); throw new Error(`gf-three assets: ${id} (${file}) failed to load: ${e.message}`); };
+
 async function fetchBytes(url, max) {
   const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -134,7 +143,7 @@ export const assets = Object.assign(base, {
         return gltfLoader().parseAsync(buf, new URL(base, globalThis.document?.baseURI ?? 'http://x/').href);
       })());
     }
-    const gltf = await S.gltf.get(id).catch(e => { S.gltf.delete(id); throw new Error(`gf-three assets: ${id} (${file}) failed to load: ${e.message}`); });
+    const gltf = await S.gltf.get(id).catch(e => failed(S.gltf, id, file, e));
     if (!gltf) return null;
     return build(id, gltf, opts, file);
   },
@@ -166,7 +175,7 @@ export const assets = Object.assign(base, {
         return tex;
       })());
     }
-    const tex = await S.tex.get(id).catch(e => { S.tex.delete(id); throw new Error(`gf-three assets: ${id} (${file}) failed to load: ${e.message}`); });
+    const tex = await S.tex.get(id).catch(e => failed(S.tex, id, file, e));
     if (!tex) return null;
     if (repeat !== null) { const t = tex.clone(); t.repeat.set(...[].concat(repeat, repeat).slice(0, 2)); t.needsUpdate = true; t.userData.gfSlot = id; return t; }
     return tex;

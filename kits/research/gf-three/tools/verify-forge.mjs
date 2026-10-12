@@ -467,7 +467,9 @@ async function check22(env) {
   const { want, add, rec, newPage, srv, log, shot } = env;
   if (!want(22)) return;
   await env.section([[22, 'the wallet in the menu']], async () => {
-    const r = await checkWallet({ newPage, url: srv.url, log, shot }); rec.wallet = r.record; rec.notes.push(...r.warnings);
+    // the economy page (CONTRACT §6g W2) plays in stepped time on the party boot; forge has none, so its round is cut to
+    // 20 s through the overrides (as the solo round, check 6) and it reaches the same results card in real time
+    const r = await checkWallet({ newPage, url: srv.url, log, shot, clock: 20 }); rec.wallet = r.record; rec.notes.push(...r.warnings);
     // alone, the player's own body is not drawn on their own screen (first person): the item's colour reaching the
     // game's loadout is what is checked here; friends see it on the body (check 5's loadout leg)
     const undrawn = r.warnings.some(w => /no drawn colour/.test(w));

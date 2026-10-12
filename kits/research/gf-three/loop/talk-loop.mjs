@@ -3,6 +3,7 @@
 // Lifted from the Studio worker's talkFlow; the checker is passed in, because the pitch's rules are the host's
 // (Studio: creator-studio/lib/pitch.mjs through tools/check-v2.mjs; a person's session: `create` checks the spec).
 import {STATE_SCHEMA,memoryStore,cancelState} from './state.mjs';
+import {specEconomy,readEconomy,paysForClears,KEEPER_HOLE,ECONOMY_FILE} from './economy.mjs';
 
 export const TALK_STEPS=['pitch','spec','deliver','done'];
 
@@ -15,6 +16,10 @@ export const TALK_STEPS=['pitch','spec','deliver','done'];
  *   agent(o)          the runner: o = {kind: 'pitch' | 'refine' | 'repair', message}. Absent: the round is handed over
  *   check()           → {failure} | {errors, file} | {file, value}: the answer as the host's checker reads it
  *   repairMessage(errors)  what the agent is told when its answer is not valid yet
+ *   economy           only in a session with web3 on (economy.mjs): {game, read?() → the economy, check?(economy) →
+ *                     refusals [{code, message, fix}]}. A locked spec that references an economy is held to it: the
+ *                     economy is saved in <game>/gamesfun.json and its checker passes it. Absent (web3 off): a spec that
+ *                     references an economy is not valid, and nothing else changes
  *   say(key), log, checkpoint()
  *   hooks: prepare(loop) (the job folder), fastLock(loop) → true when the host locked the spec with no agent,
  *          beforeAgent(loop), afterAgent(loop), deliver(loop, answer) → the outcome
@@ -27,6 +32,18 @@ export async function openTalkLoop(host){
   const S=(host.resume===false?null:await store.load())??{schema:STATE_SCHEMA,kind:host.kind,status:'building',step:'pitch',why:'a new request',fast:false,repaired:false,handed:null,outcome:null,history:[]};
   const M={answer:null};
   const go=(next,why)=>({next,why});
+  // The host's checker, then the economy a locked spec references (K3). A spec with no `economy` is the host's answer as it was.
+  const check=async()=>{
+    const out=await host.check();
+    if(out?.errors||out?.failure||out?.file!=='spec.json'||!specEconomy(out.value))return out;
+    const E=host.economy,ref=specEconomy(out.value);
+    if(!E)return {errors:['economy: this session runs with web3 off, so no game here carries an economy: take "economy" out of the spec'],file:out.file};
+    const economy=E.read?await E.read():await readEconomy(E.game,ref);
+    if(!economy)return {errors:[`economy: the spec references the economy in ${ref.in??ECONOMY_FILE}, and there is none there yet: save it with economy_save (only an economy its checker passes is saved), then have the spec checked again`],file:out.file};
+    const refusals=(await E.check?.(economy))??[];
+    if(refusals.length)return {errors:refusals.slice(0,12).map(r=>`economy: ${r.code?`${r.code}: `:''}${r.message??r}${r.fix?` Fix: ${r.fix}`:''}`),file:out.file};
+    return {...out,economy:{in:ref.in??ECONOMY_FILE,...(paysForClears(economy)?{clears:true,hole:KEEPER_HOLE}:{})}};
+  };
   const round=async o=>{
     cp();
     if(host.agent){await host.agent(o);return null;}
@@ -51,19 +68,19 @@ export async function openTalkLoop(host){
       // The repair round was handed over on an earlier call and the host has done it: take it as done, so `handed`
       // does not outlive a repaired answer that is valid (the check below then sees the repaired answer).
       if(S.handed?.step==='spec'&&S.handed.kind==='repair'){S.handed=null;S.repaired=true;}
-      let out=await host.check();
+      let out=await check();
       if(out.errors&&!flags.stub&&!S.fast&&!S.repaired){
         if(!S.handed)log(`  ${S.kind} output invalid; one repair round`);
         const w=await round({kind:'repair',message:host.repairMessage(out.errors)});if(w)return w;
         S.repaired=true;
-        out=await host.check();
+        out=await check();
       }
       M.answer=out;
       return go('deliver',out.errors?'the answer is still not valid after its repair round':out.failure?'the agent declined':'the answer is valid');
     },
     async deliver(){
       cp();
-      const r=await hooks.deliver?.(loop,M.answer??await host.check())??{outcome:M.answer?.errors?'invalid-output':M.answer?.failure?'agent-declined':M.answer?.file==='spec.json'?'locked':'pitched'};
+      const r=await hooks.deliver?.(loop,M.answer??await check())??{outcome:M.answer?.errors?'invalid-output':M.answer?.failure?'agent-declined':M.answer?.file==='spec.json'?'locked':'pitched',...(M.answer?.economy&&!M.answer.errors?{economy:M.answer.economy}:{})};
       return {next:'done',why:'the answer was handed over',outcome:r};
     },
   };
