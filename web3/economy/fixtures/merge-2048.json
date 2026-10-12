@@ -8,12 +8,12 @@
     {
       "key": "tile",
       "source": "existing",
-      "name": "Tile (pump.fun placeholder)",
+      "name": "Tile (pump.fun-style mint)",
       "symbol": "TILE",
       "decimals": 6,
       "program": "spl-token",
-      "mint": "75C3pLRUXZxMAyuF1xj7MzvPjEfyoDV6A2QB2f51QXHH",
-      "venue": "pump.fun",
+      "mint": "CywvsJBuGbL31ajSfM5cQw1k9JQWYTTwYBRo1zuYZRDs",
+      "venue": "other",
       "powers": { "mintAuthority": "none", "freeze": false }
     }
   ],

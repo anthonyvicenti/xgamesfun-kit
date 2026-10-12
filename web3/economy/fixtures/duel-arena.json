@@ -4,7 +4,7 @@
   "name": "Duel Arena",
   "prompt": "ECONOMIES-100 #69 Duel Stakes and #47 Fleet Missions: two players each put up a stake and fight; the winner takes it, less a rake that goes to the arena's holder. Ships go on 6-hour missions held by the game: they come home with loot, or the authority sends them to the wreck yard; if it does not answer in time, anyone can send them home.",
   "currency": "usdc",
-  "keys": { "authority": "9YwNxYMHHbJX3977FWspv5mkhFJ3AUd96bTEV6CzYpxq" },
+  "keys": { "authority": "Hby5BFRb3qfaDyY2Fza4UtjfRn4aFmvdnMAouigMurAs" },
   "tokens": [{ "key": "usdc", "source": "existing", "name": "USDC (devnet)", "symbol": "USDC", "decimals": 6, "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", "venue": "other", "powers": { "mintAuthority": "someone else", "freeze": true } }],
   "collection": { "name": "Duel Arena" },
   "items": [
@@ -22,7 +22,7 @@
       "entriesClose": "10m",
       "resultDue": "1h",
       "every": "1h",
-      "split": [{ "to": "holder:9wSxRXn4MhsqQrdJe6qbJXtMwJh6CvuX4HFvsL8U3AHw", "percent": 3 }, { "to": "burn", "percent": 2 }],
+      "split": [{ "to": "holder:9rAE9ZjQBaR7Gwqoh1nnbJMqNjJJYVnuptjQ8p4sV7VW", "percent": 3 }, { "to": "burn", "percent": 2 }],
       "decidedBy": "the game server, from the duel's result"
     }
   ],

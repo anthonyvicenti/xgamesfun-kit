@@ -14,8 +14,8 @@
     { "key": "clone", "name": "Clone", "price": 0.1, "rise": { "step": 0, "growthPercent": 5 } }
   ],
   "payments": [
-    { "key": "entry", "name": "Entry, with a friend's cut", "amount": 0.05, "split": [{ "to": "account:4JaSvbECYUyqYjWoyBzAjYTfvaQxMBmXnKhyLHcoaGNE", "percent": 10 }] },
-    { "key": "cursed-tip", "name": "Cursed tip", "amount": 10, "currency": "cursed", "split": [{ "to": "burn", "percent": 10 }, { "to": "account:4CkcjwWWudgAYXJkASg8gt4atpRtUNsm43ZUxguSuHkZ", "percent": 90 }] }
+    { "key": "entry", "name": "Entry, with a friend's cut", "amount": 0.05, "split": [{ "to": "account:6U3XnmrzuZ5sDujScii8SmzwtRZ4skfKcH2TLiz1rmES", "percent": 10 }] },
+    { "key": "cursed-tip", "name": "Cursed tip", "amount": 10, "currency": "cursed", "split": [{ "to": "burn", "percent": 10 }, { "to": "account:3pVhH23EoBG5yYgkYq6bSu22itPrvrtaLofqgqGxw2GP", "percent": 90 }] }
   ],
   "scenario": { "days": 30, "perDay": { "item:drop-hero": 3, "item:clone": 20, "payment:entry": 50, "payment:cursed-tip": 30 } }
 }

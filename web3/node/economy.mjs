@@ -34,6 +34,8 @@ import { migrateShop } from '../economy/migrate.mjs';
 import { fromUnits, model, rent as rentOf, WSOL } from '../economy/model.mjs';
 import { setupSteps } from '../economy/steps.mjs';
 import { readConfig } from './game.mjs';
+import { KIT_ROOT } from './game-dir.mjs';
+import { chainContext } from './settings.mjs';
 
 const fail = (message) => {
   throw new Error(message);
@@ -441,11 +443,16 @@ const PART_KIND = { item: 'item', box: 'box', recipe: 'recipe', schedule: 'sched
  *     pools: [{ index, key, mint, balance, amount, symbol }], receipts: [{ signature, slot, at, ok, events, explorer }] }
  * A part `differs` when it is on chain but not as the spec says (a price changed and not published yet). Fields the
  * program moves on its own while the game runs (a rising price, a schedule's next run, a lottery's next draw) are not
- * compared. opts: { rpc, network } (as the routes' env), `receipts` (how many recent transactions to read, default 5).
+ * compared. opts: { rpc, network } (as the routes' env), or { kitRoot, env, fetchImpl? } (an agent tool's: the RPC is
+ * picked as the dev server picks it), and `receipts` (how many recent transactions to read, default 5).
  */
 export async function economyStatus(gameDir, opts = {}) {
-  const { rpc, network } = opts;
-  if (!rpc) fail('economyStatus needs an RPC client (opts.rpc).');
+  let { rpc, network } = opts;
+  if (!rpc) {
+    // An agent tool's call: { kitRoot, env, fetchImpl? } picks the RPC the way the dev server does.
+    const chain = await chainContext(opts.kitRoot ?? KIT_ROOT, { env: opts.env ?? process.env, fetchImpl: opts.fetchImpl });
+    ({ rpc, network } = chain);
+  }
   const { economy } = await readEconomy(gameDir);
   if (!economy) return { live: false, program: LOOT_PROGRAM, game: null, collection: null, parts: [], pools: [], receipts: [], note: 'This game has no economy yet.' };
   const live = economy.live ?? {};
@@ -474,6 +481,8 @@ export async function economyStatus(gameDir, opts = {}) {
     }
     return { step: s, part: PART_KIND[kind] ?? kind, key: s.id.includes(':') ? s.id.split(':').slice(1).join(':') : s.id, address };
   });
+  // Tokens the game made: their mint, whose minting is the game's.
+  for (const t of m.tokens.values()) if (t.source === 'game' && isAddress(t.mint)) rows.push({ step: { id: `token:${t.key}`, ix: 'set_authority' }, part: 'token', key: t.key, address: t.mint });
   const accounts = await rpc.accounts(rows.map((r) => r.address).filter(Boolean));
   const byAddress = new Map(rows.map((r) => r.address).filter(Boolean).map((a, i) => [a, accounts[i]]));
   const parts = rows.map(({ step, part, key, address }) => {

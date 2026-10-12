@@ -12,11 +12,18 @@ Plain ES modules, no build step, no dependencies. Nothing here signs or talks to
 | `simulate.mjs` | the quick simulation: what each box, ticket and craft is worth, how long each pool lasts, who pays what |
 | `cost.mjs` | what going live costs: each account's rent, each call's fee, network fees |
 | `compile.mjs` | the setup plan: the program's instructions in order, split into transactions that fit; `diff` for a change |
-| `migrate.mjs` | today's `shop` section → an `economy` section (`gamesfun economy migrate --write`, or `gamesfun upgrade --economy`) |
+| `migrate.mjs` | today's `shop` section → an `economy` section (`gamesfun economy migrate --write`; `gamesfun upgrade` does it by default, `--dry-run` shows it; the publish flow and `economyStatus` move a shop on read) |
 | `slots.mjs` | every number in the spec as a value slot |
 | `model.mjs`, `steps.mjs`, `txsize.mjs`, `idl.mjs` | the shared parts: units and the program's numbers; one setup step per instruction; transaction sizes; loot 0.3's IDL (`loot-0.3.json`, trimmed from the deployed program's) |
 
-From a terminal: `npx gamesfun economy check|simulate|cost|plan|migrate [game-dir]` (`--spec <file>` for a spec outside a game, `--json` for machines). `publish` and `status` answer "not built yet": they need the loot 0.3 chain client.
+From a terminal: `npx gamesfun economy check|simulate|cost|plan|migrate|publish|status [game-dir]` (`--spec <file>` for a spec outside a game, `--json` for machines). `publish` never signs: it leaves a request and prints the studio link where the creator's wallet approves it (`--picture <file>` for a token launched on games.fun's curve with it). `status` reads the economy back from devnet.
+
+## Going live (`web3/node/economy.mjs`, `web3/node/flows.mjs`)
+
+- `planToInstructions(plan, ctx)` turns each plan step into a real instruction with the kit's builders (`gf-web3/chain/loot.js` `lootIx`, Core, SPL, Metaplex): names become addresses, decimal strings bigints, `{ Pool: 3 }` the codec's `{ Pool: [3] }`, a Token-2022 deposit gets its `transferExtras`.
+- Flow kind `economy` (`POST /api/web3/flow/start { kind: 'economy', wallet }`; the old `publish` starts it too) puts everything the economy still needs live: a token launched on the curve first (its own uploads and transaction), item pictures and details to Arweave, then every setup transaction in one wallet approval (more only when it takes more than 12). Each transaction is written to `gamesfun.json` as it lands: each part's program id, a new token's mint, `live.game`, `live.collection`, `live.treasury`, `live.at`, `live.transactions` (signatures) and `live.published`, the spec as it is on chain. The next publish sends only `diff(live.published, spec)`; "publish" in the spec always means `live.at`.
+- `economyStatus(gameDir, opts)` and `GET /api/web3/economy/status`: each part on chain or not and whether it still matches the spec, each pool's balance, the recent receipts.
+- Devnet proof: `tests/web3/devnet/economies.mjs` puts every fixture live through the same flow and reads it back (`economies-result.json`).
 
 ## How to write one
 
@@ -86,11 +93,11 @@ Ten economies from `research/gf-economy/ECONOMIES-100.md` (games.fun) and the co
 | `spark-pity` | #2 | two tokens the game mints; a recipe that pays SOL into a pool and mints both; a box priced in a game token whose split burns it all; a prize from a pool; a recipe that burns 90 Sparks for an item |
 | `halving-seasons` | #81, #6, #96 | a schedule that mints with a halving and a run limit; a schedule that moves a share between pools; a soulbound pass with a cooldown, used by a recipe that pays from a pool; a stake |
 | `scorched-treasury` | #14 (needs the authority) | a schedule that burns a share; a seed; a payment into a pool; the authority's payouts |
-| `merge-2048` | #21 | an existing pump.fun-style mint (placeholder address); recipes that burn two for one; a share of a pool as a craft's prize |
+| `merge-2048` | #21 | an existing pump.fun-style mint (a devnet stand-in: classic SPL, 6 decimals, no mint or freeze authority); recipes that burn two for one; a share of a pool as a craft's prize |
 | `stud-farm` | #31, #19, #26 | uses and a cooldown, ready-after and lasts; a recipe that uses, burns and pays the stud's holder; needs and keeps; renew |
 | `sacrifice-raffle` | #15, #67 | recipes that burn an item for minted tickets; a lottery whose tickets are another token (burned) with eight places |
 | `falling-drop` | #92, #40, #74, #20 | a price that falls, a price that rises, payments with a share to an account, a share that burns |
 | `duel-arena` | #69, #47 (needs the authority) | a contest with a share for a collectible's holder and a burn; a hold; decisions signed by a separate authority key |
 | `starforce` | #22 | a recipe that gives an attempt token; a box in that token whose outcomes are an item, the same item again, a burn, and a share of the jackpot |
 
-Real devnet mints where the kit has them: USDC-dev, MAIN-dev, and the Token-2022 coin of the 0.3 devnet run (`7MJWx2u…`). The pump.fun mint, the stud's and the arena deed's addresses, the partners' accounts and the duel arena's authority are placeholders: replace them before putting those fixtures live.
+Every address is a real devnet one: USDC-dev, MAIN-dev, the Token-2022 coin of the 0.3 devnet run (`7MJWx2u…`), and the accounts `tests/web3/devnet/economies.mjs --make-fixtures` made on 2026-10-12 (`economies-fixtures-result*.json`): the pump.fun-style TILE mint `Cywvs…`, the stud `3rzrH…` and the arena deed `9rAE9…` (Core collectibles held by test wallets), the partners' accounts (the launchpad partner wallet's wrapped SOL `6U3Xn…`, a test wallet's MAIN-dev `3pVhH…`) and the duel arena's authority, the launchpad keeper wallet `Hby5B…`. No fixture needs a secret.

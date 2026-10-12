@@ -19,7 +19,7 @@
       "in": [
         { "takes": "use", "item": "mare" },
         { "takes": "burn", "item": "hay", "count": 1 },
-        { "takes": "pay", "amount": 5, "currency": "usdc", "to": "holder:DEiGziPGmE1G9vQPHHLUrUzL9hr3jKiNbYsyLyBGEfJb" },
+        { "takes": "pay", "amount": 5, "currency": "usdc", "to": "holder:3rzrHLNCpMjZ1eNTKr5p6cg3byL3UwRzBePEVDJ1RQ4R" },
         { "takes": "pay", "amount": 1, "currency": "usdc", "to": "burn" }
       ],
       "out": [{ "gives": "item", "item": "foal" }],

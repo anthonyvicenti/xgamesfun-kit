@@ -264,7 +264,9 @@ describe('the economy flow, end to end (offline)', () => {
       assert.match(e.collection.uri, /^https:\/\/devnet\.irys\.xyz\//);
       const item = chain.accounts.get(lootPda.item(e.live.game, 1));
       assert.ok(item, 'the item is on chain');
-      const status = await economyStatus(game.gameDir, { rpc: (await import('../web3/gf-web3/rpc.js')).rpcClient('http://fake', { fetchImpl: chain.fetchImpl }), receipts: 0 });
+      // As an agent tool calls it: { kitRoot, env, fetchImpl }.
+      const status = await economyStatus(game.gameDir, { kitRoot: game.kitRoot, env: {}, fetchImpl: chain.fetchImpl, receipts: 0 });
+      assert.equal(status.live, true);
       assert.deepEqual(status.parts.filter((p) => !p.onChain || p.differs), []);
     } finally {
       await server.close();

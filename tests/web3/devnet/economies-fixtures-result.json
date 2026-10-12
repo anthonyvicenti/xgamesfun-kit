@@ -1,0 +1,63 @@
+{
+  "network": "devnet",
+  "program": "88Labq6tdVnBQsjHSfic6qqgvo5b9NGmy99AYj7KVXqM",
+  "platform": "DFbnNkPGmsrc9NT4yZKoiD161gt2SPK98DKe4yAL2cm9",
+  "startedAt": "2026-10-12T02:32:01.426Z",
+  "seedScale": 0.01,
+  "steps": [
+    {
+      "name": "a pump.fun-style mint for merge-2048 (classic SPL, 6 decimals, named, 1,000,000 TILE each to the creator and a friend, then no mint authority)",
+      "at": "2026-10-12T02:32:01.842Z",
+      "ok": true,
+      "mint": "CywvsJBuGbL31ajSfM5cQw1k9JQWYTTwYBRo1zuYZRDs",
+      "signatures": [
+        "5khtEHfGcKFQrFXUeCG7vZvUfxb7x3wmhVpTC3EBHvYW4DUyseQGsdrHXziEKnMahD1meFuVHS2rHSp42QT8zhVu",
+        "4mASNexkwEPUgTx9Ck1EWTuEXX31z5W8u9qMf3NL2wewE9SpLpH1Y3Zp2xAheAGQLsUuQUUiPuCEuTX3pMGGbdyc"
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/5khtEHfGcKFQrFXUeCG7vZvUfxb7x3wmhVpTC3EBHvYW4DUyseQGsdrHXziEKnMahD1meFuVHS2rHSp42QT8zhVu?cluster=devnet",
+        "https://explorer.solana.com/tx/4mASNexkwEPUgTx9Ck1EWTuEXX31z5W8u9qMf3NL2wewE9SpLpH1Y3Zp2xAheAGQLsUuQUUiPuCEuTX3pMGGbdyc?cluster=devnet"
+      ]
+    },
+    {
+      "name": "a Core collectible for the Stud (Stud Farm fixture), held by a friend",
+      "at": "2026-10-12T02:32:07.746Z",
+      "ok": true,
+      "asset": "3rzrHLNCpMjZ1eNTKr5p6cg3byL3UwRzBePEVDJ1RQ4R",
+      "owner": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+      "signature": "4WWzBbsP6NAuMjrksfNjuDmadVEiQKshjUhHXQhDQGZ2Fere6oRBFDhTT2GjphPjTRk3UaM8aJGq5jnXKXwRY1Zv",
+      "explorer": "https://explorer.solana.com/tx/4WWzBbsP6NAuMjrksfNjuDmadVEiQKshjUhHXQhDQGZ2Fere6oRBFDhTT2GjphPjTRk3UaM8aJGq5jnXKXwRY1Zv?cluster=devnet"
+    },
+    {
+      "name": "a Core collectible for the Arena Deed (Duel Arena fixture), held by a friend",
+      "at": "2026-10-12T02:32:13.427Z",
+      "ok": true,
+      "asset": "9rAE9ZjQBaR7Gwqoh1nnbJMqNjJJYVnuptjQ8p4sV7VW",
+      "owner": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+      "signature": "2Jw7RfZ698jih46JpGgdnhGy1fnLojbkVCGbJszpekgd6TYejmDmzWqZRfSt8fQYnU23KxpA4WYo9ZBRhhR7SahK",
+      "explorer": "https://explorer.solana.com/tx/2Jw7RfZ698jih46JpGgdnhGy1fnLojbkVCGbJszpekgd6TYejmDmzWqZRfSt8fQYnU23KxpA4WYo9ZBRhhR7SahK?cluster=devnet"
+    },
+    {
+      "name": "the partners’ token accounts: a friend’s wrapped-SOL account (falling-drop’s entry cut) and another’s MAIN-dev account (its cursed tips)",
+      "at": "2026-10-12T02:32:19.827Z",
+      "ok": true,
+      "wsol": "FG4NTkh3XgLf2h2y3miNnPFmFQh9X6dPAmwpGZwX4JJs",
+      "main": "3pVhH23EoBG5yYgkYq6bSu22itPrvrtaLofqgqGxw2GP",
+      "signature": "HP92du78ZXSBjJaGA6cznAeVL1q7uKKN5Qe4R2XU1JuneBji6sg38rv6RxpEKmY6Taw6Zu7B2jPTivCqFij3Emm",
+      "explorer": "https://explorer.solana.com/tx/HP92du78ZXSBjJaGA6cznAeVL1q7uKKN5Qe4R2XU1JuneBji6sg38rv6RxpEKmY6Taw6Zu7B2jPTivCqFij3Emm?cluster=devnet"
+    }
+  ],
+  "creator": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+  "creatorLamportsAtStart": "1214679917",
+  "fixtureAccounts": {
+    "tile": "CywvsJBuGbL31ajSfM5cQw1k9JQWYTTwYBRo1zuYZRDs",
+    "stud": "3rzrHLNCpMjZ1eNTKr5p6cg3byL3UwRzBePEVDJ1RQ4R",
+    "arenaDeed": "9rAE9ZjQBaR7Gwqoh1nnbJMqNjJJYVnuptjQ8p4sV7VW",
+    "partnerSol": "FG4NTkh3XgLf2h2y3miNnPFmFQh9X6dPAmwpGZwX4JJs",
+    "partnerMain": "3pVhH23EoBG5yYgkYq6bSu22itPrvrtaLofqgqGxw2GP",
+    "duelAuthority": "Hby5BFRb3qfaDyY2Fza4UtjfRn4aFmvdnMAouigMurAs"
+  },
+  "creatorLamportsSpent": "24647800",
+  "finishedAt": "2026-10-12T02:32:28.029Z",
+  "ok": true
+}
