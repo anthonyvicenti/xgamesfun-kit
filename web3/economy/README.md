@@ -132,7 +132,7 @@ Every address is a real devnet one: USDC-dev, MAIN-dev, the Token-2022 coin of t
 | --- | --- | --- |
 | K0, the program and the old shop | the kit on loot 0.3 (devnet `88Labq6t…`), Token-2022 allowed; devnet proof `tests/web3/devnet/loot-0.3.mjs`, 9 of 9 steps on 2026-10-11 (its script now goes through the economy; not run again since) | the CI devnet run |
 | K1, the spec and its tools | everything in the tables above; every fixture went live on devnet through the economy flow (`economies-result.json`, 13 of 13) | `economy check --devnet` (being built) |
-| K2, economies in games | the in-game calls (`gfWeb3.economy`, devnet play proof `play.mjs`, 12 of 12); the kit's menu and HUD draw offered actions (gf-three §6g W2, verify check 22) | the studio preview's side of the page bridge (being built); an example game of each kind carrying an economy |
+| K2, economies in games | the in-game calls (`gfWeb3.economy`, devnet play proof `play.mjs`, 12 of 12); the kit's menu and HUD draw offered actions (gf-three §6g W2, verify check 22: built in games.fun on a branch, not yet in this checkout's `kits/`) | W2 in `kits/` (the next kit sync); the studio preview's side of the page bridge (being built); an example game of each kind carrying an economy |
 | K3, the agent and the page | the `economy_*` tools, the `gamesfun-economy` skill, the Economy tab, the 20 frozen evals | the build loop learning the economy (pitch, spec, deliver); a scored eval run |
 | K4, decisions | decisions prepared for the creator's wallet (`economy_decide`) | the page that signs them, the local keeper, the full simulation |
 

@@ -18,7 +18,8 @@ buttons come for free:
   (`{ id, kind, label, price, says, where }`) and says the player's state in `gf:economy`.
 - The kit's own home menu, pause menu, results card and HUD draw each action where its `where` says, and a click only
   tells the page (`gf:econ-action`). The page signs (or not) and answers with a new state (gf-three CONTRACT §6g W2;
-  verify check 22 plays it).
+  verify check 22 plays it). W2 reaches this checkout's `kits/` with the next kit sync; a kit without it draws no
+  economy buttons, and the answer is still to wait for it, not to write them.
 - The wallet itself, the player's items and **Wear** are in the kit's menu too (§6g W1). Wearing sends the page a
   `gf:wear`; the page answers with the loadout, gf-three applies it, and every player in the match sees it.
 
