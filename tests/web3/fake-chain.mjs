@@ -2,12 +2,14 @@
 // signature on what it is sent (so a flow that sends a half-signed transaction fails here), and applies the effects
 // the flows rely on: the loot program 0.3's create_game / upsert_item / upsert_box, a shop purchase's order
 // (buy_item opens it rolled, settle and refund close it), Metaplex Core's collection, and a Meteora DBC pool with its
-// mint and metadata.
+// mint and metadata. For the economy calls (gf-web3's economy): buy_tickets adds a line to the lottery, draw_lottery
+// draws it at once (first place: ticket `drawTicket`, 0 unless a test sets it), pay_lottery pays places and opens the
+// next round, stake / unstake keep the position, enter / claim keep the entries, hold / take_back keep the hold.
 import { createHash } from 'node:crypto';
 import { addressBytes, decodeBase58, encodeBase58 } from '../../web3/gf-web3/chain/base58.js';
 import { decodeAccount, decodeBorsh, encodeAccount } from '../../web3/gf-web3/chain/borsh.js';
-import { concat, fromBase64, toBase64, uintLE, utf8 } from '../../web3/gf-web3/chain/bytes.js';
-import { LOOT_IDL, LOOT_PROGRAM, NO_ADDRESS } from '../../web3/gf-web3/chain/loot.js';
+import { concat, fromBase64, readUintLE, toBase64, uintLE, utf8 } from '../../web3/gf-web3/chain/bytes.js';
+import { LOOT_IDL, LOOT_PROGRAM, lotteryLines, NO_ADDRESS } from '../../web3/gf-web3/chain/loot.js';
 import { MPL_CORE_PROGRAM } from '../../web3/gf-web3/chain/core.js';
 import { DBC_PROGRAM } from '../../web3/gf-web3/chain/dbc.js';
 import { TOKEN_PROGRAM } from '../../web3/gf-web3/chain/pda.js';
@@ -21,6 +23,9 @@ export function fakeChain({ irysFree = true } = {}) {
   const accounts = new Map();
   const sent = [];
   const rolls = [];
+  const balances = new Map();
+  const draw = { ticket: 0n };
+  let now = Math.floor(Date.now() / 1000);
   const simulated = [];
   const uploads = [];
   const irysBalances = new Map();
@@ -69,6 +74,49 @@ export function fakeChain({ irysFree = true } = {}) {
       });
     } else if (name === 'settle' || name === 'settle_prize' || name === 'refund') {
       accounts.delete(at('order'));
+    } else if (name === 'buy_tickets') {
+      const data = accounts.get(at('lottery')).data;
+      const l = read(at('lottery'), 'Lottery');
+      const lines = lotteryLines(data);
+      const sold = BigInt(l.sold) + args.count;
+      const head = encodeAccount(LOOT_IDL, 'Lottery', { ...l, sold });
+      put(at('lottery'), LOOT_PROGRAM, concat(head, ...lines.map((x) => concat(addressBytes(x.buyer), uintLE(x.end, 8))), addressBytes(at('player')), uintLE(sold, 8)));
+    } else if (name === 'draw_lottery') {
+      const data = accounts.get(at('lottery')).data;
+      const l = read(at('lottery'), 'Lottery');
+      const lines = lotteryLines(data);
+      const tail = data.subarray(encodeAccount(LOOT_IDL, 'Lottery', l).length);
+      const winner = lines.find((x) => BigInt(x.end) > draw.ticket)?.buyer ?? NO_ADDRESS;
+      put(at('lottery'), LOOT_PROGRAM, concat(encodeAccount(LOOT_IDL, 'Lottery', { ...l, status: 'Drawn', first_ticket: draw.ticket, winner }), tail));
+    } else if (name === 'pay_lottery') {
+      const data = accounts.get(at('lottery')).data;
+      const l = read(at('lottery'), 'Lottery');
+      const tail = data.subarray(encodeAccount(LOOT_IDL, 'Lottery', l).length);
+      const paid = l.paid | (1 << args.place);
+      const winners = Math.min(l.places.filter(Boolean).length, Number(l.sold));
+      const done = paid.toString(2).split('1').length - 1 >= winners;
+      put(at('lottery'), LOOT_PROGRAM, done
+        ? encodeAccount(LOOT_IDL, 'Lottery', { ...l, paid: 0, status: 'Open', sold: 0n, winner: NO_ADDRESS, first_ticket: 0n, round: l.round + 1, draws_at: BigInt(l.draws_at) + BigInt(l.every) })
+        : concat(encodeAccount(LOOT_IDL, 'Lottery', { ...l, paid }), tail));
+    } else if (name === 'stake' || name === 'unstake') {
+      const s = read(at('stake'), 'Stake');
+      const old = accounts.get(at('position'))?.data;
+      const amount = old ? readUintLE(old, 66, 8) : 0n;
+      const left = name === 'stake' ? amount + args.amount : amount - args.amount;
+      loot(at('stake'), 'Stake', { ...s, total: BigInt(s.total) + (name === 'stake' ? args.amount : -args.amount) });
+      if (left === 0n) accounts.delete(at('position'));
+      else put(at('position'), LOOT_PROGRAM, concat(Uint8Array.of(10), addressBytes(at('stake')), addressBytes(at('player')), Uint8Array.of(255), uintLE(left, 8), uintLE(name === 'stake' ? BigInt(now) : readUintLE(old, 74, 8), 8), uintLE(0n, 16)));
+    } else if (name === 'enter') {
+      const c = read(at('contest'), 'Contest');
+      const old = accounts.get(at('entry')) ? read(at('entry'), 'Entry').amount : 0n;
+      loot(at('entry'), 'Entry', { contest: at('contest'), player: at('player'), side: args.side, bump: 255, amount: BigInt(old) + args.amount });
+      loot(at('contest'), 'Contest', { ...c, entries: c.entries + (old ? 0 : 1), sides: c.sides.map((v, i) => (i === args.side ? BigInt(v) + args.amount : v)) });
+    } else if (name === 'claim') {
+      accounts.delete(at('entry'));
+    } else if (name === 'hold') {
+      loot(at('hold'), 'Hold', { game: at('game'), asset: at('asset'), player: at('player'), free_at: BigInt(now) + args.seconds, reference: args.reference, bump: 255 });
+    } else if (name === 'take_back' || name === 'award') {
+      accounts.delete(at('hold'));
     }
   }
 
@@ -157,7 +205,9 @@ export function fakeChain({ irysFree = true } = {}) {
         return ok([...accounts.entries()].filter(([, a]) => a.owner === program && match(a.data)).map(([pubkey, a]) => ({ pubkey, account: rawAccount(a) })));
       }
       case 'getBalance':
-        return ok({ context: { slot }, value: 5_000_000_000 });
+        return ok({ context: { slot }, value: balances.get(params[0]) ?? 5_000_000_000 });
+      case 'getSignaturesForAddress':
+        return ok([]);
       case 'getTokenAccountBalance': {
         const a = accounts.get(params[0]);
         if (!a) return err('Invalid param: could not find account', -32602);
@@ -215,5 +265,14 @@ export function fakeChain({ irysFree = true } = {}) {
     if (String(url).startsWith('https://devnet.irys.xyz')) return irys(String(url), init);
     return rpc(JSON.parse(init.body));
   };
-  return { fetchImpl, accounts, put, sent, simulated, uploads, irysBalances, blockhash, rolls };
+  return {
+    fetchImpl, accounts, put, sent, simulated, uploads, irysBalances, blockhash, rolls, balances, draw,
+    /** The fake's clock (Unix seconds) for holds and stakes; tests pass the same to gf-web3 as `now`. */
+    get now() {
+      return now;
+    },
+    set now(value) {
+      now = value;
+    },
+  };
 }

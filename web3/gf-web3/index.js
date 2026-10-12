@@ -40,8 +40,10 @@ import { NATIVE_MINT } from './chain/pda.js';
 import { transferExtras } from './chain/token2022.js';
 import { closeTokenAccount, withSolWrap } from './chain/programs.js';
 import { sha256 } from './chain/sha256.js';
-import { compileMessage, wireTransaction, transactionId } from './chain/tx.js';
+import { compileMessage, readTransaction, wireTransaction, withSignature, transactionId } from './chain/tx.js';
 import { CONFIG_FILE, emptyConfig, findBox, findItem, parseConfig } from './config.js';
+import { economyState, parseActionId, playerActions } from './econ/actions.js';
+import { economyPlay } from './econ/play.js';
 import { loadoutOf } from './looks.js';
 import { networkConfig } from './network.js';
 import { rpcClient } from './rpc.js';
@@ -50,7 +52,7 @@ import * as walletKit from './wallet.js';
 
 import { VERSION } from './version.js';
 
-export { VERSION };
+export { VERSION, economyState, parseActionId, playerActions };
 const ROLL_POLL_MS = 1000;
 const ROLL_POLLS = 90;
 
@@ -223,14 +225,18 @@ export function createGfWeb3(options = {}) {
     return { address: player, message, signature: encodeBase58(signature), mock: false };
   }
 
-  /** Compile, have the wallet sign, send and confirm one transaction. */
-  async function signAndSend(player, instructions) {
+  /**
+   * Compile, have the wallet sign, send and confirm one transaction. `signers`: keys made here that also sign (a new
+   * collectible's address: { address, sign(message) }); they sign after the wallet.
+   */
+  async function signAndSend(player, instructions, signers = []) {
     const client = rpc();
     const { blockhash, lastValidBlockHeight } = await client.latestBlockhash();
     const wire = wireTransaction(compileMessage({ payer: player, blockhash, instructions }));
     await client.simulate(wire);
-    const [signed] = await walletKit.signTransactions(state.wallet, state.account, network.chain, [wire]);
+    let [signed] = await walletKit.signTransactions(state.wallet, state.account, network.chain, [wire]);
     if (!signed) throw new Error('The wallet returned nothing to send.');
+    for (const s of signers) signed = withSignature(signed, s.address, await s.sign(readTransaction(signed).message));
     const signature = await client.send(signed);
     await client.confirm(signature, { lastValidBlockHeight });
     return signature;
@@ -561,6 +567,20 @@ export function createGfWeb3(options = {}) {
     if (mock !== undefined) state.mock = Boolean(mock);
   }
 
+  /** The economy calls (econ/play.js): one per thing a player signs, the reads, act(id), state(). */
+  const economy = economyPlay({
+    ready,
+    connect,
+    address,
+    rpc,
+    send: signAndSend,
+    mock: () => state.mock,
+    emit,
+    say: status,
+    rollPollMs: options.rollPollMs,
+    now: options.now,
+  });
+
   return {
     VERSION,
     get mock() {
@@ -585,6 +605,7 @@ export function createGfWeb3(options = {}) {
     orders,
     finish,
     token,
+    economy,
     loadout,
     wear,
     wearOwned,
