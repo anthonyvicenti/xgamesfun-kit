@@ -2,8 +2,9 @@
 # Read docs/CI.md first: what a runner cannot check, the profile, the cost per run, and what the first runs on
 # Windows and macOS found (2026-10-11).
 #
-# Pull requests run Linux and Windows. macOS (ten times the minutes) runs on pushes to main and by hand.
-# By hand, one system or one job can run alone, so a fix for Windows does not pay for macOS:
+# Pushes to main, pull requests and runs by hand all run Linux only (about 6 plan minutes a run, against about 53 for
+# all three systems; docs/CI.md section 5). Windows (two times the minutes) and macOS (ten times) run only by hand:
+#   gh workflow run check.yml --ref <branch> -f system=windows        # or macos, linux-windows, all
 #   gh workflow run check.yml --ref <branch> -f system=windows -f job=scenic
 name: check
 
@@ -16,8 +17,8 @@ on:
       system:
         description: Which system to run on
         type: choice
-        default: all
-        options: [all, linux, windows, macos, linux-windows]
+        default: linux
+        options: [linux, windows, macos, linux-windows, all]
       job:
         description: Which job to run
         type: choice
@@ -46,10 +47,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest","windows-latest"]'
-          || inputs.system == 'linux' && '["ubuntu-latest"]' || inputs.system == 'windows' && '["windows-latest"]' || inputs.system == 'macos' && '["macos-latest"]'
+        # push and pull_request: Linux only. By hand: the chosen system (default linux).
+        os: ${{ fromJSON(github.event_name != 'workflow_dispatch' && '["ubuntu-latest"]'
+          || inputs.system == 'windows' && '["windows-latest"]' || inputs.system == 'macos' && '["macos-latest"]'
           || inputs.system == 'linux-windows' && '["ubuntu-latest","windows-latest"]'
-          || '["ubuntu-latest","windows-latest","macos-latest"]') }}
+          || inputs.system == 'all' && '["ubuntu-latest","windows-latest","macos-latest"]'
+          || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     env:
@@ -112,10 +115,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest","windows-latest"]'
-          || inputs.system == 'linux' && '["ubuntu-latest"]' || inputs.system == 'windows' && '["windows-latest"]' || inputs.system == 'macos' && '["macos-latest"]'
+        # push and pull_request: Linux only. By hand: the chosen system (default linux).
+        os: ${{ fromJSON(github.event_name != 'workflow_dispatch' && '["ubuntu-latest"]'
+          || inputs.system == 'windows' && '["windows-latest"]' || inputs.system == 'macos' && '["macos-latest"]'
           || inputs.system == 'linux-windows' && '["ubuntu-latest","windows-latest"]'
-          || '["ubuntu-latest","windows-latest","macos-latest"]') }}
+          || inputs.system == 'all' && '["ubuntu-latest","windows-latest","macos-latest"]'
+          || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     env:

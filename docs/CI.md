@@ -115,17 +115,19 @@ the checks wait for frames.
 
 ## 4. What the workflow runs
 
-Two jobs, `party` and `scenic`, each on Linux, Windows and macOS. Pull requests run Linux and Windows; pushes to `main`
-run macOS as well. By hand, one system or one job runs alone:
+Two jobs, `party` and `scenic`, each able to run on Linux, Windows and macOS. Since 2026-10-12 pushes to `main`, pull
+requests and runs by hand all run **Linux only**; Windows and macOS run only when a run by hand asks for them (section 5
+says why):
 
 ```bash
-gh workflow run check.yml --ref <branch>                               # every job on every system
+gh workflow run check.yml --ref <branch>                               # every job, Linux only (the default)
 gh workflow run check.yml --ref <branch> -f system=windows -f job=scenic
-gh workflow run check.yml --ref <branch> -f system=linux-windows       # everything but macOS (a tenth of the cost)
+gh workflow run check.yml --ref <branch> -f system=linux-windows       # everything but macOS
+gh workflow run check.yml --ref <branch> -f system=all                 # every job on every system (about 53 plan minutes)
 ```
 
-`system` is `all`, `linux`, `windows`, `macos` or `linux-windows`; `job` is `all`, `party` or `scenic`. Runs started by
-hand never cancel each other; a newer push cancels the run of an older one.
+`system` is `linux` (the default), `windows`, `macos`, `linux-windows` or `all`; `job` is `all`, `party` or `scenic`.
+Runs started by hand never cancel each other; a newer push cancels the run of an older one.
 
 What each system runs, the same on all three (run 38155626989 and the three after it, 2026-10-11):
 
@@ -183,9 +185,15 @@ Job wall time in the green runs:
 | macOS | 4 | 40 |
 | **All three** | 12 | **about 53** (about $0.32 at the rates) |
 
-On the Free plan (2000 minutes a month) that is about 37 full runs; macOS is three quarters of it, which is why pull
-requests leave it out. `gh api repos/<owner>/<repo>/actions/runs/<id>/timing` reported 0 billable milliseconds for every
-run of 2026-10-11, so the numbers above are computed from the jobs' start and end times, not read from a bill.
+On the Free plan (2000 minutes a month) that is about 37 full runs. `gh api repos/<owner>/<repo>/actions/runs/<id>/timing`
+reported 0 billable milliseconds for every run of 2026-10-11, so the numbers above are computed from the jobs' start and
+end times, not read from a bill.
+
+**What the bill showed (2026-10-12).** The free minutes ran out: 1970 plan minutes in 16 hours, of them Linux 156,
+Windows 227 × 2 = 454 and macOS 136 × 10 = 1360 (69 %). Runs started by hand on branches had taken the default of all
+three systems, and every push to `main` ran all three. Since then every automatic run and every run by hand without
+`-f system=` is Linux only: about 6 plan minutes a run as billed (the jobs' own times, 117 s and 45 s in run 38216621759,
+round to 3), against about 53 for all three. Windows and macOS are for a change that touches them, asked for by name.
 
 ## 6. What a runner still cannot check
 
