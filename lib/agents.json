@@ -29,7 +29,7 @@
         "get": ["mcp", "get", "{name}"],
         "list": ["mcp", "list"],
         "remove": ["mcp", "remove", "--scope", "{scope}", "{name}"],
-        "restartHint": "In this Claude Code session, type /reload-plugins, then say hi: it loads the kit's tools and the studio's link to this session without a restart (a new session picks them up by itself)."
+        "restartHint": "nothing to type: this session hears the studio page through node bin/gamesfun.mjs session wait (run it in the background), and new sessions load the tools and the plugin by themselves (/reload-plugins loads them into this one, if you want)."
       },
       "plugin": {
         "about": "The kit's plugin (plugin/: the studio bridge's hooks and the play-tester subagent), installed from this checkout through Claude Code's own plugin commands. The checkout is a marketplace of one plugin (.claude-plugin/marketplace.json). {kit} is this checkout's folder. listMarketplaces says which folder the marketplace was added from, so connect can tell one added from another checkout.",

@@ -320,8 +320,36 @@ async function main() {
     document.title = `${project.name} · XGames.fun Studio`;
     const empty = $('#product-empty');
     empty.hidden = false;
-    // a plain state, never a game: no example and no frame stand in while the person's own game is being made
-    empty.innerHTML = '<div class="product-empty-inner" data-part="making"><div class="product-empty-mark" aria-hidden="true"></div><h2>Making your game</h2><p>Your session pitches a few takes first, in the conversation. Pick one and it makes the game from it. Your game appears here when its first build is done: then you play it here and change it with the tools.</p></div>';
+    // a plain state, never a game: no example and no frame stand in while the person's own game is being made. It
+    // says "Making your game" only once a session acts on the idea (it holds the request, or the build loop has a
+    // state); until then "Waiting for your session", with the one step left (2026-10-12: it said "Making" with no
+    // session at all)
+    const { connection, readQueue } = await import('./lib/session.js');
+    const { sessionApi } = await import('./lib/session-client.js');
+    let shown = '';
+    const paintMaking = async () => {
+      let q = null, loop = null;
+      try { q = await sessionApi('queue'); } catch { /* no bridge */ }
+      try { loop = (await api('build/state')).loop ?? null; } catch { /* not yet */ }
+      const c = connection(readQueue(q));
+      const acting = !!loop || (c.state === 'working' && c.open > 0);
+      const key = acting ? 'making' : `waiting|${c.state}|${c.hint}`;
+      if (key === shown) return;
+      shown = key;
+      const box = document.createElement('div');
+      box.className = 'product-empty-inner';
+      box.dataset.part = acting ? 'making' : 'waiting';
+      box.dataset.session = c.state;
+      const h = document.createElement('h2'), para = document.createElement('p');
+      const mark = Object.assign(document.createElement('div'), { className: 'product-empty-mark' });
+      mark.setAttribute('aria-hidden', 'true');
+      if (acting) { h.textContent = 'Making your game'; para.textContent = 'Your session pitches a few takes first, in the conversation. Pick one and it makes the game from it. Your game appears here when its first build is done: then you play it here and change it with the tools.'; }
+      else { h.textContent = 'Waiting for your session'; para.textContent = `Your idea is saved; nothing is being made yet. ${c.state === 'none' ? 'No agent session is listening. ' : ''}${c.hint}`; }
+      box.append(mark, h, para);
+      empty.replaceChildren(box);
+    };
+    await paintMaking();
+    setInterval(paintMaking, 2000);
     return;
   }
 

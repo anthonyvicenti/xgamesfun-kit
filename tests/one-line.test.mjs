@@ -138,7 +138,7 @@ test('connect installs the kit\'s plugin through the agent\'s own plugin command
   assert.ok(f.calls.includes(`claude plugin marketplace add ${kit} --scope local`), 'the checkout is the marketplace');
   assert.ok(f.calls.includes('claude plugin install gamesfun@gamesfun-kit --scope local'));
   assert.ok(f.calls.indexOf('claude plugin install gamesfun@gamesfun-kit --scope local') > f.calls.findIndex(c => c.startsWith('claude mcp add')), 'the tools first, then the plugin');
-  assert.match(r.results[0].restartHint, /\/reload-plugins/, 'the person is told the one thing to type in the session they are in');
+  assert.match(r.results[0].restartHint, /^nothing to type: .*session wait/, 'nothing is left to type in the session they are in');
   assert.ok(r.results[0].steps.every(s => s.cwd === path.resolve('proj')), 'local scope belongs to --dir');
   // a second run leaves both alone
   const before = f.calls.length;
@@ -405,16 +405,18 @@ test('the one line is the same in README.md and docs/ONE-LINE.md, and every comm
   assert.ok(readme && readme === doc, 'one line, identical in both files');
   for (const must of ['I want you to set up', 'git clone https://', 'npm ci', 'bin/gamesfun.mjs doctor', 'bin/gamesfun.mjs connect', 'bin/gamesfun.mjs dev in the background', 'docs/ONE-LINE.md', 'Never ask me for a password, token or key',
     // informed consent, in the person's words: what connect does and how to undo it
-    'at user scope', 'studio page on 127.0.0.1', 'send it my requests and answer its permission prompts', 'connect --remove',
-    // the one step the person does by hand is the agent's last line
-    'End your last message with the line connect printed after "next:"']) assert.ok(doc.includes(must), must);
+    'at user scope', 'studio page on 127.0.0.1', 'send them my requests and answer their permission prompts', 'connect --remove',
+    // the first idea typed in the page reaches this session with nothing typed in the terminal (2026-10-12)
+    'start node bin/gamesfun.mjs session wait in the background too', 'nothing needs a reload', 'End with the studio address']) assert.ok(doc.includes(must), must);
+  assert.ok(!/reload-plugins|"next:"/.test(doc), 'the line ends on the studio, not on a command the person types');
   assert.ok(!/create games\/first|--from soak-squad|dev games\//.test(doc), 'the line makes no game: dev opens the start page, where the person describes theirs');
   assert.ok(!/claude\.ai|anthropic|logo/i.test(doc), 'no vendor name or logo in the line itself beyond what the README says in plain text');
   const { readdir } = await import('node:fs/promises');
   const files = await readdir(new URL('../commands/', import.meta.url));
   for (const c of ['doctor', 'connect', 'update', 'create', 'dev']) assert.ok(files.includes(`${c}.mjs`), c);
   const guide = await readFile(new URL('../docs/ONE-LINE.md', import.meta.url), 'utf8');
-  for (const step of ['### 1. Clone', '### 2. `npm ci`', '### 3.', '### 4.', '### 5. `node bin/gamesfun.mjs dev`']) assert.ok(guide.includes(step), step);
+  for (const step of ['### 1. Clone', '### 2. `npm ci`', '### 3.', '### 4.', '### 5. `node bin/gamesfun.mjs dev`', '### 6. `node bin/gamesfun.mjs session wait`']) assert.ok(guide.includes(step), step);
+  for (const c of ['session', 'tool']) assert.ok(files.includes(`${c}.mjs`), c);
   assert.ok((guide.match(/^If it fails/gm) ?? []).length >= 4, 'each step says what to do when it fails');
 });
 
@@ -430,7 +432,7 @@ test('docs/TRY-IT.md carries the same one line, every picture it shows is in the
   assert.ok((text.match(/\*\*If it goes wrong, send us:\*\*/g) ?? []).length >= 7, 'each thing that can be tried says what to send');
   const seven = text.slice(text.indexOf('## Seven more checks'), text.indexOf('## What to send'));
   assert.equal((seven.match(/^\d\. \*\*/gm) ?? []).length, 7, 'the seven by-hand items of docs/CI.md section 8');
-  for (const must of ['## Windows: what to install', '## Mac: what to install', '/reload-plugins', 'giant-four', '**Status: the kit side is done; the server side is games.fun\'s.**', '(ONLINE.md)', 'GAMESFUN_ONLINE=off']) assert.ok(text.includes(must), must);
+  for (const must of ['## Windows: what to install', '## Mac: what to install', 'session wait', 'giant-four', '**Status: the kit side is done; the server side is games.fun\'s.**', '(ONLINE.md)', 'GAMESFUN_ONLINE=off']) assert.ok(text.includes(must), must);
 });
 
 test('dev: the port and the browser can be set from the environment, and an option wins', async () => {

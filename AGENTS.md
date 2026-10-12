@@ -24,6 +24,14 @@ Commands: `catalog`, `examples`, `create`, `dev`, `verify`, `slots`, `play`, `pr
 `logout` / `publish` (put a game on games.fun at a link anyone can play; `docs/PUBLISH.md`), plus whatever else
 `npx gamesfun help` lists. Use Node 24.
 
+**When the `gamesfun_*` tools are not loaded in your session** (the kit was installed after the session started, a
+registration points at a folder that did not exist yet, or your agent speaks no MCP): nothing is blocked and nothing
+needs a reload or a restart. Every tool runs in a terminal from the kit folder with the same arguments and the same
+answer: `node bin/gamesfun.mjs tool <name> '<arguments as JSON>'` (`tool --list` lists them; `--game games/<name>` sets
+the game). The studio page reaches your session through `node bin/gamesfun.mjs session wait`, run in the background:
+it ends with the person's request. Report a request with `node bin/gamesfun.mjs session report <id> "<note>"`, then
+start `session wait` again. Never answer a request from the page with "the tools are not loaded".
+
 ## The loop
 
 Idea → **pitch** → **spec** → **create** → **rules** → **verify** until green → **playtest in two tabs** → **revise**.

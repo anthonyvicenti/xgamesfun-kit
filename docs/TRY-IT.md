@@ -96,7 +96,7 @@ gh auth login
 4. Paste this whole line and press Enter:
 
 ```text
-I want you to set up the XGames.fun game kit in this folder so I can make games in its studio. Here is what that involves, and I agree to it: git clone https://github.com/anthonyvicenti/gamesfun-kit.git (skip the clone if a gamesfun-kit folder is already here), then in that folder, with Node 24, run these one at a time: npm ci, then node bin/gamesfun.mjs doctor, then node bin/gamesfun.mjs connect, then start node bin/gamesfun.mjs dev in the background and give me the studio address it prints (it opens the studio's start page in my browser, where I describe my first game). connect adds the kit's tools and a plugin to you at user scope; the plugin lets the studio page on 127.0.0.1 show this session, send it my requests and answer its permission prompts. I can undo it with node bin/gamesfun.mjs connect --remove. Tell me what each step printed in one line. If a step fails, do what its "If it fails" section in gamesfun-kit/docs/ONE-LINE.md says, and if that doesn't fix it, stop and tell me exactly what failed. Never ask me for a password, token or key. End your last message with the line connect printed after "next:" (what I type in this session so the studio page reaches it), word for word, and nothing after it.
+I want you to set up the XGames.fun game kit in this folder so I can make games in its studio. Here is what that involves, and I agree to it: git clone https://github.com/anthonyvicenti/gamesfun-kit.git (skip the clone if a gamesfun-kit folder is already here), then in that folder, with Node 24, run these one at a time: npm ci, then node bin/gamesfun.mjs doctor, then node bin/gamesfun.mjs connect, then start node bin/gamesfun.mjs dev in the background (it opens the studio's start page in my browser, where I describe my first game), then start node bin/gamesfun.mjs session wait in the background too. session wait is how the studio page reaches you in this session: it ends when I send something from the page and prints my request and how to build it, so when it ends, build what I asked with the kit's commands, report it with the command it names, and start session wait again. You don't need the kit's tools loaded in this session and nothing needs a reload: every tool has a node bin/gamesfun.mjs command. connect adds the kit's tools and a plugin to you at user scope for my next sessions; the plugin lets the studio page on 127.0.0.1 show my sessions, send them my requests and answer their permission prompts. I can undo it with node bin/gamesfun.mjs connect --remove. Tell me what each step printed in one line. If a step fails, do what its "If it fails" section in gamesfun-kit/docs/ONE-LINE.md says, and if that doesn't fix it, stop and tell me exactly what failed. Never ask me for a password, token or key. End with the studio address, and tell me to type my first game idea there.
 ```
 
 Your agent now works for a few minutes. It asks your permission before it runs each command. Say yes to these. It
@@ -112,13 +112,13 @@ should never ask you for a password, a token or a key. If it does, say no and te
 | 4 | `connect` | It says the tools were added to your agent. If they were added before from another folder (an older copy of the kit), a line that starts with `moved:` names that folder and this one: this copy is the one in use now. Then a line that starts with `next:`. |
 | 5 | `dev` | An address like `http://127.0.0.1:5180/studio/`. Chrome opens on that page: the studio's start page, "What do you want to make?". No game and no example plays or shows yet. Games you already have in `games/` are listed there, and none is opened until you click one. |
 
-When the agent is done, its last line tells you to type something. **In Claude Code, type `/reload-plugins` and press
-Enter. Then say hi to it.** This is the one step the agent cannot do for you: it connects the page in Chrome to your
-agent, and the line under the start page's box stops saying "No agent session connected yet". Codex has no such step,
-and in Codex the page cannot reach your agent yet (things 3, 4 and 7 below need Claude Code).
+When the agent is done, its last line gives you the studio address. **There is nothing to type in the terminal.**
+The agent also started `session wait` in the background: that is how the page reaches it, without a reload or a
+restart, and the line under the start page's box says "Your session is listening". In Codex the page reaches it too,
+but Codex does not wake by itself: after you send something from the page, type go in Codex.
 
 The page in Chrome is the studio. It shows no game until you describe one (or pick one): when you send your first
-idea, the right side says **Making your game** while your agent pitches and builds it, and your own game appears
+idea, the right side says **Waiting for your session** until your agent picks it up, then **Making your game** while it pitches and builds it, and your own game appears
 there when its first build is done. To try the things below on a finished game straight away, click **Start from
 this** under **Soak Squad** at the bottom of the start page: it copies the example into `games/soak-squad` and opens it. The
 conversation with your agent is on the left; the game is on the right, with its tools in a bar above it. (The pictures
@@ -201,7 +201,7 @@ Then try two more:
 
 ### 3. Ask for a change in the studio page
 
-This needs Claude Code, with `/reload-plugins` typed once and one message sent after it (see above).
+This needs your agent session listening (the line's `session wait`, see above; Codex: type go after sending).
 
 **Do:** In the studio page, click the tab **Session**. At the top it should say "Your session is listening" or "Your
 session is working". Type a change in the box, for example "Make the grass pink", and click **Send to your session**.

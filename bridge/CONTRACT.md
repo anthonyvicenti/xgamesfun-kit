@@ -71,8 +71,15 @@ Everything the page needs to draw itself, in one read. → `200`
   "lastEventAt": 1791700001000,
   "game": null,                   // the game folder this session last drove with a loop tool; null until it calls one
   "waking": false,                // a wake handed it a request under 20 s ago and its first event has not arrived
-  "guard": null                   // or { "status": "waiting-on-question", "why": "…", "at": … } (section 6)
+  "guard": null,                  // or { "status": "waiting-on-question", "why": "…", "at": … } (section 6)
+  "listening": "plugin",          // which wait is open: "plugin" (the hooks' wait), "listener" (`gamesfun session wait`), null
+  "channel": "plugin",            // "plugin" when its hooks report it, "terminal" when only the kit's commands do
+  "tools": "mcp"                  // "mcp" (an mcp__…__gamesfun_* call was seen), "cli" (`gamesfun tool`/`session`), null
 }
+
+A request with no `session` goes to the newest session that is reachable: one its hooks report, or one with a wait or
+a listener open. A session known only from a listener that has closed is not a target; the request waits for the
+first session that listens.
 ```
 
 What the page says from it:
@@ -99,7 +106,8 @@ What the page says from it:
   "created": 1791700000000,
   "handed": null, "seen": null, "done": null,   // the time of each state, or null
   "note": null,                   // the session's own words when it reported the request done
-  "refusals": 0                   // stops refused because of this request (at most 2)
+  "refusals": 0,                  // stops refused because of this request (at most 1, then it stalls)
+  "stalled": false                // reminded once and still not acted on: the hook is quiet, the page says so
 }
 ```
 
@@ -111,7 +119,12 @@ States, each from a fact the server has:
 | `handed` | The transport gave it to the session. Not proof the model read it | `seen`, `done`, `dropped` |
 | `seen` | The session did something after it was handed (a prompt or tool event, or it collected it with the tool) | `done`, `dropped` |
 | `done` | The session reported it done through the tool, with `note` | (final) |
-| `dropped` | Removed by the person; or the session ended its turn twice without reporting it; or the session ended. Offer "send again" | (final) |
+| `dropped` | Removed by the person, reported dropped by the session, or the session ended. Offer "send again" |
+
+`stalled` (boolean, on a `handed` or `seen` request): the stop guard reminded the session once and it ended its turn
+again without reporting. The hook says nothing more about it (no re-send loop); the page shows "Waiting for your
+session" with the one step left (type go in its terminal). The person's next prompt in the terminal brings it back
+once (`UserPromptSubmit` answers with it), and the session collecting or reporting it clears it. (final) |
 
 Never show a request as done before `done`.
 
@@ -234,6 +247,12 @@ carried as a JSON string after the word `GF_REQUEST`.
   - `Stop` answers `{"decision":"block","reason":…}` to refuse (section 6), or
     `{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":…}}` to hand over requests that arrived during
     the turn, or `{"systemMessage":…}` when the guard gives up, or an empty `200`.
+- `GET /api/session/wait?session=<id>&form=listener&agent=<agent>&cwd=<path>`: the terminal listener
+  (`gamesfun session wait`, section 8). It needs no plugin, names its session, and stands beside the plugin's wait of
+  the same session (whichever is open hands the request; the plugin's first). It ends after one batch; its `text` is
+  the listener's own message (the request, how to build it with the kit's commands, how to report, listen again).
+- `POST /api/session/cli/tool-start|tool-end` body `{ session, agent, cwd, tool, input, ok }`: a tool call made with
+  `gamesfun tool` (section 8). The page follows a session with no hooks this way.
 - `GET /api/session/wait?session=<id>&form=rewake|monitor&cwd=<path>`: the wait. A stream of lines, each a JSON
   object, a blank line every 25 seconds as a heartbeat:
   - `{"type":"requests","session":"…","text":"…","requests":[{id,text,selection}]}`: hand these to the session
@@ -322,8 +341,9 @@ instruction) in two cases, both bounded:
    refusals for one edit, then the person is told in the terminal; the loop puts the file back at its next step
    either way); and once for each refusal on the loop's record that no round's message has told the session yet
    (`spec-changed`, `state-changed`, `lock-changed`, `promises-shrunk`, `no-repair`, `brief-changed`).
-2. **A request is unanswered.** A request this session was handed and has not reported. At most 2 refusals for each
-   request; then the request becomes `dropped`. A request the wait handed over less than 3 seconds ago does not refuse
+2. **A request is unanswered.** A request this session was handed and has not reported. One refusal for each
+   request (a reminder); then it is `stalled` and the hook is quiet about it, never dropped for it (2026-10-12: the
+   same request re-sent three times got the same answer three times). A request the wait handed over less than 3 seconds ago does not refuse
    the stop: its wake is already bringing it.
 
 Requests that arrived while the session was busy are handed over at the same moment, in the same answer (state
@@ -356,3 +376,17 @@ One interface (`bridge/transport.mjs`), one built implementation.
 | The wait, fallback (plugin monitor) | yes ("The command runs in a shell") | only with Git Bash installed | yes | yes |
 | The run file (`.gamesfun/bridge.json`, written then renamed) | no | rename falls back to a plain write when the file is held open | atomic rename | atomic rename |
 | The local server | no | binds `127.0.0.1` | the same | the same |
+
+## 8. With no plugin and no MCP tools: the terminal
+
+A session that ran the one line has neither the plugin's hooks nor the kit's MCP tools loaded until a reload, and it
+must not need them (the creator's run of 2026-10-12: nothing was built). Three commands cover it, in `bin/gamesfun.mjs`:
+
+| Command | What it does |
+|---|---|
+| `session wait` | The listener (`form=listener`). Run in the background. Ends with the request when the page sends one; an agent that is woken when a background command ends (Claude Code) wakes. Codex does not start a turn for it, so the page tells the person to type go in Codex. The session id is `CLAUDE_CODE_SESSION_ID` (the id the hooks send), else `GAMESFUN_SESSION`, else one per kit folder. |
+| `tool <name> '<json>'` | Any MCP tool, run once: the same handler, input check, running mark and answer. It posts `cli/tool-start` and `cli/tool-end`. The loop's in-memory copy of its state lasts one call, as across an MCP server restart. |
+| `session report <id> "<note>"` | `gamesfun_requests` with `done`, including its refusal while the build is not delivered; `--dropped "<why>"` declines. `session requests` collects, `session status` shows what the studio sees. |
+
+Every message a session gets (the protocol words, a request, a reminder, the listener's message) says the terminal is
+a full substitute for the tools, unless the session was seen using the MCP tools.

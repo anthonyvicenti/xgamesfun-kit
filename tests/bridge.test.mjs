@@ -793,7 +793,7 @@ test('doctor: the bridge line, for Windows, macOS and Linux', async () => {
   assert.equal((await bridgeDoctor({ platform: 'darwin', probes: { plugin: [], form: 'monitor', status: off } })).status, 'ok');
   const none = await bridgeDoctor({ platform: 'linux', probes: { plugin: [], form: 'rewake', status: { running: true, url: 'http://127.0.0.1:5180/', sessions: [] } } });
   assert.equal(none.status, 'warn');
-  for (const sys of ['win32', 'darwin', 'linux']) assert.match(none.fix[sys], /gamesfun\.mjs connect.*\/reload-plugins/);
+  for (const sys of ['win32', 'darwin', 'linux']) assert.match(none.fix[sys], /gamesfun\.mjs session wait/);
   const asleep = await bridgeDoctor({ probes: { plugin: [], form: 'rewake', status: { running: true, url: 'u', sessions: [{ state: 'idle', connected: false }] } } });
   assert.equal(asleep.status, 'warn');
   assert.match(asleep.fix.linux, /--bridge-wait monitor/);

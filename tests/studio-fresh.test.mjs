@@ -92,7 +92,7 @@ describe('the studio shows no game before the first prompt', { skip: !chromium &
     await shot('2-two-games');
   });
 
-  it('right after the first idea is sent (no session connected): "Making your game", no frame', async t => {
+  it('right after the first idea is sent (no session connected): "Waiting for your session", no frame; "Making your game" once the loop acts', async t => {
     if (!browser) return t.skip('no browser');
     const v = await open();
     await v.page.locator('#start-input').fill('Bumper boats in a pool, last one floating wins');
@@ -100,7 +100,9 @@ describe('the studio shows no game before the first prompt', { skip: !chromium &
     await v.page.waitForFunction(() => document.documentElement.dataset.view === 'making');
     const empty = v.page.locator('#product-empty');
     assert.equal(await empty.isVisible(), true);
-    assert.equal(await empty.locator('h2').textContent(), 'Making your game');
+    await empty.locator('h2').waitFor();
+    assert.equal(await empty.locator('h2').textContent(), 'Waiting for your session', 'no session: nothing is being made, and the page says so');
+    assert.match(await empty.locator('p').textContent(), /nothing is being made yet.*session wait/);
     assert.equal(await v.page.locator('.frame-wrap').isVisible(), false, 'no game frame on the page');
     await noGame(v, 'after the first idea');
     const name = (await v.page.evaluate(() => fetch('/api/studio/project').then(r => r.json()))).project.name;
@@ -112,9 +114,11 @@ describe('the studio shows no game before the first prompt', { skip: !chromium &
     await mkdir(path.join(dir, '.gf-loop'), { recursive: true });
     const state = status => writeFile(path.join(dir, '.gf-loop', 'state.json'), JSON.stringify({ schema: 'gf-loop/1', kind: 'build', status, step: status === 'delivered' ? 'done' : 'verify', history: [] }));
     await state('building');
+    await v.page.waitForFunction(() => document.querySelector('#product-empty h2')?.textContent === 'Making your game', null, { timeout: 8000 });
     await createGame(dir, { from: 'soak-squad', force: true });     // stands in for create --spec: the folder is a game on disk
     await v.page.waitForTimeout(4500);                                // two of the conversation's polls of the loop
     assert.equal(await v.page.evaluate(() => document.documentElement.dataset.view), 'making');
+    assert.equal(await empty.locator('h2').textContent(), 'Making your game', 'the loop acts: now it is being made');
     await noGame(v, 'during the first build');
     assert.equal((await fetch(`${server.url}game/`)).status, 404, 'the game page is not served during the first build');
 
