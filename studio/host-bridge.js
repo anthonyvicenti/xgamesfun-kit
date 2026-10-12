@@ -44,7 +44,9 @@ const RARITY = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
  * → { host: gf:host, economy: gf:economy, offered: [action with asks] }
  * Claims are offered on the results card only while the state says there is something to collect. The HUD lines are
  * the page's own: the player's balance in the game's currency, each box's last result, each lottery's tickets and each
- * stake, each shown by an entry of gf:economy with the line's id.
+ * stake, each shown by an entry of gf:economy with the line's id. A lottery's line shows once the player holds a
+ * ticket and a stake's once they have something in it: the kit draws a line only when its entry is there, and four
+ * lines of zeros grew the HUD's player card over the player's own character in a real game (devnet proof, coin-hop).
  */
 export function econMessages({ economy = {}, actions = [], state = null, last = {}, unclaimed = [], pending = [], error = '' } = {}) {
   const claimable = new Map((state?.claimable ?? []).map((c) => [c.id, c]));
@@ -83,11 +85,13 @@ export function econMessages({ economy = {}, actions = [], state = null, last = 
   for (const i of economy.items ?? []) if (last[`item:${i.key}`]) line(`hud:item:${i.key}`, 'buy', i.name ?? i.key, balances, last[`item:${i.key}`]);
   for (const l of economy.lotteries ?? []) {
     const t = state?.tickets?.[l.key];
-    line(`hud:lottery:${l.key}`, 'buyTickets', `${l.name ?? l.key}: tickets`, tickets, t ? `${t.mine} · pot ${t.pot} · draw ${t.nextDraw}` : '');
+    // the label stays short (the HUD card gives a label one narrow column); the count says what it counts
+    line(`hud:lottery:${l.key}`, 'buyTickets', l.name ?? l.key, tickets, t && Number(t.mine) > 0 ? `${t.mine} ticket${Number(t.mine) === 1 ? '' : 's'} · pot ${t.pot} · draw ${t.nextDraw}` : '');
   }
   for (const s of economy.stakes ?? []) {
     const p = state?.stakes?.[s.key];
-    line(`hud:stake:${s.key}`, 'stake', s.name ?? s.key, stakes, p ? `${p.staked} staked · ${p.pending} earned${p.locked ? ' · locked' : ''}` : '');
+    const some = (m) => parseFloat(String(m ?? '').replace(/^</, '')) > 0;
+    line(`hud:stake:${s.key}`, 'stake', s.name ?? s.key, stakes, p && (some(p.staked) || some(p.pending)) ? `${p.staked} staked · ${p.pending} earned${p.locked ? ' · locked' : ''}` : '');
   }
   for (const l of lines) offer(l);
 
@@ -101,6 +105,19 @@ export function econMessages({ economy = {}, actions = [], state = null, last = 
     pending: pending.filter((id) => ID.test(id)), error: cut(error, 200),
   };
   return { host, economy: message, offered };
+}
+
+/**
+ * The gf:wallet message (gf-three kit/net/host.js cleanWallet's shape). `items` is null only while a connected wallet's
+ * items are still being read: a game with no items says so with [] (the kit's menu reads null as "Reading your items…",
+ * which a game without a shop would otherwise say forever).
+ */
+export function walletMessage({ address = null, connecting = false, error = '', wallets = [], shop = false, items = null } = {}) {
+  return {
+    type: 'gf:wallet', status: address ? 'connected' : connecting ? 'connecting' : error ? 'error' : 'none', wallets,
+    address: address ?? '', short: address ? `${address.slice(0, 4)}…${address.slice(-4)}` : '', name: '', icon: null, error,
+    items: !address ? null : shop ? items : [], boxes: [],
+  };
 }
 
 /** A wallet's refusal, in a player's words; anything else as gf-web3 said it. */
@@ -267,11 +284,7 @@ export function hostBridge({ win = window, accept, configUrl = '/game/gamesfun.j
         sendWallet();
       }).catch(() => {});
     }
-    const msg = {
-      type: 'gf:wallet', status: address ? 'connected' : connecting ? 'connecting' : walletError ? 'error' : 'none', wallets: list,
-      address: address ?? '', short: address ? `${address.slice(0, 4)}…${address.slice(-4)}` : '', name: '', icon: null, error: walletError,
-      items: address && shop ? items : null, boxes: [],
-    };
+    const msg = walletMessage({ address, connecting, error: walletError, wallets: list, shop, items });
     const text = JSON.stringify(msg);
     if (force || text !== walletSent) {
       walletSent = text;

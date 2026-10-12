@@ -19,7 +19,7 @@ import { economyState, playerActions } from '../web3/gf-web3/econ/actions.js';
 import { freshKeypair } from '../web3/node/ed25519.mjs';
 import { startDevServer } from '../server/index.mjs';
 import { findChrome } from '../lib/chrome.mjs';
-import { econMessages, inside, plainError } from '../studio/host-bridge.js';
+import { econMessages, inside, plainError, walletMessage } from '../studio/host-bridge.js';
 import { fakeChain } from './web3/fake-chain.mjs';
 import { injectWallet } from './web3/inject-wallet.mjs';
 import { makeGame } from './web3/helpers.mjs';
@@ -70,7 +70,7 @@ describe('econMessages: economyState → gf:host and gf:economy', () => {
     for (const a of hud) assert.ok(entries.some((e) => e.id === a.id), `${a.id} has its entry`);
     assert.equal(entries.find((e) => e.id === 'hud:balance:sol').text, '1.234 SOL');
     assert.equal(entries.find((e) => e.id === 'hud:box:flip').text, 'You won 0.176 SOL!');
-    assert.match(entries.find((e) => e.id === 'hud:lottery:weekly').text, /^2 · pot 0\.3 SOL · draw due now$/);
+    assert.match(entries.find((e) => e.id === 'hud:lottery:weekly').text, /^2 tickets · pot 0\.3 SOL · draw due now$/);
     assert.match(entries.find((e) => e.id === 'hud:stake:backers').text, /^1\.5 ARENA staked · <0\.0001 SOL earned · locked$/, 'dust is never shown as 0');
     const results = m.host.economy.actions.filter((a) => a.where === 'results');
     assert.deepEqual(results.map((a) => a.id).sort(), ['lottery:weekly:claim', 'stake:backers:claim']);
@@ -80,6 +80,35 @@ describe('econMessages: economyState → gf:host and gf:economy', () => {
     assert.deepEqual(m.economy.pending, ['box:flip:open']);
     assert.ok(m.economy.error.length <= 200);
     assert.ok(m.offered.find((a) => a.id === 'lottery:weekly:tickets').asks.count, 'the page keeps what an action asks');
+  });
+
+  it('the HUD lines keep their labels short: a lottery’s is its name, and its line counts the tickets (devnet real-game proof, 2026-10-12)', () => {
+    const reads = { now: 1_800_000_000, lotteries: { weekly: { price: '10000000', pot: '20000000', status: 'Open', drawsAt: 1_800_604_800, sold: 1, mine: 1, places: [50, 30, 20], winners: [], paid: 0 } } };
+    const m = econMessages({ economy, actions: playerActions(economy), state: economyState(economy, reads, player) });
+    assert.equal(m.host.economy.actions.find((a) => a.id === 'hud:lottery:weekly').label, 'Weekly draw');
+    assert.match(m.economy.tickets.find((e) => e.id === 'hud:lottery:weekly').text, /^1 ticket · pot 0\.02 SOL · draw /);
+  });
+
+  it('a lottery’s and a stake’s HUD lines wait until the player has something in them (no card of zeros over the player)', () => {
+    const reads = { now: 1_800_000_000, balances: { sol: '500000000' }, lotteries: { weekly: { price: '10000000', pot: '20000000', status: 'Open', drawsAt: 1_800_604_800, sold: 4, mine: 0, places: [50, 30, 20], winners: [], paid: 0 } }, stakes: { backers: { staked: '0', pending: '0', since: 0, lock: 0 } } };
+    const m = econMessages({ economy, actions: playerActions(economy), state: economyState(economy, reads, player) });
+    assert.deepEqual(m.host.economy.actions.filter((a) => a.where === 'hud').map((a) => a.id), ['hud:balance:sol', 'hud:box:flip', 'hud:lottery:weekly', 'hud:stake:backers'], 'the lines are still offered');
+    assert.deepEqual([...m.economy.balances, ...m.economy.tickets, ...m.economy.stakes].map((e) => e.id), ['hud:balance:sol'], 'only the balance has something to say');
+    const earning = econMessages({ economy, actions: playerActions(economy), state: economyState(economy, { ...reads, stakes: { backers: { staked: '0', pending: '1000', since: 0, lock: 0 } } }, player) });
+    assert.match(earning.economy.stakes.find((e) => e.id === 'hud:stake:backers').text, /^0 ARENA staked · <0\.0001 SOL earned$/, 'something left to collect still shows');
+  });
+
+  it('gf:wallet: a connected wallet in a game with no items says [] (not null, which the kit’s menu reads as “Reading your items…” forever)', () => {
+    const address = '43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc';
+    assert.equal(walletMessage({}).items, null, 'no wallet: no items to speak of');
+    assert.equal(walletMessage({}).status, 'none');
+    const none = walletMessage({ address, shop: false, items: null });
+    assert.equal(none.status, 'connected');
+    assert.equal(none.short, '43QB…66gc');
+    assert.deepEqual(none.items, []);
+    assert.equal(walletMessage({ address, shop: true, items: null }).items, null, 'a shop’s items still being read');
+    assert.equal(walletMessage({ connecting: true }).status, 'connecting');
+    assert.equal(walletMessage({ error: 'You declined' }).status, 'error');
   });
 
   it('amounts in the HUD are rounded for people: four decimals at most, never 0 for dust', () => {
@@ -263,7 +292,7 @@ describe('the host bridge in the studio, end to end on the fake chain (Chrome)',
     await frame().locator('[data-econ="lottery:weekly:tickets"]').click();
     await page.getByTestId('econ-ask-value').fill('2');
     await page.getByTestId('econ-ask-ok').click();
-    await until(async () => /^2 ·/.test(await frame().locator('[data-econ="hud:lottery:weekly"] b').innerText()), 30_000, 'two tickets');
+    await until(async () => /^2 tickets ·/.test(await frame().locator('[data-econ="hud:lottery:weekly"] b').innerText()), 30_000, 'two tickets');
     await page.screenshot({ path: path.join(game.root, 'host-bridge.png') });
   });
 });
