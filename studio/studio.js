@@ -13,6 +13,7 @@
 //   selection            { get(), set(sel|null), onChange(fn) } what the person picked (a slot or object, {id, label}); it travels
 //                        with their next change request. A game frame may post { gf: 'select', id, label } to pick one.
 //   on(event, fn)        dev-server events: 'game' (the game's files changed: { files }), 'verify' (a run finished)
+import { hostBridge, inside } from './host-bridge.js';
 import { createWallet } from './wallet.js';
 
 const $ = sel => document.querySelector(sel);
@@ -57,6 +58,12 @@ const preview = {
 $('#preview-mode').addEventListener('change', e => { store.set('preview', e.target.value); preview.show(e.target.value); });
 $('#preview-reload').addEventListener('click', () => preview.reload());
 
+// ---- the host bridge: a game with a live economy gets its buttons from this page (studio/host-bridge.js) ----
+// It answers only the preview frame (or a frame inside it, the friends lobby's game) and only when gamesfun.json has a
+// live economy; otherwise it says nothing and the game looks as it always did.
+const bridge = hostBridge({ win: window, accept: src => inside(frame.contentWindow, src) });
+window.__gamesfunHostBridge = bridge;
+
 // ---- the selection chip ----
 let selected = null;
 const selListeners = new Set();
@@ -80,7 +87,7 @@ let reloadTimer = null;
 es.addEventListener('game', e => {
   const data = JSON.parse(e.data || '{}');
   clearTimeout(reloadTimer);
-  reloadTimer = setTimeout(() => { preview.reload(); fire('game', data); showTitle(); }, 120);
+  reloadTimer = setTimeout(() => { bridge.forget(); preview.reload(); fire('game', data); showTitle(); }, 120);
 });
 // The title in the bar follows the game's files: a change by the session or a roll-back may rename the game.
 function showTitle() {
@@ -169,6 +176,8 @@ async function main() {
   $('#game-title').title = game.hook || '';
   $('#network').textContent = game.network || 'devnet';
   networkShown = !!game.gamesfun;       // only a game with web3 settings (gamesfun.json) shows its network up front
+  // a live economy: "Open game in its own tab" opens it hosted (studio/play.html), so its economy's buttons come along
+  if (game.gamesfun?.economy?.live?.game) $('#open-game').href = '/studio/play.html';
   paintNetwork(store.get('tab'));
   preview.show(preview.path);
   const ctx = { game, api, wallet, toast, preview, on, selection };
