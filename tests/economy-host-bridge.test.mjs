@@ -92,6 +92,20 @@ describe('econMessages: economyState → gf:host and gf:economy', () => {
     assert.equal(plainError(new Error('User rejected the request.')), 'You declined in your wallet. Nothing was spent.');
   });
 
+  it('a spec payment (playerActions kind "pay") is offered as kind "buy", with its id, label, price and says unchanged', async () => {
+    const falling = JSON.parse(await readFile(new URL('../web3/economy/fixtures/falling-drop.json', import.meta.url), 'utf8'));
+    const actions = playerActions(falling);
+    const pay = actions.find((a) => a.id === 'payment:entry:pay');
+    assert.equal(pay.kind, 'pay');
+    const offered = econMessages({ economy: falling, actions }).host.economy.actions.find((a) => a.id === pay.id);
+    assert.ok(offered, 'the payment is offered: gf-three would drop kind "pay"');
+    assert.equal(offered.kind, 'buy');
+    assert.equal(offered.label, pay.label);
+    assert.equal(offered.says, pay.says);
+    assert.deepEqual(offered.price, pay.price);
+    assert.equal(offered.where, 'menu');
+  });
+
   it('a window inside the preview frame is accepted, any other is not', () => {
     const top = {}; top.parent = top;
     const frame = { parent: top };

@@ -15,10 +15,17 @@ import { economyStatus, publishPlan, readEconomy } from '../web3/node/economy.mj
 import { KIT_ROOT, studioUrl } from '../web3/node/game-dir.mjs';
 import { queueRequest } from '../web3/node/requests.mjs';
 import { chainContext } from '../web3/node/settings.mjs';
+import { devnetCheck, readKeyFile } from '../web3/node/economy-check.mjs';
+import { mkdir, writeFile } from 'node:fs/promises';
 
 const usage = `Usage: gamesfun economy <action> [game-dir] [--spec <file>] [--json]      (devnet only)
 
   check       Refusals (each with its fix) and warnings for the game's economy
+              --devnet: run the live economy end to end on devnet instead. A synthetic player, funded from a key
+              file you name (--key <file> or GAMESFUN_DEVNET_KEY; read, never printed or stored), pays, plays, wins
+              and is paid through the economy's real accounts; then every pool is checked against what it owes
+              (open orders, stakes, lottery places, contest pots) and what is left goes back to your key's wallet.
+              [--tries <n>] opens per box until a win (4)  [--budget <SOL>]  [--out <file>] the record (JSON)
   simulate    What each box, ticket and craft is worth, how long each pool lasts, who pays what
   cost        What going live costs (rent, fees, seeds) and what each action costs while it runs
   plan        The setup, instruction by instruction, split into the transactions your wallet approves
@@ -111,17 +118,47 @@ async function status(target, values) {
   return 0;
 }
 
+/** `check --devnet`: the live economy end to end on devnet, paid for by the key file the creator names. */
+async function checkDevnet(target, values) {
+  const dir = await resolveGame(target);
+  const file = values.key ?? process.env.GAMESFUN_DEVNET_KEY;
+  if (!file) throw new UsageError(`Name the devnet key file that pays for the run: --key <file> or GAMESFUN_DEVNET_KEY=<file>. It is read, never printed or stored.\n\n${usage}`);
+  const config = JSON.parse(await readFile(path.join(dir, 'gamesfun.json'), 'utf8'));
+  if (!config.economy?.live?.game) throw new Error(`${path.basename(dir)}'s economy is not live yet. Put it live first: npx gamesfun economy publish`);
+  const funder = await readKeyFile(path.resolve(file));
+  const chain = await chainContext(KIT_ROOT);
+  const tries = values.tries ? Math.max(1, Math.min(20, Number(values.tries) || 4)) : 4;
+  const budget = values.budget ? BigInt(Math.round(Number(values.budget) * 1e9)) : null;
+  const record = await devnetCheck({ config, funder, rpc: chain.rpc, rpcUrl: chain.rpcUrl, network: chain.network, tries, budget, log: values.json ? () => {} : (t) => console.log(t) });
+  const out = values.out ? path.resolve(values.out) : path.join(KIT_ROOT, '.gamesfun', 'economy-check', `${path.basename(dir)}-${record.startedAt.replace(/[:.]/g, '-')}.json`);
+  await mkdir(path.dirname(out), { recursive: true });
+  await writeFile(out, `${JSON.stringify(record, null, 2)}\n`);
+  if (values.json) printJson({ ...record, record: out });
+  else {
+    const short = (record.pools ?? []).filter((r) => r.open && !r.covers);
+    console.log([
+      '',
+      record.won ? 'The synthetic player paid, played, won and was paid.' : 'The synthetic player paid and played, but did not win within the tries (odds, or a pool too small to pay a prize yet).',
+      short.length ? `${short.length} pool${short.length === 1 ? '' : 's'} hold less than they owe: ${short.map((r) => r.key).join(', ')}.` : 'Every pool, stake and contest pot covers what it owes.',
+      record.spent !== null ? `The run cost ${Number(record.spent) / 1e9} SOL (prizes won count back).` : '',
+      `Verdict: ${record.verdict === 'ok' ? 'everything checked out' : 'problems, see above'}. Record: ${path.relative(process.cwd(), out)}`,
+    ].filter(Boolean).join('\n'));
+  }
+  return record.verdict === 'ok' ? 0 : 1;
+}
+
 export default {
   name: 'economy',
   summary: "check, simulate and cost a game's economy; its setup plan (devnet)",
   usage,
   run: (args) =>
     guard(async () => {
-      const { values, positionals } = parse(args, { spec: { type: 'string' }, write: { type: 'boolean' }, picture: { type: 'string' } }, usage);
+      const { values, positionals } = parse(args, { spec: { type: 'string' }, write: { type: 'boolean' }, picture: { type: 'string' }, devnet: { type: 'boolean' }, key: { type: 'string' }, tries: { type: 'string' }, budget: { type: 'string' }, out: { type: 'string' } }, usage);
       const [action, target] = positionals;
       if (!action) throw new UsageError(usage);
       if (action === 'publish') return publish(target, values);
       if (action === 'status') return status(target, values);
+      if (action === 'check' && values.devnet) return checkDevnet(target, values);
       if (action === 'migrate') {
         const dir = await resolveGame(target);
         const r = await migrateFile(dir, { write: values.write });
