@@ -8,7 +8,7 @@ import path from 'node:path';
 import { createGame } from '../lib/create.mjs';
 import { listSlots } from '../lib/slots.mjs';
 import { tempDir } from './helpers.mjs';
-import { dropProblem, firstSource, inGallery, licenceWords, mono, peaks, sectionCount, sections, sizeWords, slotDetails, soundDetails, soundsOf, tileKind, titleCard } from '../studio/lib/assets-view.js';
+import { dropProblem, sheetCell, firstSource, inGallery, licenceWords, mono, peaks, sectionCount, sections, sizeWords, slotDetails, soundDetails, soundsOf, tileKind, titleCard } from '../studio/lib/assets-view.js';
 
 const file = (id, type, f, extra = {}) => ({ id, label: id, kind: 'file', type, file: f, group: 'props', bytes: 2048, ...extra });
 const value = (id, type, v, extra = {}) => ({ id, label: id, kind: 'value', type, value: v, group: 'look', ...extra });
@@ -118,4 +118,12 @@ test('a made game\'s slots: the gallery shows its title card, characters and pro
   assert.ok(!ids.includes('rules') && !ids.includes('controls'), 'groups of only numbers are not in the gallery');
   assert.ok(s.find(x => x.id === 'props').files.every(f => tileKind(f) === 'model'));
   assert.ok(s.every(x => x.settings.length === 0));
+});
+
+test('sheetCell: a 2D body sheet shows its first frame; a row of square cells is a sheet; a plain picture is not', () => {
+  assert.deepEqual(sheetCell({ id: 'character.body.player' }, 1536, 768), { x: 0, y: 0, w: 256, h: 256 });
+  assert.deepEqual(sheetCell({ id: 'prop.coin' }, 128, 32), { x: 0, y: 0, w: 32, h: 32 });
+  assert.equal(sheetCell({ id: 'prop.coin' }, 64, 64), null);
+  assert.equal(sheetCell({ id: 'world.tiles.ground' }, 300, 128), null);
+  assert.equal(sheetCell({ id: 'x' }, 0, 0), null);
 });

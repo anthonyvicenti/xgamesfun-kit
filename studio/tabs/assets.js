@@ -4,7 +4,7 @@
 // with it: no code change (rules R1–R5 in AGENTS.md). Numbers are the Settings tool's: here only under "Show every
 // slot". The pure part (which tile a slot is, the sections, a waveform's peaks) is studio/lib/assets-view.js.
 import { el, slider, swatchRow, useStyles } from '../lib/editors/ui.js';
-import { ACCEPT, KIND_WORDS, dropProblem, ext, firstSource, inGallery, mono, peaks, sectionCount, sections, sizeWords, slotDetails, soundDetails, soundsOf, tileKind, titleCard } from '../lib/assets-view.js';
+import { ACCEPT, KIND_WORDS, dropProblem, ext, firstSource, inGallery, mono, peaks, sectionCount, sections, sheetCell, sizeWords, slotDetails, soundDetails, soundsOf, tileKind, titleCard } from '../lib/assets-view.js';
 
 // ---------- icons: inline SVG on a 24 x 24 grid, stroked with currentColor (like the tool bar's) ----------
 const ICON = {
@@ -240,8 +240,17 @@ export default {
       const url = `/game/${slot.file}?v=${ver(slot.file)}-${slot.bytes ?? 0}`;
       if (slot.missing) pic.append(fallback(kind), el('span', { className: 'art-missing' }, 'missing'));
       else if (kind === 'image') {
-        const img = el('img', { src: url, alt: slot.label, loading: 'lazy', decoding: 'async' });
-        img.addEventListener('load', () => { if (img.naturalWidth <= 128) img.classList.add('pixel'); });
+        const img = el('img', { src: url, alt: slot.label, decoding: 'async' });
+        img.addEventListener('load', () => {
+          const cell = sheetCell(slot, img.naturalWidth, img.naturalHeight);
+          if (cell) {   // a sheet of frames: its first frame, big
+            const c = el('canvas', { className: 'art-frame', width: Math.round(cell.w), height: Math.round(cell.h), role: 'img', 'aria-label': slot.label });
+            c.getContext('2d').drawImage(img, cell.x, cell.y, cell.w, cell.h, 0, 0, c.width, c.height);
+            if (cell.w <= 128) c.classList.add('pixel');
+            img.replaceWith(c);
+            pic.append(el('span', { className: 'art-badge' }, 'first frame'));
+          } else if (img.naturalWidth <= 128) img.classList.add('pixel');
+        });
         img.addEventListener('error', () => img.replaceWith(fallback(kind)));
         pic.classList.add('checker'); pic.append(img);
       } else if (kind === 'model') {

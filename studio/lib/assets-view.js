@@ -46,6 +46,22 @@ export function dropProblem(slot, fileName) {
   return null;
 }
 
+/**
+ * A picture that is a sheet of frames shows its first frame (a 2D body's "idle"), not a strip of tiny figures. A
+ * character's body is the kit's six-across sheet (studio/lib/editors/skins.js sheetFrames); another picture is a sheet
+ * when it is a row of three or more square cells. → { x, y, w, h } | null
+ */
+export function sheetCell(slot, width, height) {
+  if (!(width > 0 && height > 0)) return null;
+  if (String(slot?.id ?? '').startsWith('character.body')) {
+    const cell = width / 6;
+    if (cell >= 8 && height >= cell * 0.9) return { x: 0, y: 0, w: cell, h: cell };
+  }
+  const n = width / height;
+  if (n >= 3 && Math.abs(n - Math.round(n)) < 0.02) return { x: 0, y: 0, w: height, h: height };
+  return null;
+}
+
 /** A size in plain words. */
 export function sizeWords(bytes) {
   if (bytes == null) return 'missing';
