@@ -141,10 +141,11 @@ on a fresh `create --from` with the current kits; record the result in `example.
 
 ## The studio's web3 tab
 
-The Economy tab (`studio/tabs/economy.js`; it replaced the Token and Shop tabs) is off. `GET /api/studio/tabs`
-(`server/routes/studio.mjs`) leaves `economy.js` out of the list the page builds its tab row from, so it is neither in the page nor reachable by keyboard, unless the dev server
-was started with `GAMESFUN_WEB3=1` (the variable that also lists the MCP server's `web3_*` tools) or the game has a
-`gamesfun.json`. `tests/web3-switch.test.mjs` holds both ways.
+The Economy tab (`studio/tabs/economy.js`; it replaced the Token and Shop tabs) is on by default since 2026-10-12. One
+switch, `lib/web3-switch.mjs`, serves the studio and the MCP server: with `GAMESFUN_WEB3=0` (or `off`, `false`, `no`),
+`GET /api/studio/tabs` (`server/routes/studio.mjs`) leaves `economy.js` out of the list the page builds its tab row
+from, so it is neither in the page nor reachable by keyboard, and the `web3_*` and `economy_*` tools are not offered,
+even for a game that has a `gamesfun.json`. `tests/web3-switch.test.mjs` holds both ways.
 
 ## Skills
 

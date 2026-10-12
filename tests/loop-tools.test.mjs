@@ -652,10 +652,10 @@ test('asking the person: the first round ends the build waiting on a question; a
   assert.equal((await state(b)).kind, 'change');
 });
 
-test('web3 tools are off by default and an environment variable turns them on', async () => {
+test('web3 tools are on by default and GAMESFUN_WEB3=0 turns them off', async () => {
   const { tools: all } = await loadTools();
   assert.ok([...all.keys()].some(n => n.startsWith('web3_')), 'the web3 tools are still in mcp/tools');
-  assert.equal(offered('web3_status', {}), false); assert.equal(offered('web3_status', { GAMESFUN_WEB3: '1' }), true); assert.equal(offered('gamesfun_next', {}), true);
+  assert.equal(offered('web3_status', {}), true); for (const v of ['0', 'off', 'false', 'no']) assert.equal(offered('web3_status', { GAMESFUN_WEB3: v }), false, v); assert.equal(offered('gamesfun_next', { GAMESFUN_WEB3: '0' }), true); assert.equal(offered('gamesfun_next', {}), true);
   const names = async env => {
     const { server } = await createServer({ log: () => {}, env });
     const [a, c] = InMemoryTransport.createLinkedPair();
@@ -663,7 +663,7 @@ test('web3 tools are off by default and an environment variable turns them on', 
     await Promise.all([server.connect(a), client.connect(c)]);
     try { return (await client.listTools()).tools.map(x => x.name); } finally { await client.close(); }
   };
-  const off = await names({}), on = await names({ GAMESFUN_WEB3: '1' });
+  const off = await names({ GAMESFUN_WEB3: '0' }), on = await names({});
   assert.deepEqual(off.filter(n => n.startsWith('web3_')), []);
   assert.ok(on.filter(n => n.startsWith('web3_')).length >= 10);
   for (const n of ['gamesfun_next', 'gamesfun_step_pitch', 'gamesfun_step_spec', 'gamesfun_step_create', 'gamesfun_step_fix', 'gamesfun_step_verify', 'gamesfun_step_playtest', 'gamesfun_step_deliver', 'gamesfun_ask', 'gamesfun_change', 'gamesfun_rollback', 'gamesfun_requests', 'gamesfun_play', 'gamesfun_playtest_report', 'gamesfun_keep_edits']) assert.ok(off.includes(n), n);

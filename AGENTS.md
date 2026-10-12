@@ -188,4 +188,4 @@ section of its `gamesfun.json`, written from the person's sentence with the `gam
 `economy_*` tools, and put live from the studio's **Economy tab** (it replaced the Token and Shop tabs). **Write no
 wallet or economy code in the game:** the page that hosts it offers the economy's buttons and the kit's menu and HUD
 draw them (the `gamesfun-web3` skill). The web3 commands are there when present in this checkout
-(`npx gamesfun help`). Devnet only. The kit never holds a private key: wallets sign in the person's own browser.
+(`npx gamesfun help`). Web3 is on by default (`GAMESFUN_WEB3=0` turns it off). Devnet only. The kit never holds a private key: wallets sign in the person's own browser.

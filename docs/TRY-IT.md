@@ -429,7 +429,7 @@ tabs (a request, a permission question, the roll-back list) are from a real Clau
 day (`tests/e2e-live/README.md`). In those three, the row of tabs also shows "Token" and "Shop", and the corner says
 "devnet". You will not see those: the Token and Shop tabs are gone, and the Economy tab that replaced them (a game's
 whole economy on Solana devnet: its shop, loot boxes, lotteries, stakes and token; the `gamesfun-economy` skill) is
-off unless web3 is switched on.
+on by default (`GAMESFUN_WEB3=0` turns it off).
 
 The picture in thing 6 is from `tests/online-e2e.mjs` (case B) on the same day: the example game on multiplayer part
 1.6.4, with a stand-in for our server on this machine that says no in our server's own words. No picture on this page
