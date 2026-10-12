@@ -3,7 +3,21 @@
    the ".fun" of the wordmark, the lavender as the second accent (selection, links, focus of a picked thing), Arial.
    Dark is the default; light is the header's switch (or ?theme=light). Tabs draw with the tokens below; the legacy
    names (--panel, --panel-2, --text, --muted, --accent, --line, --good, --bad, --warn, --mono, --radius) stay, so a tab
-   written against them (the Economy tab's .gfw3 styles) follows the theme. Contrast: tests/studio-contrast.test.mjs. */
+   written against them (the Economy tab's .gfw3 styles) follows the theme. Contrast: tests/studio-contrast.test.mjs.
+
+   What a tab uses (no colours of its own; a new colour is a new token here, checked by the contrast test):
+     intro         the tab's first line: <p class="muted"> as the panel's first child, or <p class="intro">
+     h3            a section heading inside the tab (small caps, muted)
+     button        primary (lime); .ghost secondary; .small; .danger; .icon (a square one)
+     .toolbar      a row of buttons and controls; .toolbar.end puts it on the right
+     .row          a name (<small> under it: the slot id) and its editor (.edit); .row.tune for sliders
+     .field        a slider row: .field-label, .field-edit (range, number, .ends), .peers under it (editors.css)
+     .card         a thing you edit: .card-head (.pic, h4, .what, .kind), .field rows, .card-actions (editors.css)
+     notices       .conn (a status, data-state / data-tone), .error-box, .fail-card, .perm, .live-note, .refused,
+                   .check-line (.ok .bad .warn): one family, a coloured left edge on a quiet surface
+     .empty        nothing here yet: a dashed box with the words and, when there is one, the next step
+     .chip, .badge, .dot (.ok .go .warn .bad), .st (.pass .fail .skip), pre.log, ol.timeline, dl.controls
+     palettes      .tools/.tool, .palette/.swatch-item, .swatches/.swatch, .seats/.seat, .bodies/.body-pick (editors.css) */
 
 /* ---------------------------------------------------------------- tokens */
 :root, :root[data-theme=dark] {

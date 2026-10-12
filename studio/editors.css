@@ -132,3 +132,8 @@ details.more summary:hover { color: var(--ink); }
   .palette { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .overlay-key { font-size: var(--fs-xs); gap: 8px; }
 }
+
+/* the picture judge's verdict under a drawn picture: a notice */
+.judge.bad, .judge.ok { margin: var(--s2) 0; padding: 8px 12px; border-radius: var(--r-md); border: 1px solid var(--line); border-left: 3px solid var(--good); background: var(--surface-2); color: var(--ink-2); }
+.judge.bad { border-left-color: var(--bad); background: var(--bad-soft); }
+.judge.bad > :first-child { font-weight: 700; }
