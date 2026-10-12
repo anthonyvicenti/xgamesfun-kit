@@ -49,6 +49,26 @@ about 10–12 m of floor reads clearly ahead.
   (`edge`: fence, arena wall) with gaps only at `gates` (the `entries`); the plaza's edge is rows of houses with streets
   between them (`outside.rows`); `outside.ring` and `rings` put trees round the edge so the world goes on.
 
+## Places, colliders and reach (open builder wave 10)
+
+- **`places/`, the vocabulary.** An outdoor place is a recipe: steps run in order over one seeded stream, each a word of
+  one small vocabulary (ground `rect`, `island`; features `zones`, `spawns`, `gates`, `plaza`, `portal`, `paths`,
+  `spawn-line`, `arena-zones`, `water`; structures `edge`, `rows`, `backdrop-ring`, `climb`, `islets`, `floaters`; sizing
+  `stretch`, `grow`; dressing `place`, `put`, `pick`, `scatter`). `buildPlace(recipe, {size, seed, reach})`. A number may
+  be per size or an expression over the place's quantities, the character's jump among them (`climb` refuses a rise past
+  it at the call). `from-yard.js` turns an outdoor template into a recipe and `generate.js` builds arena, backyard and
+  plaza through it; gf-scenic lays out each island level from its `recipes.js`. Both give the worlds they gave before,
+  byte for byte (`tests/d-places.test.mjs`). Indoor worlds and dungeons are still their own generators.
+- **`colliders.js`, one collider list.** `collidersOf(layout, catalog)` is every collider a world loader builds (party:
+  the ground, each placement's catalog collider at its model's fit, the invisible walls; scenic: island tops and rims,
+  dungeon floors and walls, props, trees, crystals, ruins), as data; `buildColliders` makes Rapier from it with each
+  engine's `MATERIALS`. Both loaders build their physics this way, and `world.shapes` is the list.
+- **`reach.js`, reach.** `reachOf(layout, colliders, movementOf(game))`: which spawns, zones and entries a body gets to
+  by walking and by the jump `config/game.json` gives the character (82% of it, as the flat part), over the list. Check
+  17 reports what it cannot reach as a **warning** (rule `reach`, named in the detail); `tools/places-reach.mjs` drives
+  the jumps with the kit's capsule on Rapier. A scenic game carries `places/`, `colliders.js` and `layout.js` in its
+  `gf/three/world/` (its world imports them as `../../three/world/…`).
+
 ## Templates (`templates/<id>.json`, 2–8 players)
 
 | Id | What it is | Ground pattern | small / medium / large |

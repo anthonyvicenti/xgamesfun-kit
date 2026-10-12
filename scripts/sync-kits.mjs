@@ -43,8 +43,8 @@ export const LIBRARIES = [`${GF3}/library`, 'research/gf-scenic/library'];
  * else in a tools folder is. tests/sync-kits.test.mjs fails when the CLI runs a tool that is not listed here.
  */
 export const TOOL_ENTRIES = ['catalog', 'create', 'meshy-character', 'meshy-prop', 'play', 'promises', 'rig-check', 'slots', 'upgrade', 'verify'];
-/** Tools a check's own message tells the person to run for the full list of problems (verify checks 11 and 17), the one a flat game's map brief names, and the one melee's README names for adding an item. */
-export const NAMED_IN_MESSAGES = ['dressing', 'world', 'flat-map', 'items'];   // flat-map: a flat game's tile map report and --sync (the editors' map painter and the flat map brief name it); items: list, add like, remove a mechanic's table of things (melee's README names it; the studio's Items tab writes the same slot)
+/** Tools a check's own message tells the person to run for the full list of problems (verify checks 11 and 17, and 17's reach warning), the one a flat game's map brief names, and the one melee's README names for adding an item. */
+export const NAMED_IN_MESSAGES = ['dressing', 'world', 'flat-map', 'items', 'places-reach'];   // flat-map: a flat game's tile map report and --sync (the editors' map painter and the flat map brief name it); items: list, add like, remove a mechanic's table of things (melee's README names it; the studio's Items tab writes the same slot); places-reach: drives the jumps of a 3D world's reach (verify check 17's reach warning names it)
 export const ENTRIES = [
   ...[...TOOL_ENTRIES, ...NAMED_IN_MESSAGES].map(t => `${TOOLS}/${t}.mjs`),
   'research/multiplayer/p2p/signal-server.mjs',   // the dev server's signaling (server/index.mjs)

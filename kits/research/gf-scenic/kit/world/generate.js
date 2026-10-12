@@ -15,6 +15,10 @@
 // Terrain data (folio-2025's terrain texture, Terrain.js: r paths and slabs, g grass, b water depth) is not stored:
 // terrainData(cfg) computes it from the levels' shapes, plazas, paths and water, the same way in Node and the browser.
 
+import { outlineRadius, islandSdf, roundRectSdf, polylineDistance, walkRadius, playHalf } from '../../three/world/places/shapes.js';
+import { placeContext, runSteps } from '../../three/world/places/index.js';
+import { RECIPES } from './recipes.js';
+
 export const templates = ['island', 'isles', 'ruins', 'dungeon'];
 // Each template in its own words (its manifest; tools/catalog.mjs reads it): what a pitch is told, and what the world
 // provides to the mechanics. Every scenic world lays out levels (CONTRACT §8 "Levels"), each with an arena and a
@@ -35,36 +39,10 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
 // ---------- shapes (pure) ----------
-/** A level's outline radius at angle a (radians; 0 = +x, π/2 = +z): a superellipse with a seeded wobble. */
-export function outlineRadius(shape, a) {
-  const n = shape.n ?? 5, R = shape.radius;
-  const c = Math.abs(Math.cos(a - (shape.rot ?? 0))), s = Math.abs(Math.sin(a - (shape.rot ?? 0)));
-  const base = R * Math.pow(Math.pow(c, n) + Math.pow(s, n), -1 / n);
-  let w = 0;
-  for (const [k, amp, ph] of shape.wobble ?? []) w += amp * Math.sin(k * a + ph);
-  return base * (1 + w);
-}
-/** Signed distance (m, approximate) from (x, z) to a level's outline: negative inside. */
-export function islandSdf(level, x, z) {
-  const [cx, , cz] = level.at;
-  const dx = x - cx, dz = z - cz, d = Math.hypot(dx, dz);
-  return d - outlineRadius(level.shape, Math.atan2(dz, dx));
-}
-/** Distance outside a rounded rectangle {at:[x,z], half:[hx,hz], corner} (negative inside). */
-export function roundRectSdf(rr, x, z) {
-  const qx = Math.abs(x - rr.at[0]) - rr.half[0] + rr.corner, qz = Math.abs(z - rr.at[1]) - rr.half[1] + rr.corner;
-  return Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - rr.corner;
-}
-/** Distance from (x, z) to a polyline [[x, z], ...]. */
-export function polylineDistance(pts, x, z) {
-  let best = Infinity;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], vx = bx - ax, vz = bz - az, l2 = vx * vx + vz * vz || 1;
-    const t = clamp(((x - ax) * vx + (z - az) * vz) / l2, 0, 1);
-    best = Math.min(best, Math.hypot(x - ax - vx * t, z - az - vz * t));
-  }
-  return best;
-}
+// The island's outline and the distances to it live with the places vocabulary (gf-three kit/world/places/shapes.js,
+// open builder wave 10), so the levels' recipes, the one collider list and the reach model measure an island the same
+// way; re-exported here for the terrain, the loader and the tools.
+export { outlineRadius, islandSdf, roundRectSdf, polylineDistance, walkRadius, playHalf };
 // a cheap seeded value noise (for grass patches in the terrain data)
 function valueNoise(seed) {
   const h = (i, j) => { let k = Math.imul(i, 374761393) + Math.imul(j, 668265263) + seed; k = Math.imul(k ^ (k >>> 13), 1274126177); return ((k ^ (k >>> 16)) >>> 0) / 4294967296; };
@@ -74,13 +52,6 @@ function valueNoise(seed) {
   };
 }
 
-/** The walkable radius at angle a (inside the rim) and the play box half-size that fits inside it. */
-export function walkRadius(level, a) { return outlineRadius(level.shape, a) - (level.rimInset ?? 1.2); }
-export function playHalf(level) {
-  let h = Infinity;
-  for (let i = 0; i < 360; i++) { const a = (i / 360) * Math.PI * 2; h = Math.min(h, walkRadius(level, a) * Math.max(Math.abs(Math.cos(a)), Math.abs(Math.sin(a)))); }
-  return Math.max(4, h - 0.4);
-}
 
 // ---------- palettes: the world's colours (world.<t>.* slots), chosen to sit in each look ----------
 const PALETTES = {
@@ -107,215 +78,12 @@ export function levelCount(spec) {
   return Math.max(1, Math.min(8, Math.round(n) || 1));
 }
 
-// ---------- one island level ----------
+// ---------- island levels: recipes of the places vocabulary ----------
+// Each island level (island, isles, ruins) is laid out by its recipe (recipes.js) over the world's one random stream:
+// its island, plaza, portal, paths, spawns, zones and water, then its dressing (trees, bushes, flowers, lanterns,
+// stones, rocks, a camp, crystals; islets and loose rocks round a floating one). Until open builder wave 10 this was
+// code here (islandLevel and dress, a branch per template); the recipes take their random numbers in the same order.
 const DIAG = [Math.SQRT1_2, Math.SQRT1_2];   // the follow camera looks along +x+z: "up the screen"
-
-function islandLevel(i, L, T, R, at, rng, opts) {
-  const n = T === 'ruins' ? 4.2 : 5;
-  const wobble = Array.from({ length: 4 }, (_, k) => [2 + k * 2 + Math.floor(rng() * 2), r2((0.025 + rng() * 0.03) / (1 + k * 0.5)), r2(rng() * 6.28)]);
-  const level = { id: `level-${i + 1}`, at, radius: R, last: i === L - 1, shape: { radius: R, n, rot: 0, wobble }, rimInset: 1.2 };
-  const half = r2(playHalf(level));
-  level.half = half;
-  const [cx, , cz] = at;
-  const next = opts.next ?? null;
-  // the direction "on" (toward the next level, else up the screen) and "back" (where everyone arrives)
-  let on = DIAG;
-  if (next) { const dx = next[0] - cx, dz = next[2] - cz, d = Math.hypot(dx, dz) || 1; on = [dx / d, dz / d]; }
-  const back = [-on[0], -on[1]], side = [-on[1], on[0]];
-  // the stone plaza in the middle (the arena floor), a path from the back to it and from it to the portal
-  const plazaHalf = r2(clamp(half * (T === 'ruins' ? 0.62 : 0.48), 4, 11));
-  level.plaza = { at: [cx, cz], half: [plazaHalf, plazaHalf], corner: r2(plazaHalf * (T === 'ruins' ? 0.15 : 0.32)) };
-  const portalD = Math.max(4, half - 2.6);
-  const portal = [r2(cx + on[0] * portalD), 0, r2(cz + on[1] * portalD)];
-  const spawnD = Math.max(3, Math.min(half - 2.5, plazaHalf + 1.5));
-  const n0 = opts.players ?? 4;
-  const spawns = Array.from({ length: n0 }, (_, k) => { const s = (k - (n0 - 1) / 2) * 1.6; return [r2(cx + back[0] * spawnD + side[0] * s), 0, r2(cz + back[1] * spawnD + side[1] * s)]; });
-  const wr = walkRadius(level, Math.atan2(back[1], back[0]));
-  level.paths = [
-    { width: 2.2, points: [[r2(cx + back[0] * (wr + 0.6)), r2(cz + back[1] * (wr + 0.6))], [r2(cx + back[0] * plazaHalf * 0.6), r2(cz + back[1] * plazaHalf * 0.6)]] },
-    { width: 2.4, points: [[r2(cx + on[0] * plazaHalf * 0.6), r2(cz + on[1] * plazaHalf * 0.6)], [portal[0], portal[2]]] },
-  ];
-  level.spawns = spawns;
-  level.zones = {
-    arena: { shape: 'circle', at: [cx, 0, cz], size: [r2(half - 1)] },
-    portal: { shape: 'circle', at: portal, size: [2.2] },
-    plaza: { shape: 'box', at: [cx, 0, cz], size: [plazaHalf * 2, 1, plazaHalf * 2] },
-  };
-  // water: a stream from a spring pond in a side band (outside the play box) to the edge, where it falls off
-  level.water = [];
-  level.falls = [];
-  if (opts.water !== false) {
-    const sgn = rng() < 0.5 ? 1 : -1;
-    const a = Math.atan2(side[1] * sgn, side[0] * sgn) + (rng() - 0.5) * 0.5;
-    const edge = outlineRadius(level.shape, a);
-    const pondR = clamp((edge - half) * 0.45, 1.6, 3.2);
-    const pondD = Math.max(half + pondR * 0.4, edge - pondR - 2.4);
-    const pond = [r2(cx + Math.cos(a) * pondD), r2(cz + Math.sin(a) * pondD)];
-    // the stream turns toward the camera's side of the island, so its waterfall faces the follow camera
-    const back0 = Math.atan2(back[1], back[0]), toBack = Math.atan2(Math.sin(back0 - a), Math.cos(back0 - a));
-    const b = a + Math.sign(toBack) * (0.55 + rng() * 0.25);
-    const lip = outlineRadius(level.shape, b);
-    const mid = [r2(cx + Math.cos((a + b) / 2) * (pondD + lip) / 2 + (rng() - 0.5)), r2(cz + Math.sin((a + b) / 2) * (pondD + lip) / 2 + (rng() - 0.5))];
-    const out = [r2(cx + Math.cos(b) * (lip + 1.5)), r2(cz + Math.sin(b) * (lip + 1.5))];
-    level.water.push({ pond: { at: pond, radius: r2(pondR) }, stream: { width: 2.3, points: [pond, mid, out] } });
-    if (opts.void) level.falls.push({ at: [r2(cx + Math.cos(b) * (lip - 0.15)), -0.12, r2(cz + Math.sin(b) * (lip - 0.15))], angle: r2(b), width: 3.4, drop: r2(opts.depth * 0.95 + 6) });
-  }
-  level.cliff = { depth: opts.depth, kind: opts.void ? 'float' : 'shore' };
-  return level;
-}
-
-// a prop's usual scale in a scenic world (folio's models are sized for its car)
-const PROP_SCALE = { lantern: 0.8, 'pole-light': 0.8, bench: 0.62, crate: 0.8, fence: 1, brick: 0.85, bridge: 0.7 };
-const ps = id => PROP_SCALE[id] ?? 1;
-// a prop's half footprint at scale 1 (m; from library/props-folio.json sizes), so placements keep apart
-const FOOT = { 'dungeon-column': 0.35, 'rock-1': 5.6, 'rock-2': 3.8, 'rock-3': 4.5, lantern: 0.45, 'pole-light': 0.37, bench: 1.3, crate: 0.56, fence: 1.1, brick: 0.8, bridge: 5.5, 'dungeon-pillar': 0.6, 'dungeon-wall-broken': 1.6, 'dungeon-rubble-small': 1.6 };
-
-// ---------- dressing: vegetation, props, crystals, rocks, islets ----------
-function dress(level, T, rng, out, pal, opts) {
-  const [cx, , cz] = level.at;
-  const half = level.half;
-  const taken = [];
-  const near = (x, z, r) => taken.some(t => Math.hypot(t[0] - x, t[1] - z) < r + t[2]);
-  const inPlaza = (x, z, m = 0) => roundRectSdf(level.plaza, x, z) < m;
-  const onPath = (x, z, m = 0) => level.paths.some(p => polylineDistance(p.points, x, z) < p.width / 2 + m);
-  const inWater = (x, z, m = 0) => level.water.some(w => Math.hypot(x - w.pond.at[0], z - w.pond.at[1]) < w.pond.radius + m || polylineDistance(w.stream.points, x, z) < w.stream.width / 2 + m);
-  const nearSpawn = (x, z, m) => level.spawns.some(s => Math.hypot(s[0] - x, s[2] - z) < m) || Math.hypot(level.zones.portal.at[0] - x, level.zones.portal.at[2] - z) < m + 1.5;
-  const inBox = (x, z, m = 0) => Math.abs(x - cx) < half - m && Math.abs(z - cz) < half - m;
-  const sdf = (x, z) => islandSdf(level, x, z);
-  const pick = (test, tries = 60) => { for (let k = 0; k < tries; k++) { const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * level.radius; const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d; if (test(x, z)) return [x, z]; } return null; };
-  const ruins = T === 'ruins';
-
-  // trees: mostly in the band outside the play box, a few at its edges; never on the plaza, a path, water or a spawn
-  const kinds = ruins ? ['oak', 'pine', 'birch', 'oak'] : T === 'island' ? ['oak', 'birch', 'cherry', 'pine'] : ['pine', 'oak', 'pine', 'cherry'];
-  const nTrees = Math.round(level.radius * (ruins ? 0.95 : T === 'isles' ? 0.62 : 0.8));
-  for (let k = 0; k < nTrees; k++) {
-    const p = pick((x, z) => sdf(x, z) < -1.6 && (T !== 'isles' || sdf(x, z) > -7) && !inPlaza(x, z, 2.5) && !onPath(x, z, 1.4) && !inWater(x, z, 1.2) && !nearSpawn(x, z, 3) && !near(x, z, 2.6) && (!inBox(x, z, 2.5) || rng() < 0.12));
-    if (!p) continue;
-    const kind = kinds[k % kinds.length];
-    taken.push([p[0], p[1], 1.6]);
-    out.vegetation.trees.push({ kind, at: [r2(p[0]), 0, r2(p[1])], rot: Math.round(rng() * 360), scale: r2((kind === 'pine' ? 0.75 : 0.55) + rng() * 0.35), level: level.id });
-  }
-  // bushes: along the edge and beside trees
-  const nBush = Math.round(level.radius * 1.3);
-  for (let k = 0; k < nBush; k++) {
-    const p = pick((x, z) => sdf(x, z) < -0.6 && sdf(x, z) > -6 && !inPlaza(x, z, 1) && !onPath(x, z, 0.6) && !inWater(x, z, 0.4) && !nearSpawn(x, z, 2) && !near(x, z, 0.9));
-    if (!p) continue;
-    taken.push([p[0], p[1], 0.7]);
-    out.vegetation.bushes.push([r2(p[0]), 0.35, r2(p[1]), r2(0.75 + rng() * 0.7)]);
-  }
-  // flowers: little clusters in the grass
-  const nFlower = Math.round(level.radius * 1.4);
-  for (let k = 0; k < nFlower; k++) {
-    const p = pick((x, z) => sdf(x, z) < -1 && !inPlaza(x, z, 0.8) && !onPath(x, z, 0.4) && !inWater(x, z, 0.4));
-    if (p) out.vegetation.flowers.push([r2(p[0]), 0, r2(p[1]), r2(0.7 + rng() * 0.5)]);
-  }
-  // lanterns: at the plaza's corners and along the paths (light points)
-  const ph = level.plaza.half[0];
-  const corners = [[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([sx, sz]) => [cx + sx * (ph + 0.8), cz + sz * (ph + 0.8)]);
-  for (const [x, z] of corners) if (!onPath(x, z, 0.3) && !nearSpawn(x, z, 1.6)) { out.props.push({ prop: 'lantern', at: [r2(x), 0, r2(z)], rot: Math.round(rng() * 360), scale: ps('lantern'), level: level.id }); taken.push([x, z, 0.8]); }
-  for (const p of level.paths) {
-    const [a, b] = [p.points[0], p.points.at(-1)], len = Math.hypot(b[0] - a[0], b[1] - a[1]), nx = -(b[1] - a[1]) / (len || 1), nz = (b[0] - a[0]) / (len || 1);
-    for (let t = 0.3; t < 0.95; t += 0.45) {
-      const x = a[0] + (b[0] - a[0]) * t + nx * (p.width / 2 + 0.7), z = a[1] + (b[1] - a[1]) * t + nz * (p.width / 2 + 0.7);
-      if (sdf(x, z) < -0.8 && !near(x, z, 0.8) && !inPlaza(x, z, 0.6)) { out.props.push({ prop: 'pole-light', at: [r2(x), 0, r2(z)], rot: Math.round(rng() * 360), scale: ps('pole-light'), level: level.id }); taken.push([x, z, 0.6]); }
-    }
-  }
-  // glowing crystals just outside the arena's corners (the reference art's glowing arena), on looks with runes
-  if (!ruins && T !== 'dungeon' && opts.runes) {
-    const e = ph + 2.5;
-    [[1, 1], [-1, -1], [1, -1], [-1, 1]].forEach(([sx, sz], k) => {
-      const x = cx + sx * e, z = cz + sz * e;
-      if (sdf(x, z) > -1 || onPath(x, z, 0.8) || near(x, z, 0.8) || nearSpawn(x, z, 1.6)) return;
-      out.crystals.push({ at: [r2(x), 0, r2(z)], rot: Math.round(rng() * 360), scale: 1.15, glow: k % 2 ? 'rune' : 'crystal', level: level.id });
-      taken.push([x, z, 0.9]);
-    });
-  }
-  // the arena's border stones (KayKit stone posts): its corners and the middle of each side, never on a path
-  if (!ruins && T !== 'dungeon') {
-    const e = ph + 0.45;
-    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const x = cx + sx * e, z = cz + sz * e;
-      if (onPath(x, z, 0.5) || near(x, z, 0.5) || nearSpawn(x, z, 1)) continue;
-      out.props.push({ prop: 'dungeon-column', at: [r2(x), 0, r2(z)], rot: 0, scale: 1.25, level: level.id });
-      taken.push([x, z, 0.5]);
-    }
-  }
-  // benches (island, ruins) and rocks
-  if (T !== 'isles') for (let k = 0; k < 2; k++) {
-    const a = rng() * Math.PI * 2, x = cx + Math.cos(a) * (ph + 2.2), z = cz + Math.sin(a) * (ph + 2.2);
-    if (!onPath(x, z, 1) && !near(x, z, 1.2) && !nearSpawn(x, z, 2)) { out.props.push({ prop: 'bench', at: [r2(x), 0, r2(z)], rot: Math.round((-a * 180) / Math.PI + 90), scale: ps('bench'), level: level.id }); taken.push([x, z, 1.2]); }
-  }
-  const nRock = Math.round(level.radius * 0.35);
-  for (let k = 0; k < nRock; k++) {
-    const id = `rock-${1 + Math.floor(rng() * 3)}`, sc = r2(0.22 + rng() * 0.22), foot = FOOT[id] * sc;
-    const p = pick((x, z) => sdf(x, z) < -foot * 0.6 && sdf(x, z) > -6 && !inPlaza(x, z, foot + 0.5) && !onPath(x, z, foot) && !inWater(x, z, foot) && !nearSpawn(x, z, foot + 2) && !near(x, z, foot + 0.4));
-    if (!p) continue;
-    taken.push([p[0], p[1], foot]);
-    out.props.push({ prop: id, at: [r2(p[0]), 0, r2(p[1])], rot: Math.round(rng() * 360), scale: sc, level: level.id });
-  }
-  // ruins: KayKit pillars round the plaza (some broken down to a stub), broken walls and rubble beyond, standing torches
-  if (ruins) {
-    const nP = 10;
-    for (let k = 0; k < nP; k++) {
-      const a = (k / nP) * Math.PI * 2 + 0.2, x = cx + Math.cos(a) * (ph + 1.6), z = cz + Math.sin(a) * (ph + 1.6);
-      if (onPath(x, z, 0.8) || nearSpawn(x, z, 2) || near(x, z, 0.9)) continue;
-      const id = rng() < 0.3 ? 'dungeon-column' : rng() < 0.4 ? 'dungeon-pillar-decorated' : 'dungeon-pillar';
-      out.props.push({ prop: id, at: [r2(x), 0, r2(z)], rot: Math.round(rng() * 4) * 90, scale: 1, level: level.id });
-      taken.push([x, z, 1]);
-    }
-    for (let k = 0; k < 5; k++) {
-      const p = pick((x, z) => sdf(x, z) < -2.2 && !inBox(x, z, -1) && !inPlaza(x, z, 2) && !onPath(x, z, 1.6) && !inWater(x, z, 1.5) && !near(x, z, 2.4));
-      if (!p) continue;
-      const id = ['dungeon-wall-broken', 'dungeon-wall-cracked', 'dungeon-rubble-small'][k % 3];
-      out.props.push({ prop: id, at: [r2(p[0]), 0, r2(p[1])], rot: Math.round(rng() * 4) * 90 + (rng() - 0.5) * 20, scale: 1, level: level.id });
-      taken.push([p[0], p[1], 2.2]);
-    }
-    for (const [sx, sz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
-      const x = cx + sx * (ph - 0.9), z = cz + sz * (ph - 0.9);
-      if (!onPath(x, z, 0.4) && !near(x, z, 0.6) && !nearSpawn(x, z, 1.2)) { out.props.push({ prop: 'dungeon-torch', at: [r2(x), 0, r2(z)], rot: 0, scale: 1.4, level: level.id }); taken.push([x, z, 0.5]); }
-    }
-  }
-  // a camp by the plaza on the islands: barrels and crates (KayKit) at one corner
-  if (!ruins && T !== 'dungeon') {
-    const sgn = rng() < 0.5 ? 1 : -1, x = cx + sgn * (ph + 2), z = cz - sgn * (ph * 0.4);
-    if (sdf(x, z) < -2 && !onPath(x, z, 1) && !inWater(x, z, 1) && !near(x, z, 1.6) && !nearSpawn(x, z, 2)) {
-      out.props.push({ prop: 'dungeon-barrel', at: [r2(x), 0, r2(z)], rot: Math.round(rng() * 360), scale: 0.75, level: level.id });
-      out.props.push({ prop: 'dungeon-crates', at: [r2(x + 0.9), 0, r2(z + 1.1)], rot: Math.round(rng() * 360), scale: 0.75, level: level.id });
-      taken.push([x, z, 1.8]);
-    }
-  }
-  // crystals: glowing clusters at the edge of the play box and beside the portal (light points)
-  const nC = T === 'isles' ? 6 : T === 'ruins' ? 4 : 3;
-  for (let k = 0; k < nC; k++) {
-    const p = pick((x, z) => sdf(x, z) < -0.8 && sdf(x, z) > -7 && !inPlaza(x, z, 1) && !onPath(x, z, 0.8) && !inWater(x, z, 0.6) && !near(x, z, 1.2) && !nearSpawn(x, z, 2.5), 120);
-    if (!p) continue;
-    taken.push([p[0], p[1], 1]);
-    out.crystals.push({ at: [r2(p[0]), 0, r2(p[1])], rot: Math.round(rng() * 360), scale: r2(0.9 + rng() * 0.9), glow: k % 3 === 2 ? 'rune' : 'crystal', level: level.id });
-  }
-  // a pair flanking the portal (the levels mechanic draws the portal itself)
-  {
-    const pz = level.zones.portal.at, dx = pz[0] - cx, dz = pz[2] - cz, d = Math.hypot(dx, dz) || 1, sx = -dz / d, sz = dx / d;
-    for (const s of [-1, 1]) { const x = pz[0] + sx * s * 3.1, z = pz[2] + sz * s * 3.1; if (sdf(x, z) < -0.6) { out.crystals.push({ at: [r2(x), 0, r2(z)], rot: Math.round(rng() * 360), scale: 1.35, glow: s < 0 ? 'crystal' : 'rune', level: level.id }); taken.push([x, z, 1]); } }
-  }
-  // islets: small floating rocks round a floating island, some with a tree or a crystal
-  if (opts.void) {
-    const nI = 4 + Math.floor(rng() * 3);
-    for (let k = 0; k < nI; k++) {
-      const a = (k / nI) * Math.PI * 2 + rng() * 0.8, d = outlineRadius(level.shape, a) + 5 + rng() * 9;
-      const r = r2(1.2 + rng() * 2.2), y = r2(-3 + rng() * 6);
-      const isl = { at: [r2(cx + Math.cos(a) * d), y, r2(cz + Math.sin(a) * d)], radius: r, depth: r2(r * (2.4 + rng() * 1.6)), seed: Math.floor(rng() * 1e6), level: level.id };
-      const what = rng();
-      if (what < 0.35) isl.crystal = rng() < 0.5 ? 'crystal' : 'rune';
-      else if (what < 0.7 && r > 1.8) isl.tree = rng() < 0.5 ? 'pine' : 'oak';
-      out.islets.push(isl);
-    }
-    // loose rocks hanging under and round the island
-    for (let k = 0; k < 7; k++) {
-      const a = rng() * Math.PI * 2, d = outlineRadius(level.shape, a) * (0.2 + rng() * 1.1);
-      out.floaters.push({ at: [r2(cx + Math.cos(a) * d), r2(-opts.depth * (0.4 + rng() * 0.9)), r2(cz + Math.sin(a) * d)], scale: r2(0.4 + rng() * 1.1), rot: Math.round(rng() * 360), level: level.id });
-    }
-  }
-}
 
 // ---------- dungeon rooms (KayKit Dungeon Remastered's 3 m modules, research/gf-scenic/library/props.json) ----------
 const M = 3;   // one wall or floor module
@@ -485,10 +253,17 @@ export function generate({ template = 'isles', size = 'medium', seed = 1, levels
     vegetation: { trees: [], bushes: [], flowers: [] },
   };
   for (let i = 0; i < L; i++) {
-    const lv = T === 'dungeon' ? dungeonLevel(i, L, ats[i], rng, { players, depth, size }) : islandLevel(i, L, T, R, ats[i], rng, { next: ats[i + 1] ?? null, players, void: isVoid, depth, water: T !== 'ruins' || i % 2 === 0 });
-    out.levels.push(lv);
-    if (T !== 'dungeon') dress(lv, T, rng, out, pal, { void: isVoid, depth, runes: RUNES.has(preset) });
-    else {
+    if (T !== 'dungeon') {
+      // an island level: its recipe's steps over the world's one stream (places vocabulary; recipes.js)
+      const lv = { id: `level-${i + 1}`, at: ats[i], radius: R, last: i === L - 1 };
+      const P = placeContext({ recipe: RECIPES[T], size: SIZE_RADIUS[size] ? size : 'medium', seed, players, preset, R: rng, out });
+      Object.assign(P.vars, { R, depth });
+      Object.assign(P, { level: lv, next: ats[i + 1] ?? null, index: i });
+      runSteps(P, RECIPES[T].level);
+      out.levels.push(lv);
+    } else {
+      const lv = dungeonLevel(i, L, ats[i], rng, { players, depth, size });
+      out.levels.push(lv);
       dressDungeon(lv, rng, out);
       const p = lv.zones.portal.at;
       out.crystals.push({ at: [r2(p[0] + 2.2), 0, r2(p[2] - 2.2)], rot: 0, scale: 1, glow: 'crystal', level: lv.id }, { at: [r2(p[0] - 2.2), 0, r2(p[2] + 2.2)], rot: 0, scale: 0.8, glow: 'rune', level: lv.id });
