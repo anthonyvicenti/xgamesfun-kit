@@ -1,0 +1,88 @@
+/* Saves & scores (studio/tabs/backend.js): the picture cards of what a backend gives, the services with their lights,
+   and the connect flow as a stepper (flow-ui.js). Scoped under .sv; only studio.css's tokens (both themes). */
+
+.sv { display: flex; flex-direction: column; gap: var(--s3); }
+.sv h3 { margin: var(--s3) 0 0; }
+.sv .sv-ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sv-intro { margin: 0; color: var(--ink-2); font-size: var(--fs-md); line-height: 1.5; }
+.sv-small { margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.sv-foot { text-align: center; }
+
+/* ---- what a backend gives: four picture cards */
+.sv-benefits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+.sv-benefit { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; text-align: left; padding: var(--s3); min-height: 0; border-radius: var(--r-lg); border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-weight: 400; white-space: normal; }
+button.sv-benefit { cursor: pointer; }
+button.sv-benefit:hover { border-color: var(--lav-line); background: var(--surface-3); }
+button.sv-benefit[aria-pressed=true] { border-color: var(--lav); background: var(--lav-soft); }
+.sv-pic { position: relative; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--lav-soft); color: var(--lav-ink); margin-bottom: 4px; }
+.sv-benefit[data-id=scores] .sv-pic { background: var(--warn-soft); color: var(--warn); }
+.sv-benefit[data-id=saves] .sv-pic { background: var(--info-soft); color: var(--info); }
+.sv-benefit[data-id=accounts] .sv-pic { background: var(--lav-soft); color: var(--lav-ink); }
+.sv-benefit[data-id=server] .sv-pic { background: var(--lime-soft); color: var(--ink); }
+.sv-pic-ico { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sv-benefit-title { font-weight: 700; font-size: var(--fs-md); }
+.sv-benefit-text { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; }
+/* connected: what the game has now is lit, the rest dim */
+.sv-benefit[data-has=false] { opacity: .45; border-style: dashed; }
+.sv-benefit[data-has=true] { border-color: var(--good-line); }
+.sv-badge { position: absolute; right: -6px; bottom: -6px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--good); color: var(--surface); border: 2px solid var(--surface-2); }
+.sv-badge-ico { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- the services: a card each, with its light */
+.sv-services { display: flex; flex-direction: column; gap: var(--s2); }
+.sv-service, .sv-connected { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--s3); padding: var(--s3); border-radius: var(--r-lg); border: 1px solid var(--line-strong); background: var(--surface-2); transition: border-color .2s, opacity .2s; }
+.sv-service[data-match=yes] { border-color: var(--lav); box-shadow: 0 0 0 3px var(--lav-soft); }
+.sv-service[data-match=no] { opacity: .55; }
+.sv-service[data-tone=ok], .sv-connected[data-tone=ok] { border-color: var(--good-line); }
+.sv-connected[data-tone=ok] { background: var(--good-soft); }
+.sv-logo { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-3); color: var(--ink); }
+.sv-service[data-id=supabase] .sv-logo, .sv-connected .sv-logo { color: var(--good); }
+.sv-service[data-id=railway] .sv-logo { color: var(--lav-ink); }
+.sv-logo-ico { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sv-service-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sv-service-head { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; font-size: var(--fs-base); }
+.sv-best { font-size: var(--fs-xs); font-weight: 700; color: var(--on-lime); background: var(--lime); border-radius: var(--r-pill); padding: 1px 8px; }
+.sv-service-text { color: var(--ink-2); font-size: var(--fs-sm); line-height: 1.4; }
+.sv-where { color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.sv-gives { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.sv-give { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 8px 2px 6px; }
+.sv-give-ico { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sv-service-go { grid-column: 1 / -1; display: flex; }
+.sv-service-go button { flex: 1; }
+
+/* the light: a lamp and its words */
+.sv-light { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--muted); margin-top: 2px; }
+.sv-lamp { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
+.sv-light[data-tone=ok] { color: var(--good); font-weight: 700; }
+.sv-light[data-tone=ok] .sv-lamp { background: var(--good); box-shadow: 0 0 0 3px var(--good-soft), 0 0 8px var(--good); }
+.sv-light[data-tone=warn] { color: var(--warn); }
+.sv-light[data-tone=warn] .sv-lamp { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.sv-light[data-tone=bad] { color: var(--bad); }
+.sv-light[data-tone=bad] .sv-lamp { background: var(--bad); }
+
+.sv-back { display: inline-flex; align-items: center; gap: 4px; }
+.sv .toolbar { margin: 0; }
+.sv-panel > * + * { margin-top: var(--s3); }
+.sv-details > summary { cursor: pointer; color: var(--muted); font-size: var(--fs-sm); }
+.sv-details > summary:hover { color: var(--ink); }
+.sv-details p { margin-top: var(--s2); }
+
+/* ---- the connect flow as a stepper: numbered rings joined by a line (flow-ui.js draws ol.flow-steps) */
+.sv .flow-plan-head { margin: 0 0 var(--s2); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+.sv ol.flow-steps { margin: 0 0 var(--s3); }
+.sv ol.flow-steps li { position: relative; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; border-bottom: 0; padding: 5px 0; }
+.sv ol.flow-steps li + li::before { content: ''; position: absolute; left: 12px; top: -7px; height: 14px; width: 2px; background: var(--line-strong); }
+.sv ol.flow-steps li[data-state=done] + li::before { background: var(--good-line); }
+.sv ol.flow-steps .mark { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: var(--fs-sm); border: 2px solid var(--line-strong); background: var(--surface-2); color: var(--muted); position: relative; z-index: 1; }
+.sv ol.flow-steps .detail { grid-column: 2 / 4; }
+.sv ol.flow-steps li[data-state=done] .mark { border-color: var(--good); background: var(--good-soft); color: var(--good); }
+.sv ol.flow-steps li[data-state=doing] .mark { border-color: var(--lav); background: var(--lav-soft); color: var(--lav-ink); box-shadow: 0 0 0 4px var(--lav-soft); }
+.sv ol.flow-steps li[data-state=failed] .mark { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+.sv ol.flow-steps li[data-state=warn] .mark { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+.sv ol.flow-steps li[data-state=skipped] .mark { border-style: dashed; }
+.sv ol.flow-steps[data-plan="1"] .label { color: var(--ink-2); }
+.sv .flow-go-row { margin: 0 0 var(--s3); flex-wrap: wrap; align-items: center; }
+.sv .flow-go-row .flow-go { flex: 1 1 100%; min-height: 40px; font-size: var(--fs-base); }
+.sv .flow-intro { color: var(--muted); margin: 0 0 var(--s3); }
+.sv details.other-ways { margin-top: var(--s4); }
+.sv details.other-ways > summary { color: var(--ink-2); font-size: var(--fs-md); }

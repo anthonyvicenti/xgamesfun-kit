@@ -170,6 +170,8 @@ test('sign in, publish (only new files), update at the same link, log out: again
     const two = await publishGame(dir, { origin: g.origin, env, verify: async d => { await writeFile(path.join(d, 'evidence', 'verify-10', 'verdict.json'), JSON.stringify({ pass: true, quick: true, checks: [{ n: 1, name: 'one', ok: true }] })); } });
     assert.equal(two.uploaded, 1, 'only the changed file goes up');
     assert.equal(two.version.number, 2);
+    const hist = JSON.parse(await readFile(path.join(dir, '.gamesfun', 'publish.json'), 'utf8'))[g.origin].history;
+    assert.deepEqual(hist.map(h => [h.version, h.draft, h.url]), [[1, false, 'http://x/play/coin-hop'], [2, false, 'http://x/play/coin-hop']], 'each publish is kept for the versions timeline');
     assert.ok(g.state.calls.filter(c => c === 'POST /api/kit/publish').length === 2);
     await writeFile(path.join(dir, 'rules.js'), `const k = "${jwt('service_role')}";`);
     await assert.rejects(publishGame(dir, { origin: g.origin, env, verify: pass }), /service-role key/);

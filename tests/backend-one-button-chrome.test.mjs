@@ -46,10 +46,10 @@ describe('the Backend tab\'s one button in Chrome', { skip: !chromium && 'playwr
   const backToNone = async () => {
     for (const f of ['backend.json', 'gf/backend', 'supabase', '.mcp.json', '.gamesfun/agents-supabase.json']) await rm(path.join(game.dir, f), { recursive: true, force: true });
     await page.goto(`${server.url}studio/?r=${Date.now()}#backend`);
-    await panel().getByRole('button', { name: 'Add a backend (optional)' }).waitFor();
+    await panel().getByRole('button', { name: 'Use Supabase' }).waitFor();
   };
+  // with no backend the tool shows the services, each with its own button
   const choose = async id => {
-    await panel().getByRole('button', { name: 'Add a backend (optional)' }).click();
     await panel().getByRole('button', { name: `Use ${id}` }).click();
   };
   const question = kind => panel().locator(`.flow-question[data-kind=${kind}]:not([hidden])`);
@@ -91,12 +91,12 @@ describe('the Backend tab\'s one button in Chrome', { skip: !chromium && 'playwr
     await game?.cleanup(); await cfg?.cleanup();
   });
 
-  it('Publish has the primary action beside the preview\'s bar; no backend is one quiet line', async t => {
+  it('Publish has the primary action beside the preview\'s bar; no backend shows the services', async t => {
     if (!browser) return t.skip('no browser');
     const act = page.locator('#product-actions [data-action=publish]');
     await act.waitFor();
     assert.equal((await act.innerText()).trim(), 'Publish');
-    await panel().getByRole('button', { name: 'Add a backend (optional)' }).waitFor();
+    await panel().getByRole('button', { name: 'Use Supabase' }).waitFor();
     await shot('00-no-backend');
     await act.click();
     await page.locator('#panel-publish:not([hidden])').waitFor();

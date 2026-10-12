@@ -8,12 +8,15 @@
 const MARK = { todo: '○', doing: '●', done: '✓', skipped: '–', warn: '!', failed: '✕' };
 const clock = s => (s == null ? '' : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
 
+// Before it starts, `opts.plan` ([[id, label], …]) shows the steps it will take, numbered, so the tool reads as a stepper
+// from the first look; the flow's own steps replace them once it runs.
 /**
  * mountFlow(root, ctx, opts) → { start(body), cleanup() }
  * opts: base ('backend/supabase/one-button'), button (its words), body() (what Start sends), intro (a node or null),
  *       agentWay() (optional: the "Connect through your agent" fallback), connected(result, el) (draws the end),
  *       onDone(result) (after a success), extra (nodes under the button, e.g. the agents checkbox), hideOldResult
- *       (do not show a finished run's "Connected" when the panel opens: the game has no backend now)
+ *       (do not show a finished run's "Connected" when the panel opens: the game has no backend now), plan
+ *       ([[id, label], …]: the steps shown before it starts)
  */
 export function mountFlow(root, ctx, opts) {
   const { el, line } = ctx;
@@ -26,10 +29,12 @@ export function mountFlow(root, ctx, opts) {
   const foot = el('div');
   // a panel with nothing to start (already connected) shows only what the last run did. What needs the person (a
   // question, the end) sits right under the button; the steps follow.
-  if (opts.button) root.append(el('div', { className: 'toolbar' }, go, ...(opts.extra ?? [])));
   // once connected, the steps fold under one line (they stay open while the flow runs, and after an error)
-  const fold = el('details', { className: 'flow-fold', open: true }, el('summary', {}, 'What the kit did'), steps);
-  root.append(question, end, fold, foot);
+  const planHead = el('p', { className: 'flow-plan-head', hidden: true }, 'What happens');
+  const fold = el('details', { className: 'flow-fold', open: true }, el('summary', {}, 'What the kit did'), planHead, steps);
+  root.append(fold);
+  if (opts.button) root.append(el('div', { className: 'toolbar flow-go-row' }, go, ...(opts.extra ?? [])));
+  root.append(question, end, foot);
 
   let timer = null, stopped = false, asked = null, wasRunning = false, opened = null;
   const openTab = () => { const t = window.open('about:blank', '_blank'); if (t) t.opener = null; return t; };
@@ -39,12 +44,17 @@ export function mountFlow(root, ctx, opts) {
   };
 
   function drawSteps(s) {
-    steps.hidden = !s.steps.length;
-    fold.hidden = !s.steps.length;
-    fold.open = !!s.running || !s.result;
-    fold.querySelector('summary').hidden = !!s.running || !s.result;
-    steps.replaceChildren(...s.steps.map(x => {
-      const li = el('li', {}, el('span', { className: 'mark', 'aria-hidden': 'true' }, MARK[x.state] ?? '○'),
+    // nothing run yet (or an old run hidden): the plan, numbered
+    const plan = !s.steps.length && !s.running && !s.error && opts.plan?.length && opts.button;
+    const list = plan ? opts.plan.map(([id, label]) => ({ id, label, state: 'todo' })) : s.steps;
+    steps.hidden = !list.length;
+    fold.hidden = !list.length;
+    steps.dataset.plan = plan ? '1' : '';
+    planHead.hidden = !plan;
+    fold.open = !!s.running || !s.result || plan;
+    fold.querySelector('summary').hidden = !!s.running || !s.result || plan;
+    steps.replaceChildren(...list.map((x, i) => {
+      const li = el('li', {}, el('span', { className: 'mark', 'aria-hidden': 'true' }, x.state === 'todo' ? String(i + 1) : MARK[x.state] ?? '○'),
         el('span', { className: 'label' }, x.label),
         el('span', { className: 'clock' }, x.state === 'doing' ? clock(x.seconds) : ''),
         x.detail ? el('span', { className: 'detail' }, x.detail) : null);
@@ -157,7 +167,7 @@ export function mountFlow(root, ctx, opts) {
     let s;
     try { s = await api(); } catch (e) { end.replaceChildren(line('bad', e.message)); return; }
     // a panel for a game with no backend does not show an earlier run's "Connected" (that backend was removed since)
-    if (first && opts.hideOldResult && !s.running && s.result) { first = false; return; }
+    if (first && opts.hideOldResult && !s.running && s.result) { first = false; drawSteps({ steps: [], result: null }); return; }
     first = false;
     draw(s);
     if (s.running) timer = setTimeout(poll, 1000);
@@ -173,6 +183,7 @@ export function mountFlow(root, ctx, opts) {
     catch (e) { tab?.close(); go.disabled = false; end.replaceChildren(line('bad', e.message)); }
   }
   go.addEventListener('click', () => start());
+  drawSteps({ steps: [], result: null });
   poll();
   return { start, cleanup: () => { stopped = true; clearTimeout(timer); } };
 }
