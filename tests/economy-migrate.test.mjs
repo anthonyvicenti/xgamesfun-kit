@@ -119,3 +119,11 @@ test('gamesfun economy check|simulate|cost|plan on a fixture, and on a game', as
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('gamesfun.json keeps its economy section when the shop and token flows save it', async () => {
+  const { parseConfig, serializeConfig } = await import('../web3/gf-web3/config.js');
+  const spec = JSON.parse(await readFile(path.join(FIXTURES, 'coin-flip-arena.json'), 'utf8'));
+  const economy = spec.economy ?? spec;
+  const text = serializeConfig({ version: 1, network: 'devnet', economy });
+  assert.deepEqual(parseConfig(text).economy, economy);
+});

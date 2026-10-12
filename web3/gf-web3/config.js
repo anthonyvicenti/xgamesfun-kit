@@ -168,12 +168,15 @@ export function cleanConfig(value) {
   const creator = address(value.creator);
   const token = cleanToken(value.token);
   const shop = cleanShop(value.shop);
+  // The economy section is checked by web3/economy/check.mjs, not here; this file only carries it through.
+  const economy = isObject(value.economy) ? value.economy : null;
   return {
     version: CONFIG_VERSION,
     network: DEVNET,
     ...(creator ? { creator } : {}),
     ...(token ? { token } : {}),
     ...(shop ? { shop } : {}),
+    ...(economy ? { economy } : {}),
   };
 }
 
