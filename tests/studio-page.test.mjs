@@ -8,7 +8,10 @@ import { tempGame } from './helpers.mjs';
 import { sessionDriver } from './stubs/session-driver.mjs';
 import { IDLE_HINT, LISTEN_COMMAND, LISTENER_IDLE_HINT, NONE_HINT, connectView, STALLED_HINT, TERMINAL_NOTE, connection, describeEvent, inputLine, modeNote, normalizeEvent, readQueue, requestWords } from '../studio/lib/session.js';
 import { loopView, playtestNotes } from '../studio/lib/loop-state.js';
-import { pendingChanges, sliderRange, tunables } from '../studio/lib/tune.js';
+import {
+  cardsOf, defaultOf, endLabels, formatValue, fractionOf, fromSlider, groupIcon, isColourText, niceCeil, optionsOf, pendingChanges, sliderRange,
+  snapValue, tunables, unitOf, visualOf,
+} from '../studio/lib/tune.js';
 
 test('request states are in words a person understands', () => {
   assert.match(requestWords('waiting').label, /Waiting for your session/);
@@ -124,20 +127,100 @@ test('loopView reads the gf-loop/1 state: failing checks only, play-tester notes
   assert.deepEqual(playtestNotes({ issues: [{ text: 'a' }, 'b'] }), ['a', 'b']);
 });
 
-test('tune: only safe value slots, staged edits, all "reload"', () => {
+test('tune (Settings): the safe value slots, staged edits, all "reload"', () => {
   const slots = [
     { id: 'a', kind: 'value', type: 'number', tier: 'main', value: 5, constraints: { min: 0, max: 10 } },
     { id: 'b', kind: 'value', type: 'color', tier: 'main', value: '#fff' },
     { id: 'c', kind: 'file', type: 'model', tier: 'main' },
     { id: 'd', kind: 'value', type: 'boolean', tier: 'advanced', value: true },
     { id: 'e', kind: 'value', type: 'integer', tier: 'main', value: 3, constraints: {} },
+    { id: 'f', kind: 'value', type: 'text', tier: 'main', value: 'hi' },
   ];
   const t = tunables(slots);
-  assert.deepEqual(t.map(s => s.id), ['a', 'e']);
+  assert.deepEqual(t.map(s => s.id), ['a', 'b', 'e'], 'numbers, colours; no files, no free text, no advanced tier');
+  assert.deepEqual(tunables(slots, { all: true }).map(s => s.id), ['a', 'b', 'd', 'e'], 'all: the advanced tier too');
   assert.ok(t.every(s => s.applies === 'reload'));
-  assert.deepEqual(sliderRange(slots[0]), { min: 0, max: 10, step: 0.1 });
-  assert.equal(sliderRange(slots[4]), null);
+  assert.equal(tunables([{ ...slots[0], constraints: { min: 0, max: 10, live: true } }])[0].applies, 'live');
+  assert.deepEqual(sliderRange(slots[0]), { min: 0, max: 10, step: 0.1, soft: { min: false, max: false } });
+  assert.deepEqual(sliderRange(slots[4]), { min: 0, max: 6, step: 1, soft: { min: true, max: true } }, 'an integer with no range: 0..2×value, whole steps');
   assert.deepEqual(pendingChanges(slots, { a: '5', e: '4', zz: 1 }), [{ id: 'e', value: '4' }], 'unchanged and unknown are dropped');
+});
+
+test('tune (Settings): every number gets a slider range, inferred from its constraints, type and value', () => {
+  const n = (value, constraints = {}, extra = {}) => ({ id: 'x', label: 'X', kind: 'value', type: 'number', value, constraints, ...extra });
+  const r = (s, base) => { const x = sliderRange(s, base); return x && [x.min, x.max, x.step]; };
+  assert.deepEqual(r(n(1.15, { min: 0 })), [0, 2.5, 0.01], 'a min only: up to 2×value, rounded up to a round number, on a step the value sits on');
+  assert.deepEqual(r(n(3, { min: 0 })), [0, 6, 0.05]);
+  assert.deepEqual(r(n(260, { min: 0 })), [0, 600, 5]);
+  assert.deepEqual(r(n(0.72, { min: 0 })), [0, 1, 0.01], 'a value between 0 and 1 with no top: a 0–1 fraction');
+  assert.deepEqual(r(n(0.35, { min: 0, max: 1 })), [0, 1, 0.01]);
+  assert.deepEqual(r(n(55, { min: -180 }, { label: 'Sun height (degrees)' })), [-180, 180, 1], 'degrees (from the label): a full turn from the min');
+  assert.deepEqual(r(n(30, { unit: 'deg' })), [0, 360, 1], 'degrees with no range: 0..360');
+  assert.deepEqual(r(n(-20, { unit: '°' })), [-180, 180, 1]);
+  assert.deepEqual(r(n(-4)), [-8, 8, 0.1], 'a negative value: both ways');
+  assert.deepEqual(r(n(0)), [0, 1, 0.01], 'zero: 0..1');
+  assert.deepEqual(r({ ...n(0), type: 'integer' }), [0, 10, 1]);
+  assert.deepEqual(r(n(5, { max: 100 })), [0, 100, 1], 'a max only: from 0');
+  assert.deepEqual(r(n(4, { min: 1, max: 8, step: 0.5 })), [1, 8, 0.5], 'the slot\'s own step wins');
+  assert.deepEqual(r(n(30, { min: 0 }), 2), [0, 30, 0.1], 'the value in hand stays reachable when it passes the inferred end');
+  assert.equal(sliderRange({ ...n(1), type: 'boolean' }), null, 'not a number: no slider');
+  // the range is drawn around the value when the tool opened, never past the slot's own ends
+  const own = n(5, { min: 0, max: 10 });
+  assert.equal(snapValue(own, 12), 10); assert.equal(snapValue(own, -1), 0);
+  assert.equal(snapValue(n(5, { min: 0 }), 40), 40, 'an inferred end is soft: a typed value past it is kept');
+  assert.equal(snapValue({ ...own, type: 'integer' }, '3.6'), 4);
+  assert.equal(fromSlider(n(1.15, { min: 0 }), sliderRange(n(1.15, { min: 0 })), '1.2300000004'), 1.23);
+  assert.equal(niceCeil(2.3), 2.5); assert.equal(niceCeil(520), 600); assert.equal(niceCeil(6), 6); assert.equal(niceCeil(0), 0);
+});
+
+test('tune (Settings): how a setting is drawn follows its type and unit, never its id', () => {
+  const s = (type, value, constraints = {}, label = 'Thing') => ({ id: 'zz.any-id', label, kind: 'value', type, value, constraints });
+  assert.equal(visualOf(s('boolean', true)), 'switch');
+  assert.equal(visualOf(s('enum', 'a', { options: ['a', 'b'] })), 'pills');
+  assert.equal(visualOf(s('color', '#ff0000')), 'swatches');
+  assert.equal(visualOf(s('integer', 4, { min: 1, max: 8 })), 'dots', 'a short count: dots');
+  assert.equal(visualOf(s('integer', 6, { min: 1, max: 60 })), 'slider', 'a long count: the slider alone');
+  assert.equal(visualOf(s('integer', 90, { min: 30, max: 900, unit: 's' })), 'slider', 'a whole number of seconds is not a count');
+  assert.equal(visualOf(s('number', 55, { min: -180 }, 'Sun height (degrees)')), 'dial');
+  assert.equal(visualOf(s('number', 0.35, { min: 0, max: 1 })), 'fill');
+  assert.equal(visualOf(s('number', 5.2, { min: 1, max: 14, unit: 'm/s' })), 'slider');
+  // the same slot under another id is drawn the same
+  assert.equal(visualOf({ ...s('number', 0.35, { min: 0, max: 1 }), id: 'look.sun.shadow-strength' }), visualOf(s('number', 0.35, { min: 0, max: 1 })));
+});
+
+test('tune (Settings): values and ends in words, units from the slot or its label', () => {
+  const s = (type, constraints = {}, label = 'Thing') => ({ id: 'q', label, kind: 'value', type, constraints });
+  assert.deepEqual(unitOf(s('number', {}, 'Haze distance (metres)')), { unit: 'm', name: 'Haze distance' });
+  assert.deepEqual(unitOf(s('number', {}, 'View (metres across the short side)')), { unit: '', name: 'View (metres across the short side)' }, 'a bracket that is not a unit stays in the name');
+  assert.deepEqual(unitOf(s('number', { unit: 's' }, 'Round (minutes)')), { unit: 's', name: 'Round (minutes)' }, 'the slot\'s own unit wins');
+  assert.equal(formatValue(s('number', { unit: 's' }), 1.5), '1.5 seconds');
+  assert.equal(formatValue(s('number', { unit: 's' }), 1), '1 second');
+  assert.equal(formatValue(s('integer', { unit: 's' }), 90), '1 min 30 s');
+  assert.equal(formatValue(s('integer', { unit: 's' }), 900), '15 min');
+  assert.equal(formatValue(s('number', { unit: 'm/s' }), 5.2), '5.2 m/s');
+  assert.equal(formatValue(s('number', {}, 'Height (degrees)'), 55), '55°');
+  assert.equal(formatValue(s('number', { min: 0, max: 1 }), 0.72), '72%');
+  assert.equal(formatValue(s('number', {}), 0.30000000000000004 * 10), '3');
+  assert.equal(formatValue(s('boolean'), true), 'On');
+  assert.equal(formatValue({ ...s('enum'), constraints: { options: [{ value: 'golden', label: 'Golden hour' }] } }, 'golden'), 'Golden hour');
+  assert.equal(formatValue(s('color'), '#ff5fa2'), '#FF5FA2');
+  assert.deepEqual(endLabels({ ...s('number', { min: 0, max: 120, unit: 's' }), value: 4 }), { min: '0 seconds', max: '2 min' });
+  assert.deepEqual(optionsOf({ constraints: { options: ['a', { value: 'b', label: 'Bee' }] } }), [{ value: 'a', label: 'a' }, { value: 'b', label: 'Bee' }]);
+  assert.ok(isColourText('#fa0') && isColourText('#ffaa00') && isColourText('rgb(1,2,3)') && !isColourText('golden'));
+  assert.equal(fractionOf({ min: 0, max: 8 }, 4), 0.5); assert.equal(fractionOf({ min: 0, max: 8 }, 99), 1);
+  assert.equal(defaultOf({ constraints: { default: 2 } }, 5), 2, 'the value the game was made with, when the slot says');
+  assert.equal(defaultOf({ constraints: {} }, 5), 5, 'else the value when the tool opened');
+});
+
+test('tune (Settings): one card per slot group, in the game\'s order, the advanced tier inside', () => {
+  const s = (id, group, tier = 'main') => ({ id, group, tier, kind: 'value', type: 'number', value: 1 });
+  const cards = cardsOf([s('a', 'rules'), s('b', 'look'), s('c', 'look', 'advanced'), s('d', 'look-times', 'advanced'), s('e', null)],
+    [{ id: 'look', label: 'Look & light' }, { id: 'look-times', label: 'Look: times of day' }, { id: 'rules', label: 'Rules & scoring' }]);
+  assert.deepEqual(cards.map(c => [c.label, c.main.length, c.more.length]), [['Look & light', 1, 1], ['Rules & scoring', 1, 0], ['Other', 1, 0], ['Look: times of day', 0, 1]],
+    'cards with settings to show first, in the manifest\'s group order; advanced-only cards last');
+  assert.deepEqual(cards.map(c => c.icon), ['light', 'trophy', 'sliders', 'light'], 'an icon from the group\'s words');
+  assert.equal(groupIcon('controls', 'Movement & camera'), 'move');
+  assert.equal(groupIcon('whatever', 'Something new'), 'sliders', 'an unknown group: the generic icon');
 });
 
 let game, srv, base;

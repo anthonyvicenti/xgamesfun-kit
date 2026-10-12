@@ -1,0 +1,129 @@
+/* Settings (studio/tabs/tune.js): cards of settings, each a control you read at a glance. Scoped under .settings, on
+   studio.css's tokens only (dark and light follow the theme). */
+.settings { display: flex; flex-direction: column; min-height: 100%; padding-bottom: 0; }
+.settings .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.settings > .intro { margin-bottom: var(--s3); }
+.settings .set-cards { display: flex; flex-direction: column; gap: var(--s3); flex: 1; }
+.settings .set-fine-head { margin: var(--s3) 0 0; }
+
+/* a card: one slot group */
+.settings .set-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); }
+.settings .set-card-head { display: flex; align-items: center; gap: var(--s2); padding: 10px var(--s3); cursor: pointer; list-style: none; user-select: none; border-radius: var(--r-lg); }
+.settings .set-card-head::-webkit-details-marker { display: none; }
+.settings .set-card-head:hover { background: var(--surface-3); }
+.settings .set-card-icon { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: var(--r-md); background: var(--lav-soft); color: var(--lav-ink); }
+.settings .set-card-icon .ico { width: 18px; height: 18px; }
+.settings .set-card-name { flex: 1; min-width: 0; font-size: var(--fs-base); font-weight: 700; color: var(--ink); }
+.settings .set-card-count { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; border: 1px solid var(--line-strong); border-radius: var(--r-pill); padding: 1px 8px; }
+.settings .set-card-changed { font-size: var(--fs-xs); font-weight: 700; color: var(--warn); background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: var(--r-pill); padding: 1px 8px; }
+.settings .set-card-fold { width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); margin: 0 4px 0 2px; transition: transform .15s; }
+.settings .set-card[open] > .set-card-head .set-card-fold { transform: rotate(45deg); }
+.settings .set-card[open] > .set-card-head { border-bottom: 1px solid var(--line); border-radius: var(--r-lg) var(--r-lg) 0 0; }
+.settings .set-card-body { padding: 0 var(--s3) var(--s2); }
+
+/* a setting */
+.settings .set { position: relative; padding: 10px 0 6px; border-top: 1px solid var(--line); }
+.settings .set-card-body > .set:first-child { border-top: 0; }
+.settings .set[data-changed]::before { content: ''; position: absolute; left: calc(-1 * var(--s3)); top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--warn); }
+.settings .set-head { display: flex; align-items: center; gap: var(--s2); min-height: 28px; }
+.settings .set-name { flex: 1; min-width: 0; font-size: var(--fs-md); font-weight: 600; color: var(--ink); }
+.settings .set-value { font-size: var(--fs-base); font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.settings .set[data-changed] .set-value { color: var(--warn); }
+.settings .set-value.set-hex { font-family: var(--mono); font-size: var(--fs-xs); font-weight: 400; color: var(--muted); min-width: 62px; text-align: right; }
+.settings .set-live { font-size: var(--fs-xs); font-weight: 700; color: var(--good); background: var(--good-soft); border: 1px solid var(--good-line); border-radius: var(--r-pill); padding: 0 7px; }
+.settings .set-reset { min-height: 22px; padding: 0 8px; gap: 4px; font-size: var(--fs-xs); color: var(--muted); }
+.settings .set-reset:hover { color: var(--ink); }
+.settings .ico.sm { width: 12px; height: 12px; }
+.settings .set-desc { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--muted); line-height: 1.45; }
+
+/* the slider: a filled track, a tick at the default, the ends in words */
+.settings .set-line { display: flex; align-items: center; gap: var(--s3); margin-top: 6px; }
+.settings .set-slide { flex: 1; min-width: 0; }
+.settings .set-track { position: relative; --thumb: 16px; }
+.settings .set-track input[type=range] { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 22px; margin: 0; background: transparent; cursor: pointer; --p: 0; }
+.settings .set-track input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--control) calc(var(--p) * 100%), var(--surface-3) calc(var(--p) * 100%)); }
+.settings .set-track input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--control) calc(var(--p) * 100%), var(--surface-3) calc(var(--p) * 100%)); }
+.settings .set-track input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--thumb); height: var(--thumb); margin-top: calc((6px - var(--thumb)) / 2); border-radius: 50%; background: var(--surface); border: 3px solid var(--control); box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
+.settings .set-track input[type=range]::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--surface); border: 3px solid var(--control); }
+.settings .set-track input[type=range]:focus-visible { outline: none; }
+.settings .set-track input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--lime-soft); }
+/* a 0–1 fraction: a fat fill bar */
+.settings .set-track input[type=range].fill { height: 26px; --thumb: 22px; }
+.settings .set-track input[type=range].fill::-webkit-slider-runnable-track { height: 14px; border-radius: 7px; }
+.settings .set-track input[type=range].fill::-moz-range-track { height: 14px; border-radius: 7px; }
+.settings .set-track input[type=range].fill::-webkit-slider-thumb { width: 6px; height: 22px; margin-top: -4px; border-radius: 3px; border: 0; background: var(--ink); }
+.settings .set-track:has(.fill) { --thumb: 6px; }
+.settings .set-tick { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--lav); pointer-events: none; opacity: .9;
+  left: calc(var(--thumb) / 2 + var(--at) * (100% - var(--thumb))); }
+.settings .set-ends { display: flex; justify-content: space-between; gap: var(--s2); margin-top: 0; font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* a count: dots */
+.settings .set-dots { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.settings .set-dot { width: 18px; height: 18px; min-height: 0; padding: 0; border-radius: 50%; background: transparent; border: 2px solid var(--line-strong); }
+.settings .set-dot:hover { border-color: var(--lav); }
+.settings .set-dot[data-on=true] { background: var(--control); border-color: var(--control); }
+.settings .set-dot[aria-pressed=true] { box-shadow: 0 0 0 3px var(--lime-soft); }
+.settings .set-dot.zero { border-style: dashed; }
+.settings .set-dot.zero[aria-pressed=true] { border-color: var(--control); }
+
+/* degrees: a dial */
+.settings .set-dial { width: 48px; height: 48px; flex: none; cursor: grab; touch-action: none; }
+.settings .set-dial .face { fill: var(--surface); stroke: var(--line-strong); stroke-width: 2; }
+.settings .set-dial .flat { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 2 3; }
+.settings .set-dial .needle { stroke: var(--control); stroke-width: 3; stroke-linecap: round; }
+.settings .set-dial .hub { fill: var(--control); }
+
+/* a switch */
+.settings .set-switch { position: relative; width: 42px; min-width: 42px; height: 24px; min-height: 0; padding: 0; border-radius: var(--r-pill); background: var(--surface-3); border: 1px solid var(--line-strong); }
+.settings .set-switch .knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--muted); transition: left .15s, background .15s; }
+.settings .set-switch[aria-checked=true] { background: var(--control); border-color: var(--control); }
+.settings .set-switch[aria-checked=true] .knob { left: 20px; background: var(--on-lime); }
+
+/* a choice: pills */
+.settings .set-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.settings .set-pill { min-height: 30px; padding: 0 12px; gap: 6px; border-radius: var(--r-pill); background: var(--surface); color: var(--ink-2); border: 1px solid var(--line-strong); font-weight: 600; font-size: var(--fs-sm); }
+.settings .set-pill:hover { border-color: var(--lav-line); color: var(--ink); background: var(--surface); }
+.settings .set-pill[aria-checked=true] { background: var(--lav-soft); border-color: var(--lav); color: var(--ink); box-shadow: inset 0 0 0 1px var(--lav); }
+.settings .pill-swatch { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line-strong); }
+
+/* a colour: its dot, and the swatches when opened */
+.settings .set-colour { min-height: 28px; padding: 0 10px 0 4px; gap: 6px; border-radius: var(--r-pill); background: var(--surface); color: var(--ink-2); border: 1px solid var(--line-strong); font-weight: 600; font-size: var(--fs-xs); }
+.settings .set-colour:hover, .settings .set-colour[aria-expanded=true] { border-color: var(--lav); color: var(--ink); background: var(--surface); }
+.settings .set-colour-dot { width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .25); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .15); }
+.settings .set-tray { margin-top: 8px; }
+
+/* details: the slot id, its file, an exact number */
+.settings .set-details { margin-top: 0; }
+.settings .set-details summary { cursor: pointer; width: max-content; font-size: var(--fs-xs); color: var(--faint); padding: 2px 0; }
+.settings .set-details summary:hover { color: var(--ink); }
+.settings .set-details-body { display: flex; flex-direction: column; gap: 4px; padding: 6px 0 2px; font-size: var(--fs-xs); color: var(--ink-2); overflow-wrap: anywhere; }
+.settings .set-details-body code { font-family: var(--mono); font-size: var(--fs-xs); }
+.settings .set-exact { display: flex; align-items: center; gap: 6px; }
+.settings .set-exact input { width: 96px; min-height: 26px; }
+
+/* the advanced tier inside a card */
+.settings .set-more { border-top: 1px solid var(--line); }
+.settings .set-more > summary { cursor: pointer; padding: 10px 0; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
+.settings .set-more > summary:hover { color: var(--ink); }
+.settings .set-more-list > .set:first-child { border-top: 0; }
+
+/* the dock: what is waiting, Undo, Apply; it stays in sight while the cards scroll */
+.settings .set-dock { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s2) var(--s3);
+  margin: var(--s4) calc(-1 * var(--s5)) 0; padding: var(--s3) var(--s5); background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -8px 20px -12px rgba(0, 0, 0, .5); }
+.settings .set-dock-buttons { display: flex; gap: var(--s2); margin-left: auto; }
+.settings .set-status { font-size: var(--fs-sm); color: var(--muted); }
+.settings .set-status[data-state=waiting] { color: var(--warn); font-weight: 700; }
+.settings .set-status[data-state=waiting]::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); margin-right: 6px; vertical-align: 0; }
+.settings .set-apply { min-width: 96px; }
+
+/* nothing to adjust yet */
+.settings .set-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s3); padding: var(--s6) var(--s4); border: 1px dashed var(--line-strong); border-radius: var(--r-lg); color: var(--ink-2); font-size: var(--fs-md); line-height: 1.5; }
+.settings .set-empty p { margin: 0; max-width: 300px; }
+.settings .set-empty-art { width: 160px; height: 96px; color: var(--muted); }
+
+@media (max-width: 720px) {
+  .settings .set-dock { margin-left: calc(-1 * var(--s4)); margin-right: calc(-1 * var(--s4)); padding: var(--s3) var(--s4); }
+}
+@media (min-width: 2400px) {
+  .settings .set-name, .settings .set-value { font-size: var(--fs-lg); }
+}
