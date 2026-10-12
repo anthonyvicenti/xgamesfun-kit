@@ -70,7 +70,7 @@ status). `server/http.mjs` also has `sendJson`, `readBody`, `readJson` (size-lim
 is reported and skipped. *Extra* in `ctx`: `url` (the server's base URL) and `events.send(event, data)` (a
 Server-Sent Event to open studio pages; `ctx.on(event)` in tabs receives it).
 
-**Studio tabs:** `studio/tabs/<id>.js` exports `default { id, label, order, mount(el, ctx) }`. Here
+**Studio tabs (tools):** `studio/tabs/<id>.js` exports `default { id, label, order, group?, action?, mount(el, ctx) }`. Here
 `ctx` holds `{ game, api(path, body?), wallet, toast(msg) }`, and `wallet` is the Wallet Standard
 connection the studio page owns. As built: `game` is `/api/game/info` (title, hook, mechanics, controls, `network`,
 `gamesfun` = the game's `gamesfun.json`); `api('web3/items')` or `api('/api/web3/items')` GETs, `api(path, body)` POSTs
@@ -88,6 +88,49 @@ open one of yours, or start from an example. The dev server's open game can chan
 `ctx.gameDir` at each request (null when none is open) and may listen with `ctx.onGame(fn)`. The look is one
 design system in `studio/studio.css` (its header lists the tokens and the classes a tab uses). *Extra* in `ctx`: `preview` (`reload()`, `show(path)`) and `on(event, fn)` for
 dev-server events (`game` when the game's files change, `verify`, and any `ctx.events.send` from a route).
+
+**Adding a tool to the studio (a module of its own, e.g. Publish or a backend):** one file, `studio/tabs/<id>.js`; the
+shell is not edited.
+
+```js
+export default {
+  id: 'publish',                 // the tab's id: #publish links open it, tests click #tabs [data-id="publish"]
+  label: 'Publish',              // its name in the tool bar and the inspector's title
+  group: 'Launch',               // Edit | Test | Launch (a new word makes a new group, shown after these; none: More)
+  order: 90,                     // its place inside the group
+  action: { label: 'Publish' },  // optional: also a primary button beside the preview's bar, for the flow's last step
+  icon: '<path d="M12 3v12M7 8l5-5 5 5M5 21h14"/>',   // optional: its icon, SVG shapes on a 24 x 24 grid, stroked
+  wide: { game: 'thumbnail' },   // optional: the whole product side while it is open; the game a thumbnail in the
+                                 // corner ('thumbnail', or true) or out of sight ('hidden'), back when it closes
+  mount(el, ctx) { /* draw into el; ctx as below; return a cleanup function if it needs one */ },
+};
+```
+
+The tool opens in the inspector beside the game (on a phone, under it): 403 px wide on a 1440 px screen, 480 px (720
+device pixels, at the studio's 1.5 zoom) on a 3840 px one; `clamp(340px, 28vw, 480px)`, the `--inspector-w` token. A
+`wide` tool gets the whole product side instead (1008 px at 1440, 2100 px or 3150 device pixels at 3840; the thumbnail
+288 by 162; on a phone nothing changes, everything stacks), and a click on the game's thumbnail closes it. It is listed only once a game exists: the
+start page and a game still being pitched show no tools. It draws with the classes in `studio/studio.css` (its header
+lists them), and asks the person's session only through the conversation's one box, never a box of its own:
+
+```js
+ctx.chat.ask({
+  label: 'This rule',                                   // the chip over the box: what the request is about
+  placeholder: 'e.g. make the prize pot bigger',        // the box's placeholder while the chip is there
+  compose: words => `In the economy's rule "weekly": ${words}. …`,  // what the session is told (the person's words are
+                                                        // shown in the thread; this line goes after them, for the session)
+  selection: () => ({ id: 'economy.lotteries.weekly', label: 'Weekly draw' }),  // optional: what is picked, sent along
+  button: 'Ask my session',                             // optional: the send button's words while the chip is there
+  onSent: request => {},                                // optional: after the bridge took it
+});
+```
+
+`ctx.chat.ask` focuses the box with that context; the person types and sends; × on the chip asks about the whole game
+again. `ctx.chat.send(text)` sends words as they are (the start page's idea, a concept picked). The editors' "Ask my
+session" buttons call `askBox(ctx, { label, placeholder, compose, selection, button, onSent })` in
+`studio/lib/editors/ui.js`, which is `ctx.chat.ask` behind a button. A page with no conversation (a test page) has no
+`ctx.chat`; `askBox` then draws a box of its own. A route of its own is `server/routes/<area>.mjs` (below); it reads `ctx.gameDir` at
+each request, because the open game can change while the server runs.
 
 **Game config:** each game keeps its public web3 settings in `<game>/gamesfun.json`, written by the
 web3 layer and read by the in-game kit. It holds public addresses only, never secrets. The dev server reads its

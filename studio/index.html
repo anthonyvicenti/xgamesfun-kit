@@ -39,6 +39,8 @@
   <section class="product" aria-label="Your game">
     <div class="product-bar">
       <div class="tabs" role="tablist" id="tabs" aria-label="Tools"></div>
+      <!-- the flow's last step: a tool that declares `action` (e.g. Publish) gets a primary button here -->
+      <div class="product-actions" id="product-actions"></div>
       <div class="preview-bar">
         <label class="preview-pick"><span class="preview-label">Preview</span>
           <select id="preview-mode">
@@ -54,8 +56,9 @@
       <div class="preview">
         <div class="frame-wrap"><iframe id="preview" title="Game preview" src="about:blank" allow="autoplay; fullscreen; gamepad; clipboard-write"></iframe></div>
         <div class="product-empty" id="product-empty" hidden></div>
+        <button type="button" class="preview-cover" title="Back to the game" aria-label="Back to the game"></button>
       </div>
-      <aside class="inspector" id="inspector" aria-label="Tool" hidden>
+      <aside class="inspector side" id="inspector" aria-label="Tool" hidden><!-- .side: the name tests/economy-shots.mjs scrolls to on a phone -->
         <div class="inspector-head"><h2 id="inspector-title"></h2><button type="button" id="inspector-close" class="ghost icon small" title="Close the tool (the game gets the room)" aria-label="Close the tool">×</button></div>
         <div class="panels" id="panels"></div>
       </aside>

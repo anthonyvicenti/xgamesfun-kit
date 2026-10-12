@@ -1,9 +1,12 @@
 // The studio shell. With no game open: the start page (studio/start.js). With one: the conversation with the person's
 // own agent session on the left (studio/chat.js), and the product on the right: the game preview, with the tools (the
 // tabs seam) in a bar over it and the open tool in an inspector beside it. Also the wallet, live reload and the theme.
-// A tab is studio/tabs/<id>.js exporting `default { id, label, order, group?, mount(el, ctx) }` (docs/ARCHITECTURE.md).
-// `group` names the rail's heading it sits under (Make, Edit, Test, Launch; the built-in tabs have theirs in GROUPS
-// below, a new tab without one goes under More). mount may return a function, called when the studio page goes away. ctx holds:
+// A tab is studio/tabs/<id>.js exporting `default { id, label, order, group?, action?, wide?, icon?, mount(el, ctx) }`
+// (docs/ARCHITECTURE.md). `group` names the tool bar's group it sits in (Edit, Test, Launch; the built-in tabs have theirs
+// in GROUPS below, a new tab without one goes under More). `action` (true, or { label }) also gives it a primary button
+// beside the preview's bar: the flow's last step, e.g. Publish. A click opens the tab like its tool bar entry does.
+// `wide` (true, or { game: 'thumbnail' | 'hidden' }) gives the open tab the whole product side, the game a thumbnail
+// in its corner (true) or hidden, back when the tab closes. mount may return a function, called when the studio page goes away. ctx holds:
 //   game                 /api/game/info: title, hook, mechanics, controls, network, gamesfun (gamesfun.json), latestVerify
 //   api(path, body?, method?)  the dev server's API: GET without a body, POST with one (JSON, or raw for a Blob/ArrayBuffer);
 //                        a third argument sets the method (PATCH with a JSON body, DELETE with none);
@@ -183,7 +186,7 @@ const TAB_ICONS = {
   friends: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/><path d="M16 5.5a3 3 0 0 1 0 5M18 14a5.5 5.5 0 0 1 3 5v1"/>',
   economy: '<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/>',
 };
-const tabIcon = id => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'ico'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = TAB_ICONS[id] ?? '<rect x="5" y="5" width="14" height="14" rx="3"/>'; return s; };
+const tabIcon = (id, own = null) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'ico'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = TAB_ICONS[id] ?? (typeof own === 'string' && /^<(path|circle|rect|line|polyline|polygon)\b[^<>]*\/>(\s*<(path|circle|rect|line|polyline|polygon)\b[^<>]*\/>)*$/.test(own.trim()) ? own : '<rect x="5" y="5" width="14" height="14" rx="3"/>'); return s; };
 
 async function loadTabs(ctx) {
   const list = await api('studio/tabs');
@@ -211,6 +214,9 @@ async function loadTabs(ctx) {
     const tab = tabs.find(t => t.id === id);
     inspector.hidden = false;
     document.documentElement.dataset.tool = id;
+    // a tool that asks for the whole product side (wide): the game shrinks to a thumbnail, or hides, while it is open
+    const wide = tab.wide === true ? 'thumbnail' : tab.wide?.game === 'hidden' ? 'hidden' : tab.wide ? 'thumbnail' : null;
+    if (wide) document.documentElement.dataset.wide = wide; else delete document.documentElement.dataset.wide;
     $('#inspector-title').textContent = tab.label;
     if (!mounted.has(id)) {
       const el = panels.querySelector(`[data-id="${CSS.escape(id)}"]`);
@@ -227,8 +233,11 @@ async function loadTabs(ctx) {
     for (const p of panels.children) p.hidden = true;
     inspector.hidden = true;
     delete document.documentElement.dataset.tool;
+    delete document.documentElement.dataset.wide;
   }
   $('#inspector-close').addEventListener('click', closeTool);
+  // the game as a thumbnail (a wide tool is open): a click on it gives the game its room back
+  $('.preview').addEventListener('click', e => { if (document.documentElement.dataset.wide === 'thumbnail' && e.target.closest('.preview-cover')) closeTool(); });
   let lastGroup = null;
   for (const t of tabs) {
     if (t.group !== lastGroup) {
@@ -240,7 +249,7 @@ async function loadTabs(ctx) {
     const b = document.createElement('button');
     b.type = 'button'; b.role = 'tab'; b.dataset.id = t.id; b.dataset.group = t.group; b.id = `tab-${t.id}`; b.tabIndex = -1;
     b.setAttribute('aria-selected', 'false');
-    b.append(tabIcon(t.id), Object.assign(document.createElement('span'), { textContent: t.label }));
+    b.append(tabIcon(t.id, t.icon), Object.assign(document.createElement('span'), { textContent: t.label }));
     b.setAttribute('aria-controls', `panel-${t.id}`);
     b.addEventListener('click', () => select(t.id));
     bar.append(b);
@@ -249,6 +258,15 @@ async function loadTabs(ctx) {
     panels.append(p);
   }
   bar.querySelector('[role=tab]')?.setAttribute('tabindex', '0');
+  // a tab that is the flow's last step (action) also gets a primary button at the end of the bar
+  const acts = $('#product-actions');
+  for (const t of tabs.filter(x => x.action)) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'product-action'; b.dataset.action = t.id;
+    b.textContent = typeof t.action === 'object' && t.action.label ? String(t.action.label) : t.label;
+    b.addEventListener('click', () => select(t.id));
+    acts.append(b);
+  }
   // the arrow keys move between tools, Home and End go to the first and the last (the tablist pattern)
   bar.addEventListener('keydown', e => {
     const list = [...bar.querySelectorAll('[role=tab]')], i = list.indexOf(document.activeElement);

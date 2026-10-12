@@ -216,8 +216,14 @@ ol.stages li.waiting::before { background: var(--warn); }
 .ask-state[data-state=sent] { color: var(--good); }
 
 /* the product: the tool bar, the preview controls, the game and the inspector */
-.product { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "tabs tabs" "pbar pbar" "stage insp"; min-width: 0; min-height: 0; background: var(--stage); }
+.product { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "tabs tabs" "pbar acts" "stage insp"; min-width: 0; min-height: 0; background: var(--stage); }
 .product-bar, .product-body { display: contents; }
+.product-actions { grid-area: acts; display: flex; align-items: center; gap: var(--s2); padding: 4px var(--s3); background: var(--bg); border-bottom: 1px solid var(--line); }
+.product-actions .product-action { min-height: 30px; padding: 0 18px; }
+.product-actions { justify-content: flex-end; }
+.product-actions:empty { padding: 0; }
+.product:not(:has(.inspector:not([hidden]))) .preview { grid-column: 1 / -1; }   /* no tool open: the game takes the full width */
+:root[data-view=making] .product-actions { display: none; }
 .preview { grid-area: stage; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--stage); position: relative; }
 .preview-bar { grid-area: pbar; display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3); min-height: 40px; border-bottom: 1px solid var(--line); background: var(--bg); flex-wrap: wrap; }
 .preview-pick { display: flex; align-items: center; gap: var(--s2); }
@@ -376,7 +382,7 @@ textarea.ask { width: 100%; resize: vertical; min-height: 72px; margin-bottom: v
 
 /* ---------------------------------------------------------------- the Economy tab (.gfw3, its own file's styles):
    the same buttons, fonts and surfaces as every other tab, through CSS only */
-.panels .gfw3 { font-family: var(--font); }
+.panels .gfw3 { font-family: var(--font); grid-template-columns: minmax(0, 1fr); min-width: 0; }   /* the tab never widens the page (a phone shows it in the page, not in a scroll box) */
 .panels .gfw3 button { white-space: normal; min-height: var(--h-control); border-radius: var(--r-md); border-color: var(--line-strong); background: var(--surface-2); font-weight: 600; font-size: var(--fs-md); }
 .panels .gfw3 button:hover:not(:disabled) { background: var(--surface-3); border-color: var(--lav-line); }
 .panels .gfw3 button.primary { background: var(--lime); border-color: var(--lime); color: var(--on-lime); font-weight: 700; }
@@ -391,7 +397,7 @@ textarea.ask { width: 100%; resize: vertical; min-height: 72px; margin-bottom: v
 /* a small laptop: a narrower conversation; the inspector lies over the game's right side instead of beside it */
 @media (max-width: 1199px) {
   :root { --chat-w: 340px; --inspector-w: min(400px, 60%); }
-  .product { grid-template-columns: minmax(0, 1fr); grid-template-areas: "tabs" "pbar" "stage"; position: relative; }
+  .product { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "tabs tabs" "pbar acts" "stage stage"; position: relative; }
   .inspector { grid-area: stage; justify-self: end; z-index: 3; box-shadow: var(--shadow); }
   .preview-bar .hint { display: none; }
 }
@@ -409,7 +415,9 @@ textarea.ask { width: 100%; resize: vertical; min-height: 72px; margin-bottom: v
   .layout, :root[data-view=start] .layout { grid-template-columns: minmax(0, 1fr); overflow: visible; }
   .chat { border-right: 0; border-bottom: 1px solid var(--line); }
   .chat-scroll { max-height: 52vh; }
-  .product { grid-template-areas: "tabs" "pbar" "stage" "insp"; }
+  .product { grid-template-columns: minmax(0, 1fr); grid-template-areas: "tabs" "pbar" "acts" "stage" "insp"; }
+  .product-actions:not(:empty) { justify-content: stretch; }
+  .product-actions:not(:empty) > * { flex: 1; }
   .preview { height: min(58vh, 420px); }
   :root[data-view=making] .preview { height: auto; }
   .frame-wrap { min-height: 0; }
@@ -461,3 +469,16 @@ details.concept-more[open] summary { margin-bottom: 4px; }
 .linkish:hover { color: var(--ink); }
 .concept[aria-current=true] { border-color: var(--lime); box-shadow: inset 0 0 0 1px var(--lime); }
 .concept-picked { margin-top: var(--s2); color: var(--good); font-weight: 700; }
+
+/* a wide tool (a tab that declares `wide`): the whole product side; the game a thumbnail in the corner, or hidden */
+.preview-cover { display: none; }
+@media (min-width: 901px) {
+  :root[data-wide] .inspector { grid-column: 1 / -1; width: auto; }
+  :root[data-wide] .product { position: relative; }
+  :root[data-wide=hidden] .preview { display: none; }
+  :root[data-wide] .preview { grid-column: 1 / -1; grid-row: 3; }          /* an absolute grid item: its box is the whole row */
+  :root[data-wide=thumbnail] .preview { position: absolute; right: var(--s4); bottom: var(--s4); width: 288px; height: 162px; z-index: 5; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line-strong); box-shadow: var(--shadow); }
+  :root[data-wide=thumbnail] .frame-wrap { min-height: 0; }
+  :root[data-wide=thumbnail] .preview-cover { display: block; position: absolute; inset: 0; z-index: 3; background: transparent; border: 0; min-height: 0; padding: 0; border-radius: 0; cursor: zoom-in; }
+  :root[data-wide=thumbnail] .preview-cover:hover { background: rgba(169, 156, 255, .12); }
+}
