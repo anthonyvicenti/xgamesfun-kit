@@ -20,6 +20,8 @@ export const RESERVED_SLUGS = new Set(['api', 'play', 'p', 'v', 'd', 'signal', '
 export const FRIENDS_PAGE = 'gf/mp/index.html';
 /** The game's multiplayer manifest, beside assets.json (research/multiplayer/party/manifest.mjs MANIFEST). */
 export const MULTIPLAYER_MANIFEST = 'multiplayer.json';
+export const TAKEN_DOWN = 'This game was taken down by games.fun and cannot be published again. Write to games.fun if you think that is a mistake.';
+export const BLOCKED = 'Publishing is turned off for this account. Write to games.fun if you think that is a mistake.';
 const NOT_A_TREE = 'Only games that play from their files can be published. This version is a single HTML page; ask for a new version to publish it.';
 
 /** Errors carry an HTTP status, like StudioError (lib/studio-server.ts respond() shows their message). */
@@ -101,7 +103,7 @@ export async function publishedGame(db, slug) {
   if (!isSlug(slug)) return null;
   const row = await db.prepare(`SELECT g.slug,p.title,v.id AS version_id,v.tree_hash,v.artifact_kind FROM published_games g
     JOIN projects p ON p.id=g.project_id JOIN versions v ON v.id=g.version_id AND v.project_id=g.project_id
-    WHERE g.slug=? AND g.unpublished_at IS NULL`).bind(slug).first();
+    WHERE g.slug=? AND g.unpublished_at IS NULL AND g.taken_down_at IS NULL`).bind(slug).first();
   if (!row || row.artifact_kind !== 'file-tree' || !row.tree_hash) return null;
   return {slug: row.slug, title: row.title, versionId: row.version_id, treeHash: row.tree_hash};
 }
@@ -132,8 +134,9 @@ export function createPublishing(db, bucket) {
   // The API's answer: {published, slug, version:{id,number}, url (the /play page), gameUrl, friendsUrl, publishedAt, updatedAt}.
   // After an unpublish the slug is still reported (it is kept for this game) but nothing else is.
   async function view(row, env) {
-    const none = {published: false, slug: row?.slug ?? null, version: null, url: null, gameUrl: null, friendsUrl: null, publishedAt: null, updatedAt: row?.updated_at ?? null};
-    if (!row || row.unpublished_at != null) return none;
+    const none = {published: false, slug: row?.slug ?? null, version: null, url: null, gameUrl: null, friendsUrl: null, publishedAt: null, updatedAt: row?.updated_at ?? null,
+      ...(row?.taken_down_at != null ? {takenDown: true} : {})};
+    if (!row || row.unpublished_at != null || row.taken_down_at != null) return none;
     const v = await first('SELECT id,number,tree_hash FROM versions WHERE id=?', row.version_id);
     if (!v) return none;
     return {published: true, slug: row.slug, version: {id: v.id, number: v.number}, ...await publicLinks(bucket, row.slug, v.tree_hash, env), publishedAt: row.published_at, updatedAt: row.updated_at};
@@ -166,6 +169,9 @@ export function createPublishing(db, bucket) {
   async function publish(owner, id, input = {}, env = process.env) {
     const p = await owned(owner, id);
     if (!playOrigin(env)) throw new PublishError('The play host is not configured.', 503);
+    // An operator's takedown sticks (migration 0018): the game's link stays down, and so does the account's publishing.
+    if ((await rowFor(id))?.taken_down_at != null) throw new PublishError(TAKEN_DOWN, 403);
+    if (await first('SELECT owner FROM publish_blocks WHERE owner=?', owner)) throw new PublishError(BLOCKED, 403);
     const v = await chooseVersion(id, input?.versionId ?? null), time = Date.now();
     if (await rowFor(id)) { await relink(owner, id, v.id, time); return view(await rowFor(id), env); }
     // A new link: the title's slug, or the first free numbered form. The insert is the arbiter (slug is the primary

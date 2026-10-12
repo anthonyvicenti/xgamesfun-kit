@@ -26,7 +26,11 @@
 //
 //   const r = await checkFriendsWatch({ dir, outDir, shots, log });   → { ok, detail, record, warnings }
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { createServer } from 'node:http';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { startParty } from '../../../multiplayer/party/lib.mjs';
 import { snap, sleep, until } from '../../../multiplayer/party/gate-lib.mjs';
 import { launchChrome, GPU_TROUBLE } from '../../../foundations/qa/browser.mjs';
@@ -45,6 +49,66 @@ export async function streamerLinkFrom(page) {
   } catch { return null; }
 }
 
+// ---- the streamer's voice (gf-multiplayer 1.7.0; the creator, 2026-10-12: "How hard would it be to add in an audio
+// stream from a mic for the stream watchers") ----
+// Studio's play page opens the microphone (creator-studio/lib/voice-capture.mjs) and posts compressed voice into the
+// friends page in its frame. Here that same file runs on a page of its own in the streamer's browser (another origin,
+// as Studio is: the play origin refuses the microphone, permissions-policy microphone=()), with Chrome's fake microphone
+// (a 440 Hz tone, voiceArgs()); each message it would post goes into the streamer's friends page as from the page above
+// (this machine has no Studio origin, so the friends page takes its own). The viewer taps for sound and must hear it.
+// A checkout without Studio (the open builder's kit repo) skips the steps and says so.
+const VOICE_CAPTURE = join(dirname(fileURLToPath(import.meta.url)), '../../../../creator-studio/lib/voice-capture.mjs');
+let toneFile = null;
+/** Chrome's flags for a fake microphone that plays a steady tone (written once to the temp folder). */
+export function voiceArgs() {
+  if (!toneFile) {
+    toneFile = join(tmpdir(), `gf-voice-tone-${process.pid}.wav`);
+    const n = 48000 * 4, b = Buffer.alloc(44 + n * 2);
+    b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+    b.writeUInt32LE(48000, 24); b.writeUInt32LE(96000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40);
+    for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(9000 * Math.sin(2 * Math.PI * 440 * i / 48000)), 44 + i * 2);
+    writeFileSync(toneFile, b);
+  }
+  return ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-audio-capture=${toneFile}`];
+}
+/** Two steps: the viewer hears the streamer; a game below the streamer's friends page cannot hand it voice. */
+export async function voiceSteps({ streamer, streamerGame, viewer, step }) {
+  const party = p => p.evaluate(() => window.__party.snapshot()).catch(() => null);
+  if (!existsSync(VOICE_CAPTURE)) return { skipped: 'no creator-studio/lib/voice-capture.mjs in this checkout: the voice steps did not run' };
+  const code = readFileSync(VOICE_CAPTURE, 'utf8').replace(/^export /gm, '');
+  // the stand-in Studio page: an empty page on a server of its own (a secure context: 127.0.0.1)
+  const studio = createServer((q, r) => { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); r.end('<!doctype html><title>Studio</title>'); });
+  await new Promise(r => studio.listen(0, '127.0.0.1', r));
+  const micPage = await streamer.context().newPage();
+  let mic = null;
+  try {
+    await micPage.goto(`http://127.0.0.1:${studio.address().port}/`);
+    await micPage.exposeFunction('gfToFriends', m => streamer.evaluate(x => window.postMessage(x, location.origin), m).catch(() => {}));
+    mic = await micPage.evaluate(`(async () => { ${code}; if (!voiceSupported()) return 'this browser cannot send voice'; window.__gfVoice = await startVoice({ send: m => window.gfToFriends(m) }); window.gfToFriends({ type: 'gf:voice-state', v: 1, on: true }); return 'on'; })()`).catch(e => String(e?.message ?? e));
+    return await voiceHeard({ streamer, streamerGame, viewer, step, mic, party });
+  } finally {
+    await micPage.evaluate(() => window.__gfVoice?.stop()).catch(() => {});
+    await streamer.evaluate(() => window.postMessage({ type: 'gf:voice-state', v: 1, on: false }, location.origin)).catch(() => {});
+    await micPage.close().catch(() => {});
+    await new Promise(r => studio.close(r));
+  }
+}
+async function voiceHeard({ streamer, streamerGame, viewer, step, mic, party }) {
+  const button = await until(() => viewer.evaluate(() => document.querySelector('#mp-watch-sound')?.textContent ?? null), 8000, 'the sound button').catch(() => null);
+  if (button) await viewer.click('#mp-watch-sound').catch(() => {});
+  const heard = button ? await until(async () => { const v = (await party(viewer))?.watch?.voice; return v && v.played >= 15 && v.peak > 0.05 ? v : null; }, 8000, 'the voice').catch(() => null) : null;
+  const v = (await party(viewer))?.watch?.voice, m = (await party(streamer))?.live?.mic;
+  let ok = step('the streamer talks: a viewer taps for sound and hears them', mic === 'on' && !!heard,
+    `mic ${mic}; ${m ? `${m.frames} voice frames sent` : 'no mic state'}; the viewer's button "${button}"; ${v ? `${v.played} packets played, ${v.late} late, peak ${v.peak}` : 'no voice state'}`);
+  const before = m?.refused ?? 0;
+  await streamerGame?.evaluate(() => window.parent.postMessage({ type: 'gf:voice', v: 1, f: 20, ms: 100, d: 'AAAA' }, '*')).catch(() => {});
+  await sleep(300);
+  const refused = ((await party(streamer))?.live?.mic?.refused ?? 0) - before;
+  ok = step('only the page above the streamer\'s friends page may hand it voice (not the game below it)', refused === 1, `the game's frame tried: ${refused === 1 ? 'refused' : `${refused} refusals`}`) && ok;
+  if (button) await viewer.click('#mp-watch-sound').catch(() => {});
+  return { ok };
+}
+
 const overlap = (a, b) => !!a && !!b && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = () => {} } = {}) {
@@ -55,7 +119,7 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
   const step = (name, ok, detail = '') => { record.steps.push({ name, ok: !!ok, detail }); log(`${ok ? 'pass' : 'FAIL'} watch ${name}: ${detail}`); return !!ok; };
   if (mp.mode !== 'live') return { ok: false, detail: `multiplayer.json mode is ${mp.mode}, not live`, record, warnings };
   const srv = await startParty({ dir, port: 0 });
-  const { browser, note } = await launchForGame(launchChrome, dir);
+  const { browser, note } = await launchForGame(launchChrome, dir, { args: voiceArgs() });
   if (note) warnings.push(`watch: ${note}`);
   const errors = [];
   const open = async (who, viewport = { width: 1280, height: 720 }) => {
@@ -124,6 +188,8 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
     await V.page.goto(live.link, { waitUntil: 'load' });
     const keyed = await until(async () => { const w = (await party(V))?.watch; return w?.keyed ? w : null; }, 60000, 'V tuned in').catch(() => null);
     ok = step('a viewer tunes in: this round\'s game page, the streamer followed', !!keyed && keyed.follow?.id === js.you, keyed ? `following ${keyed.follow?.name} (${keyed.follow?.id}); ${keyed.roster} in the stream` : JSON.stringify((await party(V))?.watch)) && ok;
+    const voice = await voiceSteps({ streamer: J.page, streamerGame: frameOf(J), viewer: V.page, step });
+    if (voice.skipped) warnings.push(`watch: ${voice.skipped}`); else ok = voice.ok && ok;
     await clickGame(J); await sleep(300);
     const j0 = (await game(J))?.players?.find(p => p.local);
     await J.page.keyboard.down('KeyW'); await sleep(1300); await J.page.keyboard.up('KeyW'); await sleep(1500);
@@ -292,5 +358,5 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
     await srv.close().catch(() => {});
   }
   const failed = record.steps.filter(s => !s.ok);
-  return { ok: ok && !failed.length, detail: failed.length ? failed.map(s => `${s.name}: ${s.detail}`).slice(0, 3).join(' · ') : `${record.steps.length} steps: Go live in a round, watch the streamer (clock, scores, names), read-only, a reload, a room of one's own, Join, Stop, the game alone, the same link another day, a locked room played alone`, record, warnings };
+  return { ok: ok && !failed.length, detail: failed.length ? failed.map(s => `${s.name}: ${s.detail}`).slice(0, 3).join(' · ') : `${record.steps.length} steps: Go live in a round, watch the streamer (clock, scores, names), the streamer's voice heard, read-only, a reload, a room of one's own, Join, Stop, the game alone, the same link another day, a locked room played alone`, record, warnings };
 }

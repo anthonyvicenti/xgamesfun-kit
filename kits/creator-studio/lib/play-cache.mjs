@@ -5,6 +5,7 @@
 // flag) before the file itself was read. On 2026-10-08 that was ~1,000 requests a minute, ~1 CPU core all day.
 import {readBlobBytes, readTree, resolveTreePath} from './tree-store.mjs';
 import {MANIFEST_PATH} from './manifest.mjs';
+import {backendOrigins, BACKEND_FILE} from './publish-scan.mjs';
 
 /** A least-recently-used map, bounded by entry count and by the sum of `size(value)`. */
 export function lru({maxEntries = Infinity, maxBytes = Infinity, size = () => 0} = {}) {
@@ -55,14 +56,24 @@ export function versionTree(db, versionId) {
 }
 
 /**
- * {tree, isolated} for a tree hash, or null when the tree is missing or invalid. `isolated` is the tree's assets.json
- * → runtime.crossOriginIsolated (docs/play-origin.md §2). Callers must not change the tree: it is shared.
+ * {tree, isolated, backend} for a tree hash, or null when the tree is missing or invalid. `isolated` is the tree's
+ * assets.json → runtime.crossOriginIsolated (docs/play-origin.md §2); `backend` the valid origins of its backend.json
+ * → origins (lib/publish-scan.mjs; an invalid one is left out here, and refused when the kit publishes).
+ * Callers must not change the tree: it is shared.
  */
 export function servedTree(bucket, treeHash) {
   return remembered(trees, treeHash, async () => {
     const tree = await readTree(bucket, treeHash);
-    return tree ? {tree, isolated: await isolatedFlag(bucket, tree)} : null;
+    return tree ? {tree, isolated: await isolatedFlag(bucket, tree), backend: await backendFor(bucket, tree)} : null;
   });
+}
+
+async function backendFor(bucket, tree) {
+  const entry = resolveTreePath(tree, BACKEND_FILE);
+  if (!entry || entry.bytes > 64 * 1024) return [];
+  const bytes = await blobBytes(bucket, entry.sha256);
+  if (!bytes) return [];
+  try { return backendOrigins(JSON.parse(new TextDecoder().decode(bytes))).origins; } catch { return []; }
 }
 
 async function isolatedFlag(bucket, tree) {

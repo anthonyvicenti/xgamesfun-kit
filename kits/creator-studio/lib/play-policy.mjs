@@ -72,16 +72,21 @@ export function connectOrigin(value) {
  * `embedders`: more origins that may frame it (published games only: PUBLIC_EMBEDDERS).
  * `connect`: more origins the page may open connections to (connect-src): the live relay's wss:// origin for published
  * games (lib/watch-config.mjs relayOrigin). Only ws:, wss: and https: origins, no paths, no wildcards; else it throws.
+ * `backend`: the game's own backend origins (its backend.json → origins, checked by lib/publish-scan.mjs
+ * backendOrigins): added to connect-src, and the https ones to img-src and media-src (pictures and sounds from the
+ * game's own storage). Per game: each tree's files carry only that tree's origins (docs/kit-publish.md "Backends").
  */
-export function playHeaders({ studioOrigin, isolated = false, mime, embedders = [], connect = [] }) {
-  const extraConnect = connect.map(connectOrigin);
+export function playHeaders({ studioOrigin, isolated = false, mime, embedders = [], connect = [], backend = [] }) {
+  const own = backend.map(connectOrigin);
+  const extraConnect = [...new Set([...connect.map(connectOrigin), ...own])];
+  const media = own.filter(o => o.startsWith('https:'));
   const csp = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:",
     "worker-src 'self' blob:",
     ["connect-src 'self' blob: data:", ...extraConnect].join(' '),
-    "img-src 'self' data: blob:",
-    "media-src 'self' data: blob:",
+    ["img-src 'self' data: blob:", ...media].join(' '),
+    ["media-src 'self' data: blob:", ...media].join(' '),
     "font-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",
     "object-src 'none'", "base-uri 'none'", "form-action 'none'",

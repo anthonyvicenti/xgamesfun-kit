@@ -233,3 +233,6 @@ button.dice { flex: none; padding: 0 13px; font-size: 20px; line-height: 1; bord
 /* kit 1.6.6: a locked waiting room */
 .players li.empty.locked .name { color: var(--mp-fg); }
 .players li.empty.locked .dot { background: #8a8f9c; border-color: #8a8f9c; }
+/* kit 1.7.0: the streamer's voice. A viewer's sound button leads the bar's buttons; on, it reads as on. */
+.watch-bar button.sound { flex: 0 0 auto; }
+.watch-bar button.sound.on { background: #2b7a4b; border-color: #3ddc84; color: #fff; }

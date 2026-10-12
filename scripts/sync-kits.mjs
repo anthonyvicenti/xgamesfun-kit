@@ -76,6 +76,7 @@ export const DATA = [
   { path: 'research/foundations/kits/gf-multiplayer/{mp}', why: 'gf-multiplayer, vendored into each game as gf/mp/', browser: true },
   { path: 'research/foundations/kits/gf-multiplayer/{mpDev}', why: 'the newest frozen gf-multiplayer, when it runs ahead of the one create vendors (a game on it passes verify check 2; online signaling needs 1.6.4)', browser: true },
   { path: 'research/foundations/kits/gf-assets/{assets}', why: 'gf-assets (gf/gf-assets.js; verify checks its SHA256SUMS)', browser: true },
+  { path: 'creator-studio/lib/voice-capture.mjs', why: 'the streamer\'s voice (our own code, no imports): verify check 34 loads it into a stand-in streamer page with Chrome\'s fake microphone', browser: true },
   { path: 'research/foundations/trials/fps-arena/source/vendor/three', why: 'three.js build (pinned)', browser: true },
   { path: 'research/foundations/trials/fps-arena/source/vendor/postprocessing', why: 'pmndrs postprocessing (pinned)', browser: true },
   { path: 'research/foundations/trials/fps-arena/source/vendor/n8ao', why: 'N8AO (pinned)', browser: true },

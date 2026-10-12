@@ -65,7 +65,7 @@ export async function verifyWorld(dir, { rec, outDir, add, log, t0, lap, quick =
     // the play origin's headers (connect-src 'self'), with this machine's stand-in host and post pages (checks 22, 24)
     // allowed to frame it as games.fun's /play page and X are in production
     const server = await startWorldServer({ dir, port: 0, memory: true, csp: true, frameAncestors: ['http://127.0.0.1:*', 'http://localhost:*'] });
-    const launched = await launchForGame(launchChrome, dir);
+    const launched = await launchForGame(launchChrome, dir, { args: (await import('./lib/friends-watch-check.mjs')).voiceArgs() });
     const browser = launched.browser;
     rec.chrome = browser.version(); rec.renderer = launched.gpu;
     const shot = async (page, name) => { const f = `${String(rec.shots.length + 1).padStart(2, '0')}-${name}.jpg`; rec.shots.push(f); await page.screenshot({ path: join(outDir, f), type: 'jpeg', quality: 75 }).catch(() => {}); return f; };
@@ -161,7 +161,7 @@ export async function verifyWorld(dir, { rec, outDir, add, log, t0, lap, quick =
       if (want(13)) { const r = await checkWorldControls({ newPage, url, game, log, shot }); rec.controls = r.record; rec.notes.push(...r.warnings); add(13, 'the world controls', r.ok, r.detail); lap('controls', t); t = Date.now(); }
       if (want(20)) { const r = await checkMenu({ newPage, url, game, log, shot }); rec.menu = r.record; rec.notes.push(...r.warnings); add(20, 'the menu works', r.ok, r.detail); }
       if (want(21)) { const r = await checkHud({ newPage, url, game, log, shot }); rec.hud = r.record; rec.notes.push(...r.warnings); add(21, 'the HUD shows your state', r.ok, r.detail); }
-      if (want(22)) { const r = await checkWallet({ newPage, url, log, shot }); rec.wallet = r.record; rec.notes.push(...r.warnings); add(22, 'the wallet in the menu', r.ok, r.detail); }
+      if (want(22)) { const r = await checkWallet({ newPage, url, log, shot, world: true }); rec.wallet = r.record; rec.notes.push(...r.warnings); add(22, 'the wallet in the menu', r.ok, r.detail); }
       if (want(24)) { const r = await checkEmbed({ newPage, url, game, log, shot }); rec.embed = r.record; rec.notes.push(...r.warnings); add(24, 'plays inside a post', r.ok, r.detail); }
       if (want(31)) { const r = await checkScreens({ browser, url, log }); rec.screens = r.record; rec.notes.push(...r.warnings); add(31, 'sharp on every screen', r.ok, r.detail); }
       lap('menu, HUD, wallet, post', t); t = Date.now();
