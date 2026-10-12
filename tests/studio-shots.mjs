@@ -100,7 +100,7 @@ try {
   const sp = await page(1280, 800, scenic.url);
   await sleep(6000);
   await tab(sp, 'assets');
-  await shot(sp, 'desktop-10-scenic-slots', 'Isle Run (scenic engine) in the preview with the Slots & assets tab');
+  await shot(sp, 'desktop-10-scenic-slots', 'Isle Run (scenic engine) in the preview with the Art & sound tab');
   await tab(sp, 'tune'); await sleep(800);
   await shot(sp, 'desktop-11-scenic-tune', 'Isle Run, Tune tab');
   console.log('errors scenic:', sp.errors);
@@ -108,7 +108,7 @@ try {
   const sphone = await page(390, 844, scenic.url);
   await sleep(5000);
   await tab(sphone, 'assets');
-  await shot(sphone, 'phone-10-scenic-slots', 'Isle Run at phone width, Slots & assets');
+  await shot(sphone, 'phone-10-scenic-slots', 'Isle Run at phone width, Art & sound');
   await noSideScroll(sphone, 'phone scenic assets');
   await sphone.close();
 } finally {
