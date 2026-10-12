@@ -66,6 +66,21 @@ button.hold.holding .fillbar { width: 100%; transition: width 1.5s linear; }
 .field .peers { font-size: 11px; }
 .field.saving .field-label::after { content: ' · saving'; color: var(--muted); font-size: 11px; }
 details.more summary { cursor: pointer; color: var(--muted); font-size: 12px; padding: 4px 0; }
+.field .how { font-size: 11px; }
+
+/* items: what happened, refusals in the kit's words, renaming, the add form, switches */
+.live-note { margin: 8px 0; padding: 6px 10px; border-radius: 8px; font-size: 13px; background: var(--panel-2); border-left: 4px solid var(--good); overflow-wrap: anywhere; }
+.live-note[data-kind=bad] { border-left-color: var(--bad); }
+.live-note[hidden] { display: none; }
+.refused { margin: 6px 0; padding: 6px 10px; border-radius: 6px; font-size: 13px; color: var(--text); background: color-mix(in srgb, var(--bad) 14%, var(--panel-2)); border-left: 4px solid var(--bad); overflow-wrap: anywhere; }
+.refused strong { display: block; color: var(--bad); font-size: 12px; }
+.card-head .badge { margin-left: 8px; font-size: 11px; font-weight: 400; color: var(--good); border: 1px solid color-mix(in srgb, var(--good) 50%, var(--line)); border-radius: 99px; padding: 0 7px; vertical-align: 1px; }
+.rename { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.rename input { min-width: 0; flex: 1 1 120px; }
+.add-box .ask-row input { flex: 1 1 160px; min-width: 0; }
+.switches { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.switch-row { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+.switch-row small { display: block; color: var(--muted); font-size: 12px; }
 
 /* skins */
 .swatches { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

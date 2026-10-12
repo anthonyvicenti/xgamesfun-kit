@@ -19,7 +19,8 @@ export default function register(router, ctx) {
   router.post('/slots/value', async req => {
     const { id, value } = await readBodyJson(req);
     if (typeof id !== 'string') throw new HttpError(400, 'id is required');
-    try { return await setValue(gameDir, id, value); } catch (e) { throw new HttpError(400, e.message); }
+    // refused in the kit's own words (kit/assets/items.js slotValueProblems): `problems` lists each, for the page to show
+    try { return await setValue(gameDir, id, value); } catch (e) { throw new HttpError(400, e.message, e.problems ? { problems: e.problems } : null); }
   });
 
   // a file slot: the raw file as the body; ?id=<slot>&name=<file name>

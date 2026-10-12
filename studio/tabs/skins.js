@@ -4,7 +4,7 @@
 // own session (the art tool), with the new picture shown beside the old one to keep or put back.
 // Everything is written through slots: character.tint.player, character.body.player, character.height.player.
 import { createHistory } from '../lib/editors/history.js';
-import { MOVES, bodyChoices, drawRequest, lookAlike, modelRequest, setSeat, sheetFrames, tryOnPath } from '../lib/editors/skins.js';
+import { MOVES, bodyChoices, drawRequest, lookAlike, modelRequest, setSeat, sheetFrames, showingRole, tryOnLoadout, tryOnPath } from '../lib/editors/skins.js';
 import { askBox, el, onShown, pixelsOf, swatchRow, undoBar, useStyles } from '../lib/editors/ui.js';
 
 export default {
@@ -30,9 +30,26 @@ export default {
     const saveBtn = el('button', { type: 'button' }, 'Save the look');
     const resetBtn = el('button', { type: 'button', className: 'ghost' }, 'Put it back');
     tryon.append(saveBtn, resetBtn);
-    // the preview loads the turning player wearing the look (?gf-loadout=, CONTRACT §6e). A preview subject reads the
-    // loadout once at boot and does not follow later gf:loadout messages (a request to games.fun), so each try-on reloads
-    const showTryOn = () => { if (shown) ctx.preview.show(tryOnPath('player', { colour: cur().seats[seat] })); };
+    // the preview shows the turning player wearing the look (CONTRACT §6e). Once it is showing, a new look is handed to
+    // it as a message (gf:loadout) and the subject is made again in place, with no reload; the first time, or when the
+    // game does not answer, the preview loads with the look in its address (?gf-loadout=)
+    let tries = 0;
+    const showTryOn = async () => {
+      if (!shown) return;
+      const colour = cur().seats[seat], mine = ++tries;
+      let search = ''; try { search = ctx.preview.frame.contentWindow.location.search; } catch {}
+      if (!showingRole(search, 'player')) { ctx.preview.show(tryOnPath('player', { colour })); return; }
+      // the subject says it wore it by counting up snapshot().look.restyled (the kit's show mode)
+      const look = () => { try { return ctx.preview.frame.contentWindow.__game?.snapshot?.()?.look ?? null; } catch { return null; } };
+      const before = look();
+      ctx.preview.send({ type: 'gf:loadout', loadout: tryOnLoadout({ colour }) });
+      for (let i = 0; i < 30 && mine === tries; i++) {
+        await new Promise(r => setTimeout(r, 100));
+        const now = look();
+        if (before && now && (now.restyled > before.restyled || now.key !== before.key)) return;
+      }
+      if (mine === tries) ctx.preview.show(tryOnPath('player', { colour }));
+    };
     const dirty = () => { const d = JSON.stringify(cur()) !== saved; tryon.hidden = !d; };
     const { bar: undoBtns, refresh: refreshUndo, off: offKeys } = undoBar(history, () => { paintSeats(); dirty(); showTryOn(); repaintFlat(); }, panel);
     const stage = next => { history.push(next); refreshUndo(); paintSeats(); dirty(); showTryOn(); repaintFlat(); };
