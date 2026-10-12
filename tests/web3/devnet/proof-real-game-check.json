@@ -1,0 +1,231 @@
+{
+  "network": "devnet",
+  "program": "88Labq6tdVnBQsjHSfic6qqgvo5b9NGmy99AYj7KVXqM",
+  "game": "Ds6UyqhYr8wWtzteV6ujDfrJcPdEYYeehXWGRdMkMvrd",
+  "economy": "Coin-flip arena",
+  "startedAt": "2026-10-12T04:00:19.607Z",
+  "funder": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+  "steps": [
+    {
+      "name": "fund the synthetic player with 0.354 SOL from the key file's wallet",
+      "at": "2026-10-12T04:00:19.785Z",
+      "ok": true,
+      "signature": "3Svr97PhwoTuX7huRiwoGHHAXtUWjVBmohaxS9RU4Ev4JcXi8DfAwbiD6gd8CCHaQya3KKm8giqAd5dHnhTvYYpc",
+      "explorer": "https://explorer.solana.com/tx/3Svr97PhwoTuX7huRiwoGHHAXtUWjVBmohaxS9RU4Ev4JcXi8DfAwbiD6gd8CCHaQya3KKm8giqAd5dHnhTvYYpc?cluster=devnet"
+    },
+    {
+      "name": "Coin flip: open 1 of at most 3 (pay, roll, claim), checked against the pools and the player",
+      "at": "2026-10-12T04:00:21.443Z",
+      "ok": true,
+      "outcome": "Nothing this time.",
+      "won": false,
+      "price": "100000000",
+      "prize": "0",
+      "prizePool": null,
+      "signatures": [
+        "5jifjJZiN3z38bEZW2jaBikFj8HQkBnmM1D2yEDGgTmj9vqspgQXx7ypNjBMJDX6PicJ9RF5bzy71FfuZeqicWtV",
+        "3hDAmA7yLLVExBKAvhCZrGdnvLsfcw8jkhUCdaBWiEuqFwBLBALkpy9RznDYUPr79vHgi3CgV1bgHxQo8iNgXHpa"
+      ],
+      "player": {
+        "before": "354000000",
+        "after": "251490000",
+        "moved": "-102510000",
+        "expected": "-102510000",
+        "networkFees": "10000",
+        "oracleFee": "500000",
+        "oracleAsCosted": true,
+        "unexplained": "0",
+        "ok": true
+      },
+      "pools": {
+        "house": {
+          "before": "226000000",
+          "after": "314000000",
+          "moved": "88000000",
+          "expected": "88000000",
+          "ok": true
+        },
+        "backers": {
+          "before": "24000000",
+          "after": "26000000",
+          "moved": "2000000",
+          "expected": "2000000",
+          "ok": true
+        },
+        "pot": {
+          "before": "140000000",
+          "after": "150000000",
+          "moved": "10000000",
+          "expected": "10000000",
+          "ok": true
+        }
+      },
+      "says": "Nothing this time. Player -0.10251 SOL (oracle 0.0005 SOL, network 0.00001 SOL); house +0.088 SOL, backers +0.002 SOL, pot +0.01 SOL",
+      "explorer": [
+        "https://explorer.solana.com/tx/5jifjJZiN3z38bEZW2jaBikFj8HQkBnmM1D2yEDGgTmj9vqspgQXx7ypNjBMJDX6PicJ9RF5bzy71FfuZeqicWtV?cluster=devnet",
+        "https://explorer.solana.com/tx/3hDAmA7yLLVExBKAvhCZrGdnvLsfcw8jkhUCdaBWiEuqFwBLBALkpy9RznDYUPr79vHgi3CgV1bgHxQo8iNgXHpa?cluster=devnet"
+      ]
+    },
+    {
+      "name": "Coin flip: open 2 of at most 3 (pay, roll, claim), checked against the pools and the player",
+      "at": "2026-10-12T04:00:28.898Z",
+      "ok": true,
+      "outcome": "You won 0.176 SOL!",
+      "won": true,
+      "price": "100000000",
+      "prize": "176000000",
+      "prizePool": "house",
+      "signatures": [
+        "3UpRUxCGJfWJ1QfwYyPhbqkFVKUPdHbGLCu4Tc4brdNV8QnYY4kDH6xUVYHXrnHydULmdMKNnKSaA6vn8UZXk25e",
+        "5FMx41zAfKqnGbqjFph7tocJXkihDVg6ntwhofm3LJTdb3K5iyCwbUP5xrKnCTXn721wokPSdwnRDtEQjDVRsZpH"
+      ],
+      "player": {
+        "before": "251490000",
+        "after": "324980000",
+        "moved": "73490000",
+        "expected": "73490000",
+        "networkFees": "10000",
+        "oracleFee": "500000",
+        "oracleAsCosted": true,
+        "unexplained": "0",
+        "ok": true
+      },
+      "pools": {
+        "house": {
+          "before": "314000000",
+          "after": "226000000",
+          "moved": "-88000000",
+          "expected": "-88000000",
+          "ok": true
+        },
+        "backers": {
+          "before": "26000000",
+          "after": "28000000",
+          "moved": "2000000",
+          "expected": "2000000",
+          "ok": true
+        },
+        "pot": {
+          "before": "150000000",
+          "after": "160000000",
+          "moved": "10000000",
+          "expected": "10000000",
+          "ok": true
+        }
+      },
+      "says": "You won 0.176 SOL! Player 0.07349 SOL (oracle 0.0005 SOL, network 0.00001 SOL); house -0.088 SOL, backers +0.002 SOL, pot +0.01 SOL",
+      "explorer": [
+        "https://explorer.solana.com/tx/3UpRUxCGJfWJ1QfwYyPhbqkFVKUPdHbGLCu4Tc4brdNV8QnYY4kDH6xUVYHXrnHydULmdMKNnKSaA6vn8UZXk25e?cluster=devnet",
+        "https://explorer.solana.com/tx/5FMx41zAfKqnGbqjFph7tocJXkihDVg6ntwhofm3LJTdb3K5iyCwbUP5xrKnCTXn721wokPSdwnRDtEQjDVRsZpH?cluster=devnet"
+      ]
+    },
+    {
+      "name": "Weekly draw: buy one ticket",
+      "at": "2026-10-12T04:00:39.335Z",
+      "ok": true,
+      "says": "You have 1 ticket in “Weekly draw”; the draw is in 7 days.",
+      "signatures": [
+        "3P1PnywPp8G432ZowYiRiYck9sCHcFueZn2g45FKTrAS9w2YeG36FKPnbiZDhpMCSUdy5qBCo3AN32gqniKB8WKd"
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/3P1PnywPp8G432ZowYiRiYck9sCHcFueZn2g45FKTrAS9w2YeG36FKPnbiZDhpMCSUdy5qBCo3AN32gqniKB8WKd?cluster=devnet"
+      ]
+    },
+    {
+      "name": "every pool, stake and contest pot covers what it owes",
+      "at": "2026-10-12T04:00:43.823Z",
+      "ok": true,
+      "says": "pool house: holds 226000000, owes 0; pool backers: holds 28000000, owes 0; pool pot: holds 170000000, owes 0; stake backers (staked): holds 0, owes 0; stake backers (rewards): holds 0, owes 0"
+    },
+    {
+      "name": "send what is left back to the key file’s wallet",
+      "at": "2026-10-12T04:00:46.921Z",
+      "ok": true,
+      "signature": "4wwcxiK8Fj3CDm8V8FyQVrZuqgqKCnAwgXYYhaWA4iFPbt6Wtnd9JBaqDyXSnaYazP6uqgwdKFQJte1A9pBAMNwm",
+      "explorer": "https://explorer.solana.com/tx/4wwcxiK8Fj3CDm8V8FyQVrZuqgqKCnAwgXYYhaWA4iFPbt6Wtnd9JBaqDyXSnaYazP6uqgwdKFQJte1A9pBAMNwm?cluster=devnet",
+      "returned": "312766800",
+      "says": "0.312767 SOL returned"
+    }
+  ],
+  "pools": [
+    {
+      "kind": "pool",
+      "key": "house",
+      "index": 0,
+      "account": "5VfB5deG1Eug3Kgh1mSxy4dvonhMRTGha77RheUTcQKx",
+      "open": true,
+      "holds": "226000000",
+      "owes": [],
+      "mayOwe": [],
+      "owed": "0",
+      "covers": true,
+      "mayOwed": "0"
+    },
+    {
+      "kind": "pool",
+      "key": "backers",
+      "index": 1,
+      "account": "9eBbx54pNhGT4VkBVqHyUNUyogoQD8eXe9MZyGBWkvhY",
+      "open": true,
+      "holds": "28000000",
+      "owes": [],
+      "mayOwe": [],
+      "owed": "0",
+      "covers": true,
+      "mayOwed": "0"
+    },
+    {
+      "kind": "pool",
+      "key": "pot",
+      "index": 2,
+      "account": "CdTUC7m4M35A8Vf51wqUPKohXPKX1gqEmUwcRf6gNXG8",
+      "open": true,
+      "holds": "170000000",
+      "owes": [],
+      "mayOwe": [],
+      "owed": "0",
+      "covers": true,
+      "mayOwed": "0"
+    },
+    {
+      "kind": "stake",
+      "key": "backers (staked)",
+      "account": "ANJp2AFRDi7H11YLXAcJdhvfWLdhFT9gXRgAR6V7Nkzh",
+      "open": true,
+      "holds": "0",
+      "owes": [
+        {
+          "what": "0 stakers’ principal",
+          "units": "0"
+        }
+      ],
+      "mayOwe": [],
+      "owed": "0",
+      "covers": true,
+      "mayOwed": "0"
+    },
+    {
+      "kind": "stake",
+      "key": "backers (rewards)",
+      "account": "G7w7fmZJX26oprc1Ls9WFQCjNabxZeWHYr5RupCEs7Xr",
+      "open": true,
+      "holds": "0",
+      "owes": [
+        {
+          "what": "rewards earned and not collected",
+          "units": "0"
+        }
+      ],
+      "mayOwe": [],
+      "owed": "0",
+      "covers": true,
+      "mayOwed": "0"
+    }
+  ],
+  "verdict": "ok",
+  "budget": "354000000",
+  "player": "Ey5nosvfcc5vQkjASUq8r3L9XX88QE53nuVy4J4qKfMr",
+  "won": true,
+  "finishedAt": "2026-10-12T04:00:49.974Z",
+  "spent": "41233200"
+}
