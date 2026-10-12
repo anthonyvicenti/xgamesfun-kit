@@ -12,6 +12,7 @@ const EXPECTED_WARNINGS = {
   'duel-arena': ['W-AUTHORITY', 'W-CHANCE-PRIZE', 'W-MINT-POWERS'],
   'falling-drop': ['W-FEE', 'W-MINT-POWERS'],
   'halving-seasons': ['W-FEE'],
+  'level-ladder': ['W-AUTHORITY', 'W-FEE'],
   'merge-2048': [],
   'sacrifice-raffle': ['W-CHANCE-PRIZE', 'W-FEE'],
   'scorched-treasury': ['W-AUTHORITY', 'W-MINT-POWERS'],

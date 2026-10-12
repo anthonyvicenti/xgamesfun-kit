@@ -111,7 +111,7 @@ test('the examples: every fixture and reference, the whole spec by name, and a s
 });
 
 test('check, simulate, cost and explain on every fixture and eval reference', async () => {
-  const authority = new Set(['duel-arena', 'scorched-treasury', 'e15-level-ladder', 'e19-weekly-ladder']);
+  const authority = new Set(['duel-arena', 'scorched-treasury', 'level-ladder', 'e15-level-ladder', 'e19-weekly-ladder']);
   for (const name of ALL) {
     const c = await call('economy_check', { example: name });
     assert.equal(c.ok, true, `${name}: ${c.text}`);
@@ -251,13 +251,14 @@ test('economy_status says plainly when the chain reader is not there, and format
   assert.match(r.text, /2 recent receipts/);
 });
 
-test('economy_decide prepares a decision link for the creator’s wallet and says the page part is pending', async (t) => {
+test('economy_decide prepares a decision link for the creator’s wallet (the Economy tab signs it)', async (t) => {
   const g = await scratchGame(t, { version: 1, network: 'devnet', economy: fixture('duel-arena') });
   const k = { kitRoot: g.root, env: { GAMESFUN_DEV_URL: 'http://127.0.0.1:5999/' } };
   let r = await call('economy_decide', { game: g.rel, decision: 'contest:duel', side: 1 }, k);
   assert.equal(r.link, 'http://127.0.0.1:5999/studio/#economy?decide=contest%3Aduel&side=1');
   assert.match(r.says, /Name side 1 \(Blue\) as the winner of “Duel”/);
-  assert.match(r.pending, /not built yet \(K4\)/);
+  assert.equal(r.pending, undefined, 'the signing page exists now (K4)');
+  assert.match(r.text, /Sign in my wallet/);
   assert.match(r.signer, /not the creator’s wallet/, 'a separate authority key is named, not the wallet');
   r = await call('economy_decide', { game: g.rel, decision: 'mission-loot', to: '4JaSvbECYUyqYjWoyBzAjYTfvaQxMBmXnKhyLHcoaGNE' }, k);
   assert.match(r.says, /Pay 2 USDC from the pool “mission-rewards” to 4JaS/);
@@ -266,4 +267,9 @@ test('economy_decide prepares a decision link for the creator’s wallet and say
   await assert.rejects(() => call('economy_decide', { game: g.rel, decision: 'contest:duel', side: 2 }, k), /0 to 1/);
   await assert.rejects(() => call('economy_decide', { game: g.rel, decision: 'nope' }, k), /It has: open-duel, duel-result, mission-end, mission-loot, contest:duel, hold:mission/);
   await assert.rejects(() => call('economy_decide', { game: g.rel, decision: 'mission-loot', to: 'not an address' }, k), /public address/);
+  r = await call('economy_decide', { game: g.rel, decision: 'contest:duel', open: true }, k);
+  assert.equal(r.link, 'http://127.0.0.1:5999/studio/#economy?decide=contest%3Aduel&open=1');
+  assert.match(r.says, /Open a new round of “Duel”/);
+  r = await call('economy_decide', { game: g.rel, decision: 'mission-loot', to: '4JaSvbECYUyqYjWoyBzAjYTfvaQxMBmXnKhyLHcoaGNE', id: 'run-7', attempt: '5'.repeat(87) }, k);
+  assert.match(r.link, /&attempt=5{87}&id=run-7/);
 });

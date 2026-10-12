@@ -18,6 +18,7 @@ import { chainContext } from '../web3/node/settings.mjs';
 import { devnetCheck, readKeyFile } from '../web3/node/economy-check.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { decide, decideOptions, decideUsage, keeper } from '../web3/node/decide-cli.mjs';
 
 const usage = `Usage: gamesfun economy <action> [game-dir] [--spec <file>] [--json]      (devnet only)
 
@@ -34,6 +35,7 @@ const usage = `Usage: gamesfun economy <action> [game-dir] [--spec <file>] [--js
   publish     Ask to put it live: prints the studio link where your wallet approves it (this never signs)
               [--picture <file>] the picture of a token launched on games.fun's curve with it
   status      Where it stands on devnet: each part on chain or not, and whether it matches the spec
+${decideUsage}
 
 The economy is the "economy" section of the game's gamesfun.json (web3/economy/README.md).
 --spec <file> reads an economy (or a whole gamesfun.json) from a file instead of a game.`;
@@ -155,11 +157,13 @@ export default {
   usage,
   run: (args) =>
     guard(async () => {
-      const { values, positionals } = parse(args, { spec: { type: 'string' }, write: { type: 'boolean' }, picture: { type: 'string' }, devnet: { type: 'boolean' }, key: { type: 'string' }, tries: { type: 'string' }, budget: { type: 'string' }, out: { type: 'string' } }, usage);
+      const { values, positionals } = parse(args, { spec: { type: 'string' }, write: { type: 'boolean' }, picture: { type: 'string' }, devnet: { type: 'boolean' }, key: { type: 'string' }, tries: { type: 'string' }, budget: { type: 'string' }, out: { type: 'string' }, ...decideOptions }, usage);
       const [action, target] = positionals;
       if (!action) throw new UsageError(usage);
       if (action === 'publish') return publish(target, values);
       if (action === 'status') return status(target, values);
+      if (action === 'decide') return decide(target, values);
+      if (action === 'keeper') return keeper(target, values);
       if (action === 'check' && values.devnet) return checkDevnet(target, values);
       if (action === 'migrate') {
         const dir = await resolveGame(target);

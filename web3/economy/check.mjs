@@ -540,8 +540,23 @@ export function check(economy, { network = 'devnet', now = Math.floor(Date.now()
     }
     if (d.does === 'award' && !(d.hold && m.hold.get(d.hold))) refuse('E-REF', `${where}.hold`, `${label(d)} awards a held collectible but names no hold that exists.`, 'Name one of "holds".');
     if ((d.does === 'decide' || d.does === 'open_contest') && !(d.contest && m.contest.get(d.contest))) refuse('E-REF', `${where}.contest`, `${label(d)} works on a contest but names none that exists.`, 'Name one of "contests".');
+    // A claim comes from code in the player's browser: proof ties it to a payment on chain, caps bound what it moves.
+    const capToken = d.pool ? m.tokens.get(m.pool.get(d.pool)?.currency) : d.currency ? m.tokens.get(d.currency) : null;
+    if (d.proof) {
+      if (!m.payments.some((p) => p.key === d.proof.payment)) refuse('E-REF', `${where}.proof.payment`, `${label(d)} asks for proof of the payment “${d.proof.payment}”, which is not one of the economy’s payments.`, 'Name one of "payments" (the attempt players pay for).');
+      seconds(d.proof.after, `${where}.proof.after`);
+      seconds(d.proof.within, `${where}.proof.within`);
+    }
+    for (const k of ['each', 'perPlayerPerDay', 'perDay']) if (d.caps?.[k] !== undefined && capToken) units(d.caps[k], capToken, `${where}.caps.${k}`, `${label(d)}’s cap`);
+    if (d.caps?.each !== undefined && d.amount !== undefined && Number(d.amount) > Number(d.caps.each))
+      refuse('E-CAPS', `${where}.caps.each`, `${label(d)} moves ${d.amount} each time, more than its own cap of ${d.caps.each}: the keeper and the page would refuse every one.`, 'Raise the cap or lower the amount.');
+    const moves = ['payout', 'issue', 'make'].includes(d.does);
+    if (d.signedBy === 'keeper' && moves && !(d.caps?.each !== undefined && d.caps?.perDay !== undefined))
+      refuse('E-KEEPER-CAPS', `${where}.caps`, `${label(d)} is signed by the keeper on a claim from the game, and a game runs in the player’s browser: anyone there can claim. It needs caps the keeper keeps.`, 'Add "caps": { "each": …, "perPlayerPerDay": …, "perDay": … } (and "proof": { "payment": … } to tie each claim to a paid attempt).');
+    if (d.signedBy === 'keeper' && moves && !d.proof)
+      warn('W-KEEPER-PROOF', `${where}.proof`, `${label(d)} pays on the game’s word alone. Anyone who can post a claim (a player from the browser console, any friend in the room) can collect it up to its caps.`, 'Add "proof": { "payment": "<the attempt players pay for>", "after": "<the least time a clear takes>" }.');
     if (d.signedBy && d.signedBy !== 'page' && m.authority === 'owner')
-      warn('W-AUTHORITY', where, `${label(d)} is signed by ${d.signedBy === 'keeper' ? 'the local keeper' : 'your server'}, but the authority is your own wallet: that would put your wallet’s key on a machine that signs by itself.`, 'Give the authority its own address ("keys.authority"), made for that machine.');
+      warn('W-AUTHORITY', where, `${label(d)} is signed by ${d.signedBy === 'keeper' ? 'the local keeper' : 'your server'}, but the authority is still your own wallet${d.signedBy === 'keeper' ? ': until the keeper’s key is the authority, it cannot sign, and your wallet signs from the studio page' : ': that would put your wallet’s key on a machine that signs by itself'}.`, d.signedBy === 'keeper' ? 'Make the keeper its own key on your machine (npx gamesfun economy keeper --new-key <file outside the game>) and press "Let my keeper decide" in the Economy tab once it is live: that writes the key’s address here as "keys.authority".' : 'Give the authority its own address ("keys.authority"), made for that machine.');
   }
   const needs = [
     ...m.decisions.map((d) => `${label(d)} (when ${d.when})`),

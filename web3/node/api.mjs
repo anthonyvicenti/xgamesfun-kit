@@ -6,6 +6,8 @@ import path from 'node:path';
 import { LIMIT, RARITIES, RARITY_WEIGHTS, RuleError } from '../gf-web3/rules.js';
 import { chainStatus, mintInfo } from './chain.mjs';
 import { economyRoutes } from './economy-routes.mjs';
+import { authorityFlow, decideFlow } from './decide-flows.mjs';
+import { decideRoutes } from './decide-routes.mjs';
 import { linkToken, removeBox, removeItem, saveBox, saveItem, setCurrency, setShop, unlinkToken } from './drafts.mjs';
 import { createFlowEngine, FlowError } from './flow-engine.mjs';
 import { economyStatus } from './economy.mjs';
@@ -100,6 +102,9 @@ export function createWeb3Api(ctx) {
     if (kind === 'launch') spec = await launchFlow(e, input, body.wallet);
     // A game's shop is part of its economy (decision 2, 2026-10-11): the old "publish" starts the economy flow.
     else if (kind === 'economy' || kind === 'publish') spec = await economyFlow(e, body.wallet, input);
+    // A decision (decide-flows.mjs): one the creator signs as the game's authority, or a new authority (the keeper).
+    else if (kind === 'decide') spec = await decideFlow({ ...e, kitRoot }, body.wallet, input);
+    else if (kind === 'authority') spec = await authorityFlow(e, body.wallet, input);
     else throw new HttpError(400, 'Unknown kind of request.');
     if (request) {
       const finish = spec.onFinish;
@@ -113,6 +118,7 @@ export function createWeb3Api(ctx) {
 
   const routes = [
     ...economyRoutes({ gameDir, log: ctx.log }),
+    ...decideRoutes({ gameDir, kitRoot, env, log: ctx.log }),
     { method: 'get', path: '/state', handler: handle(state, ctx.log) },
     {
       method: 'get',

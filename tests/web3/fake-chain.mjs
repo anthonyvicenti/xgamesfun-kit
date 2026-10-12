@@ -6,11 +6,14 @@
 // mint and metadata. For the economy calls (gf-web3's economy): buy_tickets adds a line to the lottery, draw_lottery
 // draws it at once (first place: ticket `drawTicket`, 0 unless a test sets it), pay_lottery pays places and opens the
 // next round, stake / unstake keep the position, enter / claim keep the entries, hold / take_back keep the hold.
+// For decisions: pay splits into pools, payout moves a pool's balance to the receiver, update_game names the authority,
+// open_contest / decide keep the contest; pay and payout log their receipts (Paid, PaidOut), and getTransaction answers
+// with each sent transaction, its time (the fake's clock when it was sent) and its logs.
 import { createHash } from 'node:crypto';
 import { addressBytes, decodeBase58, encodeBase58 } from '../../web3/gf-web3/chain/base58.js';
-import { decodeAccount, decodeBorsh, encodeAccount } from '../../web3/gf-web3/chain/borsh.js';
+import { decodeAccount, decodeBorsh, encodeAccount, encodeBorsh } from '../../web3/gf-web3/chain/borsh.js';
 import { concat, fromBase64, readUintLE, toBase64, uintLE, utf8 } from '../../web3/gf-web3/chain/bytes.js';
-import { LOOT_IDL, LOOT_PROGRAM, lotteryLines, NO_ADDRESS } from '../../web3/gf-web3/chain/loot.js';
+import { LOOT_IDL, LOOT_PROGRAM, lootPda, lotteryLines, NO_ADDRESS } from '../../web3/gf-web3/chain/loot.js';
 import { MPL_CORE_PROGRAM } from '../../web3/gf-web3/chain/core.js';
 import { DBC_PROGRAM } from '../../web3/gf-web3/chain/dbc.js';
 import { TOKEN_PROGRAM } from '../../web3/gf-web3/chain/pda.js';
@@ -28,6 +31,26 @@ export function fakeChain({ irysFree = true } = {}) {
   const draw = { ticket: 0n };
   let now = Math.floor(Date.now() / 1000);
   const simulated = [];
+  const transactions = new Map();
+  let logs = [];
+  const emit = (name, value) => {
+    const ev = LOOT_IDL.events.find((e) => e.name === name);
+    logs.push(`Program data: ${toBase64(concat(Uint8Array.from(ev.discriminator), encodeBorsh(LOOT_IDL, { defined: { name } }, value)))}`);
+  };
+  const tokenAmount = (address) => {
+    const a = accounts.get(address);
+    return a && a.data.length >= 72 ? new DataView(a.data.buffer, a.data.byteOffset).getBigUint64(64, true) : 0n;
+  };
+  const setTokenAmount = (address, amount, mint) => {
+    let a = accounts.get(address);
+    if (!a) {
+      const data = new Uint8Array(165);
+      if (mint) data.set(addressBytes(mint), 0);
+      put(address, TOKEN_PROGRAM, data);
+      a = accounts.get(address);
+    }
+    new DataView(a.data.buffer, a.data.byteOffset).setBigUint64(64, amount, true);
+  };
   const uploads = [];
   const irysBalances = new Map();
   let slot = 1000;
@@ -132,6 +155,39 @@ export function fakeChain({ irysFree = true } = {}) {
       loot(at('hold'), 'Hold', { game: at('game'), asset: at('asset'), player: at('player'), free_at: BigInt(now) + args.seconds, reference: args.reference, bump: 255 });
     } else if (name === 'take_back' || name === 'award') {
       accounts.delete(at('hold'));
+    } else if (name === 'update_game') {
+      const g = read(at('game'), 'Game');
+      const u = args.update;
+      loot(at('game'), 'Game', { ...g, ...(u.owner ? { owner: u.owner } : {}), ...(u.authority ? { authority: u.authority } : {}), ...(u.paused !== null && u.paused !== undefined ? { paused: u.paused } : {}) });
+    } else if (name === 'pay') {
+      const game = at('game');
+      const g = read(game, 'Game');
+      let left = args.amount;
+      const pools = [];
+      for (const share of args.shares) {
+        const part = (args.amount * BigInt(share.bps)) / 10_000n;
+        left -= part;
+        if (share.to.Pool) pools.push([share.to.Pool[0], part]);
+      }
+      for (const [index, part] of pools) {
+        const pool = lootPda.pool(game, index);
+        setTokenAmount(pool, tokenAmount(pool) + part, at('mint'));
+      }
+      emit('Paid', { game, player: at('player'), mint: at('mint'), amount: args.amount, shares: args.shares, to_treasury: left, reference: args.reference });
+      if (g.paused) throw new Error('Paused');
+    } else if (name === 'payout') {
+      const have = tokenAmount(at('pool'));
+      if (have < args.amount) throw new Error('custom program error: insufficient funds');
+      if (read(at('game'), 'Game').authority !== at('authority')) throw new Error('NotAuthority');
+      setTokenAmount(at('pool'), have - args.amount);
+      setTokenAmount(at('to'), tokenAmount(at('to')) + args.amount, at('mint'));
+      emit('PaidOut', { game: at('game'), authority: at('authority'), pool: args.index, to: at('to'), amount: args.amount, reference: args.reference });
+    } else if (name === 'open_contest') {
+      loot(at('contest'), 'Contest', { game: at('game'), id: args.id, bump: 255, opener: at('authority'), mint: at('mint'), closes_at: args.args.closes_at, result_by: args.args.result_by, terms: new Uint8Array(32), verdict: 'Open', winner: 0, entries: 0, prize: 0n, unclaimed: 0n, shares: args.args.shares, sides: Array(args.args.sides).fill(0n) });
+    } else if (name === 'decide') {
+      const c = read(at('contest'), 'Contest');
+      if (read(at('game'), 'Game').authority !== at('authority')) throw new Error('NotAuthority');
+      loot(at('contest'), 'Contest', { ...c, verdict: 'Won', winner: args.side });
     }
   }
 
@@ -191,7 +247,7 @@ export function fakeChain({ irysFree = true } = {}) {
         put(mintMetadata, 'metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s', concat(Uint8Array.of(4), addressBytes(creator), addressBytes(baseMint), borshString(name), borshString(symbol), borshString(uri)));
       });
     }
-    return { effects, signature: encodeBase58(signatures[0]), m };
+    return { effects, signature: encodeBase58(signatures[0]), m, wire };
   }
 
   async function rpc(body) {
@@ -223,8 +279,11 @@ export function fakeChain({ irysFree = true } = {}) {
         return ok((params[0] + 128) * 5080);
       case 'getSignaturesForAddress':
         return ok(sent.slice(-(params[1]?.limit ?? 10)).reverse().map((signature) => ({ signature, slot, err: null, blockTime: 1_800_000_000 })));
-      case 'getTransaction':
-        return ok({ meta: { logMessages: [] } });
+      case 'getTransaction': {
+        const t = transactions.get(params[0]);
+        if (!t) return ok(sent.includes(params[0]) ? { meta: { logMessages: [] } } : null);
+        return ok({ slot, blockTime: t.blockTime, transaction: params[1]?.encoding === 'base64' ? [toBase64(t.wire), 'base64'] : { signatures: [params[0]] }, meta: { err: null, logMessages: t.logs } });
+      }
       case 'getBalance':
         return ok({ context: { slot }, value: balances.get(params[0]) ?? 5_000_000_000 });
       case 'getTokenAccountBalance': {
@@ -249,8 +308,18 @@ export function fakeChain({ irysFree = true } = {}) {
       }
       case 'sendTransaction': {
         try {
-          const { effects, signature } = apply(fromBase64(params[0]), { verify: true });
-          for (const e of effects) e();
+          const wire = fromBase64(params[0]);
+          const { effects, signature } = apply(wire, { verify: true });
+          const before = new Map([...accounts].map(([k, a]) => [k, { ...a, data: a.data.slice() }]));
+          logs = [];
+          try {
+            for (const e of effects) e();
+          } catch (e) {
+            accounts.clear();
+            for (const [k, a] of before) accounts.set(k, a);
+            throw e;
+          }
+          transactions.set(signature, { wire, blockTime: now, logs });
           sent.push(signature);
           return ok(signature);
         } catch (e) {
@@ -285,7 +354,7 @@ export function fakeChain({ irysFree = true } = {}) {
     return rpc(JSON.parse(init.body));
   };
   return {
-    fetchImpl, accounts, put, sent, simulated, uploads, irysBalances, blockhash, rolls, balances, draw,
+    fetchImpl, accounts, put, sent, transactions, tokenAmount, setTokenAmount, simulated, uploads, irysBalances, blockhash, rolls, balances, draw,
     /** The fake's clock (Unix seconds) for holds and stakes; tests pass the same to gf-web3 as `now`. */
     get now() {
       return now;

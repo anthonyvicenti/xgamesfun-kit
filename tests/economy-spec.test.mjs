@@ -9,8 +9,9 @@ import { FULL_IDL, fixture, fixtureNames } from './economy/helpers.mjs';
 
 const pointer = (doc, p) => p.split('/').slice(1).reduce((node, k) => node?.[k.replace(/~1/g, '/').replace(/~0/g, '~')], doc);
 
-test('there are the coin-flip arena and ten economies from the list of 100', () => {
-  assert.equal(fixtureNames().length, 11);
+test('there are the coin-flip arena, ten economies from the list of 100 and the level ladder (K4)', () => {
+  assert.equal(fixtureNames().length, 12);
+  assert.ok(fixtureNames().includes('level-ladder'));
   assert.ok(fixtureNames().includes('coin-flip-arena'));
 });
 

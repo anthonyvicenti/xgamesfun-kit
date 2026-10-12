@@ -11,6 +11,7 @@ import { explorer, pictureUrl, short } from './web3/client.js';
 import { approvalPanel, choosePicture, fill, h, keepFresh, note, requestBanner, styles, tabContext, walletChip } from './web3/ui.js';
 import { SECTIONS, addPart, amountText, fmt, isLivePart, nameOf, notesByPart, parseAmount, parseDuration, parseNumber, parseNumberList, parseWhole, parseWordList, partId, removePart, sectionOf, symbolOf } from './web3/economy-parts.js';
 import { LEGEND, drawFlow, econStyles, edgeColour } from './web3/economy-view.js';
+import { createDecide } from './web3/economy-decide.js';
 
 const DEBOUNCE_MS = 450;
 const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
@@ -184,13 +185,14 @@ const FIELDS = {
 };
 
 /** What a link to this tab asks for: #economy?flow=economy (economy_publish's link), or
- * #economy?decide=<key>&to=&amount=&percent=&side= (a decision; signing them from the page comes in K4). */
+ * #economy?decide=<key>&to=&amount=&percent=&side=&asset=&attempt=&id=&open= (a decision: economy_decide's and
+ * `gamesfun economy decide`'s link; the card checks it and offers "Sign in my wallet"). */
 export function linkAsks(hash) {
   const m = /^#economy(?:\?(.*))?$/.exec(String(hash ?? ''));
   if (!m) return null;
   const q = new URLSearchParams(m[1] ?? '');
   if (q.get('flow') === 'economy') return { kind: 'publish' };
-  if (q.get('decide')) return { kind: 'decide', key: q.get('decide'), values: Object.fromEntries(['to', 'amount', 'percent', 'side'].filter((k) => q.get(k)).map((k) => [k, q.get(k)])) };
+  if (q.get('decide')) return { kind: 'decide', key: q.get('decide'), values: Object.fromEntries(['to', 'amount', 'percent', 'side', 'asset', 'attempt', 'id', 'open'].filter((k) => q.get(k)).map((k) => [k, q.get(k)])) };
   return null;
 }
 
@@ -254,7 +256,7 @@ export default {
         return;
       }
       loadStatus();
-      await analyse();
+      await Promise.all([analyse(), decide.load()]);
       if (econ?.filled && econ.source === 'economy') await save(); // a token just launched: its mint goes in the spec
       render();
     }
@@ -347,6 +349,15 @@ export default {
       }
       render();
     }
+    // ------------------------------------------------------------ decisions (studio/tabs/web3/economy-decide.js)
+
+    const decide = createDecide({ t, render: () => render(), start: (body) => start(body), state: () => state, live: () => Boolean(status?.live || spec?.live?.game) });
+    function openDecision(key, values) {
+      asked = { kind: 'decide', key, values };
+      render();
+      root.querySelector('[data-testid="econ-decision"]')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
     async function goLive() {
       if (dirty) {
         clearTimeout(timer);
@@ -839,7 +850,7 @@ export default {
       root.querySelector('[data-testid="econ-general"]')?.scrollIntoView({ behavior: 'smooth' });
     }
 
-    /** The link's ask: "Put it live" offered at once (it starts only on the click), or a decision shown for K4. */
+    /** The link's ask: "Put it live" offered at once (it starts only on the click), or a decision to check and sign. */
     function askedCard() {
       if (!asked) return null;
       if (asked.kind === 'publish') {
@@ -852,14 +863,7 @@ export default {
             h('button', { class: 'primary', 'data-testid': 'econ-asked-go', disabled: Boolean(why), onclick: () => ((asked = null), goLive()) }, status?.live ? 'Put the changes live' : 'Put it live'),
             h('button', { onclick: forget }, 'Not now')));
       }
-      const v = asked.values;
-      const rule = (spec.decisions ?? []).find((d) => d.key === asked.key);
-      return h('div', { class: 'card econ-live', 'data-testid': 'econ-decision' },
-        h('strong', {}, 'Decision (coming in K4)'),
-        h('p', {}, `Your agent asked you to sign the rule “${rule?.when ?? asked.key}”`, rule ? '' : ' (no rule with that key in this economy)', '.'),
-        Object.keys(v).length ? h('ul', { class: 'econ-receipts' }, Object.entries(v).map(([k, x]) => h('li', {}, `${{ to: 'To', amount: 'Amount', percent: 'Percent', side: 'Side' }[k]}: ${x}`))) : null,
-        h('p', { class: 'dim' }, 'Signing decisions from this page comes in the next phase (K4). Nothing was signed or sent.'),
-        h('button', { onclick: forget }, 'Close'));
+      return decide.askedCard(asked, forget);
     }
 
     function summaryCard() {
@@ -920,7 +924,8 @@ export default {
           approvalPanel(t, flow, {
             onDone: (view) => {
               const kind = view?.kind ?? flow?.kind;
-              message = { kind: 'ok', text: kind === 'launch' ? 'Your token is live.' : 'Your economy is live on devnet.' };
+              message = { kind: 'ok', text: decide.doneText(kind) ?? (kind === 'launch' ? 'Your token is live.' : 'Your economy is live on devnet.') };
+              if (kind === 'decide') forget();
               flow = null;
               refresh();
             },
@@ -956,6 +961,7 @@ export default {
         groups.length ? groups : h('div', { class: 'card' }, h('p', {}, 'No parts yet. Add one below: a box players pay to roll, a lottery, a stake, an item for sale…')),
         addMenu(),
         settingsCard(),
+        decide.sectionCard(openDecision),
         liveCard(),
         h('p', { class: 'dim' }, `RPC: ${state.rpc?.shown ?? ''}${state.rpc?.custom ? ' (yours)' : ' (public; set your own with gamesfun web3 settings --rpc)'} · saved in gamesfun.json${dirty || saving ? ' · saving…' : ''}`),
       );

@@ -438,7 +438,28 @@
         "hold": { "$ref": "#/$defs/key" },
         "to": { "$ref": "#/$defs/words" },
         "perDay": { "type": "number", "minimum": 0, "description": "How often it happens, for the simulation." },
-        "signedBy": { "enum": ["page", "keeper", "server"], "default": "page" }
+        "signedBy": { "enum": ["page", "keeper", "server"], "default": "page" },
+        "proof": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["payment"],
+          "description": "What a claim must show before the keeper or the page acts on it: a payment the receiver made on chain (an attempt), not claimed before, at least `after` and at most `within` before the claim. The game's word alone is never proof: it runs in the player's browser.",
+          "properties": {
+            "payment": { "$ref": "#/$defs/key", "description": "The payment (one of \"payments\") a claim must name, paid by the receiver." },
+            "after": { "$ref": "#/$defs/duration", "description": "The least time between that payment and the claim (no one clears the ladder in less)." },
+            "within": { "$ref": "#/$defs/duration", "description": "The most time between that payment and the claim." }
+          }
+        },
+        "caps": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Limits the keeper and the page keep, in whole units of the pool's (or the token's) currency. Their own rules, not the program's: the program trusts the authority.",
+          "properties": {
+            "each": { "$ref": "#/$defs/amount", "description": "The most one decision moves." },
+            "perPlayerPerDay": { "$ref": "#/$defs/amount", "description": "The most one receiver gets in 24 hours." },
+            "perDay": { "$ref": "#/$defs/amount", "description": "The most everyone together gets in 24 hours." }
+          }
+        }
       }
     },
     "scenario": {

@@ -21,11 +21,13 @@ import { SCHEMA } from '../../web3/economy/validate.mjs';
 import { networkConfig } from '../../web3/gf-web3/network.js';
 import { readConfig, updateConfig } from '../../web3/node/game.mjs';
 import { KIT_ROOT, resolveGame, studioUrl } from '../../web3/node/game-dir.mjs';
+import { ledgerFile, linkParams, prepareDecision, readLedger, readRequest } from '../../web3/node/decide.mjs';
+import { chainContext } from '../../web3/node/settings.mjs';
 
 const ECONOMY_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'web3', 'economy');
 const FIXTURES = path.join(ECONOMY_DIR, 'fixtures');
 const IDEAS = JSON.parse(readFileSync(path.join(ECONOMY_DIR, 'ideas.json'), 'utf8')).ideas;
-const FIXTURE_NAMES = ['coin-flip-arena', 'blind-forge', 'spark-pity', 'halving-seasons', 'scorched-treasury', 'merge-2048', 'stud-farm', 'sacrifice-raffle', 'falling-drop', 'duel-arena', 'starforce'];
+const FIXTURE_NAMES = ['coin-flip-arena', 'blind-forge', 'spark-pity', 'halving-seasons', 'scorched-treasury', 'merge-2048', 'stud-farm', 'sacrifice-raffle', 'falling-drop', 'duel-arena', 'starforce', 'level-ladder'];
 
 /** Stand-ins for tests: `status` replaces web3/node/economy.mjs's economyStatus. */
 export const seams = { status: undefined };
@@ -553,7 +555,7 @@ export const tools = [
     name: 'economy_decide',
     annotations: readOnly,
     description:
-      'Prepare one of the authority’s decisions for the creator’s wallet to sign: a payout from a pool, a contest’s winning side, where a held collectible goes. Name a decision from the spec’s "decisions" (or "contest:<key>" / "hold:<key>") and its details; returns the studio link that will show it for signing. Never signs, never asks for a key. The signing page is not built yet (it comes with the decisions work, K4): say so to the creator. Returns { link, decision, says, pending }.',
+      'Prepare one of the authority’s decisions for the creator’s wallet to sign: a payout from a pool, a contest’s winning side (or opening it), where a held collectible goes. Name a decision from the spec’s "decisions" (or "contest:<key>" / "hold:<key>") and its details; returns the studio link whose Economy tab shows it with the economy’s checks (the amount within the spec, the pool can cover it, a real receiver, the proof and caps the spec asks for) and a "Sign in my wallet" button. When the economy is live it also runs those checks now (`check`). A decision the spec gives the keeper ("signedBy": "keeper") is signed by the creator’s local keeper instead, once it is the game’s authority (npx gamesfun economy keeper). Never signs, never asks for a key. Returns { link, decision, says, signer, check }.',
     inputSchema: {
       type: 'object',
       required: ['decision'],
@@ -564,19 +566,24 @@ export const tools = [
         amount: { type: ['string', 'number'], description: 'How much, in whole units of the pool’s token (instead of the decision’s own amount).' },
         percent: { type: 'number', minimum: 0, maximum: 100, description: 'A share of what the pool holds (instead of an amount).' },
         side: { type: 'integer', minimum: 0, maximum: 254, description: 'For a contest: the winning side, from 0.' },
+        open: { type: 'boolean', description: 'For a contest: open a new round instead of naming a winner.' },
+        asset: { type: 'string', description: 'For a hold: the held collectible’s address.' },
+        attempt: { type: 'string', description: 'For a decision with proof: the signature of the transaction in which the receiver paid for the attempt.' },
+        id: { type: 'string', description: 'The game’s own id for this result (a run, a match): each id is decided once.' },
       },
       additionalProperties: false,
     },
     async handler(input, ctx) {
       const gameDir = await gameDirOf(input, ctx);
       const { economy } = await load({ game: input.game }, ctx);
-      const bad = findSecrets({ to: input.to, amount: input.amount });
+      const bad = findSecrets({ to: input.to, amount: input.amount, asset: input.asset, id: input.id });
       if (bad.length) throw new Error('That looks like a private key. A decision only ever needs a public address: never ask the creator for a key.');
+      const request = readRequest({ decision: input.decision, to: input.to, amount: input.amount, percent: input.percent, side: input.side, open: input.open, asset: input.asset, attempt: input.attempt, id: input.id });
       const m = model(economy);
       const [kind, key] = input.decision.includes(':') ? input.decision.split(':') : ['decision', input.decision];
       let d;
       if (kind === 'decision') d = m.decisions.find((x) => x.key === key);
-      else if (kind === 'contest' && m.contest.has(key)) d = { key: input.decision, does: 'decide', contest: key, when: `naming who won “${m.contest.get(key).name}”` };
+      else if (kind === 'contest' && m.contest.has(key)) d = input.open ? { key: input.decision, does: 'open_contest', contest: key, when: `opening “${m.contest.get(key).name}”` } : { key: input.decision, does: 'decide', contest: key, when: `naming who won “${m.contest.get(key).name}”` };
       else if (kind === 'hold' && m.hold.has(key)) d = { key: input.decision, does: 'award', hold: key, when: `saying where “${m.hold.get(key).name}”’s collectible goes` };
       if (!d) throw new Error(`No decision “${input.decision}” in the economy. It has: ${[...m.decisions.map((x) => x.key), ...m.contests.map((c) => `contest:${c.key}`), ...m.holds.map((h) => `hold:${h.key}`)].join(', ') || 'none'}.`);
       if (input.to !== undefined && !isAddress(input.to)) throw new Error('"to" must be a wallet’s public address.');
@@ -593,21 +600,36 @@ export const tools = [
       const says =
         d.does === 'payout' ? `Pay ${amount !== undefined ? `${amount} ${sym}` : `${percent ?? 100}% of what it holds`} from the pool “${d.pool}” to ${input.to ?? d.to ?? '(say who: "to")'}`
         : d.does === 'decide' ? `Name side ${input.side}${contest?.sideNames?.[input.side] ? ` (${contest.sideNames[input.side]})` : ''} as the winner of “${contest?.name ?? d.contest}”`
+        : d.does === 'open_contest' ? `Open a new round of “${contest?.name ?? d.contest}”`
         : d.does === 'award' ? `Send the held collectible to ${input.to ?? d.to ?? '(say where: "to")'}`
         : `${d.does} (${d.when})`;
-      const params = { decide: d.key, ...(input.to ? { to: input.to } : {}), ...(amount !== undefined ? { amount: String(amount) } : {}), ...(percent !== undefined ? { percent: String(percent) } : {}), ...(input.side !== undefined ? { side: String(input.side) } : {}) };
+      const params = linkParams({ ...request, ...(amount !== undefined ? { amount: String(amount) } : {}), ...(percent !== undefined ? { percent: String(percent) } : {}) });
       const { url, link } = await studioLink(gameDir, ctx, params);
-      const signer = m.authority === 'owner' ? 'the creator’s wallet' : `the authority key ${m.authority} (not the creator’s wallet: that key’s own machine signs, such as the local keeper)`;
+      const keeper = d.signedBy === 'keeper';
+      const signer = keeper ? `the creator’s local keeper (npx gamesfun economy keeper), once its key is the game’s authority${m.authority === 'owner' ? '; until then the creator’s wallet, from the page' : ''}` : m.authority === 'owner' ? 'the creator’s wallet' : `the authority key ${m.authority} (not the creator’s wallet: that key’s own machine signs, such as the local keeper)`;
       const live = Boolean(economy.live?.game);
+      // Live: the same checks the page and the keeper run, read from the chain (refusals in plain words, with fixes).
+      let checked = null;
+      if (live) {
+        try {
+          const chain = await (ctx?.chain ?? chainContext(kitRoot(ctx), { env: envOf(ctx), ...(ctx?.fetchImpl ? { fetchImpl: ctx.fetchImpl } : {}) }));
+          const ledger = await readLedger(ledgerFile(kitRoot(ctx), economy.live.game));
+          const p = await prepareDecision({ economy, request, rpc: chain.rpc, signer: null, ledger, by: 'page' });
+          checked = { ok: p.ok, says: p.says, refusals: p.refusals, notes: p.notes, numbers: p.numbers };
+        } catch (error) {
+          checked = { ok: null, error: `Could not read the chain: ${error.message}` };
+        }
+      }
+      const checkText = checked?.refusals?.length ? `\nIt would be refused now: ${checked.refusals.map((r) => `${r.message} Fix: ${r.fix}`).join(' ')}` : checked?.error ? `\n${checked.error}` : '';
       return {
         link,
         url,
         decision: { ...params, does: d.does, when: d.when },
         signer,
         live,
-        says,
-        pending: 'The page that shows a decision for signing is not built yet (K4). The link’s shape is final: the studio’s Economy tab will read it.',
-        text: `${says}. Signed by ${signer}.${live ? '' : ' The economy is not live yet: it has to go live (economy_publish) before any decision.'}\nLink: ${link ?? `the studio’s Economy tab (start it with: npx gamesfun dev ${shownDir(gameDir, ctx)})`}, with ${new URLSearchParams(params).toString()}.\nThe signing page is not built yet (K4): tell the creator it is prepared, not signed.`,
+        says: checked?.ok ? checked.says : says,
+        check: checked,
+        text: `${checked?.ok ? checked.says : says}. Signed by ${signer}.${live ? '' : ' The economy is not live yet: it has to go live (economy_publish) before any decision.'}${checkText}\nLink: ${link ?? `the studio’s Economy tab (start it with: npx gamesfun dev ${shownDir(gameDir, ctx)})`}, with ${new URLSearchParams(params).toString()}.\nThe creator opens it, reads the checks and signs in their wallet ("Sign in my wallet"): it is prepared, not signed.`,
       };
     },
   },
