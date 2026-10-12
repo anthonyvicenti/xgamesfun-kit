@@ -40,13 +40,13 @@ const shot = async (p, name, what) => { await sleep(400); await p.screenshot({ p
 const frame = p => p.frames().find(f => f.parentFrame() === p.mainFrame());
 
 try {
-  // 1. the studio page as the one line leaves it, and the slots tab
+  // 1. the studio page as the one line leaves it, and the Art & sound tab
   const party = await boot('soak-squad', basePort);
   const p = await page(party.url);
   await sleep(6000);
   await shot(p, '01-studio', 'the studio page after the one line: the game on the left, the tabs on the right');
   await tab(p, 'assets');
-  await shot(p, '02-slots', 'Slots & assets: every colour, number, picture and model of the game');
+  await shot(p, '02-slots', 'Art & sound: every picture, model, sound, word and colour of the game');
 
   // 2. a picture through its slot: a new ground pattern, drawn here in Chrome and saved as a PNG file
   const png = await p.evaluate(() => {
@@ -59,16 +59,16 @@ try {
   });
   const mine = path.join(root, 'my-dots.png');
   await writeFile(mine, Buffer.from(png, 'base64'));
-  // through the page itself: "every slot", the Ground pattern row, its Replace… button (the file picker is given the file)
-  await p.locator('input[type=checkbox]').first().check();
+  // through the page itself: "Show every slot", the Ground pattern tile, its Replace button (the file picker is given the file)
+  await p.locator('#panel-assets .art-switch input').check();
   await sleep(1500);
-  const row = p.locator('.row', { hasText: 'Ground pattern' }).first();
+  const row = p.locator('#panel-assets .art-tile', { hasText: 'Ground pattern' }).first();
   await row.scrollIntoViewIfNeeded();
-  await shot(p, '03-picture-before', 'before: the lawn with the kit\'s own ground pattern; the Ground pattern row and its Replace… button on the right');
+  await shot(p, '03-picture-before', 'before: the lawn with the kit\'s own ground pattern; the Ground pattern tile and its Replace button on the right');
   await row.locator('input[type=file]').setInputFiles(mine);
   await sleep(8000);        // the page reloads the game by itself when a file changes
-  await p.locator('.row', { hasText: 'Ground pattern' }).first().scrollIntoViewIfNeeded().catch(() => {});
-  await shot(p, '04-picture-after', 'after Replace… with my-dots.png: the same lawn with the new picture, no code changed');
+  await p.locator('#panel-assets .art-tile', { hasText: 'Ground pattern' }).first().scrollIntoViewIfNeeded().catch(() => {});
+  await shot(p, '04-picture-after', 'after Replace with my-dots.png: the same lawn with the new picture, no code changed');
   await p.close();
 
   // 3. a friend in a second tab
