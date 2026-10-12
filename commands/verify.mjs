@@ -9,6 +9,7 @@ const usage = `Usage: gamesfun verify [dir] [--quick] [--release] [--profile <fi
 Is this game good? gf-three's verify plays it in Chrome with real input (alone with bots, and two players over real
 WebRTC) and prints one verdict. Evidence goes to <game>/evidence/verify-N/ (verdict.json, screenshots).
   --quick        skip the contact sheet (check 9); about 2 minutes
+  --all          also print each passing check and its progress as it runs (the studio's Health check counts them)
   --release      also run the checks that test the kit, not the game (8, 31, 34); about 3 minutes more
   --profile <file>  a machine that cannot run everything (a CI runner): the file lists checks to leave out, each with its
                  reason; they are recorded as skipped, never as passed, and the run is never a full pass (.github/ci-profile.json)
@@ -25,7 +26,7 @@ export default {
   summary: 'run the checks every game must pass (real Chrome, real input)',
   usage,
   run: args => guard(async () => {
-    const { values, positionals } = parse(args, { quick: { type: 'boolean' }, release: { type: 'boolean' }, profile: { type: 'string' }, check: { type: 'string' }, out: { type: 'string' } }, usage);
+    const { values, positionals } = parse(args, { quick: { type: 'boolean' }, all: { type: 'boolean' }, release: { type: 'boolean' }, profile: { type: 'string' }, check: { type: 'string' }, out: { type: 'string' } }, usage);
     if (values.check && !/^\d+(,\d+)*$/.test(values.check)) throw new UsageError(`--check takes a check number, e.g. 13\n\n${usage}`);
     const dir = await resolveGame(positionals[0]);
     if (!isStatic(values.check)) {
@@ -35,6 +36,7 @@ export default {
     ensureCharDeps();   // verify reads every body's skeleton (check 19) with the 3D tools' packages; installed once
     const flags = [];
     if (values.quick) flags.push('--quick');
+    if (values.all) flags.push('--all');
     if (values.release) flags.push('--release');
     if (values.profile) flags.push('--profile', values.profile);
     if (values.check) flags.push('--check', values.check);

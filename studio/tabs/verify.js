@@ -104,7 +104,7 @@ export default {
       const full = v?.checks?.find(x => x.n === c.n) ?? null;
       const label = `Fix: ${c.title}`;
       const compose = words => fixRequest(c, { run, rule: full?.rule ?? null, fix: full?.fix ?? null, words });
-      if (ctx.chat?.ask) ctx.chat.ask({ label, placeholder: 'Add what you noticed, or just say "please fix it", then Send', button: 'Ask to fix', compose });
+      if (ctx.chat?.ask) ctx.chat.ask({ label, text: 'Please fix this.', placeholder: 'Add what you noticed, then Send', button: 'Ask to fix', compose });
       else if (ctx.chat?.send) { await ctx.chat.send(compose('')); ctx.toast('Sent to your session'); }
       else ctx.toast('Open the conversation on the left to ask your session', 'error');
     }

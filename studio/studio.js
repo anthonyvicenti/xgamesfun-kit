@@ -22,8 +22,9 @@
 //                        next live reload away when only these files change (a value the game already took live)
 //   selection            { get(), set(sel|null), onChange(fn) } what the person picked (a slot or object, {id, label}); it travels
 //                        with their next change request. A game frame may post { gf: 'select', id, label } to pick one.
-//   chat                 { ask({ label, placeholder, compose, selection, button, onSent }), send(text) } the conversation's one
-//                        box: an editor's "Ask my session" hands it a context (studio/lib/editors/ui.js askBox)
+//   chat                 { ask({ label, text, placeholder, compose, selection, button, onSent }), send(text) } the conversation's one
+//                        box: an editor's "Ask my session" hands it a context (studio/lib/editors/ui.js askBox); `text`
+//                        fills an empty box, so a ready request ("Please fix this.") is one press
 //   project()            the open game: { name, dir, made }
 //   on(event, fn)        dev-server events: 'game' (the game's files changed: { files }), 'verify' (a run finished)
 import { hostBridge, inside } from './host-bridge.js';

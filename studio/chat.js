@@ -109,6 +109,7 @@ export function mountChat(root, ctx) {
     box.placeholder = c?.placeholder || 'Ask for a change: "make the pillows bigger", "add a second arena"…';
     send.textContent = c?.button || 'Send';
     if (!c) return;
+    if (c.text && !box.value.trim()) box.value = String(c.text);   // a ready request: one press of the button sends it
     ctxChip.append(el('span', { className: 'chat-context-label' }, c.label), el('button', { type: 'button', className: 'chip-x', title: 'Ask about the whole game instead', 'aria-label': `Stop asking about ${c.label}`, on: { click: () => setContext(null) } }, '×'));
   }
 

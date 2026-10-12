@@ -46,6 +46,7 @@ export default function register(router, ctx) {
     const body = await readBodyJson(req);
     const args = [BIN, 'verify', G()];
     if (body.quick !== false) args.push('--quick');
+    args.push('--all');                 // every check's line as it runs: the Health check counts them ("Checking… 12 of 22")
     if (body.check != null) { if (!/^\d+(,\d+)*$/.test(String(body.check))) throw new HttpError(400, 'check must be a number'); args.push('--check', String(body.check)); }
     Object.assign(run, { lines: [], started: new Date().toISOString(), finished: null, code: null, args: args.slice(2) });
     const child = spawn(process.execPath, args, { cwd: ctx.kitRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
