@@ -34,7 +34,7 @@ test('GAMESFUN_WEB3=0 takes the Economy tab out, and the other tabs stay', async
     process.env.GAMESFUN_WEB3 = v;
     const files = await tabs();
     assert.ok(!files.includes('economy.js'), v);
-    for (const f of ['session.js', 'build.js', 'tune.js', 'friends.js', 'assets.js', 'verify.js']) assert.ok(files.includes(f), f);
+    for (const f of ['tune.js', 'friends.js', 'assets.js', 'verify.js']) assert.ok(files.includes(f), f);   // (Session and Build are the conversation now, studio/chat.js)
   }
 });
 

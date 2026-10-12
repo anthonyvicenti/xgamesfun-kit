@@ -438,6 +438,9 @@ export function createBridge({ gameDir = null, run = randomBytes(4).toString('he
      */
     introduce(sid) { const s = sessions.get(String(sid)); if (!s || s.told) return false; s.told = true; return true; },
     setTransport: t => { transport = t; },
+    /** The studio opened another game (or none): the stop guard and the queue follow it. */
+    setGame: dir => { gameDir = dir ?? null; },
+    get game() { return gameDir; },
     close,
   };
 }

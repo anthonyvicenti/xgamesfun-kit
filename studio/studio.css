@@ -61,8 +61,6 @@
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s8: 32px;
   --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-pill: 999px;
   --h-control: 32px; --h-small: 26px;
-  --rail-w: 184px;
-  --panel-w: clamp(400px, 34vw, 640px);
 
   /* the names the tabs already use */
   --panel: var(--surface); --panel-2: var(--surface-2); --text: var(--ink); --accent: var(--lav); --accent-2: var(--lime);
@@ -147,33 +145,151 @@ label { cursor: default; }
 .xg-mark span { color: var(--lime); }
 :root[data-theme=light] .xg-mark span { color: #3f7300; }           /* the lime as ink: AA on white */
 .brand-label { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--line-strong); line-height: 20px; }
-.game-title { font-weight: 700; font-size: var(--fs-lg); flex: 1; min-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.game-title { font-weight: 700; font-size: var(--fs-lg); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
 .links { display: flex; align-items: center; gap: var(--s2); }
 .badge { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .8px; text-transform: uppercase; padding: 3px 10px; border-radius: var(--r-pill); background: var(--warn-soft); border: 1px solid var(--warn-line); color: var(--warn); white-space: nowrap; }
 .badge[hidden] { display: none; }
 
-/* ---------------------------------------------------------------- layout: preview | rail | panel */
-.layout { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) var(--rail-w) var(--panel-w); min-height: 0; }
-.preview { display: flex; flex-direction: column; min-width: 0; background: var(--stage); }
-.preview-bar { display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3); min-height: 48px; border-bottom: 1px solid var(--line); background: var(--bg); flex-wrap: wrap; }
+/* ---------------------------------------------------------------- layout: the conversation | the product
+   AI builders put the prompt on the left and the product on the right; so does the studio. The start page (no game
+   open) takes the whole width. The product is a grid: the tool bar over the game, the open tool in an inspector beside
+   it (closed, the game gets the room). */
+.layout { flex: 1; display: grid; grid-template-columns: var(--chat-w) minmax(0, 1fr); min-height: 0; }
+:root { --chat-w: clamp(340px, 30vw, 460px); --inspector-w: clamp(340px, 28vw, 480px); }
+.start { display: none; }
+:root[data-view=start] .layout { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+:root[data-view=start] .start { display: block; }
+:root[data-view=start] .chat, :root[data-view=start] .product, :root[data-view=loading] .product { display: none; }
+:root[data-view=start] .project .game-title, :root[data-view=start] #home-btn, :root:not([data-view=game]) .game-only { display: none; }
+
+/* the conversation */
+.chat { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); border-right: 1px solid var(--line); }
+.chat-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: 0 var(--s4); min-height: 48px; border-bottom: 1px solid var(--line); background: var(--bg); flex: none; }
+.chat-head h2 { margin: 0; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; color: var(--muted); }
+.chat-status { display: inline-flex; align-items: center; font-size: var(--fs-sm); color: var(--ink-2); }
+.chat-scroll { flex: 1; overflow: auto; min-height: 0; padding: var(--s4) var(--s4) var(--s2); }
+.chat-feed { display: flex; flex-direction: column; gap: var(--s2); }
+.chat-live { display: flex; flex-direction: column; gap: var(--s3); margin-top: var(--s3); }
+.chat-live:empty { display: none; }
+.chat-live .conn { margin: 0; }
+.msg { max-width: 92%; border-radius: var(--r-lg); padding: 10px 12px; font-size: var(--fs-md); overflow-wrap: anywhere; }
+.msg.me { align-self: flex-end; background: var(--lav-soft); border: 1px solid var(--lav-line); border-bottom-right-radius: 4px; }
+.msg.them { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.msg.card { max-width: 100%; width: 100%; }
+.msg .req-text { margin: 0; }
+.msg .req-state { margin-top: 6px; gap: 6px; }
+.msg .req-state .time { margin-left: auto; }
+.msg-title { font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.msg-title.small { font-size: var(--fs-sm); margin: var(--s3) 0 4px; }
+.msg-line { align-self: stretch; font-size: var(--fs-sm); color: var(--muted); padding: 0 4px; overflow-wrap: anywhere; }
+.msg-line.step { color: var(--ink-2); }
+.msg-line .time { font-family: var(--mono); font-size: var(--fs-xs); }
+.chat-empty { margin: var(--s2) 0; }
+/* where the build is: Pitch · Spec · Create · Build · Verify · Play-test · Deliver */
+ol.stages { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+ol.stages li { font-size: var(--fs-xs); font-weight: 700; text-align: center; color: var(--muted); padding: 18px 0 0; position: relative; white-space: nowrap; }
+ol.stages li::before { content: ''; position: absolute; left: 0; right: 0; top: 4px; height: 6px; border-radius: var(--r-pill); background: var(--surface-3); }
+ol.stages li.done { color: var(--ink-2); }
+ol.stages li.done::before { background: var(--lav); }
+ol.stages li.now { color: var(--ink); }
+ol.stages li.now::before { background: var(--lime); }
+ol.stages li.waiting::before { background: var(--warn); }
+/* the pitch's concepts and questions */
+.concepts { display: grid; gap: var(--s2); }
+.concept { border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: var(--s3); background: var(--surface); }
+.concept h3 { margin: 0 0 4px; font-size: var(--fs-base); font-weight: 700; color: var(--ink); text-transform: none; letter-spacing: 0; }
+.concept p { margin: 0 0 6px; }
+.concept-hook { color: var(--ink-2); }
+.concept-how { font-size: var(--fs-sm); color: var(--ink-2); }
+.concept-v1 { font-size: var(--fs-sm); margin-top: 4px; }
+.concept-go { margin-top: var(--s2); }
+.questions .question { margin: var(--s2) 0; }
+.question-text { font-size: var(--fs-sm); margin-bottom: 4px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button[aria-pressed=true] { background: var(--lav-soft); border-color: var(--lav); color: var(--ink); }
+/* the one box */
+.chat-input { flex: none; display: flex; flex-direction: column; gap: 6px; padding: var(--s3) var(--s4) var(--s4); border-top: 1px solid var(--line); background: var(--surface); }
+.chat-input textarea.ask { margin: 0; min-height: 76px; background: var(--surface-2); }
+.chat-send-row { display: flex; gap: var(--s2); align-items: center; justify-content: space-between; }
+.chat-send-row .ask-state { flex: 1; }
+.chat-foot { font-size: var(--fs-xs); }
+.chat-context { display: inline-flex; align-self: flex-start; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: var(--r-pill); background: var(--lime-soft); border: 1px solid var(--lime-line); font-size: var(--fs-sm); font-weight: 700; color: var(--ink); }
+.chat-context[hidden] { display: none; }
+.ask-state[data-state=error] { color: var(--bad); }
+.ask-state[data-state=sent] { color: var(--good); }
+
+/* the product: the tool bar, the preview controls, the game and the inspector */
+.product { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "tabs tabs" "pbar acts" "stage insp"; min-width: 0; min-height: 0; background: var(--stage); }
+.product-bar, .product-body { display: contents; }
+.product-actions { grid-area: acts; display: flex; align-items: center; gap: var(--s2); padding: 4px var(--s3); background: var(--bg); border-bottom: 1px solid var(--line); }
+.product-actions .product-action { min-height: 30px; padding: 0 18px; }
+.product-actions { justify-content: flex-end; }
+.product-actions:empty { padding: 0; }
+.product:not(:has(.inspector:not([hidden]))) .preview { grid-column: 1 / -1; }   /* no tool open: the game takes the full width */
+:root[data-view=making] .product-actions { display: none; }
+.preview { grid-area: stage; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--stage); position: relative; }
+.preview-bar { grid-area: pbar; display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s3); min-height: 40px; border-bottom: 1px solid var(--line); background: var(--bg); flex-wrap: wrap; }
 .preview-pick { display: flex; align-items: center; gap: var(--s2); }
+.preview-pick select { min-height: 28px; }
 .preview-label { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
 .preview-bar .hint { margin-left: auto; }
 .frame-wrap { flex: 1; min-height: 240px; background: var(--stage); position: relative; }
 .frame-wrap iframe { width: 100%; height: 100%; border: 0; display: block; }
-.side { display: contents; }
-
-/* the rail: the tools, grouped (Make, Edit, Test, Launch); a tab may name its own group */
-.tabs { grid-column: 2; display: flex; flex-direction: column; gap: 2px; padding: var(--s3) var(--s2); background: var(--bg); border-left: 1px solid var(--line); border-right: 1px solid var(--line); overflow-y: auto; min-height: 0; }
-.tab-group { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; color: var(--muted); padding: var(--s3) 10px var(--s1); }
-.tab-group:first-child { padding-top: var(--s1); }
-.tabs button { justify-content: flex-start; width: 100%; min-height: 34px; padding: 0 10px; background: transparent; border: 0; border-radius: var(--r-md); color: var(--ink-2); font-weight: 600; font-size: var(--fs-md); text-align: left; white-space: normal; position: relative; }
+:root[data-view=making] .frame-wrap, :root[data-view=making] .tabs, :root[data-view=making] .preview-bar { display: none; }
+.product-empty { flex: 1; display: grid; place-items: center; padding: var(--s8); text-align: center; background: radial-gradient(circle at 50% 40%, var(--lav-soft), transparent 55%), var(--stage); }
+.product-empty[hidden] { display: none; }
+.product-empty-inner { max-width: 440px; }
+.product-empty h2 { font-size: var(--fs-xl); margin: var(--s4) 0 var(--s2); color: #f4f4f5; }
+.product-empty p { color: #b7bcc8; margin: 0; }
+.product-empty-mark { width: 72px; height: 72px; margin: 0 auto; border-radius: 20px; border: 2px dashed rgba(255,255,255,.22); }
+/* the tool bar: the tools in groups (Edit, Test, Launch), one row that wraps; a tab may name its own group */
+.tabs { grid-area: tabs; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; padding: 6px var(--s3); background: var(--bg); border-bottom: 1px solid var(--line); }
+.tab-group { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; color: var(--muted); padding: 0 6px 0 14px; }
+.tab-group:first-child { padding-left: 4px; }
+.tabs button { min-height: 32px; padding: 0 10px; background: transparent; border: 0; border-radius: var(--r-md); color: var(--ink-2); font-weight: 600; font-size: var(--fs-md); white-space: nowrap; position: relative; }
 .tabs button:hover:not([aria-selected=true]) { background: var(--surface-2); color: var(--ink); }
 .tabs button[aria-selected=true] { background: var(--lav-soft); color: var(--ink); }
-.tabs button[aria-selected=true]::before { content: ''; position: absolute; left: -8px; top: 7px; bottom: 7px; width: 3px; border-radius: 0 3px 3px 0; background: var(--lav); }
+.tabs button[aria-selected=true]::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -7px; height: 2px; border-radius: 2px 2px 0 0; background: var(--lav); }
 .tabs button .ico { width: 16px; height: 16px; flex: none; color: var(--muted); }
 .tabs button[aria-selected=true] .ico { color: var(--lav-ink); }
-.panels { grid-column: 3; overflow: auto; background: var(--surface); min-height: 0; min-width: 0; }
+/* the inspector: the open tool, beside the game */
+.inspector { grid-area: insp; width: var(--inspector-w); display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-left: 1px solid var(--line); }
+.inspector[hidden] { display: none; }
+.inspector-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: 0 var(--s2) 0 var(--s5); min-height: 44px; border-bottom: 1px solid var(--line); flex: none; }
+.inspector-head h2 { margin: 0; font-size: var(--fs-base); font-weight: 700; }
+.inspector-head button.icon { width: 28px; min-height: 28px; font-size: 18px; }
+.panels { flex: 1; overflow: auto; background: var(--surface); min-height: 0; min-width: 0; }
+
+/* the start page */
+.start-inner { max-width: 880px; margin: 0 auto; padding: 72px var(--s6) 96px; }
+.start-hero h1 { font-size: clamp(30px, 4.4vw, 46px); line-height: 1.1; letter-spacing: -.02em; margin: 0 0 var(--s3); }
+.start-hero h1 span { color: var(--lime); }
+:root[data-theme=light] .start-hero h1 span { color: #3f7300; }
+.start-lede { font-size: var(--fs-lg); color: var(--ink-2); margin: 0 0 var(--s6); max-width: 660px; line-height: 1.55; }
+.start-box { border: 1px solid var(--line-strong); border-radius: 16px; background: var(--surface-2); padding: var(--s3); box-shadow: var(--shadow); }
+.start-box:focus-within { border-color: var(--lav); box-shadow: 0 0 0 3px var(--lav-soft), var(--shadow); }
+.start-box textarea { width: 100%; min-height: 96px; border: 0; background: transparent; font-size: var(--fs-lg); padding: 6px 8px; resize: vertical; box-shadow: none; }
+.start-box textarea:focus { box-shadow: none; }
+.start-box-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: 0 4px; }
+.start-box-row #start-go { flex: none; white-space: nowrap; min-height: 40px; padding: 0 20px; font-size: var(--fs-base); }
+.start-session { display: flex; align-items: baseline; color: var(--ink-2); line-height: 1.45; }
+.start-session .dot { flex: none; transform: translateY(-1px); }
+.start-note { color: var(--bad); margin-top: var(--s2); min-height: 1em; }
+.start-ideas { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+.idea { min-height: 32px; padding: 0 14px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--line-strong); color: var(--ink-2); font-weight: 600; font-size: var(--fs-sm); }
+.idea:hover { border-color: var(--lav-line); color: var(--ink); background: var(--surface-2); }
+.start-section { margin-top: 56px; }
+.start-section h2 { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; color: var(--muted); margin: 0 0 var(--s3); }
+.start-section > p { margin: -6px 0 var(--s3); }
+.game-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s3); }
+.game-card { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; text-align: left; min-height: 0; padding: var(--s4); border-radius: var(--r-lg); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 400; cursor: pointer; }
+.game-card.example { cursor: default; }
+button.game-card:hover { border-color: var(--lav-line); background: var(--surface-2); }
+.game-card-title { font-size: var(--fs-base); font-weight: 700; }
+.game-card-hook { font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.45; }
+.game-card-meta { margin-top: auto; padding-top: var(--s2); font-size: var(--fs-xs); color: var(--muted); font-family: var(--mono); }
+.game-card.example .game-card-meta { font-family: var(--font); }
+.project { display: flex; align-items: center; gap: var(--s3); flex: 1; min-width: 0; }
 
 /* ---------------------------------------------------------------- the panel and its parts */
 .panel { padding: var(--s5) var(--s5) var(--s8); }
@@ -269,7 +385,7 @@ textarea.ask { width: 100%; resize: vertical; min-height: 72px; margin-bottom: v
 
 /* ---------------------------------------------------------------- the Economy tab (.gfw3, its own file's styles):
    the same buttons, fonts and surfaces as every other tab, through CSS only */
-.panels .gfw3 { font-family: var(--font); }
+.panels .gfw3 { font-family: var(--font); grid-template-columns: minmax(0, 1fr); min-width: 0; }   /* the tab never widens the page (a phone shows it in the page, not in a scroll box) */
 .panels .gfw3 button { white-space: normal; min-height: var(--h-control); border-radius: var(--r-md); border-color: var(--line-strong); background: var(--surface-2); font-weight: 600; font-size: var(--fs-md); }
 .panels .gfw3 button:hover:not(:disabled) { background: var(--surface-3); border-color: var(--lav-line); }
 .panels .gfw3 button.primary { background: var(--lime); border-color: var(--lime); color: var(--on-lime); font-weight: 700; }
@@ -281,42 +397,51 @@ textarea.ask { width: 100%; resize: vertical; min-height: 72px; margin-bottom: v
 .panels .gfw3 .seg button.on { border-color: var(--lav); color: var(--lav-ink); background: var(--lav-soft); }
 
 /* ---------------------------------------------------------------- narrower screens */
-/* a laptop: the rail becomes a grouped bar over the panel, which wraps (no label is ever cut off or hidden in a scroll) */
+/* a small laptop: a narrower conversation; the inspector lies over the game's right side instead of beside it */
 @media (max-width: 1199px) {
-  .layout { grid-template-columns: minmax(0, 1fr) minmax(380px, 42vw); }
-  .side { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-left: 1px solid var(--line); }
-  .tabs { grid-column: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px 4px; padding: var(--s2); border: 0; border-bottom: 1px solid var(--line); overflow: visible; }
-  .tab-group { padding: 0 4px 0 10px; }
-  .tab-group:first-child { padding: 0 4px 0 4px; }
-  .tabs button { width: auto; min-height: 30px; white-space: nowrap; }
-  .tabs button[aria-selected=true]::before { left: 10px; right: 10px; top: auto; bottom: 0; width: auto; height: 2px; border-radius: 2px 2px 0 0; }
-  .panels { grid-column: auto; flex: 1; }
+  :root { --chat-w: 340px; --inspector-w: min(400px, 60%); }
+  .product { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "tabs tabs" "pbar acts" "stage stage"; position: relative; }
+  .inspector { grid-area: stage; justify-self: end; z-index: 3; box-shadow: var(--shadow); }
+  .preview-bar .hint { display: none; }
 }
+/* a phone: everything stacks, the conversation first, then the game and its tools */
 @media (max-width: 900px) {
   html, body { height: auto; min-height: 100%; }
   .bar { flex-wrap: wrap; gap: var(--s2) var(--s3); padding: var(--s2) var(--s4); }
   .brand { order: 1; }
-  .game-title { order: 3; flex: 1 1 100%; font-size: var(--fs-base); }
+  .project { order: 3; flex: 1 1 100%; }
+  .game-title { font-size: var(--fs-base); }
   .links { order: 2; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
   .xg-mark { font-size: 18px; }
   .brand-label { margin-left: 10px; padding-left: 10px; }
   .links .btn { min-height: 28px; padding: 0 10px; font-size: var(--fs-sm); }
-  .layout { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+  .layout, :root[data-view=start] .layout { grid-template-columns: minmax(0, 1fr); overflow: visible; }
+  .chat { border-right: 0; border-bottom: 1px solid var(--line); }
+  .chat-scroll { max-height: 52vh; }
+  .product { grid-template-columns: minmax(0, 1fr); grid-template-areas: "tabs" "pbar" "acts" "stage" "insp"; }
+  .product-actions:not(:empty) { justify-content: stretch; }
+  .product-actions:not(:empty) > * { flex: 1; }
   .preview { height: min(58vh, 420px); }
+  :root[data-view=making] .preview { height: auto; }
   .frame-wrap { min-height: 0; }
   .preview-bar { padding: 6px var(--s4); min-height: 0; }
-  .preview-bar .hint { margin-left: 0; flex: 1 1 100%; }
-  .side { min-height: 60vh; border-left: 0; }
   .tabs { padding: var(--s2) var(--s3); }
+  .inspector { grid-area: insp; width: auto; justify-self: stretch; box-shadow: none; border-left: 0; border-top: 1px solid var(--line); }
+  .panels { overflow: visible; }
   .panel { padding: var(--s4) var(--s4) var(--s8); }
   .row { grid-template-columns: 1fr; gap: var(--s2); }
   .row .edit { justify-content: flex-start; flex-wrap: wrap; }
   .row .edit input[type=text] { width: 100%; }
+  .start-inner { padding: 36px var(--s4) 64px; }
+  .start-box-row { flex-direction: column; align-items: stretch; }
+  .start-section { margin-top: 40px; }
+  ol.stages li { font-size: 10px; }
 }
 @media (max-width: 480px) {
-  .bar .links #open-friends { display: none; }    /* the same link is the Friends tab's step 2 and the preview's lobby */
+  .bar .links #open-friends { display: none; }    /* the same link is the Friends tool's step 2 and the preview's lobby */
   .tab-group { flex: 1 1 100%; padding: 6px 4px 0; }
   .tab-group:first-child { padding-top: 0; }
+  ol.stages { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 8px; }
 }
 
 /* ---------------------------------------------------------------- a 4K screen at 100 %: the tools grow, the game does not.
@@ -337,3 +462,26 @@ dl.controls { display: grid; grid-template-columns: max-content minmax(0, 1fr); 
 dl.controls dt { color: var(--muted); text-transform: capitalize; }
 dl.controls dd { margin: 0; color: var(--ink); }
 .links > * { white-space: nowrap; }
+.game-folder { font: 400 var(--fs-sm) var(--mono); color: var(--muted); margin-left: 6px; }
+details.concepts-done summary { cursor: pointer; font-weight: 600; }
+details.concepts-done p { margin: 6px 0 0; color: var(--ink-2); }
+details.concept-more summary { cursor: pointer; font-size: var(--fs-sm); color: var(--muted); }
+details.concept-more summary:hover { color: var(--ink); }
+details.concept-more[open] summary { margin-bottom: 4px; }
+.linkish { background: none; border: 0; min-height: 0; padding: 0; color: var(--lav-ink); font: inherit; font-size: var(--fs-sm); font-weight: 600; text-decoration: underline; cursor: pointer; }
+.linkish:hover { color: var(--ink); }
+.concept[aria-current=true] { border-color: var(--lime); box-shadow: inset 0 0 0 1px var(--lime); }
+.concept-picked { margin-top: var(--s2); color: var(--good); font-weight: 700; }
+
+/* a wide tool (a tab that declares `wide`): the whole product side; the game a thumbnail in the corner, or hidden */
+.preview-cover { display: none; }
+@media (min-width: 901px) {
+  :root[data-wide] .inspector { grid-column: 1 / -1; width: auto; }
+  :root[data-wide] .product { position: relative; }
+  :root[data-wide=hidden] .preview { display: none; }
+  :root[data-wide] .preview { grid-column: 1 / -1; grid-row: 3; }          /* an absolute grid item: its box is the whole row */
+  :root[data-wide=thumbnail] .preview { position: absolute; right: var(--s4); bottom: var(--s4); width: 288px; height: 162px; z-index: 5; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line-strong); box-shadow: var(--shadow); }
+  :root[data-wide=thumbnail] .frame-wrap { min-height: 0; }
+  :root[data-wide=thumbnail] .preview-cover { display: block; position: absolute; inset: 0; z-index: 3; background: transparent; border: 0; min-height: 0; padding: 0; border-radius: 0; cursor: zoom-in; }
+  :root[data-wide=thumbnail] .preview-cover:hover { background: rgba(169, 156, 255, .12); }
+}

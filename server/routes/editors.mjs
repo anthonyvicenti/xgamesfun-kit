@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { GF3, GF3_LIBRARY, GF3_TOOLS } from '../../lib/paths.mjs';
 import { findSlot, setValue } from '../../lib/slots.mjs';
 import { BASE_HEADERS } from '../security.mjs';
-import { HttpError, readJson } from '../http.mjs';
+import { HttpError, openGame, readJson } from '../http.mjs';
 
 const FOLDERS = new Set(['bodies', 'props']);
 const NAME = /^[a-z0-9][a-z0-9-]*\.(glb|preview\.jpg)$/;
@@ -19,17 +19,18 @@ const json = async f => JSON.parse(await readFile(f, 'utf8'));
 const kitModule = rel => import(pathToFileURL(path.join(GF3, rel)).href);
 
 export default function register(router, ctx) {
-  const { gameDir } = ctx;
+  // the open game, read at each request: the studio may open another while the server runs (server/index.mjs)
+  const G = () => openGame(ctx);
 
   // the library's bodies, each with its picture, and which one the game's body slot holds now (by its bytes)
   router.get('/bodies', async () => {
     const lib = await json(path.join(GF3_LIBRARY, 'bodies.json'));
     const list = Array.isArray(lib) ? lib : lib.bodies ?? [];
     let current = null, file = null;
-    try { const s = await findSlot(gameDir, `character.body.${ctxRole(ctx)}`); file = s.source?.file; } catch {}
+    try { const s = await findSlot(G(), `character.body.${ctxRole(ctx)}`); file = s.source?.file; } catch {}
     if (file && file.endsWith('.glb')) {
       try {
-        const mine = createHash('sha256').update(await readFile(path.join(gameDir, file))).digest('hex');
+        const mine = createHash('sha256').update(await readFile(path.join(G(), file))).digest('hex');
         for (const b of list) {
           try { if (createHash('sha256').update(await readFile(path.join(GF3_LIBRARY, b.file))).digest('hex') === mine) { current = b.id; break; } } catch {}
         }
@@ -66,20 +67,20 @@ export default function register(router, ctx) {
   router.post('/map', async req => {
     const { map } = await readJson(req, { limit: 512 * 1024 });
     if (!map || typeof map !== 'object') throw new HttpError(400, 'map is required');
-    const slot = await findSlot(gameDir, 'world.map').catch(() => null);
+    const slot = await findSlot(G(), 'world.map').catch(() => null);
     if (!slot) throw new HttpError(400, 'this game has no tile map (no world.map slot)');
     const { readMap, reachOf, jumpReach } = await kitModule('kit/flat/tilemap.js');
     const { SIDE } = await kitModule('kit/flat/slots.js');
     const M = readMap(map);
     if (!M.ok) throw new HttpError(400, `the map has problems: ${M.problems.join('; ')}`);
     if (M.side) {
-      const game = await json(path.join(gameDir, 'config', 'game.json')).catch(() => ({}));
+      const game = await json(path.join(G(), 'config', 'game.json')).catch(() => ({}));
       const C = game.controller ?? {};
-      const G = reachOf(M, jumpReach({ gravity: game.gravity ?? 20, jump: C.jump ?? SIDE.jump, speed: C.speed ?? SIDE.speed, fallScale: SIDE.fallScale }));
-      if (G.problems.length) throw new HttpError(400, `out of reach: ${G.problems.join('; ')}`);
+      const reach = reachOf(M, jumpReach({ gravity: game.gravity ?? 20, jump: C.jump ?? SIDE.jump, speed: C.speed ?? SIDE.speed, fallScale: SIDE.fallScale }));
+      if (reach.problems.length) throw new HttpError(400, `out of reach: ${reach.problems.join('; ')}`);
     }
-    const wrote = await setValue(gameDir, 'world.map', map);
-    const derived = await syncDerived(gameDir);
+    const wrote = await setValue(G(), 'world.map', map);
+    const derived = await syncDerived(G());
     return { id: wrote.id, file: wrote.file, cols: M.cols, rows: M.rows, spawns: M.spawns.length, derived };
   });
 }

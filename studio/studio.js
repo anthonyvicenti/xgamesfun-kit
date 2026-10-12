@@ -1,7 +1,12 @@
-// The studio shell: the game preview, the wallet, live reload, and the tabs seam.
-// A tab is studio/tabs/<id>.js exporting `default { id, label, order, group?, mount(el, ctx) }` (docs/ARCHITECTURE.md).
-// `group` names the rail's heading it sits under (Make, Edit, Test, Launch; the built-in tabs have theirs in GROUPS
-// below, a new tab without one goes under More). mount may return a function, called when the studio page goes away. ctx holds:
+// The studio shell. With no game open: the start page (studio/start.js). With one: the conversation with the person's
+// own agent session on the left (studio/chat.js), and the product on the right: the game preview, with the tools (the
+// tabs seam) in a bar over it and the open tool in an inspector beside it. Also the wallet, live reload and the theme.
+// A tab is studio/tabs/<id>.js exporting `default { id, label, order, group?, action?, wide?, icon?, mount(el, ctx) }`
+// (docs/ARCHITECTURE.md). `group` names the tool bar's group it sits in (Edit, Test, Launch; the built-in tabs have theirs
+// in GROUPS below, a new tab without one goes under More). `action` (true, or { label }) also gives it a primary button
+// beside the preview's bar: the flow's last step, e.g. Publish. A click opens the tab like its tool bar entry does.
+// `wide` (true, or { game: 'thumbnail' | 'hidden' }) gives the open tab the whole product side, the game a thumbnail
+// in its corner (true) or hidden, back when the tab closes. mount may return a function, called when the studio page goes away. ctx holds:
 //   game                 /api/game/info: title, hook, mechanics, controls, network, gamesfun (gamesfun.json), latestVerify
 //   api(path, body?, method?)  the dev server's API: GET without a body, POST with one (JSON, or raw for a Blob/ArrayBuffer);
 //                        a third argument sets the method (PATCH with a JSON body, DELETE with none);
@@ -17,6 +22,9 @@
 //                        next live reload away when only these files change (a value the game already took live)
 //   selection            { get(), set(sel|null), onChange(fn) } what the person picked (a slot or object, {id, label}); it travels
 //                        with their next change request. A game frame may post { gf: 'select', id, label } to pick one.
+//   chat                 { ask({ label, placeholder, compose, selection, button, onSent }), send(text) } the conversation's one
+//                        box: an editor's "Ask my session" hands it a context (studio/lib/editors/ui.js askBox)
+//   project()            the open game: { name, dir, made }
 //   on(event, fn)        dev-server events: 'game' (the game's files changed: { files }), 'verify' (a run finished)
 import { hostBridge, inside } from './host-bridge.js';
 import { createWallet } from './wallet.js';
@@ -164,12 +172,11 @@ const WEB3_TABS = new Set(['economy']);
 let networkShown = false;
 const paintNetwork = id => { $('#network').hidden = !(networkShown || WEB3_TABS.has(id)); };
 
-// The rail's groups, in order. A tab may name its own (`group: 'Edit'`); one that names none goes under More.
-const GROUPS = { session: 'Make', build: 'Make', map: 'Edit', skins: 'Edit', items: 'Edit', assets: 'Edit', tune: 'Edit', verify: 'Test', friends: 'Test', economy: 'Launch' };
-const GROUP_ORDER = ['Make', 'Edit', 'Test', 'Launch'];
+// The tool bar's groups, in order. A tab may name its own (`group: 'Edit'`); one that names none goes under More.
+// (Session and Build are not tools: they are the conversation, on the left.)
+const GROUPS = { map: 'Edit', skins: 'Edit', items: 'Edit', assets: 'Edit', tune: 'Edit', verify: 'Test', friends: 'Test', economy: 'Launch' };
+const GROUP_ORDER = ['Edit', 'Test', 'Launch'];
 const TAB_ICONS = {
-  session: '<path d="M4 5h16v11H9l-5 4z"/>',
-  build: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/>',
   map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
   skins: '<circle cx="12" cy="7" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>',
   items: '<path d="M14.5 3.5l6 6-9 9-4 1 1-4z"/><path d="M4 20l3-3"/>',
@@ -179,7 +186,7 @@ const TAB_ICONS = {
   friends: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/><path d="M16 5.5a3 3 0 0 1 0 5M18 14a5.5 5.5 0 0 1 3 5v1"/>',
   economy: '<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/>',
 };
-const tabIcon = id => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'ico'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = TAB_ICONS[id] ?? '<rect x="5" y="5" width="14" height="14" rx="3"/>'; return s; };
+const tabIcon = (id, own = null) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'ico'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = TAB_ICONS[id] ?? (typeof own === 'string' && /^<(path|circle|rect|line|polyline|polygon)\b[^<>]*\/>(\s*<(path|circle|rect|line|polyline|polygon)\b[^<>]*\/>)*$/.test(own.trim()) ? own : '<rect x="5" y="5" width="14" height="14" rx="3"/>'); return s; };
 
 async function loadTabs(ctx) {
   const list = await api('studio/tabs');
@@ -196,20 +203,41 @@ async function loadTabs(ctx) {
   }
   const groupRank = g => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? GROUP_ORDER.length : i; };
   tabs.sort((a, b) => groupRank(a.group) - groupRank(b.group) || a.order - b.order || a.label.localeCompare(b.label));
-  const bar = $('#tabs'), panels = $('#panels');
+  const bar = $('#tabs'), panels = $('#panels'), inspector = $('#inspector');
   const mounted = new Map(), cleanups = [];
+  // A tool opens in the inspector beside the game; closing it gives the game the room (nothing is lost: a tool stays mounted)
   async function select(id) {
     store.set('tab', id);
     paintNetwork(id);
     for (const b of bar.querySelectorAll('[role=tab]')) { const on = b.dataset.id === id; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; }
     for (const p of panels.children) p.hidden = p.dataset.id !== id;
+    const tab = tabs.find(t => t.id === id);
+    inspector.hidden = false;
+    document.documentElement.dataset.tool = id;
+    // a tool that asks for the whole product side (wide): the game shrinks to a thumbnail, or hides, while it is open
+    const wide = tab.wide === true ? 'thumbnail' : tab.wide?.game === 'hidden' ? 'hidden' : tab.wide ? 'thumbnail' : null;
+    if (wide) document.documentElement.dataset.wide = wide; else delete document.documentElement.dataset.wide;
+    $('#inspector-title').textContent = tab.label;
     if (!mounted.has(id)) {
-      const tab = tabs.find(t => t.id === id), el = panels.querySelector(`[data-id="${CSS.escape(id)}"]`);
+      const el = panels.querySelector(`[data-id="${CSS.escape(id)}"]`);
       mounted.set(id, true);
       try { const off = await tab.mount(el, ctx); if (typeof off === 'function') cleanups.push(off); }
       catch (e) { el.innerHTML = '<p class="error-box"></p>'; el.firstChild.textContent = `${tab.label}: ${e.message}`; console.error(e); }
     }
   }
+  function closeTool() {
+    store.set('tab', '');
+    paintNetwork(null);
+    for (const b of bar.querySelectorAll('[role=tab]')) { b.setAttribute('aria-selected', 'false'); b.tabIndex = -1; }
+    bar.querySelector('[role=tab]')?.setAttribute('tabindex', '0');
+    for (const p of panels.children) p.hidden = true;
+    inspector.hidden = true;
+    delete document.documentElement.dataset.tool;
+    delete document.documentElement.dataset.wide;
+  }
+  $('#inspector-close').addEventListener('click', closeTool);
+  // the game as a thumbnail (a wide tool is open): a click on it gives the game its room back
+  $('.preview').addEventListener('click', e => { if (document.documentElement.dataset.wide === 'thumbnail' && e.target.closest('.preview-cover')) closeTool(); });
   let lastGroup = null;
   for (const t of tabs) {
     if (t.group !== lastGroup) {
@@ -220,7 +248,8 @@ async function loadTabs(ctx) {
     }
     const b = document.createElement('button');
     b.type = 'button'; b.role = 'tab'; b.dataset.id = t.id; b.dataset.group = t.group; b.id = `tab-${t.id}`; b.tabIndex = -1;
-    b.append(tabIcon(t.id), Object.assign(document.createElement('span'), { textContent: t.label }));
+    b.setAttribute('aria-selected', 'false');
+    b.append(tabIcon(t.id, t.icon), Object.assign(document.createElement('span'), { textContent: t.label }));
     b.setAttribute('aria-controls', `panel-${t.id}`);
     b.addEventListener('click', () => select(t.id));
     bar.append(b);
@@ -228,7 +257,17 @@ async function loadTabs(ctx) {
     p.className = 'panel'; p.dataset.id = t.id; p.hidden = true; p.role = 'tabpanel'; p.id = `panel-${t.id}`; p.setAttribute('aria-labelledby', `tab-${t.id}`);
     panels.append(p);
   }
-  // the arrow keys move between tabs, Home and End go to the first and the last (the tablist pattern)
+  bar.querySelector('[role=tab]')?.setAttribute('tabindex', '0');
+  // a tab that is the flow's last step (action) also gets a primary button at the end of the bar
+  const acts = $('#product-actions');
+  for (const t of tabs.filter(x => x.action)) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'product-action'; b.dataset.action = t.id;
+    b.textContent = typeof t.action === 'object' && t.action.label ? String(t.action.label) : t.label;
+    b.addEventListener('click', () => select(t.id));
+    acts.append(b);
+  }
+  // the arrow keys move between tools, Home and End go to the first and the last (the tablist pattern)
   bar.addEventListener('keydown', e => {
     const list = [...bar.querySelectorAll('[role=tab]')], i = list.indexOf(document.activeElement);
     if (i < 0) return;
@@ -239,16 +278,52 @@ async function loadTabs(ctx) {
     next.focus(); select(next.dataset.id);
   });
   window.addEventListener('pagehide', () => { for (const off of cleanups) { try { off(); } catch {} } });
-  // a link to a tab (#economy, or #economy?flow=economy from an agent's tool) wins over the remembered tab
+  // a link to a tool (#economy, or #economy?flow=economy from an agent's tool) wins over the one left open last time
   const linked = () => decodeURIComponent(location.hash.slice(1).split('?')[0]);
   const want = tabs.some(t => t.id === linked()) ? linked() : store.get('tab');
-  if (tabs.length) await select(tabs.some(t => t.id === want) ? want : tabs[0].id);
+  if (tabs.some(t => t.id === want)) await select(want);
   window.addEventListener('hashchange', () => { if (tabs.some(t => t.id === linked())) select(linked()); });
   return tabs;
 }
 
+// ---- which game is open ----
+const setView = v => { document.documentElement.dataset.view = v; };
+// another game opened (here, from another tab, or by the build loop's folder becoming a game): start the page over
+const reopen = () => { location.href = '/studio/'; };
+es.addEventListener('project', reopen);
+$('#home-btn').addEventListener('click', async () => {
+  try { await api('studio/project', { name: null }); } catch (e) { toast(e.message, 'error'); return; }
+  reopen();
+});
+
 async function main() {
   window.__gamesfunStudio = true;
+  let project;
+  try { project = (await api('studio/project')).project; } catch (e) { $('#game-title').textContent = `Could not reach the dev server: ${e.message}`; return; }
+  const ctx = { api, wallet, toast, preview, on, selection, project: () => project, open: reopen };
+
+  if (!project) {                                         // the start page: nothing is played
+    setView('start');
+    $('#game-title').textContent = '';
+    document.title = 'XGames.fun Studio';
+    const { mountStart } = await import('./start.js');
+    window.__gamesfunStart = mountStart($('#start'), ctx);
+    return;
+  }
+
+  setView(project.made ? 'game' : 'making');
+  const { mountChat } = await import('./chat.js');
+  ctx.chat = mountChat($('#chat'), { ...ctx, onMade: reopen });
+  window.__gamesfunChat = ctx.chat;
+  if (!project.made) {                                    // the build loop is making this folder: the game appears when it exists
+    $('#game-title').replaceChildren('New game ', Object.assign(document.createElement('span'), { className: 'game-folder', textContent: `games/${project.name}` }));
+    document.title = `${project.name} · XGames.fun Studio`;
+    const empty = $('#product-empty');
+    empty.hidden = false;
+    empty.innerHTML = '<div class="product-empty-inner"><div class="product-empty-mark" aria-hidden="true"></div><h2>Your game appears here once it is made</h2><p>Your session pitches a few takes first, in the conversation. Pick one and it makes the game from it: then you play it here and change it with the tools.</p></div>';
+    return;
+  }
+
   let game;
   try { game = await api('game/info'); } catch (e) { $('#game-title').textContent = `Could not reach the dev server: ${e.message}`; return; }
   document.title = `${game.title} · XGames.fun Studio`;
@@ -260,7 +335,7 @@ async function main() {
   if (game.gamesfun?.economy?.live?.game) $('#open-game').href = '/studio/play.html';
   paintNetwork(store.get('tab'));
   preview.show(preview.path);
-  const ctx = { game, api, wallet, toast, preview, on, selection };
+  ctx.game = game;
   window.__gamesfunStudioTabs = await loadTabs(ctx);
 }
 main();

@@ -92,6 +92,9 @@ export default async function register(router, ctx) {
   // ---- the run file: how the plugin and the tools find this server ---------------------------------------------
   const entry = { url: ctx.url, token, run: bridge.run, pid: process.pid, game: ctx.gameDir, wait, started: Date.now() };
   await recordRun(ctx.kitRoot, entry);
+  // the studio opened another game (or a new idea's folder): the bridge and the run file follow, so the plugin and the
+  // tools find this server for that game
+  ctx.onGame?.(dir => { bridge.setGame(dir); entry.game = dir; recordRun(ctx.kitRoot, entry).catch(e => ctx.log(`bridge: ${e.message}`)); });
   const onExit = () => { /* a dead pid is dropped by every reader; nothing to do synchronously */ };
   process.once('exit', onExit);
   live.set(ctx.url, {

@@ -96,7 +96,7 @@ gh auth login
 4. Paste this whole line and press Enter:
 
 ```text
-Set up the games.fun game-building kit on this machine: git clone https://github.com/anthonyvicenti/gamesfun-kit.git (skip the clone if a gamesfun-kit folder is already here), then in that folder run these, one at a time, with Node 24: npm ci, then node bin/gamesfun.mjs doctor, then node bin/gamesfun.mjs connect, then node bin/gamesfun.mjs create games/first --from soak-squad, then start node bin/gamesfun.mjs dev games/first in the background and give me the studio address it prints (it opens my browser too). Tell me what each step printed in one line, and end with the line connect printed after "next:" (what I type in this session so the studio page reaches it). If a step fails, do what its "If it fails" section in gamesfun-kit/docs/ONE-LINE.md says, and if that doesn't fix it, stop and tell me exactly what failed. Never ask me for a password, token or key.
+I want you to set up the XGames.fun game kit in this folder so I can make games in its studio. Here is what that involves, and I agree to it: git clone https://github.com/anthonyvicenti/gamesfun-kit.git (skip the clone if a gamesfun-kit folder is already here), then in that folder, with Node 24, run these one at a time: npm ci, then node bin/gamesfun.mjs doctor, then node bin/gamesfun.mjs connect, then start node bin/gamesfun.mjs dev in the background and give me the studio address it prints (it opens the studio's start page in my browser, where I describe my first game). connect adds the kit's tools and a plugin to you at user scope; the plugin lets the studio page on 127.0.0.1 show this session, send it my requests and answer its permission prompts. I can undo it with node bin/gamesfun.mjs connect --remove. Tell me what each step printed in one line. If a step fails, do what its "If it fails" section in gamesfun-kit/docs/ONE-LINE.md says, and if that doesn't fix it, stop and tell me exactly what failed. Never ask me for a password, token or key. End your last message with the line connect printed after "next:" (what I type in this session so the studio page reaches it), word for word, and nothing after it.
 ```
 
 Your agent now works for a few minutes. It asks your permission before it runs each command. Say yes to these. It
@@ -110,15 +110,17 @@ should never ask you for a password, a token or a key. If it does, say no and te
 | 2 | `npm ci` | A line that starts with "added" and a number of packages. It takes under a minute. |
 | 3 | `doctor` | About ten lines that start with `ok`, `warn` or `FAIL`, then "Ready: nothing blocks a first game." A `warn` is fine. A `FAIL` is not. |
 | 4 | `connect` | It says the tools were added to your agent. Then a line that starts with `next:`. |
-| 5 | `create` | "create: OK games/first". |
-| 6 | `dev` | An address like `http://127.0.0.1:5180/studio/`. Chrome opens on that page. |
+| 5 | `dev` | An address like `http://127.0.0.1:5180/studio/`. Chrome opens on that page: the studio's start page, "What do you want to make?". No game plays yet. |
 
-When the agent is done it tells you to type something. **In Claude Code, type `/reload-plugins` and press Enter. Then
-say anything to it, for example "hello".** This connects the page in Chrome to your agent: the Session tab stops saying
-"No session connected yet". Codex has no such step, and in Codex the page cannot reach your agent yet
-(things 3, 4 and 7 below need Claude Code).
+When the agent is done, its last line tells you to type something. **In Claude Code, type `/reload-plugins` and press
+Enter. Then say hi to it.** This is the one step the agent cannot do for you: it connects the page in Chrome to your
+agent, and the line under the start page's box stops saying "No agent session connected yet". Codex has no such step,
+and in Codex the page cannot reach your agent yet (things 3, 4 and 7 below need Claude Code).
 
-The page in Chrome is the studio. The game is on the left. On the right are tabs.
+The page in Chrome is the studio. To try the things below on a finished game, click **Start from this** under
+**Soak Squad** at the bottom of the start page: it copies the example into `games/soak-squad` and opens it. The
+conversation with your agent is on the left; the game is on the right, with its tools in a bar above it. (The pictures
+on this page show the studio before this layout: the game on the left and the tabs on the right.)
 
 ![The studio page: the game on the left, tabs on the right](try-it/01-studio.jpg)
 
@@ -189,10 +191,10 @@ Then try two more:
 - Ask your agent to do one for you, in your own words, with your own file's place:
 
   ```text
-  In games/first, use the picture C:\Users\me\Pictures\dots.png for the ground pattern.
+  In games/soak-squad, use the picture C:\Users\me\Pictures\dots.png for the ground pattern.
   ```
 
-**If it goes wrong, send us:** the picture you used, a screenshot of the page, and the file `games/first/assets.json`.
+**If it goes wrong, send us:** the picture you used, a screenshot of the page, and the file `games/soak-squad/assets.json`.
 
 ### 3. Ask for a change in the studio page
 
@@ -207,7 +209,7 @@ takes a few minutes. When it is done, the game in the page has changed.
 
 ![A request typed in the page, done by the session](try-it/session-request-done.jpg)
 
-**If it goes wrong, send us:** a screenshot of the Session tab, and what your agent's terminal shows. If the tab says
+**If it goes wrong, send us:** a screenshot of the conversation (the left side of the studio), and what your agent's terminal shows. If the tab says
 "No session connected yet", say so: that means the page and your agent did not find each other.
 
 ### 4. Answer a permission question in the page
@@ -218,7 +220,7 @@ takes a few minutes. When it is done, the game in the page has changed.
 Run this command: node --version > out.txt
 ```
 
-**You should see:** the question appears in your terminal, and also in the Session tab with two buttons, **Allow** and
+**You should see:** the question appears in your terminal, and also in the studio's conversation with two buttons, **Allow** and
 **Deny**. Click **Allow** in the page. The agent goes on, and the terminal's question goes away. Ask again and click
 **Deny**. The agent is told no.
 
@@ -321,7 +323,7 @@ do not want what it was doing.
 
 ![The Build tab: the steps so far, and the copies you can roll back to](try-it/build-roll-back.jpg)
 
-**If it goes wrong, send us:** a screenshot of the Build tab, what the agent said next, and the file
+**If it goes wrong, send us:** a screenshot of the conversation (where the build's steps and roll-back points are), what the agent said next, and the file
 `games/<name>/.gf-loop/state.json`.
 
 ### 8. Make the board game example
@@ -362,11 +364,11 @@ real Windows PC or Mac. Each takes a few minutes. Run the commands in the `games
 1. **The full check of a game.** This plays the game in Chrome with real keys and mouse, about 3 minutes:
 
    ```text
-   node bin/gamesfun.mjs verify games/first --quick
+   node bin/gamesfun.mjs verify games/soak-squad --quick
    ```
 
    You should see a list of numbered checks and, at the end, a line that starts with `PASS`. Send us the newest
-   `verdict.json` inside `games/first/evidence/` whether it passes or not.
+   `verdict.json` inside `games/soak-squad/evidence/` whether it passes or not.
 
 2. **The second kind of game, with the better graphics.** It needs a real graphics card.
 

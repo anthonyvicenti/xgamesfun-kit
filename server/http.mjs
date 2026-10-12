@@ -39,3 +39,9 @@ export async function readJson(req, { limit = 1024 * 1024 } = {}) {
   if (!buf.length) return {};
   try { return JSON.parse(buf.toString('utf8')); } catch { throw new HttpError(400, 'body is not JSON'); }
 }
+
+/** The game the dev server has open now (ctx.gameDir), or a 409 that says what to do when none is. */
+export function openGame(ctx) {
+  if (!ctx.gameDir) throw new HttpError(409, 'No game is open yet: pick one on the studio\'s start page, or describe a new one there.');
+  return ctx.gameDir;
+}

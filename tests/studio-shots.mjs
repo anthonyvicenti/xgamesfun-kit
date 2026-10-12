@@ -58,7 +58,7 @@ try {
       playtest: { round: 1, ok: false, verdict: 'fail', at: new Date().toISOString() }, pt: { notes: ['The enemies stand still at the far end of the arena.', 'The score never moves while I shoot.'] },
       fixes: [{ round: 1, fix: 'fair-on', file: 'config/game.json', pointer: '/fair/on', line: 'x' }], outcome: null,
       history: [{ step: 'create', next: 'agent', why: '', at: new Date().toISOString() }, { step: 'agent', next: 'fix', why: '', at: new Date().toISOString() }, { step: 'verify', next: 'repair', why: '', at: new Date().toISOString() }] }));
-    await tab(p, 'build'); await sleep(2500);
+    await sleep(2500);                       // the build is the conversation on the left: no tab to open
     await shot(p, `${label}-6-build-verdict`, 'Build tab: step, round, failing check with its rule and fix, play-tester notes, automatic fixes, roll back (none saved yet)');
     // tune
     await tab(p, 'tune'); await sleep(600);
@@ -70,7 +70,7 @@ try {
 
   // phone width: nothing scrolls sideways
   const phone = await page(390, 844, party.url);
-  for (const id of ['session', 'build', 'assets', 'tune', 'verify', 'friends']) { await tab(phone, id); await noSideScroll(phone, `phone ${id}`); }
+  for (const id of ['assets', 'tune', 'verify', 'friends']) { await tab(phone, id); await noSideScroll(phone, `phone ${id}`); }
   await phone.close();
 
   // friend joined: a real room in the preview, a second tab joined by the room code

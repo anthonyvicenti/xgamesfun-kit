@@ -164,8 +164,10 @@ try {
     await p.click('.swatch[title="#4be0a8"]');
     await sleep(5000);                        // the preview reloads the turning player wearing the colour
     await shot(p, 'skins-2d-1', 'Skins on a flat game: the six frames and the walk tinted with player 1\'s new colour (light parts take it), the kit\'s picture judge passes the sheet');
-    await p.fill('.ask-box textarea', 'a small knight in blue armour with a feather on the helmet');
-    await p.click('button:has-text("Ask my session to draw it")');
+    // the editor's "Ask my session" hands the conversation's one box its context; the person types there
+    await p.click('.ask-box button:has-text("Ask my session to draw it")');
+    await p.fill('#chat-input', 'a small knight in blue armour with a feather on the helmet');
+    await p.click('#chat-send');
     await sleep(800);
     const got = await s.collect();
     // the stand-in session answers with the kit's PIXEL stand-in sheet through the slot route (a real session would draw

@@ -65,7 +65,9 @@ export function readQueue(raw, hide = new Set()) {
 }
 
 /** No session has reached the studio. What gets one here is the same whether the session is new or already running. */
-export const NONE_HINT = 'In your agent\'s terminal run "node bin/gamesfun.mjs connect" in the kit folder once, then in Claude Code type /reload-plugins and say anything: your session appears here with its next message.';
+export const NONE_HINT = 'Connect your agent once: in the kit folder, run "node bin/gamesfun.mjs connect" in its terminal. Then in Claude Code type /reload-plugins and say hi: your session shows up here.';
+/** connect has run here (its record, GET /api/studio/setup): only the step that is left. */
+export const RELOAD_HINT = 'In Claude Code, type /reload-plugins, then say hi.';
 export const IDLE_HINT = 'Press Enter in the terminal once to reconnect.';
 
 /**

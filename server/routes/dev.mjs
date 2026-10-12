@@ -5,7 +5,7 @@ import { kitsInfo } from '../index.mjs';
 export default function register(router, ctx) {
   const started = new Date().toISOString();
   router.get('/status', async () => ({
-    url: ctx.url, game: shown(ctx.gameDir), studio: `${ctx.url}studio/`, play: `${ctx.url}game/`, friends: `${ctx.url}game/gf/mp/`,
+    url: ctx.url, game: ctx.gameDir ? shown(ctx.gameDir) : null, studio: `${ctx.url}studio/`, play: `${ctx.url}game/`, friends: `${ctx.url}game/gf/mp/`,
     pid: process.pid, started, network: ctx.network, ...(await kitsInfo()),
   }));
 }
