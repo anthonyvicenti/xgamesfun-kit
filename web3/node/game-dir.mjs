@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 export const KIT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const exists = async (p) => stat(p).then(() => true, () => false);
-const isGame = async (dir) => (await exists(path.join(dir, 'index.html'))) || (await exists(path.join(dir, 'gamesfun.json')));
+// a game the build loop is making counts from its pitch on (.gf-loop/): its economy is saved before create (K3)
+const isGame = async (dir) => (await exists(path.join(dir, 'index.html'))) || (await exists(path.join(dir, 'gamesfun.json'))) || (await exists(path.join(dir, '.gf-loop')));
 
 /**
  * The game folder: `--game`, else the current folder when it is a game, else the only game under games/.
