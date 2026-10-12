@@ -84,7 +84,7 @@ const asSeconds = (v) => {
 };
 function same(a, b) {
   if (a === b) return true;
-  if (typeof b === 'string' && DURATION.test(b)) return asSeconds(a) !== null && asSeconds(a) === asSeconds(b);
+  if ([a, b].some((x) => typeof x === 'string' && DURATION.test(x))) return asSeconds(a) !== null && asSeconds(a) === asSeconds(b);
   const x = asNumber(a), y = asNumber(b);
   return x !== null && y !== null && x === y;
 }
