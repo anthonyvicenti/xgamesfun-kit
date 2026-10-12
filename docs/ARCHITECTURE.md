@@ -88,7 +88,7 @@ without one goes under More. With no game open (`gamesfun dev` with no folder) t
 (`studio/start.js`): describe a game (the idea goes to the session and starts the build loop on a fresh `games/<name>`),
 open one of yours, or start from an example. The dev server's open game can change while it runs: routes read
 `ctx.gameDir` at each request (null when none is open) and may listen with `ctx.onGame(fn)`. The look is one
-design system in `studio/studio.css` (its header lists the tokens and the classes a tab uses). *Extra* in `ctx`: `preview` (`reload()`, `show(path)`) and `on(event, fn)` for
+design system in `studio/studio.css` (a tool may add its own sheet beside it, scoped under its panel and built on the same tokens: `tabs/<id>.css`, `talk.css` for the start page and the conversation) (its header lists the tokens and the classes a tab uses). *Extra* in `ctx`: `preview` (`reload()`, `show(path)`) and `on(event, fn)` for
 dev-server events (`game` when the game's files change, `verify`, and any `ctx.events.send` from a route).
 
 **Adding a tool to the studio (a module of its own, e.g. Publish or a backend):** one file, `studio/tabs/<id>.js`; the
@@ -146,7 +146,7 @@ web3 layer and read by the in-game kit. It holds public addresses only, never se
 | `/studio/…` | `studio/` (index, shell, `tabs/*.js`) |
 | `/game/…` | the game folder; HTML pages get the live-reload script; `/game/gf/mp/` is the friends lobby; `/game/gamesfun.json` answers 204 (no web3 settings) when the game has none, so the host bridge's reads print no 404 |
 | `/signal` (WebSocket), `/signal/v1`, `/signal/v1/ice` | gf-multiplayer signaling, from the kits' own signal server |
-| `/api/<area>/…` | routes; core areas: `game` (info, slots, verify), `studio` (tabs), `dev` (status) |
+| `/api/<area>/…` | routes; core areas: `game` (info, slots, verify), `studio` (tabs), `dev` (status), `pictures` (each game's and example's card picture and colours, read only: files found by listing a game's verify folders or an example's folder, never a path from the request) |
 | `/__gamesfun/events`, `/__gamesfun/reload.js` | live reload (Server-Sent Events) |
 
 Every response is `no-store`, `nosniff` and frameable only by the server's own pages. Paths are resolved by
