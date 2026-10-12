@@ -19,6 +19,9 @@
      .chip, .badge, .dot (.ok .go .warn .bad), .st (.pass .fail .skip), pre.log, ol.timeline, dl.controls
      palettes      .tools/.tool, .palette/.swatch-item, .swatches/.swatch, .seats/.seat, .bodies/.body-pick (editors.css) */
 
+/* the hidden attribute always hides (a rule like button { display: inline-flex } must not win over it) */
+[hidden] { display: none !important; }
+
 /* ---------------------------------------------------------------- tokens */
 :root, :root[data-theme=dark] {
   color-scheme: dark;
