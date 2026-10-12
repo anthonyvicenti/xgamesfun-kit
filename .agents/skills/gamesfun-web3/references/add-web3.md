@@ -1,33 +1,20 @@
-# Add web3 to a game
+# A game made before the economy: the shop and the `web3_*` drafts
 
-## 1. The kit is in the game. Use it from `rules.js`
+New work starts from the `gamesfun-economy` skill: the economy spec covers a shop and much more, and the kit's menu
+draws its buttons. This page is for a game that already has a `shop` in its `gamesfun.json`, or a creator who uses the
+older shop commands.
 
-`npx gamesfun create` (and `upgrade`) copies the in-game kit into every game at `gf/web3/`, and writes a
-`gamesfun.json` stub there. Like everything under `gf/`, that copy belongs to the kit, so never edit it.
-`index.html` and `main.js` belong to the kit too (verify check 2). **Your web3 code goes in `rules.js`**, the game's
-own file:
+## 1. Nothing goes in the game's code
 
-```js
-// rules.js
-import gfWeb3 from './gf/web3/index.js';
+`npx gamesfun create` (and `upgrade`) copies the in-game kit into every game at `gf/web3/` and writes a `gamesfun.json`
+stub there. Like everything under `gf/`, that copy belongs to the kit, so never edit it, and don't import it from
+`rules.js`: the page that hosts the game runs it, and the kit's menu and HUD show the wallet, the owned items and the
+economy's buttons (gf-three CONTRACT §6g W1, W2; `buy-button.md`). A game whose `rules.js` already calls gf-web3 keeps
+working: gf-web3 reads an old `shop` as the economy it stands for.
 
-export default {
-  setup(ctx) {
-    // A player who connected a wallet wears what they own; guests wear the game's defaults.
-    gfWeb3.ready().then(() => gfWeb3.address && gfWeb3.wearOwned()).catch(() => {});
-    gfWeb3.on('items', () => gfWeb3.wearOwned().catch(() => {}));
-    // …the game's own setup
-  },
-};
-```
+## 2. Draft the shop (no signature needed)
 
-`ready()` never throws. A game with an empty `gamesfun.json` still loads, and its shop is just empty. Under
-`gamesfun verify` the kit runs its mock, so verify stays deterministic. The Soak Squad example with these lines
-passes `verify --quick` (16/16; check 9 is skipped by `--quick`).
-
-## 2. Draft the setup (no signature needed)
-
-Use the CLI or the MCP tools. Each changes only `gamesfun.json`:
+The shop drafts still work and change only `gamesfun.json`:
 
 ```bash
 npx gamesfun web3 status --game games/bean-brawl
@@ -45,12 +32,19 @@ The MCP tools are the same operations: `web3_status`, `web3_list_pictures`, `web
   Up to 100 KB is free on Irys devnet. A bigger picture asks the wallet for a small SOL deposit first.
 - **What an item does in the game** is its `look`. Its slot ids come from `web3_player_looks`. See
   `cosmetics.md`.
-- **Currency.** A shop needs no token. It can be priced in SOL or in any classic SPL token, and the
-  price is fixed once the shop is live.
+- **Currency.** A shop needs no token. It can be priced in SOL or in any token, classic SPL or
+  Token-2022, and the currency is fixed once it is live.
 - **A token** is optional. To link an existing one, use `gamesfun web3 link --mint <address>`. To
-  launch one, see step 3.
+  launch one, see step 4.
 
-## 3. Ask the human to approve
+## 3. Move it into the economy
+
+A shop is part of the game's economy now (the Economy tab replaced the Token and Shop tabs). It moves on its own when
+it goes live, when the Economy tab saves, and in `gamesfun upgrade`; to move it now and keep going with the
+`economy_*` tools: `npx gamesfun economy migrate games/<name> --write`. Its items and boxes keep their names, prices
+and looks. A shop that was live on loot 0.1 or 0.2 is kept under `economy.previous` and goes live fresh on 0.3.
+
+## 4. Ask the human to approve
 
 ```bash
 npx gamesfun web3 launch --name "Bean Brawl" --symbol BEAN --picture assets/icon.png   # optional
@@ -58,12 +52,12 @@ npx gamesfun web3 shop publish
 ```
 
 Or use `web3_prepare_launch` and `web3_prepare_publish`. Each one prints a step for the human. Relay
-it as-is: "Open the studio's Shop tab and press **Review and approve**." The studio shows every step
-before the wallet asks (`creator-flow.md`). Afterwards, `gamesfun web3 status` shows the items as
-listed and on chain.
+it as-is: "Open the studio's Economy tab and press **Review and approve**." The studio shows every step
+before the wallet asks (`creator-flow.md`). Afterwards, `npx gamesfun economy status games/<name>` shows each part on
+chain.
 
-## 4. Use it in the game
+## 5. Check it
 
 - Owned cosmetics: `cosmetics.md`
-- Buy and open buttons: `buy-button.md`
+- The economy's buttons in the menu: `buy-button.md`
 - Test it: `testing.md`

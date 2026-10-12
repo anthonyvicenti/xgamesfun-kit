@@ -1,8 +1,18 @@
 # Testing web3 in a game
 
-## The mock: automatic in verify and headless browsers
+## What verify checks in the game
 
-`gfWeb3.mock` is `true` and nothing touches the network when:
+The game's side is the kit's: `gamesfun verify` check 22 frames the game in a stand-in page (a test wallet, two
+items, then one economy action per place) and clicks through the wallet, Wear and every economy button for real
+(`buy-button.md`, "Checking it"). Nothing in `rules.js` needs testing for web3, because nothing there is web3. Run
+`npx gamesfun verify games/<name>` after changing the economy or an item's look; check 5's loadout leg has to pass too.
+
+The economy itself is checked before it reaches a game: `economy_check`, `economy_simulate` and `economy_cost`
+(the `gamesfun-economy` skill).
+
+## The gf-web3 mock (the page side, and older games)
+
+gf-web3 is what the page runs to sign (and what an older game's own code calls). `gfWeb3.mock` is `true` and nothing touches the network when:
 
 - the page is automated or headless (`navigator.webdriver`, HeadlessChrome), so **`gamesfun verify`
   stays deterministic**;
@@ -18,9 +28,9 @@ In the mock:
   check that `wearOwned()` changes the player and that every other player sees it.
 - What the mock buys or opens is owned until the page reloads.
 
-Use it to check that the buttons appear, the looks apply, errors show, and the game still runs for a
-guest who never connects. Run `npx gamesfun verify games/<name> --quick` after wiring web3: the kit runs the mock
-there, and verify's loadout leg (check 5) still has to pass.
+Every `gfWeb3.economy.*` call answers at once in the mock with `{ mock: true, says }`. Use it to check a page's
+side, or an older game whose `rules.js` calls gf-web3: that the looks apply, errors show, and the game still runs for
+a guest who never connects.
 
 ## A real wallet on devnet
 
@@ -31,8 +41,9 @@ The human does this part. You can't approve a wallet prompt, and you must never 
    In an automated browser, add `?gamesfun_mock=0`.
 2. Ask them to switch the wallet (Phantom, Solflare, Backpack…) to **devnet** and get devnet SOL
    (https://faucet.solana.com).
-3. Have them connect, buy an item and open a box, approving each in the wallet. Then check the result
-   with `gamesfun web3 status` and `gfWeb3.ownedItems()`.
+3. Have them press the economy's buttons in the game's menu, where a page offers them (the studio's preview, whose
+   side of `gf:host` is being built), approving each in the wallet. Then check the result
+   with `npx gamesfun economy status games/<name>` (each part on chain, the pools, the recent receipts).
 
 ## Limits of the public devnet RPC
 

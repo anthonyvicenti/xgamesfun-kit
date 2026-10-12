@@ -1,0 +1,28 @@
+{
+  "network": "devnet",
+  "program": "88Labq6tdVnBQsjHSfic6qqgvo5b9NGmy99AYj7KVXqM",
+  "platform": "DFbnNkPGmsrc9NT4yZKoiD161gt2SPK98DKe4yAL2cm9",
+  "startedAt": "2026-10-12T02:33:42.264Z",
+  "seedScale": 0.01,
+  "steps": [
+    {
+      "name": "the partners’ token accounts: the partner wallet’s wrapped-SOL account (falling-drop’s entry cut) and a friend’s MAIN-dev account (its cursed tips)",
+      "at": "2026-10-12T02:33:42.653Z",
+      "ok": true,
+      "wsol": "6U3XnmrzuZ5sDujScii8SmzwtRZ4skfKcH2TLiz1rmES",
+      "main": "3pVhH23EoBG5yYgkYq6bSu22itPrvrtaLofqgqGxw2GP",
+      "signature": "43BUkWinejR8JN8LxRuNS1nktdsu5XrQBCqT8GhAJR6XxryczT5tfbrLgF6izNRPhVaZTFPoRhJpnzC7943jqkkW",
+      "explorer": "https://explorer.solana.com/tx/43BUkWinejR8JN8LxRuNS1nktdsu5XrQBCqT8GhAJR6XxryczT5tfbrLgF6izNRPhVaZTFPoRhJpnzC7943jqkkW?cluster=devnet"
+    }
+  ],
+  "creator": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+  "creatorLamportsAtStart": "1184607157",
+  "fixtureAccounts": {
+    "partnerSol": "6U3XnmrzuZ5sDujScii8SmzwtRZ4skfKcH2TLiz1rmES",
+    "partnerMain": "3pVhH23EoBG5yYgkYq6bSu22itPrvrtaLofqgqGxw2GP",
+    "duelAuthority": "Hby5BFRb3qfaDyY2Fza4UtjfRn4aFmvdnMAouigMurAs"
+  },
+  "creatorLamportsSpent": "5000",
+  "finishedAt": "2026-10-12T02:33:45.598Z",
+  "ok": true
+}

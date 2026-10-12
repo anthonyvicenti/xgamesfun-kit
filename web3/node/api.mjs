@@ -1,13 +1,15 @@
-// The dev server's web3 API (mounted by server/routes/web3.mjs under /api/web3): the studio's Token and Shop tabs read
+// The dev server's web3 API (mounted by server/routes/web3.mjs under /api/web3): the studio's Economy tab reads
 // the game's setup here, edit drafts, and run approvals. The server builds every transaction with the creator's own
 // RPC; the creator's wallet signs in the studio page; the server checks what comes back and sends it. It never holds
 // the creator's key.
 import path from 'node:path';
 import { LIMIT, RARITIES, RARITY_WEIGHTS, RuleError } from '../gf-web3/rules.js';
 import { chainStatus, mintInfo } from './chain.mjs';
+import { economyRoutes } from './economy-routes.mjs';
 import { linkToken, removeBox, removeItem, saveBox, saveItem, setCurrency, setShop, unlinkToken } from './drafts.mjs';
 import { createFlowEngine, FlowError } from './flow-engine.mjs';
-import { launchFlow, publishFlow } from './flows.mjs';
+import { economyStatus } from './economy.mjs';
+import { economyFlow, launchFlow } from './flows.mjs';
 import { gameTitle, listPictures, playerLooks, readConfig, readPicture } from './game.mjs';
 import { handle, HttpError, readJson, sendBytes } from './http.mjs';
 import { getRequest, listRequests, removeRequest } from './requests.mjs';
@@ -58,7 +60,8 @@ export function createWeb3Api(ctx) {
         quoteSymbol: c.network.launchpad.quoteSymbol,
         quoteDecimals: c.network.launchpad.quoteDecimals,
         currencies: c.network.currencies,
-        platformFeeBps: c.network.loot.platformFeeBps,
+        playerFeeLamports: c.network.loot.playerFeeLamports,
+        projectFeeLamports: c.network.loot.projectFeeLamports,
       },
       rpc: { shown: c.shown, custom: c.custom },
       game: { title: await gameTitle(dir), folder: path.basename(dir) },
@@ -95,7 +98,8 @@ export function createWeb3Api(ctx) {
     const input = request?.input ?? body.input ?? {};
     let spec;
     if (kind === 'launch') spec = await launchFlow(e, input, body.wallet);
-    else if (kind === 'publish') spec = await publishFlow(e, body.wallet);
+    // A game's shop is part of its economy (decision 2, 2026-10-11): the old "publish" starts the economy flow.
+    else if (kind === 'economy' || kind === 'publish') spec = await economyFlow(e, body.wallet, input);
     else throw new HttpError(400, 'Unknown kind of request.');
     if (request) {
       const finish = spec.onFinish;
@@ -108,6 +112,7 @@ export function createWeb3Api(ctx) {
   }
 
   const routes = [
+    ...economyRoutes({ gameDir, log: ctx.log }),
     { method: 'get', path: '/state', handler: handle(state, ctx.log) },
     {
       method: 'get',
@@ -144,6 +149,11 @@ export function createWeb3Api(ctx) {
       }, ctx.log),
     },
     { method: 'post', path: '/flow/start', handler: handle(startFlow, ctx.log) },
+    {
+      method: 'get',
+      path: '/economy/status',
+      handler: handle(async (req) => economyStatus(gameDir(), { ...(await env()), receipts: Number(queryOf(req).get('receipts') ?? 5) }), ctx.log),
+    },
     {
       method: 'post',
       path: '/flow/prepare',

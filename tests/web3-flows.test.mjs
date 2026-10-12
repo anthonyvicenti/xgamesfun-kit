@@ -4,10 +4,11 @@
 // token launch through the HTTP routes, down to what lands in gamesfun.json.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fromBase64, toBase64, utf8 } from '../web3/gf-web3/chain/bytes.js';
 import { decodeLoot, lootPda } from '../web3/gf-web3/chain/loot.js';
+import { associatedTokenAddress, TOKEN_2022_PROGRAM } from '../web3/gf-web3/chain/pda.js';
 import { compileMessage, readMessage, readTransaction, wireTransaction, withSignature } from '../web3/gf-web3/chain/tx.js';
 import { transferLamports } from '../web3/gf-web3/chain/programs.js';
 import { freshKeypair } from '../web3/node/ed25519.mjs';
@@ -111,11 +112,12 @@ describe('the approval engine', () => {
   });
 });
 
-describe('putting a shop on sale, end to end (offline)', () => {
+describe('putting a shop on sale, end to end (offline): the shop is part of the economy now', () => {
   let game;
   let chain;
   let server;
   const wallet = testWallet();
+  const saved = async () => JSON.parse(await readFile(path.join(game.gameDir, 'gamesfun.json'), 'utf8'));
   before(async () => {
     game = await makeGame();
     chain = fakeChain();
@@ -134,52 +136,92 @@ describe('putting a shop on sale, end to end (offline)', () => {
 
     const started = await post(server.port, '/flow/start', { kind: 'publish', wallet: wallet.address });
     assert.equal(started.status, 200, started.text);
-    // 2 pictures + collection details + 2 item details + one transactions approval; the item with no picture waits.
+    assert.equal(started.json.kind, 'economy', 'the shop goes live as the economy it moves into');
+    // 2 pictures + 2 item details + collection details + one transactions approval; the item with no picture goes live without one.
     assert.equal(started.json.steps.length, 6);
-    assert.match(started.json.lines.join(' '), /No Picture Yet still needs a picture/);
+    assert.match(started.json.lines.join(' '), /No Picture Yet has no picture/);
     const done = await approveAll(server.port, started.json, wallet);
     assert.equal(done.done, true);
     assert.equal(chain.uploads.length, 5);
     assert.ok(chain.sent.length >= 1 && chain.sent.length <= 3, `sent ${chain.sent.length}`);
 
-    const config = JSON.parse(await readFile(path.join(game.gameDir, 'gamesfun.json'), 'utf8'));
+    const config = await saved();
     assert.equal(config.creator, wallet.address);
-    assert.equal(config.shop.currency.symbol, 'SOL');
-    assert.equal(config.shop.game, lootPda.game(config.shop.collection));
-    assert.deepEqual(config.shop.items.map((i) => i.listed), [true, true, false]);
-    assert.equal(config.shop.boxes[0].listed, true);
-    assert.match(config.shop.items[0].uri, /^https:\/\/devnet\.irys\.xyz\/[1-9A-HJ-NP-Za-km-z]{43,44}$/);
-    const item = decodeLoot('ItemDef', chain.accounts.get(lootPda.item(config.shop.game, 1)).data);
+    assert.equal(config.shop, undefined);
+    const e = config.economy;
+    assert.equal(e.currency, 'sol');
+    assert.equal(e.live.game, lootPda.game(e.live.collection));
+    assert.deepEqual(e.items.map((i) => i.id), [1, 2, 3]);
+    assert.match(e.items[0].uri, /^https:\/\/devnet\.irys\.xyz\/[1-9A-HJ-NP-Za-km-z]{43,44}$/);
+    const item = decodeLoot('Item', chain.accounts.get(lootPda.item(e.live.game, 1)).data);
     assert.equal(item.price, 50_000_000n);
-    assert.equal(item.uri, config.shop.items[0].uri);
+    assert.equal(item.uri, e.items[0].uri);
     // The item details uploaded are real Metaplex JSON with the look under properties.gameLook.
     // A data item (ANS-104, no target): 2 + 64 + 32 + 1 + 1 + 32 + 8 bytes, then the tags' length (u64), the tags, the data.
-    const dataItem = chain.uploads.find((u) => u.id === config.shop.items[0].uri.split('/').pop()).bytes;
+    const dataItem = chain.uploads.find((u) => u.id === e.items[0].uri.split('/').pop()).bytes;
     const tagsLength = Number(new DataView(dataItem.buffer, dataItem.byteOffset).getBigUint64(140, true));
     const meta = JSON.parse(new TextDecoder().decode(dataItem.subarray(148 + tagsLength)));
     assert.deepEqual(meta.properties.gameLook, { values: { 'character.tint.player': '#ffcc00' }, files: {} });
 
-    const after = await request(server.port, { path: '/api/web3/state' });
-    assert.equal(after.json.chain.shop.items[1].state, 'published');
-    assert.equal(after.json.chain.shop.boxes[1].state, 'published');
+    const status = await request(server.port, { path: '/api/web3/economy/status' });
+    assert.deepEqual(status.json.parts.filter((p) => !p.onChain || p.differs), []);
   });
 
   it('a later change is one more approval, with no new upload when only the price changed', async () => {
     const uploads = chain.uploads.length;
-    assert.equal((await post(server.port, '/item/save', { id: 2, price: '0.2' })).status, 200);
-    const started = await post(server.port, '/flow/start', { kind: 'publish', wallet: wallet.address });
+    const config = await saved();
+    config.economy.items[1].price = '0.2';
+    await writeFile(path.join(game.gameDir, 'gamesfun.json'), JSON.stringify(config, null, 2));
+    const started = await post(server.port, '/flow/start', { kind: 'economy', wallet: wallet.address });
     assert.equal(started.json.steps.length, 1, started.text);
     await approveAll(server.port, started.json, wallet);
     assert.equal(chain.uploads.length, uploads);
-    const config = JSON.parse(await readFile(path.join(game.gameDir, 'gamesfun.json'), 'utf8'));
-    assert.equal(decodeLoot('ItemDef', chain.accounts.get(lootPda.item(config.shop.game, 2)).data).price, 200_000_000n);
-    assert.equal((await post(server.port, '/shop/currency', { currency: 'USDC' })).status, 400);
+    assert.equal(decodeLoot('Item', chain.accounts.get(lootPda.item(config.economy.live.game, 2)).data).price, 200_000_000n);
   });
 
-  it('only the shop’s wallet can change it', async () => {
-    const r = await post(server.port, '/flow/start', { kind: 'publish', wallet: testWallet().address });
+  it('the loot game is the creator’s: its owner and its authority, the whole sale to the treasury', async () => {
+    const { economy: e } = await saved();
+    const g = decodeLoot('Game', chain.accounts.get(e.live.game).data);
+    assert.deepEqual([g.owner, g.authority, g.treasury, g.mint], [wallet.address, wallet.address, e.live.treasury, 'So11111111111111111111111111111111111111112']);
+    const box = decodeLoot('LootBox', chain.accounts.get(lootPda.box(e.live.game, 1)).data);
+    assert.deepEqual(box.entries, [{ outcome: { Item: [1] }, weight: 60 }, { outcome: { Item: [2] }, weight: 40 }]);
+    assert.deepEqual([box.currency, box.shares], [null, []]);
+  });
+
+  it('only the economy’s wallet can change it', async () => {
+    const r = await post(server.port, '/flow/start', { kind: 'economy', wallet: testWallet().address });
     assert.equal(r.status, 400);
     assert.match(r.json.error, /belongs to the wallet/);
+  });
+});
+
+describe('a shop priced in a Token-2022 token (offline)', () => {
+  it('prices in it, opens the treasury under Token-2022, and the game takes that mint', async () => {
+    const game = await makeGame();
+    const chain = fakeChain();
+    const mint = testWallet().address;
+    const data = new Uint8Array(82);
+    data[44] = 6;
+    data[45] = 1;
+    chain.put(mint, TOKEN_2022_PROGRAM, data);
+    const server = await serve({ gameDir: game.gameDir, kitRoot: game.kitRoot, fetchImpl: chain.fetchImpl, env: {}, log: () => {} });
+    const wallet = testWallet();
+    try {
+      const priced = await post(server.port, '/shop/currency', { currency: mint });
+      assert.equal(priced.status, 200, priced.text);
+      assert.equal((await post(server.port, '/item/save', { name: 'Golden Hat', picture: 'assets/hat.png', price: '2.5' })).status, 200);
+      const started = await post(server.port, '/flow/start', { kind: 'publish', wallet: wallet.address });
+      assert.equal(started.status, 200, started.text);
+      assert.equal((await approveAll(server.port, started.json, wallet)).done, true);
+      const { economy: e } = JSON.parse(await readFile(path.join(game.gameDir, 'gamesfun.json'), 'utf8'));
+      assert.equal(e.tokens[0].program, 'token-2022');
+      assert.equal(e.live.treasury, associatedTokenAddress(wallet.address, mint, TOKEN_2022_PROGRAM));
+      const g = decodeLoot('Game', chain.accounts.get(e.live.game).data);
+      assert.deepEqual([g.mint, g.treasury], [mint, e.live.treasury]);
+      assert.equal(decodeLoot('Item', chain.accounts.get(lootPda.item(e.live.game, 1)).data).price, 2_500_000n);
+    } finally {
+      await server.close();
+    }
   });
 });
 

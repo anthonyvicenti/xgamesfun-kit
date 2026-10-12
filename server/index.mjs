@@ -8,6 +8,8 @@
 //   /signal, /signal/v1    gf-multiplayer signaling: the WebSocket the kit uses on 127.0.0.1, and HTTP (kits' signal server)
 //   /api/<area>/…          routes from server/routes/<area>.mjs
 //   /__gamesfun/online.js  online play's readable side, for a game page that got the online line (server/online.mjs)
+//   /__gamesfun/gf-web3/…  the kit's own in-game web3 kit (web3/gf-web3), for the studio's host bridge (studio/host-bridge.js):
+//                          the page that hosts the game signs with the kit's code, never with code from the game's folder
 //   /__gamesfun/events     live reload (Server-Sent Events): `game` when the game's files change, `studio` for the studio's
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -15,6 +17,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readJson } from '../lib/games.mjs';
 import { KIT_ROOT, SIGNAL_SERVER, STUDIO } from '../lib/paths.mjs';
+const GF_WEB3 = path.join(KIT_ROOT, 'web3', 'gf-web3');
 import { sendJson, sendText } from './http.mjs';
 import { injectOnline, ONLINE_CLIENT, ONLINE_CLIENT_PATH, onlineFor } from './online.mjs';
 import { createEvents, injectReload, RELOAD_CLIENT, watchTree } from './reload.mjs';
@@ -65,6 +68,7 @@ export async function startDevServer({ gameDir, port = null, log = console.log, 
       if (url.pathname === '/__gamesfun/reload.js') return sendText(res, 200, RELOAD_CLIENT, 'text/javascript; charset=utf-8');
       if (url.pathname === ONLINE_CLIENT_PATH) return sendText(res, 200, ONLINE_CLIENT, 'text/javascript; charset=utf-8');
       if (url.pathname === '/studio' || url.pathname === '/game') { res.writeHead(301, { ...BASE_HEADERS, location: `${url.pathname}/${url.search}` }); return res.end(); }
+      if (url.pathname.startsWith('/__gamesfun/gf-web3/')) return await serveStatic(req, res, { base: GF_WEB3, rest: url.pathname.slice('/__gamesfun/gf-web3'.length), mount: '/__gamesfun/gf-web3', search: url.search });
       if (url.pathname.startsWith('/studio/')) return await serveStatic(req, res, { base: STUDIO, rest: url.pathname.slice('/studio'.length), mount: '/studio', search: url.search });
       if (url.pathname.startsWith('/game/')) {
         return await serveStatic(req, res, {

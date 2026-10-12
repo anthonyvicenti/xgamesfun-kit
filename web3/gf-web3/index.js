@@ -1,12 +1,13 @@
 // gf-web3: the games.fun in-game kit. Optional wallet sign-in, the player's items from this game's collection,
-// the shop, loot boxes and the game's token, all from the game's public gamesfun.json. Guests play without a
+// the game's economy (econ/play.js: buy, boxes, recipes, lotteries, stakes, contests, holds) and its token, all from
+// the game's public gamesfun.json (its `economy` section; an older `shop` reads as the economy it stands for). Guests play without a
 // wallet; nothing asks for one until the player presses something that needs it. Owned items' looks become a
 // gf-three loadout (CONTRACT §6e), so everyone in a multiplayer match sees what each player wears.
 //
 //   import gfWeb3 from './gf/web3/index.js';
 //   await gfWeb3.ready();                        // reads ./gamesfun.json
 //   const items = await gfWeb3.shop.list();      // what is on sale, priced in the shop's currency
-//   await gfWeb3.shop.buy(items[0].id);          // one wallet approval: pay, mint, deliver
+//   await gfWeb3.shop.buy(items[0].id);          // two wallet approvals: pay, then claim (the collectible is minted)
 //   await gfWeb3.wearOwned();                    // the owned items' looks → window.__GF_LOADOUT
 //
 // Mock mode (no network, a pretend wallet, deterministic rolls) runs when the page is automated or headless
@@ -20,35 +21,30 @@
 import { encodeBase58, isAddress } from './chain/base58.js';
 import { utf8 } from './chain/bytes.js';
 import { ownedAssetFilters, parseCoreAsset, MPL_CORE_PROGRAM } from './chain/core.js';
-import { buyAndSettleInstructions, decodeLoot, LootAccount, lootPda, openBoxInstructions, OrderStatus, refundInstruction, settleInstructions } from './chain/loot.js';
-import { associatedTokenAddress, NATIVE_MINT } from './chain/pda.js';
-import { closeTokenAccount, withSolWrap } from './chain/programs.js';
+import { decodeLoot, LOOT_PROGRAM, LootAccount, lootPda } from './chain/loot.js';
 import { sha256 } from './chain/sha256.js';
-import { compileMessage, wireTransaction, transactionId } from './chain/tx.js';
-import { CONFIG_FILE, emptyConfig, findBox, findItem, parseConfig } from './config.js';
+import { compileMessage, readTransaction, wireTransaction, withSignature, transactionId } from './chain/tx.js';
+import { CONFIG_FILE, emptyConfig, parseConfig } from './config.js';
+import { economyState, parseActionId, playerActions } from './econ/actions.js';
+import { economyPlay } from './econ/play.js';
+import { economyFromShop } from './econ/shop.js';
+import { readEconomy, toUnits } from './econ/spec.js';
 import { loadoutOf } from './looks.js';
 import { networkConfig } from './network.js';
 import { rpcClient } from './rpc.js';
-import { fromUnits, odds, secretLike } from './rules.js';
+import { secretLike } from './rules.js';
 import * as walletKit from './wallet.js';
 
 import { VERSION } from './version.js';
 
-export { VERSION };
-const ROLL_POLL_MS = 1000;
-const ROLL_POLLS = 90;
+export { VERSION, economyState, parseActionId, playerActions };
 
 const MESSAGE = {
   NoWallet: 'No Solana wallet found in this browser. Install one (Phantom, Solflare, Backpack…) and reload.',
   Cancelled: 'No wallet chosen.',
-  NoShop: 'This game has no shop yet.',
-  NotLive: 'This game’s shop is not on sale yet.',
-  NoItem: (sku) => `There is no item ${sku} in this shop.`,
+  NoItem: (sku) => `There is no item ${sku} in this game.`,
   NotForSale: (name) => `${name} is not sold directly; it comes from loot boxes.`,
-  NoBox: (id) => `There is no loot box ${id} in this shop.`,
-  Short: (need) => `You need ${need} for this.`,
-  RollFailed: 'The roll failed (everything in the box is sold out). Your payment was refunded.',
-  RollSlow: 'The box was opened but the roll has not arrived yet. Check your items again in a minute.',
+  NoBox: (id) => `There is no box ${id} in this game.`,
 };
 
 /** Deterministic randomness for the mock (mulberry32). */
@@ -124,9 +120,10 @@ export function createGfWeb3(options = {}) {
 
   const ownedOf = (item, asset, serial) => ({
     id: item.id,
+    key: item.key ?? null,
     name: item.name,
-    description: item.description,
-    rarity: item.rarity,
+    description: item.description ?? '',
+    rarity: item.rarity ?? 'Common',
     look: item.look ?? null,
     image: item.image ?? null,
     serial,
@@ -135,7 +132,10 @@ export function createGfWeb3(options = {}) {
 
   /** Read gamesfun.json (once) and get ready. Call it before anything else; it never throws. */
   async function ready() {
-    state.loading ??= loadConfig().then((config) => {
+    state.loading ??= loadConfig().then((loaded) => {
+      // Every call reads the economy section; a game that still has an old `shop` gets the economy it stands for.
+      const fromShop = economyFromShop(loaded);
+      const config = fromShop ? { ...loaded, economy: fromShop } : loaded;
       state.config = config;
       if (state.mock) {
         const wanted = (query.get('gamesfun_owned') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -193,7 +193,7 @@ export function createGfWeb3(options = {}) {
       `${host} wants you to sign in with your Solana account:`,
       player,
       '',
-      statement ?? `Sign in to ${config.shop?.name ?? 'this game'} on games.fun. This costs nothing and moves no funds.`,
+      statement ?? `Sign in to ${config.economy?.name ?? 'this game'} on games.fun. This costs nothing and moves no funds.`,
       '',
       `URI: ${loc?.origin ?? ''}`,
       `Chain ID: ${network.chain}`,
@@ -205,176 +205,188 @@ export function createGfWeb3(options = {}) {
     return { address: player, message, signature: encodeBase58(signature), mock: false };
   }
 
-  /** Compile, have the wallet sign, send and confirm one transaction. */
-  async function signAndSend(player, instructions) {
+  /**
+   * Compile, have the wallet sign, send and confirm one transaction. `signers`: keys made here that also sign (a new
+   * collectible's address: { address, sign(message) }); they sign after the wallet.
+   */
+  async function signAndSend(player, instructions, signers = []) {
     const client = rpc();
     const { blockhash, lastValidBlockHeight } = await client.latestBlockhash();
     const wire = wireTransaction(compileMessage({ payer: player, blockhash, instructions }));
     await client.simulate(wire);
-    const [signed] = await walletKit.signTransactions(state.wallet, state.account, network.chain, [wire]);
+    let [signed] = await walletKit.signTransactions(state.wallet, state.account, network.chain, [wire]);
     if (!signed) throw new Error('The wallet returned nothing to send.');
+    for (const s of signers) signed = withSignature(signed, s.address, await s.sign(readTransaction(signed).message));
     const signature = await client.send(signed);
     await client.confirm(signature, { lastValidBlockHeight });
     return signature;
   }
 
-  function liveShop(config) {
-    const shop = config.shop;
-    if (!shop) throw new Error(MESSAGE.NoShop);
-    if (!shop.game || !shop.collection || !shop.currency) throw new Error(MESSAGE.NotLive);
-    return shop;
+  /** The economy section, read (an old `shop` stands in through econ/shop.js), or null. */
+  const econOf = (config) => (config.economy ? readEconomy(config.economy) : null);
+
+  /** An item of the economy by key, id (number or digits) or name (any case). */
+  function findItem(config, sku) {
+    const e = econOf(config);
+    if (!e) return null;
+    const text = String(sku ?? '').trim();
+    const id = typeof sku === 'number' ? sku : /^\d+$/.test(text) ? Number(text) : NaN;
+    return e.items.find((i) => i.id === id) ?? e.items.find((i) => i.key === text) ?? e.items.find((i) => i.name.toLowerCase() === text.toLowerCase()) ?? null;
+  }
+  /** A box of the economy by key or id. */
+  function findBox(config, id) {
+    const e = econOf(config);
+    return e?.boxes.find((b) => b.key === String(id)) ?? e?.boxes.find((b) => b.id === Number(id)) ?? null;
   }
 
-  const priceText = (shop, units) => `${fromUnits(units, shop.currency?.decimals ?? 9)} ${shop.currency?.symbol ?? ''}`.trim();
+  const priceText = (e, part) => `${part.price} ${e.priceToken(part)?.symbol ?? ''}`.trim();
+  const unitsOf = (e, part) => toUnits(part.price ?? 0, e.priceToken(part)?.decimals ?? 9).toString();
 
-  /** What the shop sells: listed items, priced in the shop's currency. */
+  /** What the game sells: its items, priced in its currency (items priced 0 come from boxes and recipes). */
   async function listShop() {
-    const config = await ready();
-    const shop = config.shop;
-    if (!shop) return [];
-    return shop.items
-      .filter((item) => item.listed || state.mock)
-      .map((item) => ({
-        id: item.id,
-        sku: item.id,
-        name: item.name,
-        description: item.description,
-        rarity: item.rarity,
-        look: item.look ?? null,
-        image: item.image ?? null,
-        price: item.price,
-        priceText: item.price === '0' ? 'Loot boxes only' : priceText(shop, item.price),
-        currency: shop.currency?.symbol ?? null,
-        forSale: item.price !== '0',
-      }));
+    const e = econOf(await ready());
+    if (!e) return [];
+    return e.items
+      .filter((item) => item.active !== false)
+      .map((item) => {
+        const forSale = Number(item.price ?? 0) > 0;
+        return {
+          id: item.id,
+          key: item.key,
+          sku: item.id,
+          name: item.name,
+          description: item.description ?? '',
+          rarity: item.rarity ?? 'Common',
+          look: item.look ?? null,
+          image: item.image ?? null,
+          price: unitsOf(e, item),
+          priceText: forSale ? priceText(e, item) : 'Loot boxes only',
+          currency: e.currency?.symbol ?? null,
+          forSale,
+        };
+      });
   }
 
-  /** The game's loot boxes with their published odds. */
+  /** The game's boxes that give items, with their published odds. */
   async function boxes() {
-    const config = await ready();
-    const shop = config.shop;
-    if (!shop) return [];
-    return shop.boxes
-      .filter((b) => b.listed || state.mock)
-      .map((box) => ({
-        id: box.id,
-        name: box.name,
-        price: box.price,
-        priceText: priceText(shop, box.price),
-        odds: odds(box.entries).map((e) => ({ id: e.item, item: findItem(config, e.item)?.name ?? `Item ${e.item}`, chance: e.chance })),
-      }));
+    const e = econOf(await ready());
+    if (!e) return [];
+    return e.boxes
+      .filter((box) => box.active !== false)
+      .map((box) => {
+        const outcomes = box.outcomes ?? [];
+        const weights = outcomes.map((o) => o.weight ?? Math.round((o.chance ?? 0) * 100));
+        const total = weights.reduce((n, w) => n + w, 0) || 1;
+        return {
+          id: box.id,
+          key: box.key,
+          name: box.name,
+          price: unitsOf(e, box),
+          priceText: priceText(e, box),
+          odds: outcomes.map((o, i) => ({ id: o.gives === 'item' ? (e.part('item', o.item)?.id ?? null) : null, item: o.gives === 'item' ? (e.part('item', o.item)?.name ?? o.item) : o.gives, chance: weights[i] / total })),
+        };
+      });
   }
 
-  /** The on-chain Game, Platform and (optionally) item or box accounts a purchase needs. */
-  async function readShop(shop, extra = []) {
-    const [game, platform, ...rest] = await rpc().accounts([shop.game, lootPda.platform(), ...extra]);
-    if (!game || !platform) throw new Error(MESSAGE.NotLive);
-    return { game: decodeLoot(LootAccount.Game, game.data), platform: decodeLoot(LootAccount.Platform, platform.data), rest };
-  }
+  /** What an outcome of the economy calls means for the player's items. */
+  const wonItem = (e, outcome) => {
+    const item = outcome?.item ? e.part('item', outcome.item) : null;
+    return item ? ownedOf(item, outcome.asset ?? null, outcome.serial ?? null) : { id: null, name: outcome?.name ?? 'Nothing', rarity: 'Common', look: null, image: null, serial: null, asset: null, outcome };
+  };
 
-  async function checkFunds(player, mint, price, shop) {
-    const client = rpc();
-    const have = mint === NATIVE_MINT ? await client.balance(player) : await client.tokenBalance(associatedTokenAddress(player, mint));
-    if (have < BigInt(price)) throw new Error(MESSAGE.Short(priceText(shop, price)));
-  }
-
-  /** Buy an item (by id or name): one wallet approval pays, mints the collectible and delivers it. */
-  async function buy(sku) {
+  /** Buy an item (by id, key or name). Two wallet approvals: the purchase, then the claim that mints the collectible. */
+  async function buy(sku, { onStatus } = {}) {
     const config = await ready();
     const item = findItem(config, sku);
     if (!item) throw new Error(MESSAGE.NoItem(sku));
-    if (item.price === '0') throw new Error(MESSAGE.NotForSale(item.name));
-    if (!state.mock) liveShop(config);
-    const player = await connect();
+    if (!(Number(item.price ?? 0) > 0)) throw new Error(MESSAGE.NotForSale(item.name));
     if (state.mock) {
+      await connect();
       const bought = ownedOf(item, `mock-asset-${state.mockOwned.length + 1}`, state.mockOwned.length + 1);
       state.mockOwned.push(bought);
       emit('items', bought);
       return { item: bought, signatures: [], mock: true };
     }
-    const shop = liveShop(config);
-    status('Getting the shop ready…');
-    const { game, platform, rest } = await readShop(shop, [lootPda.item(shop.game, item.id)]);
-    const onChain = rest[0] ? decodeLoot(LootAccount.Item, rest[0].data) : null;
-    if (!onChain?.active || onChain.price === 0n) throw new Error(MESSAGE.NotForSale(item.name));
-    await checkFunds(player, game.mint, onChain.price, shop);
-    const context = { game: shop.game, gameMint: game.mint, treasury: game.treasury, collection: game.collection, feeWallet: platform.fee_wallet, player, itemId: item.id };
-    const sale = buyAndSettleInstructions(player, context);
-    status('Approve the purchase in your wallet…');
-    const signature = await signAndSend(player, withSolWrap(player, game.mint, onChain.price, sale.instructions));
-    const bought = ownedOf(item, sale.asset, null);
-    emit('items', bought);
-    status('');
-    return { item: bought, asset: sale.asset, signatures: [signature], mock: false };
+    const off = onStatus ? on('status', onStatus) : null;
+    try {
+      const r = await economy.buy(item.key);
+      return { item: wonItem(econOf(config), r.outcome), asset: r.asset ?? null, order: r.order, signatures: r.signatures, mock: false };
+    } finally {
+      off?.();
+    }
   }
 
-  /** Open a loot box: pay and roll (one approval), wait for MagicBlock's VRF, then claim what it rolled (a second approval). */
+  /** Open a box (by id or key): pay and roll (one approval), wait for MagicBlock's VRF, then claim what it rolled. */
   async function openBox(id, { onStatus } = {}) {
-    const say = (text) => (status(text), onStatus?.(text));
     const config = await ready();
     const box = findBox(config, id);
     if (!box) throw new Error(MESSAGE.NoBox(id));
-    if (!state.mock) liveShop(config);
-    const player = await connect();
     if (state.mock) {
+      await connect();
+      const e = econOf(config);
       const roll = seeded(box.id * 7919 + ++state.mockOpened)();
-      const total = box.entries.reduce((n, e) => n + e.weight, 0);
-      let pick = roll * total;
-      const entry = box.entries.find((e) => (pick -= e.weight) < 0) ?? box.entries.at(-1);
-      const item = findItem(config, entry.item);
-      const won = ownedOf(item, `mock-asset-${state.mockOwned.length + 1}`, state.mockOwned.length + 1);
+      const outcomes = (box.outcomes ?? []).filter((o) => o.gives === 'item');
+      const weight = (o) => o.weight ?? Math.round((o.chance ?? 0) * 100);
+      let pick = roll * outcomes.reduce((n, o) => n + weight(o), 0);
+      const entry = outcomes.find((o) => (pick -= weight(o)) < 0) ?? outcomes.at(-1);
+      if (!entry) return { item: wonItem(e, { name: 'Nothing' }), signatures: [], mock: true };
+      const won = ownedOf(e.part('item', entry.item), `mock-asset-${state.mockOwned.length + 1}`, state.mockOwned.length + 1);
       state.mockOwned.push(won);
       emit('items', won);
       return { item: won, signatures: [], mock: true };
     }
-    const shop = liveShop(config);
-    say('Getting the box ready…');
-    const { game, platform, rest } = await readShop(shop, [lootPda.box(shop.game, box.id)]);
-    const onChain = rest[0] ? decodeLoot(LootAccount.Box, rest[0].data) : null;
-    if (!onChain?.active) throw new Error(MESSAGE.NoBox(id));
-    await checkFunds(player, game.mint, onChain.price, shop);
-    const open = openBoxInstructions({ player, game: shop.game, mint: game.mint, boxId: box.id, itemIds: onChain.entries.map((e) => e.item_id) });
-    say('Approve opening the box in your wallet…');
-    const opened = await signAndSend(player, withSolWrap(player, game.mint, onChain.price, open.instructions));
-    say('Rolling…');
-    let order = null;
-    for (let poll = 0; poll < ROLL_POLLS; poll++) {
-      const [account] = await rpc().accounts([open.order]);
-      order = account ? decodeLoot(LootAccount.Order, account.data) : null;
-      if (order && order.status !== OrderStatus.Pending) break;
-      await new Promise((resolve) => setTimeout(resolve, options.rollPollMs ?? ROLL_POLL_MS));
+    const off = onStatus ? on('status', onStatus) : null;
+    try {
+      const r = await economy.openBox(box.key);
+      return { item: wonItem(econOf(config), r.outcome), asset: r.outcome?.asset ?? null, outcome: r.outcome, order: r.order, signatures: r.signatures, mock: false };
+    } finally {
+      off?.();
     }
-    if (!order || order.status === OrderStatus.Pending) throw new Error(MESSAGE.RollSlow);
-    const context = { game: shop.game, gameMint: game.mint, treasury: game.treasury, collection: game.collection, feeWallet: platform.fee_wallet, player, itemId: order.item_id };
-    if (order.status === OrderStatus.Failed) {
-      say('Nothing left to win: approve the refund in your wallet…');
-      const refund = [refundInstruction({ signer: player, order: open.order, player, game: shop.game, mint: game.mint })];
-      // A SOL shop refunds into a re-created wrapped-SOL account: close it so the player keeps plain SOL.
-      if (game.mint === NATIVE_MINT) refund.push(closeTokenAccount(associatedTokenAddress(player, NATIVE_MINT), player, player));
-      await signAndSend(player, refund);
-      throw new Error(MESSAGE.RollFailed);
+  }
+
+  /** The live game's address, or null. */
+  const liveGame = (e) => e?.game ?? (e?.collection ? lootPda.game(e.collection) : null);
+
+  /** The connected player's orders in this game that have not ended yet (a claim they did not approve, a slow roll). */
+  async function orders() {
+    const config = await ready();
+    const player = address();
+    const game = liveGame(econOf(config));
+    if (state.mock || !player || !game) return [];
+    const filters = [
+      { memcmp: { offset: 0, bytes: encodeBase58(Uint8Array.of(5)) } },
+      { memcmp: { offset: 1, bytes: game } },
+      { memcmp: { offset: 33, bytes: player } },
+    ];
+    const found = await rpc().programAccounts(LOOT_PROGRAM, filters);
+    return found.map(({ pubkey, account }) => ({ order: pubkey, ...decodeLoot(LootAccount.Order, account.data) }));
+  }
+
+  /** Finish an order: claim it when it was rolled, refund it when it failed or waited too long. */
+  async function finish(order) {
+    const config = await ready();
+    const r = await economy.finish(order);
+    if (r.settled) {
+      const won = wonItem(econOf(config), r.outcome);
+      if (won.asset) emit('items', won);
+      return { settled: true, item: won, outcome: r.outcome, signatures: r.signatures };
     }
-    say('You won something! Approve claiming it in your wallet…');
-    const claimed = await signAndSend(player, settleInstructions(player, open.order, context));
-    const item = findItem(config, order.item_id);
-    const won = item ? ownedOf(item, lootPda.asset(open.order), order.serial) : { id: order.item_id, name: `Item ${order.item_id}`, rarity: 'Common', look: null, image: null, serial: order.serial, asset: lootPda.asset(open.order) };
-    emit('items', won);
-    say('');
-    return { item: won, asset: won.asset, order: open.order, signatures: [opened, claimed], mock: false };
+    return r;
   }
 
   /** The connected player's items from this game's collection (none for a guest). */
   async function ownedItems() {
     const config = await ready();
     const player = address();
-    if (!player || !config.shop) return [];
+    const e = econOf(config);
+    if (!player || !e) return [];
     if (state.mock) return [...state.mockOwned];
-    if (!config.shop.collection) return [];
-    const assets = await rpc().programAccounts(MPL_CORE_PROGRAM, ownedAssetFilters(player, config.shop.collection));
+    if (!e.collection) return [];
+    const assets = await rpc().programAccounts(MPL_CORE_PROGRAM, ownedAssetFilters(player, e.collection));
     return assets.flatMap(({ pubkey, account }) => {
       try {
         const asset = parseCoreAsset(account.data);
-        const item = findItem(config, Number(asset.attributes.item_id));
+        const item = e.itemById(Number(asset.attributes.item_id));
         return item ? [ownedOf(item, pubkey, asset.attributes.serial ? Number(asset.attributes.serial) : null)] : [];
       } catch {
         return [];
@@ -382,7 +394,7 @@ export function createGfWeb3(options = {}) {
     });
   }
 
-  /** Whether the player owns an item, by id or name. */
+  /** Whether the player owns an item, by id, key or name. */
   async function owns(sku) {
     const config = await ready();
     const item = findItem(config, sku);
@@ -452,6 +464,20 @@ export function createGfWeb3(options = {}) {
     if (mock !== undefined) state.mock = Boolean(mock);
   }
 
+  /** The economy calls (econ/play.js): one per thing a player signs, the reads, act(id), state(). */
+  const economy = economyPlay({
+    ready,
+    connect,
+    address,
+    rpc,
+    send: signAndSend,
+    mock: () => state.mock,
+    emit,
+    say: status,
+    rollPollMs: options.rollPollMs,
+    now: options.now,
+  });
+
   return {
     VERSION,
     get mock() {
@@ -473,7 +499,10 @@ export function createGfWeb3(options = {}) {
     shop: { list: listShop, buy },
     boxes,
     openBox,
+    orders,
+    finish,
     token,
+    economy,
     loadout,
     wear,
     wearOwned,

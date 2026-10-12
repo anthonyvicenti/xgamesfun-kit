@@ -1,4 +1,4 @@
-// The studio's wallet, as the Token and Shop tabs use it. The studio page owns the Wallet Standard connection and
+// The studio's wallet, as the Economy tab uses it. The studio page owns the Wallet Standard connection and
 // hands it over as ctx.wallet (studio/wallet.js); this adapts it (and other shapes a host may pass), and falls back to
 // finding a wallet itself when the page has none. The wallet signs in this browser; nothing here ever sees a private key.
 //   { name, address(), connect(), signTransactions(base64[]) → base64[], signMessage(text) → base64 signature }

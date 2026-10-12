@@ -1,6 +1,6 @@
 // The dev server's web3 routes, under /api/web3/… (docs/ARCHITECTURE.md, "Dev-server routes"). The handlers live in
 // web3/node/api.mjs; each checks its own boundary too (loopback, Host, Origin, JSON, body size) before anything runs.
-//   GET  /state  /picture?path=  /flow?id=
+//   GET  /state  /picture?path=  /flow?id=  /economy/status
 //   POST /mint  /token/link  /token/unlink  /shop/currency  /shop/settings  /item/save  /item/remove
 //        /box/save  /box/remove  /request/dismiss  /flow/start  /flow/prepare  /flow/complete  /flow/cancel
 import { createWeb3Api } from '../../web3/node/api.mjs';

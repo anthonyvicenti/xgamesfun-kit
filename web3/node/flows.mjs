@@ -1,30 +1,21 @@
-// The two things a creator approves in their wallet: launching the game's token, and putting the shop on sale
-// (collection, loot game, items, boxes). Each is a flow for flow-engine.mjs: uploads to Arweave through Irys (one
-// signMessage each, paid from the wallet's Irys balance; small files are free on Irys), then the transactions,
-// which the wallet approves together in one prompt. What lands is written to gamesfun.json as it lands.
+// The two things a creator approves in their wallet: launching the game's token, and putting the game's economy live
+// (its collection, loot game, pools, items, boxes, recipes, schedules, lotteries, stakes; a game's old shop is part of
+// it). Each is a flow for flow-engine.mjs: uploads to Arweave through Irys (one signMessage each, paid from the
+// wallet's Irys balance; small files are free on Irys), then the transactions, which the wallet approves together in
+// one prompt. What lands is written to gamesfun.json as it lands.
 import { readUintLE, utf8 } from '../gf-web3/chain/bytes.js';
-import { createCollectionInstruction } from '../gf-web3/chain/core.js';
 import { createPoolInstruction, dbcPda, firstBuyInstructions, readVirtualPool } from '../gf-web3/chain/dbc.js';
-import { createGameInstruction, lootPda, upsertBoxInstruction, upsertItemInstruction } from '../gf-web3/chain/loot.js';
+import { decodeLoot, lootPda } from '../gf-web3/chain/loot.js';
 import { parseMetaplexMetadata } from '../gf-web3/chain/mint.js';
 import { associatedTokenAddress, metadataAddress } from '../gf-web3/chain/pda.js';
-import { computeUnitLimit, createAssociatedTokenAccountIdempotent, transferLamports } from '../gf-web3/chain/programs.js';
+import { computeUnitLimit, transferLamports } from '../gf-web3/chain/programs.js';
 import { compileMessage, MAX_TRANSACTION_BYTES, readMessage, readTransaction, signersOf, wireTransaction } from '../gf-web3/chain/tx.js';
 import { explorerUrl } from '../gf-web3/network.js';
 import { fromUnits, gamePath, LIMIT, onChainUri, RuleError, text, ticker, toUnits } from '../gf-web3/rules.js';
-import {
-  chainStatus,
-  collectionMetadata,
-  collectionMetaSource,
-  hashJson,
-  itemMetadata,
-  itemMetaSource,
-  itemOnChainArgs,
-  mintInfo,
-  poolConfig,
-  tokenMetadata,
-} from './chain.mjs';
-import { defaultCurrency } from './drafts.mjs';
+import { migrateShop } from '../economy/migrate.mjs';
+import { model } from '../economy/model.mjs';
+import { collectionMetadata, itemMetadata, mintInfo, poolConfig, tokenMetadata } from './chain.mjs';
+import { planToInstructions, publishedAt, publishPlan, readEconomy, recordLanded, resolver } from './economy.mjs';
 import { freshKeypair } from './ed25519.mjs';
 import { readConfig, readPicture, updateConfig } from './game.mjs';
 import { irysNode, itemId, messageToSign, signedItem, unsignedItem } from './irys.mjs';
@@ -58,7 +49,7 @@ function programNames(network, wallet) {
     ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL: 'Associated Token Account',
     CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d: 'Metaplex Core',
     metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s: 'Metaplex Token Metadata',
-    [network.loot.program]: 'games.fun loot program',
+    [network.loot.program]: 'games.fun loot program 0.3',
     [network.launchpad.dbcProgram]: 'Meteora Dynamic Bonding Curve',
   };
 }
@@ -209,6 +200,26 @@ export async function launchFlow(ctx, input, wallet) {
   const config = await readConfig(ctx.gameDir);
   if (config.token) fail(config.token.source === 'launched' ? `This game already launched $${config.token.symbol}.` : `This game uses $${config.token.symbol}. Stop using it before launching a new token.`);
   if (config.creator && config.creator !== wallet) fail(`This game belongs to the wallet ${config.creator}. Connect that wallet.`);
+  const launch = await launchSteps(ctx, input, wallet, (c, token) => {
+    c.creator = wallet;
+    c.token = token;
+  });
+  return {
+    kind: 'launch',
+    title: `Launch $${launch.symbol} for this game`,
+    lines: launch.lines,
+    wallet,
+    steps: launch.steps,
+    context: { mint: launch.mint, pool: launch.pool },
+    onFinish: async () => ({ token: (await readConfig(ctx.gameDir)).token }),
+  };
+}
+
+/**
+ * The steps of a token launch on games.fun's curve (uploads, then the launch transaction), for the launch flow and
+ * the economy flow. `record(config, token)` writes the landed token into gamesfun.json (the config is saved after).
+ */
+async function launchSteps(ctx, input, wallet, record) {
   const name = text(input.name, 'Token name', { maxBytes: LIMIT.TokenNameBytes });
   const symbol = ticker(input.symbol);
   const description = text(input.description, 'Description', { maxChars: LIMIT.DescriptionChars, required: false });
@@ -288,8 +299,7 @@ export async function launchFlow(ctx, input, wallet) {
         const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k);
         if (failed.length) throw new Error(`The launch transaction ${signature} landed, but the chain does not show the token as expected (${failed.join(', ')}).`);
         await updateConfig(ctx.gameDir, (c) => {
-          c.creator = wallet;
-          c.token = {
+          record(c, {
             mint: mint.address,
             name,
             symbol,
@@ -302,7 +312,7 @@ export async function launchFlow(ctx, input, wallet) {
             config: launchpad.config,
             quoteMint: launchpad.quoteMint,
             signature,
-          };
+          });
           return c;
         });
         return `$${symbol} is live: ${explorerUrl(ctx.network, 'tx', signature)}`;
@@ -310,223 +320,241 @@ export async function launchFlow(ctx, input, wallet) {
     }),
   ];
   return {
-    kind: 'launch',
-    title: `Launch $${symbol} for this game`,
-    lines: [`${name}${description ? `: ${description}` : ''}`, `Picture: ${picture.path}. Network: devnet.`, firstBuy ? `Initial buy: ${buyText} ${launchpad.quoteSymbol}.` : 'No initial buy.'],
-    wallet,
+    symbol,
+    mint: mint.address,
+    pool,
     steps,
-    context: { mint: mint.address, pool },
-    onFinish: async () => ({ token: (await readConfig(ctx.gameDir)).token }),
+    lines: [`${name}${description ? `: ${description}` : ''}`, `Picture: ${picture.path}. Network: devnet.`, firstBuy ? `Initial buy: ${buyText} ${launchpad.quoteSymbol}.` : 'No initial buy.'],
   };
 }
 
-// ---------------------------------------------------------------- put the shop on sale
 
-/** Pack instructions into as few transactions as fit, keeping each group's ids (what landed with which). */
-function pack(payer, blockhash, entries, maxTransactions) {
-  const groups = [];
-  let current = { instructions: [], ids: [] };
-  const size = (list) => {
+// ---------------------------------------------------------------- put the economy live
+
+/** A plan's transactions as wires: each plan transaction is one, split in two only if it does not fit after all. */
+function economyWires({ wallet, blockhash, built, keys }) {
+  const out = [];
+  const signersFor = (names) => names.map((n) => keys[n]).filter(Boolean);
+  const wireOf = (instructions, stepList) => {
+    const names = [...new Set(stepList.flatMap((s) => s.signers.filter((x) => x.startsWith('new:'))))];
+    return buildWire({ payer: wallet, blockhash, instructions, signers: signersFor(names) });
+  };
+  for (const tx of built.transactions) {
     try {
-      return wireTransaction(compileMessage({ payer, blockhash, instructions: list })).length;
-    } catch {
-      return Infinity;
+      out.push({ wire: wireOf(tx.instructions, tx.stepList), steps: tx.stepList, says: tx.says });
+    } catch (error) {
+      if (!/limit is/.test(error.message) || tx.instructions.length < 2) throw error;
+      // The compiler sizes conservatively, but a Token-2022 mint's extras are only known now: split by step.
+      let group = { instructions: [], steps: [] };
+      const flush = () => group.instructions.length && out.push({ wire: wireOf(group.instructions, group.steps), steps: group.steps, says: [...new Set(group.steps.map((s) => s.says))] });
+      tx.instructions.forEach((ix, i) => {
+        const trial = { instructions: [...group.instructions, ix], steps: [...group.steps, tx.stepList[i]] };
+        try {
+          wireOf(trial.instructions, trial.steps);
+          group = trial;
+        } catch {
+          flush();
+          group = { instructions: [ix], steps: [tx.stepList[i]] };
+        }
+      });
+      flush();
     }
-  };
-  for (const entry of entries) {
-    if (current.instructions.length && size([...current.instructions, entry.instruction]) > MAX_TRANSACTION_BYTES) {
-      groups.push(current);
-      current = { instructions: [], ids: [] };
-    }
-    current.instructions.push(entry.instruction);
-    current.ids.push(entry.id);
   }
-  if (current.instructions.length) groups.push(current);
-  return { kept: groups.slice(0, maxTransactions), partial: groups.length > maxTransactions };
+  return out;
 }
+
+const refusalText = (refusals) => refusals.map((r) => `${r.message}${r.fix ? ` Fix: ${r.fix}` : ''}`).join(' ');
 
 /**
- * Everything the shop still needs, in one wallet approval for the transactions: the collection and loot game the
- * first time (priced in the shop's currency, fixed from then on), every new or changed item that has a picture, and
- * every box whose items are on sale or going on sale now. Uploads come first (one signature each).
+ * Everything the game's economy still needs on chain, in one wallet approval for the transactions (more when it
+ * takes more transactions than one approval holds): a token launched on games.fun's curve first (its uploads and its
+ * own transaction), item pictures and details to Arweave, then the setup the compiler plans (web3/economy/compile.mjs).
+ * Once it is live, a change publishes only what differs from what is on chain (`diff`). Each transaction that lands
+ * is written to gamesfun.json at once (economy.live). A game that still has a `shop` has it moved into its economy.
+ * input: { picture? (for a token launched on the curve), description?, initialBuy?, tokens?: { <key>: { picture, … } } }
  */
-export async function publishFlow(ctx, wallet) {
-  const config = await readConfig(ctx.gameDir);
-  const shop = config.shop;
-  if (!shop?.items.length) fail('Add an item before opening the shop.');
+export async function economyFlow(ctx, wallet, input = {}) {
+  const read = await readEconomy(ctx.gameDir);
+  const { config } = read;
+  if (!read.economy) fail('This game has no economy yet. Write one into gamesfun.json (web3/economy/README.md has the parts and an example), or add an item in the studio.');
   if (config.creator && config.creator !== wallet) fail(`This game belongs to the wallet ${config.creator}. Connect that wallet.`);
-  const status = await chainStatus(ctx.rpc, ctx.network, config, { pictureHash: async (p) => readPicture(ctx.gameDir, p).then((x) => x.sha256).catch(() => null) });
-  const live = status.shop.exists;
-  if (live && status.shop.game.authority !== wallet) fail(`This shop’s loot game belongs to ${status.shop.game.authority}. Connect that wallet.`);
-  const currency = live ? shop.currency : shop.currency ?? defaultCurrency(config);
-  if (!live && !currency.native) {
-    const info = await mintInfo(ctx.rpc, currency.mint);
-    if (!info.lootReady) fail('Shops take classic SPL tokens and SOL; the chosen currency is Token-2022.');
+  const live = read.economy.live ?? {};
+  if (live.game) {
+    const account = await ctx.rpc.account(live.game);
+    const owner = account ? decodeLoot('Game', account.data).owner : null;
+    if (owner && owner !== wallet) fail(`This economy’s game belongs to ${owner}. Connect that wallet.`);
   }
-  const pictures = new Map();
-  for (const item of shop.items) if (item.picture) pictures.set(item.id, await readPicture(ctx.gameDir, item.picture).catch(() => null));
-  const publishing = shop.items.filter((item) => status.shop.items[item.id].state !== 'published' && (item.image || pictures.get(item.id)));
-  const ids = new Set(publishing.map((i) => i.id));
-  const onSale = (id) => ids.has(id) || (shop.items.find((i) => i.id === id)?.listed && status.shop.items[id]?.state === 'published');
-  const boxes = shop.boxes.filter((b) => status.shop.boxes[b.id].state !== 'published' && b.entries.every((e) => onSale(e.item)));
-  const skipped = shop.items.filter((i) => status.shop.items[i.id].state !== 'published' && !i.image && !pictures.get(i.id));
-  if (live && !publishing.length && !boxes.length) fail(skipped.length ? 'The items waiting need a picture first.' : 'Everything is already on sale.');
-  if (!live && !publishing.length) fail('Give an item a picture before opening the shop.');
+  const startedAt = Math.floor(Date.now() / 1000);
+  const first = publishPlan(read.economy, { now: publishedAt(read.economy, startedAt) });
+  if (!first.plan.ok) fail(`The economy is not ready to go live. ${refusalText(first.plan.refusals)}`);
+  const m = model(first.next, { now: first.now });
+  // Every mint the spec names must be on this network, in the token program it says.
+  for (const t of m.tokens.values()) {
+    if (t.wsol || !t.mint || t.mint.startsWith('@')) continue;
+    const info = await mintInfo(ctx.rpc, t.mint).catch((e) => fail(`${t.symbol}: ${e.message}`));
+    if (info.program !== t.program) fail(`${t.symbol} (${t.mint}) is a ${info.program === 'token-2022' ? 'Token-2022' : 'classic SPL'} token, but the economy says ${t.program}. Fix: set "program": "${info.program}" on the token "${t.key}".`);
+  }
 
-  // Uploads: item pictures, then (for a new shop) the collection's details, then item details.
   const steps = [];
-  for (const item of publishing) {
-    const picture = pictures.get(item.id);
-    if (picture && (!item.image || item.imageHash !== picture.sha256)) {
-      steps.push(
-        uploadStep(ctx, {
-          title: `Upload the picture of ${item.name}`,
-          build: async () => ({ label: `The picture of ${item.name}`, bytes: picture.bytes, contentType: picture.contentType }),
-          done: async (flow, upload) =>
-            updateConfig(ctx.gameDir, (c) => {
-              const it = c.shop.items.find((i) => i.id === item.id);
-              Object.assign(it, { image: upload.url, imageHash: picture.sha256 });
-              return c;
-            }),
-        }),
-      );
-    }
+  const lines = [];
+  // 1. Tokens to launch on games.fun's curve: the token launch, as one part of the economy.
+  for (const t of m.tokens.values()) {
+    if (t.source !== 'curve' || !t.mint.startsWith('@')) continue;
+    const own = input.tokens?.[t.key] ?? {};
+    const picture = own.picture ?? input.picture;
+    if (!picture) fail(`Launching ${t.symbol} on games.fun’s curve needs a picture. Fix: pass one (npx gamesfun economy publish --picture assets/icon.png), or launch it from the token part of the Economy tab.`);
+    const launch = await launchSteps(ctx, { name: t.name, symbol: t.symbol, description: own.description ?? input.description ?? '', picture, initialBuy: own.initialBuy ?? input.initialBuy ?? '' }, wallet, (c, token) => {
+      if (!c.economy && c.shop) c.economy = migrateShop(c).config.economy;
+      const spec = c.economy.tokens.find((x) => x.key === t.key);
+      Object.assign(spec, { mint: token.mint, decimals: token.decimals, program: token.program, venue: 'games.fun', ...(token.image ? { image: token.image } : {}), ...(token.metadataUri ? { uri: token.metadataUri } : {}) });
+      delete c.shop;
+      c.creator ??= wallet;
+      c.token ??= token;
+    });
+    steps.push(...launch.steps);
+    lines.push(`First: launch $${launch.symbol} on games.fun’s curve (two uploads and one transaction).`);
   }
-  const collection = live ? null : freshKeypair();
-  if (!live) {
+
+  // 2. Pictures and details to Arweave, for items with a picture and no details yet, and the collection's.
+  const economyName = read.economy.name ?? m.name;
+  const pictureOf = new Map();
+  for (const it of m.items) if (it.picture && !it.uri) pictureOf.set(it.key, await readPicture(ctx.gameDir, it.picture).catch(() => null));
+  const writeItem = (key, fields) =>
+    updateConfig(ctx.gameDir, (c) => {
+      if (!c.economy && c.shop) {
+        c.economy = migrateShop(c).config.economy;
+        delete c.shop;
+      }
+      Object.assign(c.economy.items.find((i) => i.key === key), fields);
+      return c;
+    });
+  for (const it of m.items) {
+    const picture = pictureOf.get(it.key);
+    if (!picture) continue;
+    if (!it.image)
+      steps.push(uploadStep(ctx, { title: `Upload the picture of ${it.name}`, build: async () => ({ label: `The picture of ${it.name}`, bytes: picture.bytes, contentType: picture.contentType }), done: async (flow, upload) => writeItem(it.key, { image: upload.url }) }));
+    steps.push(
+      uploadStep(ctx, {
+        title: `Upload the details of ${it.name}`,
+        build: async () => {
+          const now = (await readEconomy(ctx.gameDir)).economy.items.find((i) => i.key === it.key);
+          return { label: `The details of ${it.name}`, bytes: utf8(JSON.stringify(itemMetadata({ name: economyName }, { ...now, rarity: now.rarity ?? 'Common', soulbound: !!now.soulbound }, now.image, picture.contentType))), contentType: 'application/json' };
+        },
+        done: async (flow, upload) => writeItem(it.key, { uri: onChainUri(upload.url) }),
+      }),
+    );
+  }
+  const collectionImage = () => readEconomy(ctx.gameDir).then(({ economy }) => economy.collection?.image ?? economy.items?.find((i) => i.image)?.image ?? null);
+  if (!live.collection && !m.collection.uri && (read.economy.collection?.image || pictureOf.size || m.items.some((i) => i.image))) {
     steps.push(
       uploadStep(ctx, {
         title: 'Upload the collection’s details',
-        build: async () => {
-          const c = await readConfig(ctx.gameDir);
-          const image = c.shop.image ?? c.token?.image ?? c.shop.items.find((i) => i.image)?.image;
-          if (!image) fail('The collection needs a picture: give an item a picture first.');
-          const type = c.shop.image || c.token?.image ? 'image/png' : pictures.get(c.shop.items.find((i) => i.image)?.id)?.contentType ?? 'image/png';
-          return { label: 'The collection details', bytes: utf8(JSON.stringify(collectionMetadata(c.shop, image, type))), contentType: 'application/json', image };
-        },
+        build: async () => ({ label: 'The collection details', bytes: utf8(JSON.stringify(collectionMetadata({ name: m.collection.name, description: m.collection.description }, await collectionImage(), 'image/png'))), contentType: 'application/json' }),
         done: async (flow, upload) =>
           updateConfig(ctx.gameDir, (c) => {
-            const image = c.shop.image ?? c.token?.image ?? c.shop.items.find((i) => i.image)?.image;
-            Object.assign(c.shop, { image, metadataUri: onChainUri(upload.url), metaHash: hashJson(collectionMetaSource(c.shop, image)) });
+            if (!c.economy && c.shop) {
+              c.economy = migrateShop(c).config.economy;
+              delete c.shop;
+            }
+            c.economy.collection = { ...(c.economy.collection ?? {}), uri: onChainUri(upload.url) };
             return c;
           }),
       }),
     );
   }
-  // Items whose details are already uploaded and current (a price or supply change) skip straight to the transaction.
-  const upToDate = (it, c) => it.uri && it.image && it.metaHash === hashJson(itemMetaSource(c.shop, it));
-  for (const item of publishing) {
-    const picture = pictures.get(item.id);
-    const newPicture = picture && (!item.image || item.imageHash !== picture.sha256);
-    if (!newPicture && upToDate(item, config)) continue;
-    steps.push(
-      uploadStep(ctx, {
-        title: `Upload the details of ${item.name}`,
-        build: async () => {
-          const c = await readConfig(ctx.gameDir);
-          const it = c.shop.items.find((i) => i.id === item.id);
-          const type = pictures.get(item.id)?.contentType ?? 'image/png';
-          return { label: `The details of ${item.name}`, bytes: utf8(JSON.stringify(itemMetadata(c.shop, it, it.image, type))), contentType: 'application/json' };
-        },
-        done: async (flow, upload) =>
-          updateConfig(ctx.gameDir, (c) => {
-            const it = c.shop.items.find((i) => i.id === item.id);
-            Object.assign(it, { uri: onChainUri(upload.url), metaHash: hashJson(itemMetaSource(c.shop, it)) });
-            return c;
-          }),
-      }),
-    );
-  }
-  const unit = (units) => `${fromUnits(units, currency.decimals)} ${currency.symbol}`;
-  const treasury = associatedTokenAddress(wallet, currency.mint);
-  let plan = null;
-  steps.push(
-    transactionsStep(ctx, {
-      title: live ? 'Put the changes on sale' : `Open the shop, priced in ${currency.symbol}`,
-      build: async (flow, blockhash) => {
-        const c = await readConfig(ctx.gameDir);
-        const s = c.shop;
-        const game = live ? lootPda.game(s.collection) : lootPda.game(collection.address);
-        const entries = [];
-        const setup = [];
-        if (!live) {
-          setup.push(
-            createCollectionInstruction({ collection: collection.address, creator: wallet, name: s.name, uri: s.metadataUri, royaltyBps: s.royaltyBps }),
-            createAssociatedTokenAccountIdempotent(wallet, wallet, currency.mint),
-            createGameInstruction({ authority: wallet, collection: collection.address, mint: currency.mint, treasury, burnBps: 0 }),
-          );
+
+  // 3. The setup, in as few approvals as the transactions need.
+  const keys = {};
+  const state = { prepared: null, lastValidBlockHeight: null, approvals: 0 };
+  const rent = async (bytes) => BigInt(await ctx.rpc.call('getMinimumBalanceForRentExemption', [Number(bytes)]));
+  const ownerTransactions = (plan) => plan.transactions.filter((t) => t.signer === 'owner');
+  const waiting = (plan) => plan.transactions.filter((t) => t.signer !== 'owner');
+  steps.push({
+    title: live.game ? 'Put the changes live' : `Put ${economyName} live`,
+    async prepare(flow) {
+      const fresh = await readEconomy(ctx.gameDir);
+      const { plan, next, now } = publishPlan(fresh.economy, { now: publishedAt(fresh.economy, startedAt) });
+      if (!plan.ok) fail(`The economy is not ready to go live. ${refusalText(plan.refusals)}`);
+      const mine = ownerTransactions(plan);
+      if (!mine.length) fail(waiting(plan).length ? `What is left needs the authority’s wallet (${model(next).authority}).` : 'Everything is already live.');
+      for (const tx of mine) for (const name of tx.signers) if (name.startsWith('new:') && !keys[name]) keys[name] = freshKeypair();
+      const liveNow = fresh.economy.live ?? {};
+      const ctxBuild = { economy: next, owner: wallet, keys, rpc: ctx.rpc, rent, collection: liveNow.collection ?? keys['new:collection']?.address };
+      const { blockhash, lastValidBlockHeight } = await ctx.rpc.latestBlockhash();
+      const built = await planToInstructions({ ...plan, transactions: mine.slice(0, LIMIT.PublishTransactions) }, ctxBuild);
+      const wires = economyWires({ wallet, blockhash, built, keys }).slice(0, LIMIT.PublishTransactions);
+      const resolve = resolver(ctxBuild);
+      state.prepared = { wires, next, now, ctxBuild, collection: ctxBuild.collection, treasury: resolve(`ata:owner/${model(next).currencyKey}`), authority: resolve('@wallet:authority') };
+      state.lastValidBlockHeight = lastValidBlockHeight;
+      await ctx.rpc.simulate(wires[0].wire);
+      const more = mine.length - built.transactions.length;
+      const kinds = (prefix) => wires.flatMap((w) => w.steps).filter((s) => s.id.startsWith(prefix)).length;
+      return {
+        kind: 'transactions',
+        transactions: wires.map((w) => w.wire),
+        details: [
+          ...(liveNow.game ? ['Only what changed since it went live.'] : [`A new collection ${keys['new:collection']?.address ?? ''} (Metaplex Core): your wallet is its update authority; the loot program may mint into it. The game ${lootPda.game(ctxBuild.collection)} on games.fun’s loot program 0.3 is yours: you own it and change it.`]),
+          ...wires.map((w, i) => `Transaction ${i + 1}: ${w.says.join('; ')}.`),
+          ...plan.notes.filter((n) => !/Compute units/.test(n)),
+          `${wires.length} transaction${wires.length === 1 ? '' : 's'}, one approval: ${kinds('pool:')} pool(s), ${kinds('item:')} item(s), ${kinds('box:')} box(es), ${kinds('recipe:')} recipe(s), ${kinds('schedule:')} schedule(s), ${kinds('lottery:')} lotter${kinds('lottery:') === 1 ? 'y' : 'ies'}, ${kinds('stake:')} stake(s).`,
+          ...(more > 0 ? [`${more} more transaction${more === 1 ? '' : 's'} after this approval: your wallet asks again.`] : []),
+          `Your wallet pays the network fees and each new account’s rent; games.fun’s loot program charges no fee to set an economy up.`,
+        ],
+      };
+    },
+    async complete(flow, answer) {
+      const p = state.prepared;
+      const landed = [];
+      const mints = Object.fromEntries(Object.entries(keys).filter(([n]) => n.startsWith('new:mint/')).map(([n, k]) => [n.slice('new:mint/'.length), k.address]));
+      for (const [i, wire] of answer.transactions.entries()) {
+        let signature;
+        try {
+          signature = await ctx.rpc.send(wire);
+          await ctx.rpc.confirm(signature, { lastValidBlockHeight: state.lastValidBlockHeight });
+        } catch (error) {
+          if (landed.length) flow.results.push(`Part of it landed (${landed.length} of ${answer.transactions.length} transactions): ${landed.map((s) => explorerUrl(ctx.network, 'tx', s)).join(' ')}. Press Approve again for the rest.`);
+          throw error;
         }
-        for (const item of publishing) {
-          const it = s.items.find((i) => i.id === item.id);
-          if (!upToDate(it, c)) fail(`${it.name}’s details were not uploaded. Press Approve again.`);
-          entries.push({ id: `item:${it.id}`, instruction: upsertItemInstruction({ admin: wallet, game, itemId: it.id, ...itemOnChainArgs(it) }) });
-        }
-        for (const box of boxes) {
-          const b = s.boxes.find((x) => x.id === box.id);
-          entries.push({ id: `box:${b.id}`, instruction: upsertBoxInstruction({ admin: wallet, game, boxId: b.id, price: BigInt(b.price), entries: b.entries.map((e) => ({ itemId: e.item, weight: e.weight })) }) });
-        }
-        const groups = [];
-        if (setup.length) {
-          const size = wireTransaction(compileMessage({ payer: wallet, blockhash, instructions: setup })).length;
-          if (size <= MAX_TRANSACTION_BYTES) groups.push({ instructions: setup, ids: ['setup'], signers: [collection] });
-          else {
-            groups.push({ instructions: [setup[0]], ids: ['collection'], signers: [collection] });
-            groups.push({ instructions: setup.slice(1), ids: ['game'], signers: [] });
-          }
-        }
-        const packed = pack(wallet, blockhash, entries, LIMIT.PublishTransactions - groups.length);
-        groups.push(...packed.kept.map((g) => ({ ...g, signers: [] })));
-        plan = { groups, partial: packed.partial, game };
-        const wires = groups.map((g) => buildWire({ payer: wallet, blockhash, instructions: g.instructions, signers: g.signers }));
-        const itemCount = groups.flatMap((g) => g.ids).filter((id) => id.startsWith('item:')).length;
-        const boxCount = groups.flatMap((g) => g.ids).filter((id) => id.startsWith('box:')).length;
-        return {
-          wires,
-          // Later transactions depend on the first landing (the loot game must exist), so only a live shop's are all dry-run.
-          simulate: live ? wires.length : 1,
-          details: [
-            ...(live ? [] : [`Collection ${collection.address} (Metaplex Core): your wallet is its update authority; ${s.royaltyBps / 100}% resale royalty to you. The loot program may mint into it.`, `Priced in ${currency.symbol}, fixed from now on. Sales go to your account ${treasury}; games.fun’s loot program keeps ${ctx.network.loot.platformFeeBps / 100}%.`]),
-            ...publishing.map((i) => `${i.name} (${i.rarity}): ${i.price === '0' ? 'loot boxes only' : unit(i.price)}`),
-            ...boxes.map((b) => `Loot box ${b.name}: ${unit(b.price)}`),
-            ...(packed.partial ? ['That is more than one approval holds; press “Put it on sale” again afterwards for the rest.'] : []),
-            `${wires.length} transaction${wires.length === 1 ? '' : 's'}, one approval. ${itemCount} item${itemCount === 1 ? '' : 's'}, ${boxCount} loot box${boxCount === 1 ? '' : 'es'}.`,
-          ],
-        };
-      },
-      landed: async (flow, signatures, partial) => {
-        const landedIds = new Set(plan.groups.slice(0, signatures.length).flatMap((g) => g.ids));
+        landed.push(signature);
         await updateConfig(ctx.gameDir, (c) => {
-          if (landedIds.has('setup') || landedIds.has('collection')) {
-            c.creator = wallet;
-            Object.assign(c.shop, { collection: collection.address, currency });
+          let next = c;
+          if (!next.economy && next.shop) {
+            next = migrateShop(next).config;
+            delete next.shop;
           }
-          if (landedIds.has('setup') || landedIds.has('game')) Object.assign(c.shop, { game: plan.game, treasury, currency });
-          for (const it of c.shop.items) if (landedIds.has(`item:${it.id}`)) it.listed = true;
-          for (const b of c.shop.boxes) if (landedIds.has(`box:${b.id}`)) b.listed = true;
-          return c;
+          return recordLanded(next, { signature, steps: p.wires[i].steps, next: p.next, owner: wallet, collection: p.collection, treasury: p.treasury, authority: p.authority, mints, at: new Date(p.now * 1000).toISOString() });
         });
-        collection?.drop();
-        const links = signatures.map((s) => explorerUrl(ctx.network, 'tx', s));
-        if (partial) return `Part of it landed (${signatures.length} of ${plan.groups.length} transactions): ${links.join(' ')}`;
-        return `${live ? 'Your changes are on sale' : 'Your shop is open'}${plan.partial ? ' (press again for the rest)' : ''}: ${links.join(' ')}`;
-      },
-    }),
-  );
+      }
+      state.approvals += 1;
+      const links = landed.map((s) => explorerUrl(ctx.network, 'tx', s)).join(' ');
+      const after = publishPlan((await readEconomy(ctx.gameDir)).economy, { now: p.now });
+      const left = after.plan.ok ? ownerTransactions(after.plan).length : 0;
+      if (left) return { result: `Landed ${landed.length} transaction${landed.length === 1 ? '' : 's'}: ${links}. ${left} more to approve.`, again: true };
+      const authority = after.plan.ok ? waiting(after.plan).length : 0;
+      return `${live.game ? 'Your changes are live' : 'Your economy is live'}: ${links}${authority ? ` (${authority} transaction${authority === 1 ? '' : 's'} wait for the authority’s wallet)` : ''}`;
+    },
+  });
+
+  const owners = ownerTransactions(first.plan).length;
   return {
-    kind: 'publish',
-    title: live ? 'Put the changes on sale' : `Open the shop for ${shop.name}`,
+    kind: 'economy',
+    title: live.game ? `Put the changes to ${economyName} live` : `Put ${economyName} live`,
     lines: [
-      `Players pay in ${currency.symbol}.`,
-      `${publishing.length} item${publishing.length === 1 ? '' : 's'} and ${boxes.length} loot box${boxes.length === 1 ? '' : 'es'}.`,
-      ...(skipped.length ? [`${skipped.map((i) => i.name).join(', ')} still need${skipped.length === 1 ? 's' : ''} a picture and will wait.`] : []),
-      `${steps.length - 1} upload${steps.length === 2 ? '' : 's'} (a signature each), then one approval for the transactions.`,
+      ...read.notes.filter((n) => !/^There is no shop/.test(n)),
+      ...lines,
+      `Priced in ${m.currency?.symbol ?? 'its currency'}. ${owners} transaction${owners === 1 ? '' : 's'} (${Math.max(1, Math.ceil(owners / LIMIT.PublishTransactions))} approval${owners > LIMIT.PublishTransactions ? 's' : ''}) ${live.game ? 'for what changed' : 'to set it up'}.`,
+      ...first.plan.warnings.slice(0, 5).map((w) => `Note: ${w.message}`),
+      ...m.items.filter((i) => !i.uri && !i.picture && !i.image).slice(0, 3).map((i) => `${i.name} has no picture: it goes live without one (wallets show its name).`),
     ],
     wallet,
     steps,
     onFinish: async () => {
-      const c = await readConfig(ctx.gameDir);
-      return { collection: c.shop?.collection ?? null, game: c.shop?.game ?? null, explorer: c.shop?.collection ? explorerUrl(ctx.network, 'address', c.shop.collection) : null };
+      for (const k of Object.values(keys)) k.drop?.();
+      const { economy } = await readEconomy(ctx.gameDir);
+      return { game: economy.live?.game ?? null, collection: economy.live?.collection ?? null, explorer: economy.live?.game ? explorerUrl(ctx.network, 'address', economy.live.game) : null };
     },
   };
 }
 
+/** The shop's old publish: a game's shop is part of its economy now, so this is the economy flow. */
+export const publishFlow = (ctx, wallet, input) => economyFlow(ctx, wallet, input);

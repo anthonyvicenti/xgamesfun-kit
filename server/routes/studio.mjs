@@ -3,10 +3,10 @@ import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { STUDIO } from '../../lib/paths.mjs';
 
-// Web3 is off until asked for (HANDOFF section 1): the Token and Shop tabs are not in the list the page builds its tab
+// Web3 is off until asked for (HANDOFF section 1): the Economy tab is not in the list the page builds its tab
 // row from, so they are not in the DOM and cannot be reached by keyboard. On with GAMESFUN_WEB3=1 for the dev server (the
 // variable the MCP server uses for its web3_* tools), or when the game already has a gamesfun.json.
-export const WEB3_TAB_FILES = new Set(['token.js', 'shop.js']);
+export const WEB3_TAB_FILES = new Set(['economy.js']);
 
 export async function web3On(env, gameDir) {
   if (env.GAMESFUN_WEB3 === '1') return true;

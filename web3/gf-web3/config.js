@@ -85,7 +85,7 @@ function cleanCurrency(v) {
   const symbol = str(v.symbol, { maxChars: 40 });
   const decimals = whole(v.decimals, 0, MAX_DECIMALS);
   if (!mint || !symbol || decimals === undefined) return undefined;
-  return { mint, symbol, decimals, native: v.native === true };
+  return { mint, symbol, decimals, native: v.native === true, program: v.program === 'token-2022' ? 'token-2022' : 'spl-token' };
 }
 
 function cleanItem(v) {
@@ -168,12 +168,15 @@ export function cleanConfig(value) {
   const creator = address(value.creator);
   const token = cleanToken(value.token);
   const shop = cleanShop(value.shop);
+  // The economy section is checked by web3/economy/check.mjs, not here; this file only carries it through.
+  const economy = isObject(value.economy) ? value.economy : null;
   return {
     version: CONFIG_VERSION,
     network: DEVNET,
     ...(creator ? { creator } : {}),
     ...(token ? { token } : {}),
     ...(shop ? { shop } : {}),
+    ...(economy ? { economy } : {}),
   };
 }
 

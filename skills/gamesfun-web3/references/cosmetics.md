@@ -1,7 +1,8 @@
 # The cosmetics loop: own it, wear it, everyone sees it
 
-An item's `look` is a **gf-three loadout fragment** (gf-three CONTRACT §6e). It holds the player-look
-slots that owning the item changes:
+An item's `look` is a **gf-three loadout fragment** (gf-three CONTRACT §6e), written on the item in the game's
+economy spec (`economy` → `items[].look`, with `economy_save` or the Economy tab). It holds the player-look slots that
+owning the item changes:
 
 ```json
 { "values": { "character.tint.player": "#ffcc00", "mechanic.projectile.color": "#2457ff" },
@@ -18,36 +19,23 @@ slots that owning the item changes:
 
 ## Wear what the player owns
 
-In `rules.js` (game code never goes in `main.js`, `index.html` or `gf/`):
+**No code.** The kit's wallet view (home menu or pause menu, gf-three CONTRACT §6g W1) lists the items the page says
+the player owns, each with **Wear**. A click sends the page `gf:wear`; the page builds the loadout from the items' looks
+and answers with `gf:loadout` (§6e). gf-three's `kit/net/looks.js` applies it to this player, and every other copy in
+the match draws it too (the `lk`/`lo` loadout messages). You write no wallet, ownership or multiplayer code for this,
+and `rules.js` never imports `gf/web3/`.
 
-```js
-import gfWeb3 from './gf/web3/index.js';
-
-export default {
-  setup(ctx) {
-    const wear = () => gfWeb3.wearOwned().catch(() => {});
-    gfWeb3.ready().then(() => gfWeb3.address && wear());
-    gfWeb3.on('wallet', (address) => address && wear());   // after the player connects (see buy-button.md)
-    gfWeb3.on('items', wear);                               // after a buy or a box opens
-  },
-};
-```
-
-`wearOwned()` sets `window.__GF_LOADOUT`. gf-three's `kit/net/looks.js` applies it to this player, and every
-other copy in the match draws it too (the `lk`/`lo` loadout messages). You write no multiplayer code for this.
-`ctx.looks.apply(loadout)` is the same thing from inside the rules, so
-`ctx.looks.apply((await gfWeb3.wear(ids)).loadout)` works too.
-
-- **One item per slot.** With no choice made, the rarest owned item wins each slot. To let the
-  player choose, call `gfWeb3.wear([itemId, …])`. Their order wins, and the choice is remembered per
-  game and wallet.
-- **Invalid looks are dropped.** gf-three checks the loadout against the game's slots again and
-  drops anything that doesn't fit (P4: never fatal).
-- **Guests** wear the game's defaults. `ownedItems()` returns `[]` for them.
+- **One item per slot.** The page decides which owned item fills a slot until the player picks one with Wear
+  (gf-web3's own rule, page side: the rarest wins, and the choice is remembered per game and wallet).
+- **Invalid looks are dropped.** gf-three checks the loadout against the game's slots again and drops anything that
+  doesn't fit (P4: never fatal).
+- **Guests** wear the game's defaults.
+- **Checking it:** verify check 22 frames the game in a stand-in page with a test wallet and two items, presses Wear,
+  and checks the player is drawn in the item's colour. `?gf-loadout=` (§6e) previews a loadout with no page at all.
 
 ## Making a look exist
 
 When an item should change something the game doesn't have yet (a rainbow skin, a trail), add a
 player-look slot to the game first (gf-three CONTRACT §6e: `config/game.json` → `loadout.slots`,
-`tools/slots.mjs`). Then set the item's look to it with `web3_update_item`. Once players own copies,
-an item's look can't change. Make a new item instead.
+`tools/slots.mjs`). Then set the item's `look` to it in the economy spec. Once players own copies, an item's look can't
+change. Make a new item instead.

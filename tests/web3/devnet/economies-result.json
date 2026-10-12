@@ -1,0 +1,660 @@
+{
+  "network": "devnet",
+  "program": "88Labq6tdVnBQsjHSfic6qqgvo5b9NGmy99AYj7KVXqM",
+  "platform": "DFbnNkPGmsrc9NT4yZKoiD161gt2SPK98DKe4yAL2cm9",
+  "startedAt": "2026-10-12T02:35:32.726Z",
+  "seedScale": 0.01,
+  "steps": [
+    {
+      "name": "the fixtures’ devnet accounts are there and are what the fixtures say",
+      "at": "2026-10-12T02:35:33.110Z",
+      "ok": true,
+      "addresses": {
+        "tile": "CywvsJBuGbL31ajSfM5cQw1k9JQWYTTwYBRo1zuYZRDs",
+        "stud": "3rzrHLNCpMjZ1eNTKr5p6cg3byL3UwRzBePEVDJ1RQ4R",
+        "arenaDeed": "9rAE9ZjQBaR7Gwqoh1nnbJMqNjJJYVnuptjQ8p4sV7VW",
+        "partnerSol": "6U3XnmrzuZ5sDujScii8SmzwtRZ4skfKcH2TLiz1rmES",
+        "partnerMain": "3pVhH23EoBG5yYgkYq6bSu22itPrvrtaLofqgqGxw2GP",
+        "duelAuthority": "Hby5BFRb3qfaDyY2Fza4UtjfRn4aFmvdnMAouigMurAs"
+      },
+      "checks": {
+        "tile": true,
+        "stud": true,
+        "arenaDeed": true,
+        "partnerSol": true,
+        "partnerMain": true,
+        "duelAuthority": true
+      }
+    },
+    {
+      "name": "blind-forge: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:34:01.558Z",
+      "ok": true,
+      "game": "5y2ucy4kDkt1VH6BVXBgavUVrXaj6Dhr1rViMFWs7GkP",
+      "collection": "4sghShKr8U3r84Rah6EnPAaJi7dLmUn9NtdeguKCvwwd",
+      "treasury": "Hty2DiL7RAiDn5UyumMXCocFmnTZhUrzNv5gLZhDgQWF",
+      "tokens": [
+        {
+          "key": "forge",
+          "mint": "7MJWx2uTWn8ZHFda1WUpW46SgWb5UyAjjFrYjjSsSYHA"
+        }
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 2
+      },
+      "signatures": [
+        "47t9khnXySprnBSH4SpAKPcNiPVTSRL1UUPKH8pUAn9Tf6x6yCYNkmjpTDPFrGHANiE9qVfBeEHQ3j63Rd4mBnRG",
+        "5ybmiziSTSokHKGkPcLCZCwKzfqWUEUeCfEtqRkrSauJMGhwBNqdw6wgaaJpcBvM3JG2MrZGmJTZdHXSRi5kqheK"
+      ],
+      "explorer": "https://explorer.solana.com/address/5y2ucy4kDkt1VH6BVXBgavUVrXaj6Dhr1rViMFWs7GkP?cluster=devnet",
+      "results": [
+        "Your economy is live: https://explorer.solana.com/tx/47t9khnXySprnBSH4SpAKPcNiPVTSRL1UUPKH8pUAn9Tf6x6yCYNkmjpTDPFrGHANiE9qVfBeEHQ3j63Rd4mBnRG?cluster=devnet https://explorer.solana.com/tx/5ybmiziSTSokHKGkPcLCZCwKzfqWUEUeCfEtqRkrSauJMGhwBNqdw6wgaaJpcBvM3JG2MrZGmJTZdHXSRi5kqheK?cluster=devnet"
+      ],
+      "seeds": [],
+      "status": {
+        "parts": 10,
+        "onChain": 10,
+        "differs": [],
+        "missing": [],
+        "pools": [
+          {
+            "key": "pot",
+            "amount": "0",
+            "symbol": "FORGE"
+          }
+        ]
+      },
+      "lamportsSpent": "14533640",
+      "fromRun": "2026-10-12T02:34:00.989Z"
+    },
+    {
+      "name": "falling-drop: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:34:11.984Z",
+      "ok": true,
+      "game": "A8a2HN66gNikHNYRP3hLjZQMD88T3esxeUBmjsJcFwT9",
+      "collection": "5Js5DiCFp8Dq7wyJ3vMhE68rWG38dQEmhxzLjouWbv7z",
+      "treasury": "rAqWmDKnGiesJtpCfJVdeAuDrshu3dwhwFYu94GKg2X",
+      "tokens": [
+        {
+          "key": "cursed",
+          "mint": "4ikj24Byduo7WZGhnxNYkqstpm9xUVeZH7eLQbjGDL7N"
+        }
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 1
+      },
+      "signatures": [
+        "5UBLN8Bns49gDm1cYNPDhWhL9nnz3V7iZHcXSMmP5SAzCK1LyUG5yrKN9gYzUT7PQRXv23CrpXQXnkLAE9c9NXWL"
+      ],
+      "explorer": "https://explorer.solana.com/address/A8a2HN66gNikHNYRP3hLjZQMD88T3esxeUBmjsJcFwT9?cluster=devnet",
+      "results": [
+        "Your economy is live: https://explorer.solana.com/tx/5UBLN8Bns49gDm1cYNPDhWhL9nnz3V7iZHcXSMmP5SAzCK1LyUG5yrKN9gYzUT7PQRXv23CrpXQXnkLAE9c9NXWL?cluster=devnet"
+      ],
+      "seeds": [],
+      "status": {
+        "parts": 4,
+        "onChain": 4,
+        "differs": [],
+        "missing": [],
+        "pools": []
+      },
+      "lamportsSpent": "5404960",
+      "fromRun": "2026-10-12T02:34:00.989Z"
+    },
+    {
+      "name": "halving-seasons: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:34:16.762Z",
+      "ok": true,
+      "game": "7sU7Fg82icvBa4hjPUPQVJW4yKJAbe4GywTczWeUad7E",
+      "collection": "2RXL4qDTLWhpA4eDZL2ijZFikFm8hA22hb3aF7JvkND9",
+      "treasury": "rAqWmDKnGiesJtpCfJVdeAuDrshu3dwhwFYu94GKg2X",
+      "tokens": [
+        {
+          "key": "play",
+          "mint": "794TkeHeEcfYo4ye3dcrCTQGTkVzPUGx1vniKqd5yRft"
+        }
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 2
+      },
+      "signatures": [
+        "fQKgYBCwmxgPKePDiZ33YnYCUusVfC8RUmS1DXGn8bFb47aoNifXypGnwypYFVDgGpizm2Dnu8Wh8P1ETJoE7xs",
+        "3ywc7jYU3at5xg7v5wYdYYe879nqyQDgLV3datpoEarUApub68FHwo3wuLgUYcWf1e1vDJGSgv9dSmEdkhjc9Xf1"
+      ],
+      "explorer": "https://explorer.solana.com/address/7sU7Fg82icvBa4hjPUPQVJW4yKJAbe4GywTczWeUad7E?cluster=devnet",
+      "results": [
+        "Your economy is live: https://explorer.solana.com/tx/fQKgYBCwmxgPKePDiZ33YnYCUusVfC8RUmS1DXGn8bFb47aoNifXypGnwypYFVDgGpizm2Dnu8Wh8P1ETJoE7xs?cluster=devnet https://explorer.solana.com/tx/3ywc7jYU3at5xg7v5wYdYYe879nqyQDgLV3datpoEarUApub68FHwo3wuLgUYcWf1e1vDJGSgv9dSmEdkhjc9Xf1?cluster=devnet"
+      ],
+      "seeds": [],
+      "status": {
+        "parts": 9,
+        "onChain": 9,
+        "differs": [],
+        "missing": [],
+        "pools": [
+          {
+            "key": "season",
+            "amount": "0",
+            "symbol": "PLAY"
+          },
+          {
+            "key": "interest",
+            "amount": "0",
+            "symbol": "PLAY"
+          }
+        ]
+      },
+      "lamportsSpent": "29760880",
+      "fromRun": "2026-10-12T02:34:00.989Z"
+    },
+    {
+      "name": "merge-2048: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:34:22.037Z",
+      "ok": true,
+      "game": "3LtsAb2LECKj9uVCk61PiuRZXji8VRZqQBdLzMjeSAsV",
+      "collection": "2bdXLj61MjszVg4vsRvWqqEW8AfweRScMyoSDpom2Uvk",
+      "treasury": "43tKzLUGdbwzUm9zWpusaDBNmp7nati9rJj2w9svgyNN",
+      "tokens": [
+        {
+          "key": "tile",
+          "mint": "CywvsJBuGbL31ajSfM5cQw1k9JQWYTTwYBRo1zuYZRDs"
+        }
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 2
+      },
+      "signatures": [
+        "2bvwc7rsNEnEMHb2uJQT7MP42Dr32vHSat1S76PHqKdQm2QKjWjCFoqKrwWz4qdUNXXw5ouqgL828WGrJoiNe82Q",
+        "4og6VUqzRLkwKVd5J2PBSTuqdwEK1bzndJS8QHWztpLzybnaLSfFjLJECx9LxhMUVQvVJrqYsJzytScyULTqczAA"
+      ],
+      "explorer": "https://explorer.solana.com/address/3LtsAb2LECKj9uVCk61PiuRZXji8VRZqQBdLzMjeSAsV?cluster=devnet",
+      "results": [
+        "Your economy is live: https://explorer.solana.com/tx/2bvwc7rsNEnEMHb2uJQT7MP42Dr32vHSat1S76PHqKdQm2QKjWjCFoqKrwWz4qdUNXXw5ouqgL828WGrJoiNe82Q?cluster=devnet https://explorer.solana.com/tx/4og6VUqzRLkwKVd5J2PBSTuqdwEK1bzndJS8QHWztpLzybnaLSfFjLJECx9LxhMUVQvVJrqYsJzytScyULTqczAA?cluster=devnet"
+      ],
+      "seeds": [],
+      "status": {
+        "parts": 10,
+        "onChain": 10,
+        "differs": [],
+        "missing": [],
+        "pools": [
+          {
+            "key": "grand",
+            "amount": "0",
+            "symbol": "TILE"
+          }
+        ]
+      },
+      "lamportsSpent": "12049520",
+      "fromRun": "2026-10-12T02:34:00.989Z"
+    },
+    {
+      "name": "sacrifice-raffle: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:34:25.911Z",
+      "ok": true,
+      "game": "8EcutH4iv1cb7K5Yf4KvcGQvNmtsggh8HGLWnqqcVyfz",
+      "collection": "4sBYyJZ38r4sywY5Xjpz6mi4MZ7B4MbJesH7F9jCibnd",
+      "treasury": "rAqWmDKnGiesJtpCfJVdeAuDrshu3dwhwFYu94GKg2X",
+      "tokens": [
+        {
+          "key": "ticket",
+          "mint": "HAdtFPZQ8rMKvdhiENopz5uySKnDXeTLEC6RkqicnaKP"
+        }
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 2
+      },
+      "signatures": [
+        "3AuCVpqycHXCFSc8crXRiY9k8aVYPF3oX7efAhaXASfEo1PxonoqrjA3pBZRbCqPyb58tES2wXvRSMDyT4sbQysZ",
+        "2Boy9dui2FJHJFxwSW2pPciRNnTyi6Mq5u1jY3rmx1svuc5Cob4GV7KRnvPVn6MWdHuGHKKysyYzBwDSwW8NTpsY"
+      ],
+      "explorer": "https://explorer.solana.com/address/8EcutH4iv1cb7K5Yf4KvcGQvNmtsggh8HGLWnqqcVyfz?cluster=devnet",
+      "results": [
+        "Your economy is live: https://explorer.solana.com/tx/3AuCVpqycHXCFSc8crXRiY9k8aVYPF3oX7efAhaXASfEo1PxonoqrjA3pBZRbCqPyb58tES2wXvRSMDyT4sbQysZ?cluster=devnet https://explorer.solana.com/tx/2Boy9dui2FJHJFxwSW2pPciRNnTyi6Mq5u1jY3rmx1svuc5Cob4GV7KRnvPVn6MWdHuGHKKysyYzBwDSwW8NTpsY?cluster=devnet"
+      ],
+      "seeds": [],
+      "status": {
+        "parts": 8,
+        "onChain": 8,
+        "differs": [],
+        "missing": [],
+        "pools": [
+          {
+            "key": "pot",
+            "amount": "0",
+            "symbol": "SOL"
+          }
+        ]
+      },
+      "lamportsSpent": "25569880",
+      "fromRun": "2026-10-12T02:34:00.989Z"
+    },
+    {
+      "name": "scorched-treasury: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:34:30.039Z",
+      "ok": true,
+      "game": "8U5GejsevuAwUTr7r7rJsZQ3v9VXe4MBfphAZaZPiY4p",
+      "collection": "HZZqnXQudMFHhRrUNtRwYzW7QTptCdzqYZsjYvFsb7FH",
+      "treasury": "G53sumL3JAF561h765o3bsGnSFBmkfyyHSz5TEXZi3h6",
+      "tokens": [
+        {
+          "key": "main",
+          "mint": "4ikj24Byduo7WZGhnxNYkqstpm9xUVeZH7eLQbjGDL7N"
+        }
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 1
+      },
+      "signatures": [
+        "5AzrKKq7qeaTJejoKMozEow9yfwKPzg4mnvDgjZKUux4VrA21Qa1Q63LwnVBmEv4ihU5E6JxVd36rTktXXnBgrHj"
+      ],
+      "explorer": "https://explorer.solana.com/address/8U5GejsevuAwUTr7r7rJsZQ3v9VXe4MBfphAZaZPiY4p?cluster=devnet",
+      "results": [
+        "Your economy is live: https://explorer.solana.com/tx/5AzrKKq7qeaTJejoKMozEow9yfwKPzg4mnvDgjZKUux4VrA21Qa1Q63LwnVBmEv4ihU5E6JxVd36rTktXXnBgrHj?cluster=devnet"
+      ],
+      "seeds": [
+        {
+          "pool": "embers",
+          "fixture": 100000,
+          "wentIn": 100000,
+          "symbol": "MAIN"
+        }
+      ],
+      "status": {
+        "parts": 5,
+        "onChain": 5,
+        "differs": [],
+        "missing": [],
+        "pools": [
+          {
+            "key": "embers",
+            "amount": "100000",
+            "symbol": "MAIN"
+          },
+          {
+            "key": "flame-guard",
+            "amount": "0",
+            "symbol": "MAIN"
+          }
+        ]
+      },
+      "lamportsSpent": "7091360",
+      "fromRun": "2026-10-12T02:34:00.989Z"
+    },
+    {
+      "name": "spark-pity: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:34:32.893Z",
+      "ok": true,
+      "game": "CuDZ9Q9kUx7gJpRcrusF8h1acHdEhShBNeEciFmHvvGn",
+      "collection": "9jw1v83jx9eTPP66w8vRBRG2D1mxgTGd8rNHJW7vvCtf",
+      "treasury": "rAqWmDKnGiesJtpCfJVdeAuDrshu3dwhwFYu94GKg2X",
+      "tokens": [
+        {
+          "key": "pull",
+          "mint": "GUcNAxmk6EiWJAjTYSxyZtDiWA1RPo1SX66NoWdBmXuq"
+        },
+        {
+          "key": "spark",
+          "mint": "Apvuhpc29W7WEBwEuKnoYLWG4Z6WpobbaGRZ9r4aQQy4"
+        }
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 3
+      },
+      "signatures": [
+        "4uymbixVYFL2fggTTMNFCdyWWWE71Uwo9yDHm438afA6H69RQ88RhZ3rhcQu6X8C9PiexKTBQbFXGvZRHxkYGpoR",
+        "5tpqoNGWqokutTZiFS11p2QFa2gyvNXeZWAsj8ufnrKGdT6WBfBwVrtsP3i2FA4sVb97dGyVui58Hv1GTskkpbpo",
+        "3dayigUej2pTZkZ5Xe2p1CsEuwLPfRob9HbVtuzxfhkk19McSJeQmpXUZvnoNAj8ivv9hVBgoqeekEPo78yojbzk"
+      ],
+      "explorer": "https://explorer.solana.com/address/CuDZ9Q9kUx7gJpRcrusF8h1acHdEhShBNeEciFmHvvGn?cluster=devnet",
+      "results": [
+        "Your economy is live: https://explorer.solana.com/tx/4uymbixVYFL2fggTTMNFCdyWWWE71Uwo9yDHm438afA6H69RQ88RhZ3rhcQu6X8C9PiexKTBQbFXGvZRHxkYGpoR?cluster=devnet https://explorer.solana.com/tx/5tpqoNGWqokutTZiFS11p2QFa2gyvNXeZWAsj8ufnrKGdT6WBfBwVrtsP3i2FA4sVb97dGyVui58Hv1GTskkpbpo?cluster=devnet https://explorer.solana.com/tx/3dayigUej2pTZkZ5Xe2p1CsEuwLPfRob9HbVtuzxfhkk19McSJeQmpXUZvnoNAj8ivv9hVBgoqeekEPo78yojbzk?cluster=devnet"
+      ],
+      "seeds": [
+        {
+          "pool": "bank",
+          "fixture": 1,
+          "wentIn": 0.01,
+          "symbol": "SOL"
+        }
+      ],
+      "status": {
+        "parts": 9,
+        "onChain": 9,
+        "differs": [],
+        "missing": [],
+        "pools": [
+          {
+            "key": "bank",
+            "amount": "0.01",
+            "symbol": "SOL"
+          }
+        ]
+      },
+      "lamportsSpent": "51696040",
+      "fromRun": "2026-10-12T02:34:00.989Z"
+    },
+    {
+      "name": "starforce: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:34:40.281Z",
+      "ok": true,
+      "game": "6aqMk8ar2xpbdQPRzYw9Nr4JSH7dUUZWCcT1W629v9t5",
+      "collection": "HC4gbKHVRrzzncXrEGAJJnsWk622Kemw2zZeWddgt35X",
+      "treasury": "rAqWmDKnGiesJtpCfJVdeAuDrshu3dwhwFYu94GKg2X",
+      "tokens": [
+        {
+          "key": "attempt",
+          "mint": "96UKDmPx1MHBtfzyi8MSvhv6SXoMfiFEGvgjfBgP2C8f"
+        }
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 2
+      },
+      "signatures": [
+        "2KTQCiF2RQkGKnbHErpeXUBwdukTiDGYHSo6XC5iKC5C5QzGw37eXt1VgzDiqoEmch8D37cY1qjEwPbs3aDFG6LN",
+        "5qNcDupPPx2HZkBC2UjbAehEF5t4ZkCZHqtdBixm1XAfQVyMWRVS65NrFhS7ogudai38WSRaER2eU2EyLU2oPgFn"
+      ],
+      "explorer": "https://explorer.solana.com/address/6aqMk8ar2xpbdQPRzYw9Nr4JSH7dUUZWCcT1W629v9t5?cluster=devnet",
+      "results": [
+        "Your economy is live: https://explorer.solana.com/tx/2KTQCiF2RQkGKnbHErpeXUBwdukTiDGYHSo6XC5iKC5C5QzGw37eXt1VgzDiqoEmch8D37cY1qjEwPbs3aDFG6LN?cluster=devnet https://explorer.solana.com/tx/5qNcDupPPx2HZkBC2UjbAehEF5t4ZkCZHqtdBixm1XAfQVyMWRVS65NrFhS7ogudai38WSRaER2eU2EyLU2oPgFn?cluster=devnet"
+      ],
+      "seeds": [
+        {
+          "pool": "jackpot",
+          "fixture": 2,
+          "wentIn": 0.02,
+          "symbol": "SOL"
+        }
+      ],
+      "status": {
+        "parts": 7,
+        "onChain": 7,
+        "differs": [],
+        "missing": [],
+        "pools": [
+          {
+            "key": "jackpot",
+            "amount": "0.02",
+            "symbol": "SOL"
+          }
+        ]
+      },
+      "lamportsSpent": "44274320",
+      "fromRun": "2026-10-12T02:34:00.989Z"
+    },
+    {
+      "name": "stud-farm: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:34:44.069Z",
+      "ok": true,
+      "game": "946MmojVajYrkykEfdD23PgygUXxeo2weNHga7FqFssi",
+      "collection": "4hFxppmXuFyd3XZM9PPVTMkKa3xdLtxkeNMih7HfUVCH",
+      "treasury": "rsvENe6Egj4y6eLsfem8wjt7RjoFNjrBJyrQo9Yvdif",
+      "tokens": [
+        {
+          "key": "usdc",
+          "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+        }
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 2
+      },
+      "signatures": [
+        "3fUSB4VTX9Xcu6ikKvNUtMSiRMsoDUtbvZQ86bD9rUZhkzVMYJi5Zemq8n6yr73q7NQ6e65hiiBme2rXW57Nz7th",
+        "4TPP3x2BHeJLayoxXFYC9wEKoiscRYssF1esS8FwBfagqnDHpKPPXUEDpjLLDU7QoP6FaidHDq71tRP6hw58QjEX"
+      ],
+      "explorer": "https://explorer.solana.com/address/946MmojVajYrkykEfdD23PgygUXxeo2weNHga7FqFssi?cluster=devnet",
+      "results": [
+        "Your economy is live: https://explorer.solana.com/tx/3fUSB4VTX9Xcu6ikKvNUtMSiRMsoDUtbvZQ86bD9rUZhkzVMYJi5Zemq8n6yr73q7NQ6e65hiiBme2rXW57Nz7th?cluster=devnet https://explorer.solana.com/tx/4TPP3x2BHeJLayoxXFYC9wEKoiscRYssF1esS8FwBfagqnDHpKPPXUEDpjLLDU7QoP6FaidHDq71tRP6hw58QjEX?cluster=devnet"
+      ],
+      "seeds": [],
+      "status": {
+        "parts": 8,
+        "onChain": 8,
+        "differs": [],
+        "missing": [],
+        "pools": []
+      },
+      "lamportsSpent": "10449320",
+      "fromRun": "2026-10-12T02:34:00.989Z"
+    },
+    {
+      "name": "starforce: one change (an item’s price) publishes only that difference",
+      "at": "2026-10-12T02:34:49.343Z",
+      "ok": true,
+      "item": "sword-1",
+      "price": {
+        "was": 0.05,
+        "now": 0.06
+      },
+      "differedBefore": [
+        "item:sword-1"
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 1
+      },
+      "landed": [
+        {
+          "signature": "4ndcBgYWVPctxh3dsKJCa9GycsRqt75kBtDdTxCVsY5g3QtHYDXWTJB29TyEMF62Gjo9knF414R5hXNWz1cWd4fo",
+          "parts": [
+            "item:sword-1"
+          ]
+        }
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/4ndcBgYWVPctxh3dsKJCa9GycsRqt75kBtDdTxCVsY5g3QtHYDXWTJB29TyEMF62Gjo9knF414R5hXNWz1cWd4fo?cluster=devnet"
+      ],
+      "status": {
+        "parts": 7,
+        "onChain": 7,
+        "differs": [],
+        "missing": [],
+        "pools": [
+          {
+            "key": "jackpot",
+            "amount": "0.02",
+            "symbol": "SOL"
+          }
+        ]
+      },
+      "fromRun": "2026-10-12T02:34:00.989Z"
+    },
+    {
+      "name": "coin-flip-arena: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:35:33.294Z",
+      "ok": true,
+      "game": "A5eKmYff8G2PMaP293giZTmwTvtVEBL3qBnX9NnQ8JtG",
+      "collection": "G2VB5oCnDet1onSSaJGVik76bvJsDtEySWFtWzw9beMG",
+      "treasury": "rAqWmDKnGiesJtpCfJVdeAuDrshu3dwhwFYu94GKg2X",
+      "tokens": [
+        {
+          "key": "arena",
+          "mint": "BHGDrgbNtaVPS2VP4fDffK27gG6Z5VDX5kMQqSmcPugU"
+        }
+      ],
+      "approvals": {
+        "messages": 2,
+        "transactions": 2,
+        "wires": 3,
+        "launch": 1
+      },
+      "signatures": [
+        "2ChEh4Qgi6k3YFqRXs5sZPxSuBy3VrJLoEMNfEJiubxTtsd6NFdPvVRzJqPinNsSyU8uhGJEVCHhxyQ4HF6qvfyL",
+        "5KPZjCKeMC2ECrr79jg9p4FSq8w3ih48gTXXJyzy5RVXAhmZgEEBazw3tPuZL6nBzjB42J6AnBoEPiVR6ATiAojT"
+      ],
+      "explorer": "https://explorer.solana.com/address/A5eKmYff8G2PMaP293giZTmwTvtVEBL3qBnX9NnQ8JtG?cluster=devnet",
+      "results": [
+        "Uploaded The token picture: https://devnet.irys.xyz/2ZL4qMPurxU1rkGFFgWmBvW9fLNd3yiEd6WZqY5FEUoj",
+        "Uploaded The token details: https://devnet.irys.xyz/6WHEcpqjg5ZZsx7yLycHH8dJgCAJ88tTvKB7DXfpNJSf",
+        "$ARENA is live: https://explorer.solana.com/tx/MJdVG4rjEoUwW9qraKaQFKHSsu6E3yWi3YKnQGVQJT7Ng4qowh2wToBEjVa46ivrkqwFMSAGY56ds54oL5H1EgX?cluster=devnet",
+        "Your economy is live: https://explorer.solana.com/tx/2ChEh4Qgi6k3YFqRXs5sZPxSuBy3VrJLoEMNfEJiubxTtsd6NFdPvVRzJqPinNsSyU8uhGJEVCHhxyQ4HF6qvfyL?cluster=devnet https://explorer.solana.com/tx/5KPZjCKeMC2ECrr79jg9p4FSq8w3ih48gTXXJyzy5RVXAhmZgEEBazw3tPuZL6nBzjB42J6AnBoEPiVR6ATiAojT?cluster=devnet"
+      ],
+      "seeds": [
+        {
+          "pool": "house",
+          "fixture": 5,
+          "wentIn": 0.05,
+          "symbol": "SOL"
+        }
+      ],
+      "status": {
+        "parts": 8,
+        "onChain": 8,
+        "differs": [],
+        "missing": [],
+        "pools": [
+          {
+            "key": "house",
+            "amount": "0.05",
+            "symbol": "SOL"
+          },
+          {
+            "key": "backers",
+            "amount": "0",
+            "symbol": "SOL"
+          },
+          {
+            "key": "pot",
+            "amount": "0",
+            "symbol": "SOL"
+          }
+        ]
+      },
+      "lamportsSpent": "85236880"
+    },
+    {
+      "name": "duel-arena: put live in one approval through the economy flow, then read back with economyStatus",
+      "at": "2026-10-12T02:35:39.747Z",
+      "ok": true,
+      "game": "F7ag1J4H14jpKLX2yHejCytEyLcaauhr52qFaceEZjWF",
+      "collection": "ATwnaFHpcw3EzDUBHndaqRYPJ2xkDBqLxpaMyrw1rv65",
+      "treasury": "rsvENe6Egj4y6eLsfem8wjt7RjoFNjrBJyrQo9Yvdif",
+      "tokens": [
+        {
+          "key": "usdc",
+          "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+        }
+      ],
+      "approvals": {
+        "messages": 0,
+        "transactions": 1,
+        "wires": 1
+      },
+      "signatures": [
+        "3C12LyYxqzLHpttkX3MtQkTqgU7QNw9cSMPme479QuyaVgYmh9YXzdATP1FrhrMi1pVnBQ1BifmLgfSofp3rawKc"
+      ],
+      "explorer": "https://explorer.solana.com/address/F7ag1J4H14jpKLX2yHejCytEyLcaauhr52qFaceEZjWF?cluster=devnet",
+      "results": [
+        "Your economy is live: https://explorer.solana.com/tx/3C12LyYxqzLHpttkX3MtQkTqgU7QNw9cSMPme479QuyaVgYmh9YXzdATP1FrhrMi1pVnBQ1BifmLgfSofp3rawKc?cluster=devnet"
+      ],
+      "seeds": [
+        {
+          "pool": "mission-rewards",
+          "fixture": 100,
+          "wentIn": 0,
+          "symbol": "USDC",
+          "instead": "10% of every “Arena Deed” sale goes to “mission-rewards”"
+        }
+      ],
+      "status": {
+        "parts": 5,
+        "onChain": 5,
+        "differs": [],
+        "missing": [],
+        "pools": [
+          {
+            "key": "mission-rewards",
+            "amount": "0",
+            "symbol": "USDC"
+          }
+        ]
+      },
+      "lamportsSpent": "6741000"
+    }
+  ],
+  "creator": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+  "creatorLamportsAtStart": "898530357",
+  "earlierRuns": [
+    "2026-10-12T02:34:00.989Z"
+  ],
+  "creatorLamportsSpentEarlier": "286071800",
+  "economies": {
+    "blind-forge": {
+      "game": "5y2ucy4kDkt1VH6BVXBgavUVrXaj6Dhr1rViMFWs7GkP",
+      "collection": "4sghShKr8U3r84Rah6EnPAaJi7dLmUn9NtdeguKCvwwd",
+      "explorer": "https://explorer.solana.com/address/5y2ucy4kDkt1VH6BVXBgavUVrXaj6Dhr1rViMFWs7GkP?cluster=devnet"
+    },
+    "falling-drop": {
+      "game": "A8a2HN66gNikHNYRP3hLjZQMD88T3esxeUBmjsJcFwT9",
+      "collection": "5Js5DiCFp8Dq7wyJ3vMhE68rWG38dQEmhxzLjouWbv7z",
+      "explorer": "https://explorer.solana.com/address/A8a2HN66gNikHNYRP3hLjZQMD88T3esxeUBmjsJcFwT9?cluster=devnet"
+    },
+    "halving-seasons": {
+      "game": "7sU7Fg82icvBa4hjPUPQVJW4yKJAbe4GywTczWeUad7E",
+      "collection": "2RXL4qDTLWhpA4eDZL2ijZFikFm8hA22hb3aF7JvkND9",
+      "explorer": "https://explorer.solana.com/address/7sU7Fg82icvBa4hjPUPQVJW4yKJAbe4GywTczWeUad7E?cluster=devnet"
+    },
+    "merge-2048": {
+      "game": "3LtsAb2LECKj9uVCk61PiuRZXji8VRZqQBdLzMjeSAsV",
+      "collection": "2bdXLj61MjszVg4vsRvWqqEW8AfweRScMyoSDpom2Uvk",
+      "explorer": "https://explorer.solana.com/address/3LtsAb2LECKj9uVCk61PiuRZXji8VRZqQBdLzMjeSAsV?cluster=devnet"
+    },
+    "sacrifice-raffle": {
+      "game": "8EcutH4iv1cb7K5Yf4KvcGQvNmtsggh8HGLWnqqcVyfz",
+      "collection": "4sBYyJZ38r4sywY5Xjpz6mi4MZ7B4MbJesH7F9jCibnd",
+      "explorer": "https://explorer.solana.com/address/8EcutH4iv1cb7K5Yf4KvcGQvNmtsggh8HGLWnqqcVyfz?cluster=devnet"
+    },
+    "scorched-treasury": {
+      "game": "8U5GejsevuAwUTr7r7rJsZQ3v9VXe4MBfphAZaZPiY4p",
+      "collection": "HZZqnXQudMFHhRrUNtRwYzW7QTptCdzqYZsjYvFsb7FH",
+      "explorer": "https://explorer.solana.com/address/8U5GejsevuAwUTr7r7rJsZQ3v9VXe4MBfphAZaZPiY4p?cluster=devnet"
+    },
+    "spark-pity": {
+      "game": "CuDZ9Q9kUx7gJpRcrusF8h1acHdEhShBNeEciFmHvvGn",
+      "collection": "9jw1v83jx9eTPP66w8vRBRG2D1mxgTGd8rNHJW7vvCtf",
+      "explorer": "https://explorer.solana.com/address/CuDZ9Q9kUx7gJpRcrusF8h1acHdEhShBNeEciFmHvvGn?cluster=devnet"
+    },
+    "starforce": {
+      "game": "6aqMk8ar2xpbdQPRzYw9Nr4JSH7dUUZWCcT1W629v9t5",
+      "collection": "HC4gbKHVRrzzncXrEGAJJnsWk622Kemw2zZeWddgt35X",
+      "explorer": "https://explorer.solana.com/address/6aqMk8ar2xpbdQPRzYw9Nr4JSH7dUUZWCcT1W629v9t5?cluster=devnet"
+    },
+    "stud-farm": {
+      "game": "946MmojVajYrkykEfdD23PgygUXxeo2weNHga7FqFssi",
+      "collection": "4hFxppmXuFyd3XZM9PPVTMkKa3xdLtxkeNMih7HfUVCH",
+      "explorer": "https://explorer.solana.com/address/946MmojVajYrkykEfdD23PgygUXxeo2weNHga7FqFssi?cluster=devnet"
+    },
+    "coin-flip-arena": {
+      "game": "A5eKmYff8G2PMaP293giZTmwTvtVEBL3qBnX9NnQ8JtG",
+      "collection": "G2VB5oCnDet1onSSaJGVik76bvJsDtEySWFtWzw9beMG",
+      "explorer": "https://explorer.solana.com/address/A5eKmYff8G2PMaP293giZTmwTvtVEBL3qBnX9NnQ8JtG?cluster=devnet"
+    },
+    "duel-arena": {
+      "game": "F7ag1J4H14jpKLX2yHejCytEyLcaauhr52qFaceEZjWF",
+      "collection": "ATwnaFHpcw3EzDUBHndaqRYPJ2xkDBqLxpaMyrw1rv65",
+      "explorer": "https://explorer.solana.com/address/F7ag1J4H14jpKLX2yHejCytEyLcaauhr52qFaceEZjWF?cluster=devnet"
+    }
+  },
+  "creatorLamportsSpent": "91977880",
+  "finishedAt": "2026-10-12T02:35:42.078Z",
+  "ok": true
+}

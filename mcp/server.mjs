@@ -21,9 +21,13 @@ const NAME = /^[a-zA-Z0-9_-]{1,64}$/;
 /**
  * Tool families that are off unless an environment variable turns them on. The open builder is game creation only
  * for now (HANDOFF section 1), so the web3_* tools are not offered to a session by default: GAMESFUN_WEB3=1 lists
- * them again. Nothing in web3/ changes; the commands (`npx gamesfun web3 …`) work either way.
+ * them again, and the economy_* tools with them. Nothing in web3/ changes; the commands (`npx gamesfun web3 …`,
+ * `npx gamesfun economy …`) work either way.
  */
-export const OPTIONAL_TOOLS = [{ prefix: 'web3_', env: 'GAMESFUN_WEB3', why: 'tokens, shops and loot boxes (devnet)' }];
+export const OPTIONAL_TOOLS = [
+  { prefix: 'web3_', env: 'GAMESFUN_WEB3', why: 'tokens, shops and loot boxes (devnet)' },
+  { prefix: 'economy_', env: 'GAMESFUN_WEB3', why: 'game economies on loot program 0.3 (devnet)' },
+];
 const on = v => /^(1|true|yes|on)$/i.test(String(v ?? '').trim());
 /** Is this tool offered with this environment? */
 export const offered = (name, env = process.env) => !OPTIONAL_TOOLS.some(o => name.startsWith(o.prefix) && !on(env[o.env]));
@@ -111,7 +115,7 @@ export async function createServer({ toolsDir = TOOLS_DIR, log = (...a) => conso
     instructions: INSTRUCTIONS,
   });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [...tools.values()].map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+    tools: [...tools.values()].map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, ...(t.annotations ? { annotations: t.annotations } : {}) })),
   }));
   server.setRequestHandler(CallToolRequestSchema, async (req, extra) => {
     const t = tools.get(req.params.name);

@@ -38,11 +38,10 @@ async function ensureShop(gameDir, config) {
   return config.shop;
 }
 
-/** The currency a shop would take now: the game's own classic token if it has one, else SOL. */
+/** The currency a shop would take now: the game's own token if it has one, else SOL. */
 function defaultCurrency(config) {
-  if (config.token && config.token.program === 'spl-token')
-    return { mint: config.token.mint, symbol: config.token.symbol, decimals: config.token.decimals, native: false };
-  return { mint: NATIVE_MINT, symbol: 'SOL', decimals: 9, native: true };
+  if (config.token) return { mint: config.token.mint, symbol: config.token.symbol, decimals: config.token.decimals, native: false, program: config.token.program };
+  return { mint: NATIVE_MINT, symbol: 'SOL', decimals: 9, native: true, program: 'spl-token' };
 }
 
 // ---------------------------------------------------------------- token
@@ -78,23 +77,21 @@ export async function unlinkToken({ gameDir }) {
 
 // ---------------------------------------------------------------- shop
 
-/** What the shop is priced in: "SOL", "MAIN", "USDC", "token" (the game's) or any classic SPL mint address. */
+/** What the shop is priced in: "SOL", "MAIN", "USDC", "token" (the game's) or any mint address, classic SPL or Token-2022. */
 export async function setCurrency({ gameDir, rpc, network }, { currency }) {
   const choice = String(currency ?? '').trim();
   const quick = network.currencies.find((c) => c.symbol.toLowerCase() === choice.toLowerCase() || c.kind === choice.toLowerCase() || c.symbol.split('-')[0].toLowerCase() === choice.toLowerCase());
   let next;
-  if (quick) next = { mint: quick.mint, symbol: quick.symbol, decimals: quick.decimals, native: quick.mint === NATIVE_MINT };
+  if (quick) next = { mint: quick.mint, symbol: quick.symbol, decimals: quick.decimals, native: quick.mint === NATIVE_MINT, program: 'spl-token' };
   else if (choice.toLowerCase() === 'token') next = null;
   else if (isAddress(choice)) {
     const info = await mintInfo(rpc, choice, { network });
-    if (!info.lootReady) fail('Shops take classic SPL tokens and SOL; that mint belongs to Token-2022.');
-    next = { mint: info.mint, symbol: clip(info.symbol || info.mint.slice(0, 4), 40), decimals: info.decimals, native: info.native };
+    next = { mint: info.mint, symbol: clip(info.symbol || info.mint.slice(0, 4), 40), decimals: info.decimals, native: info.native, program: info.program };
   } else fail('Currency is SOL, MAIN, USDC, token (the game’s own) or a mint address.');
   return updateConfig(gameDir, async (config) => {
     if (isLive(config)) fail(`The shop is live and priced in ${config.shop.currency?.symbol}. A live shop keeps its currency.`);
     if (next === null) {
-      if (!config.token) fail('This game has no token yet. Launch or link one in the Token tab.');
-      if (config.token.program !== 'spl-token') fail('Shops take classic SPL tokens; this game’s token is Token-2022.');
+      if (!config.token) fail('This game has no token yet. Launch or link one in the Economy tab.');
       next = defaultCurrency(config);
     }
     const shop = await ensureShop(gameDir, config);

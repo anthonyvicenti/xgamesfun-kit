@@ -17,6 +17,7 @@
 //   selection            { get(), set(sel|null), onChange(fn) } what the person picked (a slot or object, {id, label}); it travels
 //                        with their next change request. A game frame may post { gf: 'select', id, label } to pick one.
 //   on(event, fn)        dev-server events: 'game' (the game's files changed: { files }), 'verify' (a run finished)
+import { hostBridge, inside } from './host-bridge.js';
 import { createWallet } from './wallet.js';
 
 const $ = sel => document.querySelector(sel);
@@ -77,6 +78,12 @@ let held = null;
 $('#preview-mode').addEventListener('change', e => { store.set('preview', e.target.value); preview.show(e.target.value); });
 $('#preview-reload').addEventListener('click', () => preview.reload());
 
+// ---- the host bridge: a game with a live economy gets its buttons from this page (studio/host-bridge.js) ----
+// It answers only the preview frame (or a frame inside it, the friends lobby's game) and only when gamesfun.json has a
+// live economy; otherwise it says nothing and the game looks as it always did.
+const bridge = hostBridge({ win: window, accept: src => inside(frame.contentWindow, src) });
+window.__gamesfunHostBridge = bridge;
+
 // ---- the selection chip ----
 let selected = null;
 const selListeners = new Set();
@@ -103,7 +110,7 @@ es.addEventListener('game', e => {
   const files = Array.isArray(data.files) ? data.files : [];
   const live = held && Date.now() < held.until && files.length && files.every(f => held.files.has(f));
   if (live) held = null;
-  reloadTimer = setTimeout(() => { if (!live) preview.reload(); fire('game', { ...data, live: !!live }); showTitle(); }, 120);
+  reloadTimer = setTimeout(() => { if (!live) { bridge.forget(); preview.reload(); } fire('game', { ...data, live: !!live }); showTitle(); }, 120);
 });
 // The title in the bar follows the game's files: a change by the session or a roll-back may rename the game.
 function showTitle() {
@@ -133,7 +140,7 @@ setTimeout(paintWallet, 500);
 
 // ---- tabs ----
 // The network badge belongs to the web3 side: hidden until the game has web3 settings or the person opens a web3 tab.
-const WEB3_TABS = new Set(['token', 'shop']);
+const WEB3_TABS = new Set(['economy']);
 let networkShown = false;
 const paintNetwork = id => { $('#network').hidden = !(networkShown || WEB3_TABS.has(id)); };
 
@@ -175,8 +182,11 @@ async function loadTabs(ctx) {
     panels.append(p);
   }
   window.addEventListener('pagehide', () => { for (const off of cleanups) { try { off(); } catch {} } });
-  const want = store.get('tab');
+  // a link to a tab (#economy, or #economy?flow=economy from an agent's tool) wins over the remembered tab
+  const linked = () => decodeURIComponent(location.hash.slice(1).split('?')[0]);
+  const want = tabs.some(t => t.id === linked()) ? linked() : store.get('tab');
   if (tabs.length) await select(tabs.some(t => t.id === want) ? want : tabs[0].id);
+  window.addEventListener('hashchange', () => { if (tabs.some(t => t.id === linked())) select(linked()); });
   return tabs;
 }
 
@@ -189,6 +199,8 @@ async function main() {
   $('#game-title').title = game.hook || '';
   $('#network').textContent = game.network || 'devnet';
   networkShown = !!game.gamesfun;       // only a game with web3 settings (gamesfun.json) shows its network up front
+  // a live economy: "Open game in its own tab" opens it hosted (studio/play.html), so its economy's buttons come along
+  if (game.gamesfun?.economy?.live?.game) $('#open-game').href = '/studio/play.html';
   paintNetwork(store.get('tab'));
   preview.show(preview.path);
   const ctx = { game, api, wallet, toast, preview, on, selection };
