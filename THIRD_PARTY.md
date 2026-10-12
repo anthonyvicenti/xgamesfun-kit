@@ -108,7 +108,7 @@ game of games.fun's board mechanic and turns loop (same owner). Each uses only t
 
 | Package | Version | Licence | In a game |
 |---|---|---|---|
-| @modelcontextprotocol/sdk | 1.30.1 | MIT | no (tools only) |
+| @modelcontextprotocol/sdk | 1.32.1 | MIT | no (tools only) |
 | playwright-core | 1.63.0 | Apache-2.0 | no (tools only) |
 | their dependencies (93 packages: express, hono, zod, ajv, ...) | as locked in `package-lock.json` | MIT (83), ISC (7), BSD-3-Clause (2), BSD-2-Clause (1) | no |
 
