@@ -1,11 +1,17 @@
 // A small Borsh codec driven by an Anchor IDL, so neither side needs Anchor. It covers what the loot program and the
-// accounts this kit reads use: bool, u8–u128, pubkey, string, fixed arrays, vec, option, defined structs and unit
-// enums. Addresses are base58 strings, u64/u128 values bigints (u8–u32 numbers) and byte arrays Uint8Arrays.
-// Bytemuck (repr C) accounts decode the same way because their IDL lists every padding field.
+// accounts this kit reads use: bool, u8–u128, i64, pubkey, string, fixed arrays, vec, option, defined structs and
+// enums, with or without data. Ported from games.fun launchpad/loot/client/codec.mjs (commit 905eb7e63) without
+// Node's Buffer, so the in-game kit uses it too.
+//
+// Values: addresses are base58 strings, u64/u128/i64 bigints (u8–u32 numbers), byte arrays Uint8Arrays. An enum is
+// its variant's name ('Nothing'), or for a variant with data { Name: [values] } (tuple fields) or
+// { Name: { field: value } } (named fields), exactly as games.fun's codec writes and reads them. Account and event
+// discriminators are whatever length the IDL gives (program 0.3 tags its accounts with one byte).
 import { addressBytes, encodeBase58 } from './base58.js';
-import { concat, equalBytes, fromUtf8, readUintLE, uintLE, utf8 } from './bytes.js';
+import { concat, equalBytes, fromBase64, fromUtf8, readUintLE, uintLE, utf8 } from './bytes.js';
 
-const INT_SIZES = { u8: 1, u16: 2, u32: 4, u64: 8, u128: 16 };
+const UINT = { u8: 1, u16: 2, u32: 4, u64: 8, u128: 16 };
+const INT = { i64: 8 };
 const ADDRESS_BYTES = 32;
 
 function typeDef(idl, name) {
@@ -14,9 +20,23 @@ function typeDef(idl, name) {
   return def;
 }
 
+/** A two's-complement integer of `size` bytes. */
+function intLE(value, size) {
+  const v = BigInt(value);
+  const bits = BigInt(size * 8);
+  if (v < -(1n << (bits - 1n)) || v >= 1n << (bits - 1n)) throw new RangeError(`${value} does not fit in a signed ${size}-byte integer`);
+  return uintLE(v < 0n ? v + (1n << bits) : v, size);
+}
+
+function readIntLE(data, at, size) {
+  const v = readUintLE(data, at, size);
+  const bits = BigInt(size * 8);
+  return v >= 1n << (bits - 1n) ? v - (1n << bits) : v;
+}
+
 function encodeScalar(type, value, out) {
-  const size = INT_SIZES[type];
-  if (size) out.push(uintLE(value, size));
+  if (UINT[type]) out.push(uintLE(value, UINT[type]));
+  else if (INT[type]) out.push(intLE(value, INT[type]));
   else if (type === 'bool') out.push(Uint8Array.of(value ? 1 : 0));
   else if (type === 'pubkey') out.push(addressBytes(String(value)));
   else if (type === 'string') {
@@ -25,12 +45,22 @@ function encodeScalar(type, value, out) {
   } else throw new Error(`Unsupported IDL type ${type}`);
 }
 
+/** A variant's field list: named ({ name, type }) or tuple (bare types). */
+const isNamed = (fields) => typeof fields[0] === 'object' && fields[0] !== null && 'name' in fields[0];
+
 function encodeDefined(idl, name, value, out) {
   const def = typeDef(idl, name).type;
   if (def.kind === 'enum') {
-    const index = def.variants.findIndex((v) => v.name === value);
-    if (index < 0) throw new Error(`${name} has no variant ${String(value)}`);
+    const variantName = typeof value === 'string' ? value : Object.keys(value ?? {})[0];
+    const index = def.variants.findIndex((v) => v.name === variantName);
+    if (index < 0) throw new Error(`${name} has no variant ${String(variantName)}`);
     out.push(Uint8Array.of(index));
+    const fields = def.variants[index].fields ?? [];
+    if (!fields.length) return;
+    const payload = typeof value === 'string' ? null : value[variantName];
+    if (payload == null) throw new Error(`${name}.${variantName} needs its data`);
+    if (isNamed(fields)) for (const f of fields) encodeInto(idl, f.type, payload[f.name], out);
+    else fields.forEach((f, i) => encodeInto(idl, f, payload[i], out));
     return;
   }
   for (const field of def.fields) {
@@ -83,8 +113,17 @@ export function encodeInstruction(idl, name, args) {
   return concat(...out);
 }
 
+/** An account's bytes as the program writes them: its discriminator, then its fields. */
+export function encodeAccount(idl, name, value) {
+  const account = idl.accounts.find((a) => a.name === name);
+  if (!account) throw new Error(`Unknown account type ${name}`);
+  return concat(Uint8Array.from(account.discriminator), encodeBorsh(idl, { defined: { name } }, value));
+}
+
 function decodeScalar(type, data, at) {
-  const size = INT_SIZES[type];
+  const size = UINT[type] ?? INT[type];
+  if (size && at + size > data.length) throw new RangeError('read past the end of the data');
+  if (INT[type]) return [readIntLE(data, at, size), at + size];
   if (size >= 8) return [readUintLE(data, at, size), at + size];
   if (size) return [Number(readUintLE(data, at, size)), at + size];
   if (type === 'bool') {
@@ -119,7 +158,18 @@ function decodeDefined(idl, name, data, at) {
   if (def.kind === 'enum') {
     const variant = def.variants[data[at]];
     if (!variant) throw new Error(`${name}: unknown variant ${data[at]}`);
-    return [variant.name, at + 1];
+    const fields = variant.fields ?? [];
+    if (!fields.length) return [variant.name, at + 1];
+    let offset = at + 1;
+    const named = isNamed(fields);
+    const payload = named ? {} : [];
+    fields.forEach((f, i) => {
+      let value;
+      [value, offset] = decodeAt(idl, named ? f.type : f, data, offset);
+      if (named) payload[f.name] = value;
+      else payload[i] = value;
+    });
+    return [{ [variant.name]: payload }, offset];
   }
   const record = {};
   let offset = at;
@@ -142,23 +192,46 @@ function decodeAt(idl, type, data, at) {
     if (length > data.length) throw new RangeError('vec longer than the data');
     return decodeList(idl, type.vec, length, data, at + 4);
   }
-  if ('option' in type) return data[at] === 0 ? [null, at + 1] : decodeAt(idl, type.option, data, at + 1);
+  if ('option' in type) {
+    if (at >= data.length) throw new RangeError('read past the end of the data');
+    return data[at] === 0 ? [null, at + 1] : decodeAt(idl, type.option, data, at + 1);
+  }
   return decodeDefined(idl, type.defined.name, data, at);
 }
 
 /** One value of `type` at `offset`: [value, next offset]. */
 export const decodeBorsh = (idl, type, data, offset = 0) => decodeAt(idl, type, data, offset);
 
-/** An account of the named type, after checking its 8-byte discriminator. */
+const startsWith = (data, prefix) => data.length >= prefix.length && equalBytes(data.subarray(0, prefix.length), Uint8Array.from(prefix));
+
+/** An account of the named type, after checking its discriminator. Bytes after the fields are left alone. */
 export function decodeAccount(idl, name, data) {
   const account = idl.accounts.find((a) => a.name === name);
   if (!account) throw new Error(`Unknown account type ${name}`);
-  if (!equalBytes(data.subarray(0, 8), Uint8Array.from(account.discriminator))) throw new Error(`Not a ${name} account`);
-  return decodeDefined(idl, name, data, 8)[0];
+  if (!startsWith(data, account.discriminator)) throw new Error(`Not a ${name} account`);
+  return decodeDefined(idl, name, data, account.discriminator.length)[0];
 }
 
 /** Whether the data starts with the named account's discriminator. */
 export function isAccount(idl, name, data) {
   const account = idl.accounts.find((a) => a.name === name);
-  return Boolean(account) && equalBytes(data.subarray(0, 8), Uint8Array.from(account.discriminator));
+  return Boolean(account) && startsWith(data, account.discriminator);
+}
+
+/** Anchor events in a transaction's logs (`Program data: <base64 of discriminator + Borsh>`): [{ name, data }]. */
+export function decodeEvents(idl, logs) {
+  const out = [];
+  for (const line of logs ?? []) {
+    const m = /^Program data: (.+)$/.exec(line);
+    if (!m) continue;
+    let bytes;
+    try {
+      bytes = fromBase64(m[1]);
+    } catch {
+      continue;
+    }
+    const event = (idl.events ?? []).find((e) => startsWith(bytes, e.discriminator));
+    if (event) out.push({ name: event.name, data: decodeDefined(idl, event.name, bytes, event.discriminator.length)[0] });
+  }
+  return out;
 }

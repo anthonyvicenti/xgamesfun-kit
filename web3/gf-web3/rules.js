@@ -19,7 +19,7 @@ export const LIMIT = Object.freeze({
   PublishTransactions: 12,
 });
 
-/** Rarity names, in the order the program stores them (ItemDef.rarity). */
+/** Rarity names, in the order the program stores them (Item.rarity). */
 export const RARITIES = Object.freeze(['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']);
 /** Default drop weights by rarity, for a box whose odds the creator did not set. */
 export const RARITY_WEIGHTS = Object.freeze({ Common: 60, Uncommon: 25, Rare: 10, Epic: 4, Legendary: 1 });

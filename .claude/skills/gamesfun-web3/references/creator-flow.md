@@ -29,7 +29,8 @@ The name, ticker and picture are permanent.
 2. **One approval for every transaction** (up to 12; the wallet signs them together):
    - the first time: the Core collection (the creator's wallet is its update authority, with a 5%
      resale royalty to them; a fresh collection address signs once), the creator's treasury account,
-     and `create_game` on the loot program, priced in the chosen currency (fixed from then on);
+     and `create_game` on the loot program 0.3, priced in the chosen currency (fixed from then on). The
+     creator's wallet is the game's owner (settings and catalog) and its authority (payouts);
    - `upsert_item` for each new or changed item, then `upsert_box` for each box whose items are on
      sale.
 3. What lands is written to `gamesfun.json` as it lands. If a later transaction fails, the earlier
@@ -37,5 +38,7 @@ The name, ticker and picture are permanent.
 
 ## Player purchases (in the game, not the studio)
 
-A buy is one approval. A box is two (pay and roll, then claim). The loot program keeps 5%, and the
-creator's treasury receives the rest in the shop's currency (wrapped SOL for a SOL shop).
+A buy is two approvals (pay, then claim). A box is two (pay and roll, then claim). The creator's
+treasury receives the whole price in the shop's currency (wrapped SOL for a SOL shop; a Token-2022
+token's own transfer fee, if it has one, is kept by the token). games.fun's loot program charges the
+player a flat 0.002 SOL per purchase, in SOL, on top of the price.

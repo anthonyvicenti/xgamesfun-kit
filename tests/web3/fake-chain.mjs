@@ -1,12 +1,13 @@
 // A small fake of the Solana JSON-RPC and the Irys node, for offline tests of the creator flows. It checks every
 // signature on what it is sent (so a flow that sends a half-signed transaction fails here), and applies the effects
-// the flows rely on: the loot program's create_game / upsert_item / upsert_box, Metaplex Core's collection, and a
-// Meteora DBC pool with its mint and metadata.
+// the flows rely on: the loot program 0.3's create_game / upsert_item / upsert_box, a shop purchase's order
+// (buy_item opens it rolled, settle and refund close it), Metaplex Core's collection, and a Meteora DBC pool with its
+// mint and metadata.
 import { createHash } from 'node:crypto';
 import { addressBytes, decodeBase58, encodeBase58 } from '../../web3/gf-web3/chain/base58.js';
-import { encodeBorsh, decodeBorsh } from '../../web3/gf-web3/chain/borsh.js';
+import { decodeAccount, decodeBorsh, encodeAccount } from '../../web3/gf-web3/chain/borsh.js';
 import { concat, fromBase64, toBase64, uintLE, utf8 } from '../../web3/gf-web3/chain/bytes.js';
-import { LOOT_IDL, LOOT_PROGRAM } from '../../web3/gf-web3/chain/loot.js';
+import { LOOT_IDL, LOOT_PROGRAM, NO_ADDRESS } from '../../web3/gf-web3/chain/loot.js';
 import { MPL_CORE_PROGRAM } from '../../web3/gf-web3/chain/core.js';
 import { DBC_PROGRAM } from '../../web3/gf-web3/chain/dbc.js';
 import { TOKEN_PROGRAM } from '../../web3/gf-web3/chain/pda.js';
@@ -14,12 +15,12 @@ import { readMessage, readTransaction } from '../../web3/gf-web3/chain/tx.js';
 import { verifySignature } from '../../web3/node/ed25519.mjs';
 
 const json = (value, status = 200) => new Response(JSON.stringify(value, (k, v) => (typeof v === 'bigint' ? Number(v) : v)), { status, headers: { 'content-type': 'application/json' } });
-const discriminator = (kind, name) => Uint8Array.from((kind === 'ix' ? LOOT_IDL.instructions : LOOT_IDL.accounts).find((x) => x.name === name).discriminator);
 const borshString = (s) => concat(uintLE(utf8(s).length, 4), utf8(s));
 
 export function fakeChain({ irysFree = true } = {}) {
   const accounts = new Map();
   const sent = [];
+  const rolls = [];
   const simulated = [];
   const uploads = [];
   const irysBalances = new Map();
@@ -27,23 +28,47 @@ export function fakeChain({ irysFree = true } = {}) {
   const blockhash = encodeBase58(createHash('sha256').update('fake blockhash').digest());
 
   const put = (address, owner, data) => accounts.set(address, { owner, data, lamports: 1_000_000 });
+  // Wrapped SOL's mint is always there, as on the real chain.
+  const nativeMint = new Uint8Array(82);
+  nativeMint[44] = 9;
+  nativeMint[45] = 1;
+  put('So11111111111111111111111111111111111111112', TOKEN_PROGRAM, nativeMint);
   const rawAccount = (a) => (a ? { owner: a.owner, lamports: a.lamports, data: [toBase64(a.data), 'base64'], executable: false } : null);
+
+  const loot = (address, type, value) => put(address, LOOT_PROGRAM, encodeAccount(LOOT_IDL, type, value));
+  const read = (address, type) => decodeAccount(LOOT_IDL, type, accounts.get(address).data);
 
   function lootEffect(name, args, keys) {
     const ix = LOOT_IDL.instructions.find((i) => i.name === name);
-    const at = (n) => keys[ix.accounts.findIndex((a) => a.name === n)];
+    const names = [];
+    const walk = (list) => list.forEach((a) => (a.accounts ? walk(a.accounts) : names.push(a.name)));
+    walk(ix.accounts);
+    const at = (n) => keys[names.indexOf(n)];
     if (name === 'create_game') {
-      const data = encodeBorsh(LOOT_IDL, { defined: { name: 'Game' } }, { authority: at('authority'), admins: [], collection: at('collection'), mint: at('mint'), treasury: at('treasury'), burn_bps: args.burn_bps, paused: false, orders: 0n, bump: 255 });
-      put(at('game'), LOOT_PROGRAM, concat(discriminator('account', 'Game'), data));
+      loot(at('game'), 'Game', { owner: at('owner'), authority: args.authority, collection: at('collection'), mint: at('mint'), treasury: at('treasury'), orders: 0n, bump: 255, paused: false, suspended: false, official: null });
     } else if (name === 'upsert_item') {
-      const a = args.args;
-      const existing = accounts.get(at('item'));
-      const issued = existing ? decodeBorsh(LOOT_IDL, { defined: { name: 'ItemDef' } }, existing.data, 8)[0].issued : 0;
-      const data = encodeBorsh(LOOT_IDL, { defined: { name: 'ItemDef' } }, { game: at('game'), item_id: args.item_id, kind: a.kind, rarity: a.rarity, soulbound: a.soulbound, name: a.name, uri: a.uri, max_supply: a.max_supply, issued, price: a.price, active: a.active, bump: 255 });
-      put(at('item'), LOOT_PROGRAM, concat(discriminator('account', 'ItemDef'), data));
+      const issued = accounts.get(at('item')) ? read(at('item'), 'Item').issued : 0;
+      loot(at('item'), 'Item', { ...args.args, game: at('game'), item_id: args.item_id, issued, bump: 255 });
     } else if (name === 'upsert_box') {
-      const data = encodeBorsh(LOOT_IDL, { defined: { name: 'LootBox' } }, { game: at('game'), box_id: args.box_id, price: args.price, active: args.active, entries: args.entries, opened: 0n, bump: 255 });
-      put(at('loot_box'), LOOT_PROGRAM, concat(discriminator('account', 'LootBox'), data));
+      const old = accounts.get(at('loot_box')) ? read(at('loot_box'), 'LootBox') : null;
+      loot(at('loot_box'), 'LootBox', { ...args.args, game: at('game'), box_id: args.box_id, opened: 0n, version: old ? old.version + 1 : 0, bump: 255 });
+    } else if (name === 'buy_item') {
+      const item = read(at('item'), 'Item');
+      loot(at('item'), 'Item', { ...item, issued: item.issued + 1 });
+      loot(at('order'), 'Order', {
+        game: at('game'), player: at('player'), nonce: args.nonce, mint: at('mint'), loot_box: NO_ADDRESS, box_version: 0, status: 'Rolled',
+        outcome: { Item: [args.item_id] }, serial: item.issued + 1, paid: item.price, fee: 2_000_000n, shares: item.shares, requested_slot: BigInt(slot), bump: 255,
+      });
+    } else if (name === 'open_box') {
+      // The oracle answers at once here: `rolls` says how (the box's first entry, unless a test pushed 'Failed').
+      const box = read(at('loot_box'), 'LootBox');
+      const failed = rolls.shift() === 'Failed';
+      loot(at('order'), 'Order', {
+        game: at('game'), player: at('player'), nonce: args.nonce, mint: at('mint'), loot_box: at('loot_box'), box_version: box.version, status: failed ? 'Failed' : 'Rolled',
+        outcome: failed ? 'Nothing' : box.entries[0].outcome, serial: 1, paid: box.price, fee: 2_000_000n, shares: box.shares, requested_slot: BigInt(slot), bump: 255,
+      });
+    } else if (name === 'settle' || name === 'settle_prize' || name === 'refund') {
+      accounts.delete(at('order'));
     }
   }
 
@@ -115,6 +140,8 @@ export function fakeChain({ irysFree = true } = {}) {
         return ok({ context: { slot }, value: { blockhash, lastValidBlockHeight: 10_000 } });
       case 'getBlockHeight':
         return ok(500);
+      case 'getSlot':
+        return ok(slot);
       case 'getMultipleAccounts':
         return ok({ context: { slot }, value: params[0].map((a) => rawAccount(accounts.get(a))) });
       case 'getAccountInfo':
@@ -188,5 +215,5 @@ export function fakeChain({ irysFree = true } = {}) {
     if (String(url).startsWith('https://devnet.irys.xyz')) return irys(String(url), init);
     return rpc(JSON.parse(init.body));
   };
-  return { fetchImpl, accounts, put, sent, simulated, uploads, irysBalances, blockhash };
+  return { fetchImpl, accounts, put, sent, simulated, uploads, irysBalances, blockhash, rolls };
 }

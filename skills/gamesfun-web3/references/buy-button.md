@@ -13,7 +13,7 @@ for (const item of await gfWeb3.shop.list()) {           // listed items, priced
   addButton(`${item.name} · ${item.priceText}`, async (button) => {
     button.disabled = true;
     try {
-      const { item: bought } = await gfWeb3.shop.buy(item.id);   // one wallet approval: pay, mint, deliver
+      const { item: bought } = await gfWeb3.shop.buy(item.id, { onStatus: showMessage });   // two approvals: pay, then claim
       celebrate(bought.name);
       await gfWeb3.wearOwned();
     } catch (error) {
@@ -34,12 +34,19 @@ for (const box of await gfWeb3.boxes()) {
 gfWeb3.on('status', showMessage);   // "Approve the purchase in your wallet…", "Rolling…"
 ```
 
-- **A buy is one approval.** In a single transaction, `buy_item` and `settle` pay, mint the Core
-  NFT and split the payment: the platform takes 5% and the creator's treasury gets the rest. For a
-  SOL shop, exactly the price is wrapped and then unwrapped around it.
+- **A buy is two approvals.** The first pays (`buy_item` opens an order that holds the payment). The
+  second claims it (`settle` mints the Core NFT to the player and sends the whole price to the
+  creator's treasury). The collectible's address depends on the slot the purchase lands in, so the
+  two cannot share a transaction. games.fun's loot program charges the player a flat 0.002 SOL per
+  purchase; the order also holds 0.006 SOL until it is claimed, then gives back what is left. For a
+  SOL shop, exactly the price is wrapped and then unwrapped around the purchase.
 - **A box is two approvals.** The first pays and asks MagicBlock's VRF to roll. A few seconds later
   the kit sees the roll and asks the wallet to claim the item (a permissionless `settle`). If
   everything in the box sold out, the roll fails and the kit asks the wallet to approve a refund.
+- **An order the player did not finish** (they declined the claim, closed the page, or the roll was
+  slow) stays theirs: `gfWeb3.orders()` lists it and `gfWeb3.finish(order)` claims it, or refunds it
+  once the program allows (a failed roll at once, a roll that never came after about 10 minutes, an
+  unclaimed order after 7 days).
 - **Errors carry plain words for the player.** Show `error.message`. Don't retry a declined
   request on your own.
 - **Disable a button while its promise runs.** A second click makes a second purchase.

@@ -1,0 +1,206 @@
+{
+  "network": "devnet",
+  "program": "88Labq6tdVnBQsjHSfic6qqgvo5b9NGmy99AYj7KVXqM",
+  "platform": "DFbnNkPGmsrc9NT4yZKoiD161gt2SPK98DKe4yAL2cm9",
+  "startedAt": "2026-10-11T23:11:34.921Z",
+  "steps": [
+    {
+      "name": "wallets on devnet",
+      "at": "2026-10-11T23:11:35.575Z",
+      "ok": true,
+      "creatorLamports": "1309189517",
+      "playerLamports": "834850102"
+    },
+    {
+      "name": "the shop example is published: uploads, then collection + loot game + 2 items + 1 box in one approval",
+      "at": "2026-10-11T23:11:35.578Z",
+      "ok": true,
+      "collection": "GxTqMtdbYbKw9rW6EYjpqUQc8giRKm6Bnd3VBewRvQ9C",
+      "game": "3brqsyHc77GhzdCacbGhB1DJ1jBWLqQcytH6Sg81h4tv",
+      "treasury": "rAqWmDKnGiesJtpCfJVdeAuDrshu3dwhwFYu94GKg2X",
+      "signatures": [
+        "5mhUuetupoHMk7tDSn7EgHqEspsXsp8M4XHtZfuzF6568GHCRbDKf8EFZsYksa7BaG8qfyYTekzokdTTmnG7BabZ",
+        "Kvks4K8kuAPpo3JtbpwtuLuCJUCEixKGtqLytSxpbAvBG38t52hLA94wEXih5zYLTnr1J9cP9zKRHaAmB4NSDfW"
+      ],
+      "results": [
+        "Uploaded The picture of Golden Hat: https://devnet.irys.xyz/F9CyZ26ojPMHVD2B8wZwxvSTm5fj8QQcvECLpVVmFco9",
+        "Uploaded The picture of Ice Skin: https://devnet.irys.xyz/HJ3osNTManRJKtwN4gxXrgdqqFKQfdJ13dVp6yw3dviz",
+        "Uploaded The collection details: https://devnet.irys.xyz/Gy3R3jGpLmWmXYfaS8XzXj2gBB784XYfPgkeMEaxqzvp",
+        "Uploaded The details of Golden Hat: https://devnet.irys.xyz/8VHADVXfeTkeqBujx3drEQmN7bUc3tK3ts94DMR15C5c",
+        "Uploaded The details of Ice Skin: https://devnet.irys.xyz/D5jpQsq54gXHJmCKQop9Rj68NxQjdRenoAXwnS8XSiLz",
+        "Your shop is open: https://explorer.solana.com/tx/5mhUuetupoHMk7tDSn7EgHqEspsXsp8M4XHtZfuzF6568GHCRbDKf8EFZsYksa7BaG8qfyYTekzokdTTmnG7BabZ?cluster=devnet https://explorer.solana.com/tx/Kvks4K8kuAPpo3JtbpwtuLuCJUCEixKGtqLytSxpbAvBG38t52hLA94wEXih5zYLTnr1J9cP9zKRHaAmB4NSDfW?cluster=devnet"
+      ],
+      "gameOnChain": {
+        "owner": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+        "authority": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+        "mint": "So11111111111111111111111111111111111111112",
+        "treasury": "rAqWmDKnGiesJtpCfJVdeAuDrshu3dwhwFYu94GKg2X"
+      },
+      "items": [
+        {
+          "id": 1,
+          "name": "Golden Hat",
+          "uri": "https://devnet.irys.xyz/8VHADVXfeTkeqBujx3drEQmN7bUc3tK3ts94DMR15C5c",
+          "listed": true
+        },
+        {
+          "id": 2,
+          "name": "Ice Skin",
+          "uri": "https://devnet.irys.xyz/D5jpQsq54gXHJmCKQop9Rj68NxQjdRenoAXwnS8XSiLz",
+          "listed": true
+        }
+      ],
+      "boxes": [
+        {
+          "id": 1,
+          "listed": true
+        }
+      ]
+    },
+    {
+      "name": "a player buys Golden Hat: pay (buy_item), then claim (settle mints the collectible)",
+      "at": "2026-10-11T23:11:40.721Z",
+      "ok": true,
+      "order": "GEHiBsZfufFaqD3YsBCeHtdAApJznyZEMVcYEteL5qxf",
+      "asset": "5PGxSpaCdovGHaD6nBhWWe8J2mGoLcZM83esSVhyEfXW",
+      "assetOwner": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+      "signatures": [
+        "NPGZ8NP51hJALmWrqa3qpuz4wjpKXXMcHnW7fd71ARsfh9NRcJwGzr4Aupp3jBwYDM8Ww3ad7E8vZwGR3FjjEpc",
+        "2NofSSbAU8R2dnCT1dF4heAGDbTbS7FrMhxgNumRjPTQTAWv3gMy6PRnNoQr5gnHwvD6FYhRfNtdX6XeeCwsjELz"
+      ],
+      "receipts": [
+        [
+          "OrderRolled"
+        ],
+        [
+          "OrderSettled"
+        ]
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/NPGZ8NP51hJALmWrqa3qpuz4wjpKXXMcHnW7fd71ARsfh9NRcJwGzr4Aupp3jBwYDM8Ww3ad7E8vZwGR3FjjEpc?cluster=devnet",
+        "https://explorer.solana.com/tx/2NofSSbAU8R2dnCT1dF4heAGDbTbS7FrMhxgNumRjPTQTAWv3gMy6PRnNoQr5gnHwvD6FYhRfNtdX6XeeCwsjELz?cluster=devnet"
+      ]
+    },
+    {
+      "name": "the player opens Mystery Box: pay and roll (open_box), MagicBlock’s oracle rolls it on devnet, then claim (settle)",
+      "at": "2026-10-11T23:11:45.100Z",
+      "ok": true,
+      "order": "DmGcvnMQNL5pkcRhxgAmCQkJfb44duNTDJxJRmgF72jT",
+      "item": "Golden Hat",
+      "serial": 2,
+      "asset": "7en1UDLyQvvGg6iuJzpPbYmBbqQCcvudYvR1BGKed2zN",
+      "assetOwner": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+      "signatures": [
+        "r1591siZ8s6m46wqAXCYBCMcw86Msmr5FPHZ7KW4hqBuCFJHkDGKygoG7zpjmGcuw6hcWYdX5QAjGmdHaETxD8b",
+        "2fMSxxKjbmvNQRdCv9viycfzbtcEAAkdHgsMobS6UtFCVkBMgwDH6h1Uxo42SRjCLL5nx69TJBTA5zRUaFn2t6Pi"
+      ],
+      "receipts": [
+        [],
+        [
+          "OrderSettled"
+        ]
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/r1591siZ8s6m46wqAXCYBCMcw86Msmr5FPHZ7KW4hqBuCFJHkDGKygoG7zpjmGcuw6hcWYdX5QAjGmdHaETxD8b?cluster=devnet",
+        "https://explorer.solana.com/tx/2fMSxxKjbmvNQRdCv9viycfzbtcEAAkdHgsMobS6UtFCVkBMgwDH6h1Uxo42SRjCLL5nx69TJBTA5zRUaFn2t6Pi?cluster=devnet"
+      ]
+    },
+    {
+      "name": "the player’s items, read from the collection",
+      "at": "2026-10-11T23:11:49.447Z",
+      "ok": true,
+      "items": [
+        {
+          "id": 1,
+          "name": "Golden Hat",
+          "serial": 1,
+          "asset": "5PGxSpaCdovGHaD6nBhWWe8J2mGoLcZM83esSVhyEfXW"
+        },
+        {
+          "id": 1,
+          "name": "Golden Hat",
+          "serial": 2,
+          "asset": "7en1UDLyQvvGg6iuJzpPbYmBbqQCcvudYvR1BGKed2zN"
+        }
+      ]
+    },
+    {
+      "name": "a forced refund: the creator edits the box in the transaction the player opens it in; the roll fails, the player refunds at once",
+      "at": "2026-10-11T23:11:49.556Z",
+      "ok": true,
+      "order": "HTmAb613ckiPpmVL1RyAxy8fLDx9Hv4SUv6x6ZGwG7VT",
+      "status": "Failed",
+      "signatures": [
+        "4PsiW8PYGgFiePfLqmdVRdcB6h26dX12RFseSpNeUZC4ffg7rZ3q6BvVnD9aSqW3SHQRD8gFG6ZTsaHkNKey149n",
+        "4JzfoJKUceR61WNgMmBniqvZL983ssbPjvDb1ZTnYUE4wz9TARHMEUY3V3TRJ7qWP8jgK5R4fu5aEGM7hHmPUrA9"
+      ],
+      "receipts": [
+        [],
+        [
+          "OrderRefunded"
+        ]
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/4PsiW8PYGgFiePfLqmdVRdcB6h26dX12RFseSpNeUZC4ffg7rZ3q6BvVnD9aSqW3SHQRD8gFG6ZTsaHkNKey149n?cluster=devnet",
+        "https://explorer.solana.com/tx/4JzfoJKUceR61WNgMmBniqvZL983ssbPjvDb1ZTnYUE4wz9TARHMEUY3V3TRJ7qWP8jgK5R4fu5aEGM7hHmPUrA9?cluster=devnet"
+      ],
+      "playerLamportsBack": "15296240",
+      "orderClosed": true
+    },
+    {
+      "name": "a Token-2022 coin with a 1% transfer fee (made here for the test), 1000 to the player",
+      "at": "2026-10-11T23:11:57.344Z",
+      "ok": true,
+      "mint": "E7Rktt9Ypr3kFauuxwwTuGdQU55Vv1AGUvpsKzwsdHxh",
+      "signature": "45wuJJKKijkZyhjg7er6Es7XpFUYrGLebkE7TYUGDDKE3SKDjsAPZ1Cdv9g9qp2cFPjT29NbvdsaZU6sLuDY2Ysy",
+      "explorer": "https://explorer.solana.com/tx/45wuJJKKijkZyhjg7er6Es7XpFUYrGLebkE7TYUGDDKE3SKDjsAPZ1Cdv9g9qp2cFPjT29NbvdsaZU6sLuDY2Ysy?cluster=devnet"
+    },
+    {
+      "name": "a shop priced in the Token-2022 coin is published",
+      "at": "2026-10-11T23:11:59.002Z",
+      "ok": true,
+      "game": "5sekQUUA6EfsyzGUhekB3XJU3Jm13XnAxx3ib5owskk",
+      "treasury": "XukVJtQci6mUCFUBAVPpFmq5kUgm61a53AtsQuxouaq",
+      "currency": {
+        "mint": "E7Rktt9Ypr3kFauuxwwTuGdQU55Vv1AGUvpsKzwsdHxh",
+        "symbol": "E7Rk",
+        "decimals": 6,
+        "native": false,
+        "program": "token-2022"
+      },
+      "signatures": [
+        "8t5rkZDQhVAF1J6BTv1QrLjhTwMxVN3y3u9d4NHPLWYn8RSVETjntJbMty4iemWB3Tc5JKbeFMLr5ijQoqXgRHE",
+        "4g4Ge7wyzFRWq2H6NwKzdtpiMjRU1fFvYv4dxoMHhDkYptUYmsYrSSpFmr8qxiMSnhdam7u1sL3hj7js1ZZH1kJg"
+      ]
+    },
+    {
+      "name": "the player buys Coin Crown in the Token-2022 coin (the Memo program rides along); the treasury gets what the coin’s fee leaves",
+      "at": "2026-10-11T23:12:03.840Z",
+      "ok": true,
+      "order": "DzzsYWZ8c2KYRB4nsQSpNdg2MLmSgroTfDzQJ8ScYAv7",
+      "asset": "ENMg5CJnjwdvufZEiYTbcxm2vJfwbAtYLznvgSku2CpN",
+      "assetOwner": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+      "treasuryGot": "9801000",
+      "expected": "9801000",
+      "extras": [
+        "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+      ],
+      "signatures": [
+        "57qXGZCUFxu9XNxA59LgMdc8EHY7sfUVqKCkU3FbfEfpcBdDJ32m9gCe7dG5FDc1SDaxwt3dEfZCrhBGYSKNM8xf",
+        "LJjeFkDy78Q3b1B5pATXq1kuqcuEammn7oPCe7GTCeR8j7o2a3XNsC157C3h42YSrY9uioSmNDH8NikmnQYs2Lu"
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/57qXGZCUFxu9XNxA59LgMdc8EHY7sfUVqKCkU3FbfEfpcBdDJ32m9gCe7dG5FDc1SDaxwt3dEfZCrhBGYSKNM8xf?cluster=devnet",
+        "https://explorer.solana.com/tx/LJjeFkDy78Q3b1B5pATXq1kuqcuEammn7oPCe7GTCeR8j7o2a3XNsC157C3h42YSrY9uioSmNDH8NikmnQYs2Lu?cluster=devnet"
+      ]
+    }
+  ],
+  "creator": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+  "player": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+  "lamportsSpent": {
+    "creator": "19018880",
+    "player": "35475640"
+  },
+  "finishedAt": "2026-10-11T23:12:09.885Z",
+  "ok": true
+}

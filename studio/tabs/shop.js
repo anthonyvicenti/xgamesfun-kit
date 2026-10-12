@@ -1,5 +1,5 @@
 // Studio tab: the game's shop. Ported from games.fun Creator Studio v2's Shop tab (components/studio/v2/earn.tsx):
-// one currency pick (SOL, the game's token or any classic SPL token; fixed once live), items made from the game's
+// one currency pick (SOL, the game's token or any other token, classic SPL or Token-2022; fixed once live), items made from the game's
 // pictures with what owning them changes in the game (its player looks, gf-three CONTRACT §6e), loot boxes with odds
 // from rarity, and one "Put it on sale" that is one wallet approval for every transaction (plus a signature for
 // each new upload).
@@ -8,6 +8,8 @@ import { approvalPanel, choosePicture, fill, h, keepFresh, modal, note, requestB
 
 const STATE_LABEL = { draft: 'Not on sale yet', published: 'On sale', changed: 'Changes not live' };
 const SWATCHES = ['#ff4d6d', '#ff9f1c', '#ffd23f', '#7bd389', '#2ec4b6', '#3a86ff', '#8338ec', '#f15bb5', '#ffffff', '#1b1b1f'];
+/** Lamports as SOL in words: 2000000 → "0.002 SOL". */
+const sol = (lamports) => `${Number(lamports) / 1e9} SOL`;
 const percent = (x) => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`;
 
 export default {
@@ -87,7 +89,7 @@ export default {
           h('button', { 'data-testid': 'shop-pay-other', onclick: otherToken }, 'Another token…')));
     }
 
-    /** Price the shop in any classic SPL token: paste its mint, see what it is, then use it. */
+    /** Price the shop in any token (classic SPL or Token-2022): paste its mint, see what it is, then use it. */
     function otherToken() {
       let info = null;
       let error = '';
@@ -96,23 +98,22 @@ export default {
       const draw = () =>
         fill(m.el,
           h('h3', {}, 'Price the shop in another token'),
-          h('p', { class: 'dim' }, 'Any classic SPL token works. Players pay in it; your sales arrive in it.'),
+          h('p', { class: 'dim' }, 'Any token works, classic SPL or Token-2022. Players pay in it; your sales arrive in it (less any fee the token itself keeps on transfers).'),
           input,
           h('button', { onclick: async () => {
             info = null;
             error = '';
             try {
               info = await t.api('/mint', { mint: input.value.trim() });
-              if (!info.lootReady) error = 'That is a Token-2022 token; shops can’t be priced in it.';
             } catch (e) {
               error = e.message;
             }
             draw();
           } }, 'Look it up'),
-          info ? h('p', { class: 'note', 'data-testid': 'mint-card' }, h('strong', {}, info.name ?? 'Unnamed token'), ` ${info.symbol ? `$${info.symbol}` : ''} · ${info.decimals} decimals`) : null,
+          info ? h('p', { class: 'note', 'data-testid': 'mint-card' }, h('strong', {}, info.name ?? 'Unnamed token'), ` ${info.symbol ? `$${info.symbol}` : ''} · ${info.decimals} decimals${info.program === 'token-2022' ? ' · Token-2022' : ''}`) : null,
           error ? h('p', { class: 'note error' }, error) : null,
           h('div', { class: 'w3-row' },
-            h('button', { class: 'primary', disabled: !info || !info.lootReady, onclick: () => (m.close(), run(`Your shop is priced in ${info.symbol ?? 'that token'}.`, () => t.api('/shop/currency', { currency: info.mint }))) }, `Price in ${info?.symbol ? `$${info.symbol}` : 'this token'}`),
+            h('button', { class: 'primary', disabled: !info, onclick: () => (m.close(), run(`Your shop is priced in ${info.symbol ?? 'that token'}.`, () => t.api('/shop/currency', { currency: info.mint }))) }, `Price in ${info?.symbol ? `$${info.symbol}` : 'this token'}`),
             h('button', { onclick: m.close }, 'Cancel')));
       draw();
     }
@@ -330,7 +331,7 @@ export default {
           render();
         }, onDone: refresh }));
         body.push(
-          h('p', { class: 'dim' }, `Sell items and loot boxes for ${state.game.title}. Players keep what they get as collectibles (Metaplex Core NFTs) in their wallet. games.fun’s loot program keeps ${state.network.platformFeeBps / 100}% of each sale.`),
+          h('p', { class: 'dim' }, `Sell items and loot boxes for ${state.game.title}. Players keep what they get as collectibles (Metaplex Core NFTs) in their wallet. Your sales arrive in full; games.fun’s loot program charges each buyer a flat ${sol(state.network.playerFeeLamports)} per purchase, on top of the price.`),
           payPicker(),
           h('div', {}, h('h3', {}, 'Items'), h('div', { class: 'grid', 'data-testid': 'shop-items' }, (s?.items ?? []).map(itemCard), h('button', { class: 'tile', 'data-testid': 'shop-add-item', onclick: () => itemDialog(null) }, h('strong', {}, '+ Add an item'), h('span', { class: 'dim' }, 'A skin, a hat, a trophy…')))),
           h('div', {}, h('h3', {}, 'Loot boxes'), h('div', { class: 'grid', 'data-testid': 'shop-boxes' }, (s?.boxes ?? []).map(boxCard), h('button', { class: 'tile', 'data-testid': 'shop-add-box', disabled: !s?.items?.length, onclick: () => boxDialog(null) }, h('strong', {}, '+ Make a loot box'), h('span', { class: 'dim' }, s?.items?.length ? 'Players pay once and get one item at random.' : 'Add an item first.')))),

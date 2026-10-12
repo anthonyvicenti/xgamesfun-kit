@@ -9,7 +9,7 @@
   "properties": {
     "version": { "const": 1 },
     "network": { "const": "devnet", "description": "Devnet only. There is no mainnet in this kit." },
-    "creator": { "$ref": "#/$defs/address", "description": "The creator's wallet: pool creator, collection update authority and loot game authority." },
+    "creator": { "$ref": "#/$defs/address", "description": "The creator's wallet: pool creator, collection update authority, and the loot game's owner and authority." },
     "token": {
       "type": "object",
       "description": "The game's token: launched here on games.fun's curve, or an existing mint the creator linked.",
@@ -41,14 +41,15 @@
         "royaltyBps": { "type": "integer", "minimum": 0, "maximum": 2500, "default": 500 },
         "currency": {
           "type": "object",
-          "description": "What players pay in: SOL (wrapped for them) or any classic SPL token. Fixed once the shop is live.",
+          "description": "What players pay in: SOL (wrapped for them), any classic SPL token or any Token-2022 token. Fixed once the shop is live.",
           "required": ["mint", "symbol", "decimals", "native"],
           "additionalProperties": false,
           "properties": {
             "mint": { "$ref": "#/$defs/address" },
             "symbol": { "type": "string" },
             "decimals": { "type": "integer", "minimum": 0, "maximum": 18 },
-            "native": { "type": "boolean", "description": "true for SOL" }
+            "native": { "type": "boolean", "description": "true for SOL" },
+            "program": { "enum": ["spl-token", "token-2022"], "default": "spl-token", "description": "The token program that owns the mint." }
           }
         },
         "collection": { "$ref": "#/$defs/address" },

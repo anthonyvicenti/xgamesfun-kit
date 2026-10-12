@@ -1,7 +1,7 @@
 // The one place games.fun's chain addresses live. Everything here is public: program ids, the launchpad's curve
 // config and quote mint, fee wallets, the Irys node. No key, token or keyed RPC URL ever belongs in this file.
 // Devnet only: there is deliberately no mainnet entry (creator decision; mainnet needs explicit approval).
-// Source: games.fun launchpad/devnet.json (2026-10-01) and launchpad/lib/mint-info.mjs.
+// Source: games.fun launchpad/devnet.json (2026-10-01; loot 0.3 under `loot03`, 2026-10-11) and launchpad/lib/mint-info.mjs.
 
 export const DEVNET = 'devnet';
 
@@ -24,14 +24,22 @@ const devnet = Object.freeze({
     quoteSymbol: 'MAIN-dev',
     partner: '8yPDcNeKHwfSmyx9MPNpgqU8o1W4xiCHxzYty7w3rnNV',
   }),
-  /** The games.fun loot program (items, shop, loot boxes) and its platform fee. */
+  /**
+   * The games.fun loot program 0.3 (items, shop, loot boxes and every other economy piece), its platform record and
+   * its two flat fees in lamports: the player fee when a player signs for something of their own (a purchase, a box,
+   * tickets, a stake), the project fee for everything else that is charged. The platform account holds the fees in
+   * force; these are what it was set up with (games.fun launchpad/loot devnet-deploy-0.3-result.json, 2026-10-11).
+   * Shops take SOL, any classic SPL token and any Token-2022 token.
+   */
   loot: Object.freeze({
-    program: 'FWVap91DnGRU2bid8PZwazZmFfWwJomyeTMKqYsSf53D',
-    platform: 'gHfGU4UmCEHmQ94rvVdygNUD3XpMnbjEvcfMU18KzY4',
-    platformFeeBps: 500,
-    platformFeeWallet: '8yPDcNeKHwfSmyx9MPNpgqU8o1W4xiCHxzYty7w3rnNV',
+    program: '88Labq6tdVnBQsjHSfic6qqgvo5b9NGmy99AYj7KVXqM',
+    platform: 'DFbnNkPGmsrc9NT4yZKoiD161gt2SPK98DKe4yAL2cm9',
+    playerFeeLamports: 2_000_000,
+    projectFeeLamports: 10_000,
+    partner: '8yPDcNeKHwfSmyx9MPNpgqU8o1W4xiCHxzYty7w3rnNV',
+    token2022: true,
   }),
-  /** Currencies a shop can be priced in without typing an address (any other classic SPL mint works by address). */
+  /** Currencies a shop can be priced in without typing an address (any other mint, classic or Token-2022, works by address). */
   currencies: Object.freeze([
     Object.freeze({ kind: 'sol', symbol: 'SOL', mint: 'So11111111111111111111111111111111111111112', decimals: 9 }),
     Object.freeze({ kind: 'main', symbol: 'MAIN-dev', mint: '4ikj24Byduo7WZGhnxNYkqstpm9xUVeZH7eLQbjGDL7N', decimals: 6 }),

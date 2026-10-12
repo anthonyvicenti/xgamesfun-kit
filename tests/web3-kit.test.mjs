@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { addressBytes } from '../web3/gf-web3/chain/base58.js';
 import { concat, uintLE, utf8 } from '../web3/gf-web3/chain/bytes.js';
 import { MPL_CORE_PROGRAM } from '../web3/gf-web3/chain/core.js';
-import { encodeBorsh } from '../web3/gf-web3/chain/borsh.js';
+import { encodeAccount } from '../web3/gf-web3/chain/borsh.js';
 import { LOOT_IDL, lootPda } from '../web3/gf-web3/chain/loot.js';
 import { readMessage, readTransaction, withSignature } from '../web3/gf-web3/chain/tx.js';
 import { createGfWeb3 } from '../web3/gf-web3/index.js';
@@ -135,11 +135,12 @@ function standardWallet(key) {
 describe('real mode against a chain', () => {
   const chain = fakeChain();
   const player = freshKeypair();
-  const gameAccount = encodeBorsh(LOOT_IDL, { defined: { name: 'Game' } }, { authority: player.address, admins: [], collection, mint: 'So11111111111111111111111111111111111111112', treasury: player.address, burn_bps: 0, paused: false, orders: 0n, bump: 255 });
-  const disc = (name) => Uint8Array.from(LOOT_IDL.accounts.find((a) => a.name === name).discriminator);
-  chain.put(game, LOOT_IDL.address, concat(disc('Game'), gameAccount));
-  chain.put(lootPda.platform(), LOOT_IDL.address, concat(disc('Platform'), encodeBorsh(LOOT_IDL, { defined: { name: 'Platform' } }, { admin: player.address, fee_wallet: '8yPDcNeKHwfSmyx9MPNpgqU8o1W4xiCHxzYty7w3rnNV', fee_bps: 500, bump: 255 })));
-  chain.put(lootPda.item(game, 1), LOOT_IDL.address, concat(disc('ItemDef'), encodeBorsh(LOOT_IDL, { defined: { name: 'ItemDef' } }, { game, item_id: 1, kind: 'Collectible', rarity: 2, soulbound: false, name: 'Golden Hat', uri: 'https://x', max_supply: 0, issued: 0, price: 50_000_000n, active: true, bump: 255 })));
+  const owner = freshKeypair().address;
+  const loot = (address, type, value) => chain.put(address, LOOT_IDL.address, encodeAccount(LOOT_IDL, type, value));
+  const fees = { player: 2_000_000n, project: 10_000n };
+  loot(game, 'Game', { owner, authority: owner, collection, mint: 'So11111111111111111111111111111111111111112', treasury: owner, orders: 0n, bump: 255, paused: false, suspended: false, official: null });
+  loot(lootPda.platform(), 'Platform', { admin: owner, partner: owner, fees, pending: fees, pending_at: 0n, bump: 255 });
+  loot(lootPda.item(game, 1), 'Item', { game, item_id: 1, kind: 'Collectible', rarity: 2, soulbound: false, burnable: false, max_supply: 0, issued: 0, price: 50_000_000n, active: true, bump: 255, rise: null, fall: null, life: null, shares: [], name: 'Golden Hat', uri: 'https://x' });
   const str = (s) => concat(uintLE(utf8(s).length, 4), utf8(s));
   const asset = (owner, itemId) => {
     const head = concat(Uint8Array.of(1), addressBytes(owner), Uint8Array.of(2), addressBytes(collection), str('Golden Hat #1'), str('https://x'), Uint8Array.of(0));
@@ -150,23 +151,52 @@ describe('real mode against a chain', () => {
     return concat(head, Uint8Array.of(3), uintLE(registryAt, 8), plugin, registry);
   };
 
-  it('buys with one approval: buy_item and settle in one transaction, SOL wrapped around it', async () => {
+  it('buys with two approvals: buy_item with SOL wrapped around it, then the claim that mints the collectible', async () => {
     const kit = createGfWeb3({ config: CONFIG, location: at('?gamesfun_mock=0'), fetchImpl: chain.fetchImpl, wallets: [standardWallet(player)] });
     assert.equal(kit.mock, false);
     const result = await kit.shop.buy(1);
-    assert.equal(result.signatures.length, 1);
-    assert.equal(chain.sent.at(-1), result.signatures[0]);
-    const m = chain.simulated.at(-1);
-    const programs = m.instructions.map((ix) => m.keys[ix.programIndex]);
-    assert.deepEqual(programs, [
+    assert.equal(result.signatures.length, 2);
+    assert.deepEqual(chain.sent.slice(-2), result.signatures);
+    const programsOf = (m) => m.instructions.map((ix) => m.keys[ix.programIndex]);
+    const [buy, settle] = chain.simulated.slice(-2);
+    assert.deepEqual(programsOf(buy), [
       'ComputeBudget111111111111111111111111111111',
       'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
       '11111111111111111111111111111111',
       'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
       LOOT_IDL.address,
-      LOOT_IDL.address,
       'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
     ]);
+    assert.deepEqual(programsOf(settle), ['ComputeBudget111111111111111111111111111111', LOOT_IDL.address]);
+    // The collectible's address is the one settle minted at: the order and the slot it was paid in.
+    assert.equal(result.asset, lootPda.asset(result.order, 1000n));
+    assert.equal(chain.accounts.has(result.order), false, 'the order ended');
+    assert.deepEqual(await kit.orders(), []);
+    // An order the player left open (a claim they declined) is listed, and finish() claims it.
+    const nonce = 77n;
+    const left = lootPda.order(game, player.address, nonce);
+    loot(left, 'Order', { game, player: player.address, nonce, mint: 'So11111111111111111111111111111111111111112', loot_box: '11111111111111111111111111111111', box_version: 0, status: 'Rolled', outcome: { Item: [1] }, serial: 9, paid: 50_000_000n, fee: 2_000_000n, shares: [], requested_slot: 1000n, bump: 255 });
+    const open = await kit.orders();
+    assert.deepEqual(open.map((o) => [o.order, o.status, o.serial]), [[left, 'Rolled', 9]]);
+    const done = await kit.finish(left);
+    assert.equal(done.settled, true);
+    assert.equal(done.item.asset, lootPda.asset(left, 1000n));
+    assert.deepEqual(await kit.orders(), []);
+  });
+
+  it('opens a box: pay and roll, then claim what it rolled; a failed roll is refunded', async () => {
+    loot(lootPda.box(game, 1), 'LootBox', { game, box_id: 1, price: 10_000_000n, currency: null, rise: null, fall: null, stock_odds: false, active: true, opened: 0n, version: 0, bump: 255, shares: [], entries: [{ outcome: { Item: [1] }, weight: 60 }] });
+    const kit = createGfWeb3({ config: CONFIG, location: at('?gamesfun_mock=0'), fetchImpl: chain.fetchImpl, wallets: [standardWallet(player)], rollPollMs: 1 });
+    const won = await kit.openBox(1);
+    assert.equal(won.item.name, 'Golden Hat');
+    assert.equal(won.signatures.length, 2);
+    const programsOf = (m) => m.instructions.map((ix) => m.keys[ix.programIndex]);
+    assert.ok(programsOf(chain.simulated.at(-1)).includes(LOOT_IDL.address));
+    chain.rolls.push('Failed');
+    await assert.rejects(kit.openBox(1), /refunded/);
+    const refund = chain.simulated.at(-1);
+    // refund, then the wrapped SOL it returned is closed back to plain SOL
+    assert.deepEqual(programsOf(refund), [LOOT_IDL.address, 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA']);
   });
 
   it('reads the player’s items from the collection on chain', async () => {
