@@ -13,13 +13,15 @@
 //                 you hold, your lap and place, whether you are it, your team, the wave and the enemies left, the
 //                 task quota. The rules' own meters (ctx.ui.meter) sit in the same card. With the action mechanics
 //                 (gf-scenic wave 1, track M): the level ("Level 2/3 · 4 left", "Portal open"), your coins and your
-//                 weapon in its rarity colour.
+//                 weapon in its rarity colour. Last, the hosting page's economy lines (gf:host → economy, where
+//                 'hud'; kit/net/host.js, CONTRACT §6g W2): each its label and the page's gf:economy entry of the same id.
+//                 No offer, no line; rules.js never sees them.
 //   top middle    the boss's name and its big health bar while a boss fights (the boss mechanic)
 //   the edges     a red flash when you are hurt, and a slow pulse while your health is low
 //
 // The observation, window.__game.hud() (verify check 21): every widget the game's mechanics call for, whether it is on
 // screen, what it shows (read back from the page) and what the kit's state says it should show.
-import { host } from '../net/host.js';
+import { host, econText } from '../net/host.js';
 
 const CSS = `
 #gf-ui .gf-menubtn{position:absolute;top:10px;left:10px;width:40px;height:40px;border-radius:12px;border:0;background:var(--gf-panel,#1c2133cc);color:var(--gf-text,#fff);font:800 20px/1 system-ui,sans-serif;cursor:pointer;pointer-events:auto;display:none;box-shadow:0 2px 0 #0003}
@@ -191,13 +193,27 @@ export function createHud(ctx, ui, { onMenu = () => {} } = {}) {
   const hp = el('div', 'gf-hp'); hp.dataset.widget = 'health';
   const status = el('div', 'gf-status'); status.dataset.widget = 'status';
   const lines = el('div', 'gf-lines');
+  const econ = el('div', 'gf-lines gf-econ'); econ.id = 'gf-econ-hud'; econ.dataset.where = 'hud';
   card.append(name, hp, status, lines);
+  // the economy's HUD lines: drawn again whenever the page says something (gf:host, gf:economy), never each frame
+  function drawEcon() {
+    const rowsOut = [];
+    for (const a of host.econAt?.('hud') ?? []) {
+      const v = host.econValue?.(a.id); if (!v) continue;      // nothing to say until the page's state has it
+      const row = el('div', 'gf-line'); row.dataset.econ = a.id; row.dataset.kind = a.kind;
+      row.append(el('em', null, a.label), el('b', null, econText(v))); rowsOut.push(row);
+    }
+    econ.replaceChildren(...rowsOut);
+    econ.style.display = rowsOut.length ? '' : 'none';
+  }
+  host.onChange?.(drawEcon); drawEcon();
   // the boss's bar across the top (the boss mechanic)
   const bossBar = el('div', 'gf-bossbar'); bossBar.id = 'gf-bossbar'; bossBar.dataset.widget = 'boss';
   const bossName = el('i'), bossTrack = el('span'), bossLag = el('u'), bossFill = el('b'); bossTrack.append(bossLag, bossFill); bossBar.append(bossName, bossTrack);
   let bossKey = '', bossLast = null, bossHitT = 0;
   // the rules' own meters live in the card (ui.meter)
   if (ui.parts?.meters) card.append(ui.parts.meters);
+  card.append(econ);          // the page's lines last: the game's own state first
   root.prepend(vig);
   root.append(btn, fsBtn, goal, card, bossBar);
 
@@ -328,7 +344,8 @@ export function createHud(ctx, ui, { onMenu = () => {} } = {}) {
             : { value: node?.dataset.value ?? '', text: node?.querySelector('b')?.textContent ?? '' };
         return { id: w.id, kind: w.kind, from: w.from, need: w.need, label: w.label, ...s, shows, truth: truth ? JSON.parse(JSON.stringify(truth)) : null };
       });
-      return { card: seen(card), goal: { text: goal.textContent, ...seen(goal) }, menuButton: seen(btn), widgets, meters: [...(ui.parts?.meters?.children ?? [])].map(m => m.querySelector('b')?.textContent ?? '') };
+      const economy = [...econ.children].map(r => ({ id: r.dataset.econ, label: r.querySelector('em')?.textContent ?? '', text: r.querySelector('b')?.textContent ?? '', ...seen(r) }));
+      return { economy, card: seen(card), goal: { text: goal.textContent, ...seen(goal) }, menuButton: seen(btn), widgets, meters: [...(ui.parts?.meters?.children ?? [])].map(m => m.querySelector('b')?.textContent ?? '') };
     },
   };
   return api;

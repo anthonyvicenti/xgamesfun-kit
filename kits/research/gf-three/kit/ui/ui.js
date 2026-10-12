@@ -136,6 +136,8 @@ export function createUI(ctx, { text = {}, controls = {}, theme = null } = {}) {
     get touchLayer() { return touch; },
     /** For the kit's HUD and menu only. */
     parts: { meters, card },
+    /** The kit's menu only: () → an element for the results card, or null (the economy's 'results' buttons). */
+    resultsExtra: null,
     /** The kit's menu (or anything else of the kit's) covers the game: the input reads idle under it. */
     cover(name, on) {
       if (on) covers.add(name); else covers.delete(name);
@@ -209,6 +211,9 @@ export function createUI(ctx, { text = {}, controls = {}, theme = null } = {}) {
       card.className = 'gf-card'; card.dataset.view = 'results';
       const ul = el('ul'); for (const r of rows) { const li = el('li'); li.append(el('span', null, `${winners.includes(r.id) ? '★ ' : ''}${r.name ?? r.id}`), el('span', null, String(r.value ?? ''))); ul.append(li); }
       card.replaceChildren(el('h1', null, title), ul);
+      // what the hosting page's economy offers on the results card (the menu sets it: kit/ui/menu.js, CONTRACT §6g W2)
+      let extra = null; try { extra = api.resultsExtra?.() ?? null; } catch (e) { console.error(e); }
+      if (extra) card.append(extra);
       const row = el('div'); row.style.cssText = 'display:flex;gap:10px;justify-content:center;flex-wrap:wrap';
       if (onAgain) { const b = el('button', null, text.again ?? 'Play again'); b.id = 'gf-again'; b.onclick = () => onAgain(); row.append(b); }
       if (onMenu) { const b = el('button', null, text.toMenu ?? 'Menu'); b.id = 'gf-to-menu'; b.style.background = '#ffffff26'; b.onclick = () => onMenu(); row.append(b); }
