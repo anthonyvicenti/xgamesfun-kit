@@ -22,7 +22,7 @@ this kit have the same owner, so these are MIT under this repository's `LICENSE`
 |---|---|---|---|---|
 | gf-three (the three.js game kit and its tools) | 0.1.0-dev | `research/gf-three/` | MIT (this repository) | kit part: yes (`gf/three/`); tools: no |
 | gf-scenic (the scenic engine: WebGPU, generated islands and dungeons) | 0.1.0-dev | `research/gf-scenic/` | MIT (this repository); the folio-2025 code inside is a separate row below | scenic games: yes (`gf/scenic/`) |
-| gf-multiplayer | 1.6.6 | `research/foundations/kits/gf-multiplayer/1.6.6/` | MIT (its `kit.json` and file headers) | yes (`gf/mp/`) |
+| gf-multiplayer | 1.7.0 | `research/foundations/kits/gf-multiplayer/1.7.0/` | MIT (its `kit.json` and file headers) | yes (`gf/mp/`) |
 | gf-audio | 1.5.0 | `research/foundations/kits/gf-audio/1.5.0/` | MIT (this repository); ZzFX inside is a separate row below | yes (`audio/`) |
 | gf-assets | 1.3.0 | `research/foundations/kits/gf-assets/1.3.0/` | MIT (this repository) | yes (`gf/gf-assets.js`) |
 | local signaling, validators, QA (signal server, asset-manifest validator, audio gate, Chrome launcher) | as synced | `research/multiplayer/`, `research/asset-manifest/`, `research/audio/`, `research/foundations/qa/`, `creator-studio/lib/` | MIT (this repository) | no |

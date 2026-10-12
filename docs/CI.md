@@ -289,6 +289,13 @@ hand on Linux with a graphics card (`coin-hop` and `coin-dash`, 133 and 137 s), 
 examples (the party, scenic, board and flat ones: `coin-hop` is new). The workflow still runs the party, scenic and
 board examples only; the flat one has not run on a runner.
 
+### Kits synced to games.fun d78283f51 (2026-10-12)
+
+`create` vendors gf-multiplayer 1.7.0 (the streamer's voice for viewers). Verify check 34 now plays the voice steps: the
+sync carries `creator-studio/lib/voice-capture.mjs` (Studio's own capture file, our code, no imports), which the check
+loads into a stand-in streamer page with Chrome's fake microphone; without it the check skips them and says so. The
+smoke test ran all four examples 22 of 22 on Linux with a graphics card; the workflow did not run (billing).
+
 ## 8. What a person on a real Windows machine or a Mac still has to try by hand
 
 A runner is a virtual machine without a real graphics card, and it ran the profile only. None of this has been done on
