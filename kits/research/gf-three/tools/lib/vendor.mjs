@@ -151,10 +151,13 @@ export async function optionalModuleDirs() {
 // What a game's gf/three/ holds: the kit's code and licences, never its docs, tests or the mechanics' fixtures.
 const kitSkip = rel => /(^|\/)(fixture|fixtures|tests?|evidence)(\/|$)/.test(rel) || /\.test\.m?js$/.test(rel) || (/\.md$/i.test(rel) && !/^(LICEN[CS]E|NOTICE|THIRD_PARTY)/i.test(rel.split('/').pop()));
 
-// a scenic game's look and world are gf/scenic's, so gf/three/ leaves this kit's own out (CONTRACT §8)
+// a scenic game's look and world are gf/scenic's, so gf/three/ leaves this kit's own out (CONTRACT §8); it keeps the
+// world pieces both engines share, which gf/scenic/world imports as ../../three/world/…: the places vocabulary, the one
+// collider list and the layout helpers they stand on (open builder wave 10)
+export const sharedWorld = rel => rel.startsWith('world/places/') || rel === 'world/colliders.js' || rel === 'world/layout.js';
 // a forge game's gf/three/ is the forge closure alone (forgeKitClosure); a three.js game never carries the forge boot
 const dropModule = (modules, rel, closure = null, optional = new Set()) => (modules.engine === 'forge' ? !closure?.includes(rel) : rel === 'core/boot-forge.js')
-  || ((!modules.look || modules.engine === 'scenic') && rel.startsWith('look/')) || ((!modules.world || modules.engine === 'scenic') && rel.startsWith('world/')) || (!modules.character && rel.startsWith('character/'))
+  || ((!modules.look || modules.engine === 'scenic') && rel.startsWith('look/')) || ((!modules.world || modules.engine === 'scenic') && rel.startsWith('world/') && !(modules.engine === 'scenic' && sharedWorld(rel))) || (!modules.character && rel.startsWith('character/'))
   || (rel.startsWith('mechanics/') && !(modules.mechanics ?? []).includes(rel.split('/')[1]))
   || (optional.has(rel.split('/')[0]) && !(modules.extras ?? []).includes(rel.split('/')[0]));
 

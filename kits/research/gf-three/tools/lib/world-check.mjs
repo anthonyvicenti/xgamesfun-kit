@@ -19,7 +19,9 @@
 //   entries     enemies come in (waves) but the world names no real door or gate for them (entries), too few for the
 //               size, an entry that is not at a door or gate, or a solid standing in an entry's way in
 //   rooms       a room no door reaches
-// and notes (warnings): filled ground (of the floor, how much has something within 3 m) and the three scales of things
+// and notes (warnings): reach (a spawn, zone or entry the character's own jump cannot get to: kit/world/reach.js over
+// the colliders the loader builds, kit/world/colliders.js; a warning, never failing a game, until a corpus run has shown
+// it on every delivered game: open builder wave 10), filled ground (of the floor, how much has something within 3 m) and the three scales of things
 // per room (big, middle, small), after genex-desktop's liveness recipes (MIT; research bank).
 // A scenic world (gf-scenic: island, isles, ruins, dungeon; 2026-10-08) is checked by checkScenicWorld instead: each
 // level's size, a level for every one the game plays, spawns for every seat, a way on from every level but the last.
@@ -30,6 +32,8 @@ import { KIT, LIBRARY } from './paths.mjs';
 import { flatOf } from './flat-reads.mjs';
 import { expandLayout, footprint, placementScale, colliderParts, roomGraph, turn } from '../../kit/world/layout.js';
 import { generateLayout, SIZE_CLASSES, sizeClassOf } from '../../kit/world/generate.js';
+import { reachOf, movementOf } from '../../kit/world/reach.js';
+import { collidersOf } from '../../kit/world/colliders.js';
 
 export const RULES = {
   size: 'the play area does not match its size class',
@@ -43,6 +47,7 @@ export const RULES = {
   rooms: 'a room no door reaches',
   filled: 'little of the floor has anything near it (warning)',
   scales: 'a room lacks big, middle or small things (warning)',
+  reach: 'a spawn, zone or entry the character cannot get to with its own jump (warning)',
 };
 export const T = { gap: 0.6, outdoorGap: 3.0, sample: 0.25, wallPad: 0.3, continuesMin: 0.75, rays: 16, reach: 120, filled: 0.6, filledRadius: 3, doorMin: 0.8, entryNear: 0.5, gateNear: 1.6, wayIn: 2.5, wayFree: 0.9, wayStep: 0.5 };
 const BACKDROP = new Set(['building', 'backdrop']);
@@ -96,6 +101,20 @@ export const SCENIC_RULES = {
 };
 /** Is this subject a scenic world? (its template, else the game's engine in gf-three.json) */
 export const isScenic = subject => SCENIC_TEMPLATES.includes(subject.world?.template) || subject.engine === 'scenic';
+
+/**
+ * The reach rule (open builder wave 10, track H): every spawn, zone and entry a player must get to (a scenic level's
+ * spawns, arena and portal), from the first spawn, by walking and by the jump config/game.json gives the character,
+ * over the colliders the world's loader builds. A WARNING for now (the parent's call, 2026-10-11): reported under check
+ * 17, never failing a game, until a corpus run has shown it on every delivered game. → [{target, message}] and stats
+ */
+export function reachOfSubject(subject) {
+  const cfg = subject.world;
+  if (!cfg || !(Array.isArray(cfg.levels) || Array.isArray(cfg.props))) return { problems: [], stats: null };
+  const r = reachOf(cfg, collidersOf(cfg, subject.catalog), movementOf(subject.game ?? {}));
+  return { problems: r.problems, stats: { targets: r.stats.targets, refused: r.problems.length, jumps: r.jumps.length, up: r.numbers.up, across: r.numbers.across } };
+}
+const REACH_FIX = 'lower the step up to it or add a way up (a ramp or a block the jump reaches); node research/gf-three/tools/places-reach.mjs <game> drives the jumps with the character';
 
 /** How many levels the game plays: the levels mechanic's count (config/game.json or the spec), else rules.params.levels. */
 function levelsAsked(subject) {
@@ -174,6 +193,8 @@ export function checkScenicWorld(subject) {
       if (d < r + (Number(M.radius ?? R) || 0)) add('overlap', 'error', `${name} and ${M.id ?? 'the next level'} overlap (${fmt(d)} m apart)`, regen);
     }
   }
+  const reachRule = reachOfSubject(subject);
+  for (const p of reachRule.problems) problems.push({ rule: 'reach', severity: 'warning', message: p.message, fix: REACH_FIX, slot: `world.${t}.layout`, target: p.target });
   const notes = [`a scenic ${t}: the indoor and edge rules (walls, ceiling, doors, gates, entries, the view past the edge) do not apply; its edge is cliff, water or void, drawn by gf/scenic/world`];
   for (const n of notes) problems.push({ rule: 'scenic', severity: 'warning', message: n, fix: null, slot: `world.${t}.layout` });
   const errors = problems.filter(p => p.severity === 'error').length;
@@ -181,7 +202,7 @@ export function checkScenicWorld(subject) {
   const a0 = scenicLevelArea(levels[0], r0);
   return {
     tool: 'research/gf-three/tools/world.mjs', check: 17, target: subject.target, template: t, kind: cfg.kind ?? t, engine: 'scenic', ok: errors === 0, errors, warnings: problems.length - errors, problems,
-    stats: { size: a0.size, area: Math.round(a0.area), sizeClass: intent, measuredClass: sizeClassOf(a0.area), rooms: 0, levels: levels.length, levelsAsked: asked, radius: r0, entries: 0, ceiling: null, filledGround: 0 },
+    stats: { size: a0.size, area: Math.round(a0.area), sizeClass: intent, measuredClass: sizeClassOf(a0.area), rooms: 0, levels: levels.length, levelsAsked: asked, radius: r0, entries: 0, ceiling: null, filledGround: 0, reach: reachRule.stats },
   };
 }
 
@@ -388,13 +409,17 @@ export function checkWorld(subject) {
     if (lack.length) add('scales', 'warning', `${r.label ?? r.id} has no ${lack.join(' or ')} things (big ≥ 1.5 m, middle 0.5–1.5 m, small < 0.5 m): it reads as bare`, 'add a group with things of that size (a bookcase or plant; a desk or sofa; things on the desks)');
   }
 
+  // ---- reach: what the character's own jump cannot get to (a warning; reachOfSubject) ----
+  const reachRule = reachOfSubject(subject);
+  for (const p of reachRule.problems) add('reach', 'warning', p.message, REACH_FIX, { target: p.target });
+
   // the worst first: a missing ceiling or wall, then the size, the rooms, the doors for enemies, the outside
-  const order = ['ceiling', 'walls', 'size', 'spaces', 'entries', 'outside', 'continues', 'door', 'rooms', 'filled', 'scales'];
+  const order = ['ceiling', 'walls', 'size', 'spaces', 'entries', 'outside', 'continues', 'door', 'rooms', 'reach', 'filled', 'scales'];
   problems.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1) || order.indexOf(a.rule) - order.indexOf(b.rule));
   const errors = problems.filter(p => p.severity === 'error').length;
   return {
     tool: 'research/gf-three/tools/world.mjs', check: 17, target: subject.target, template: t, kind, ok: errors === 0, errors, warnings: problems.length - errors, problems,
-    stats: { size: [W, D], area: Math.round(area), sizeClass: intent, measuredClass: got, rooms: rooms.length, areas, entries: entries.length, ceiling: cfg.ceiling?.height ?? null, wallTop: +wallTop.toFixed(2), perimeterOpen: +openLen.toFixed(1), perimeterDoors: +doorLen.toFixed(1), perimeter: +perim.toFixed(1), filledGround: +filledShare.toFixed(2), scales: scaleRows },
+    stats: { size: [W, D], area: Math.round(area), sizeClass: intent, measuredClass: got, rooms: rooms.length, areas, entries: entries.length, ceiling: cfg.ceiling?.height ?? null, wallTop: +wallTop.toFixed(2), perimeterOpen: +openLen.toFixed(1), perimeterDoors: +doorLen.toFixed(1), perimeter: +perim.toFixed(1), filledGround: +filledShare.toFixed(2), scales: scaleRows, reach: reachRule.stats },
   };
 }
 
@@ -423,5 +448,8 @@ export async function worldCheck(gameDir) {
     : report.ok
     ? `complete: ${report.kind} ${s.size.join(' x ')} m (${s.area} m², ${s.sizeClass})${s.rooms ? `, ${s.rooms} rooms` : ''}${s.ceiling ? `, ceiling ${s.ceiling} m` : ''}, ${s.entries} entries, ${Math.round(s.filledGround * 100)}% of the floor filled; ${report.warnings} notes`
     : `${report.errors} errors (node research/gf-three/tools/world.mjs <game> lists them with their fixes): ${report.problems.filter(p => p.severity === 'error').map(p => `${p.rule}: ${p.message}`).join(' | ')}`;
-  return { ok: report.ok, detail, report, notes: ls.filter(l => l.startsWith('warn')) };
+  // what the character cannot get to is reported in the detail by name, never failing the check (the reach rule)
+  const unreachable = report.engine === 'flat' ? [] : report.problems.filter(p => p.rule === 'reach');
+  const said = unreachable.length ? `; reach (warning): ${unreachable.map(p => p.message).join(' | ')}` : '';
+  return { ok: report.ok, detail: detail + said, report, notes: ls.filter(l => l.startsWith('warn')) };
 }

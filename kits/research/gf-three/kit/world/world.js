@@ -23,7 +23,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { adoptMaterials, material, setGroundPattern } from '../look/materials.js';
-import { expandLayout, colliderParts, createRouter, entryPoint, roomAt } from './layout.js';
+import { expandLayout, createRouter, entryPoint, roomAt } from './layout.js';
+import { collidersOf, buildColliders, MATERIALS } from './colliders.js';
 import { generateLayout } from './generate.js';
 
 export const templates = ['backyard', 'office', 'plaza', 'arena', 'store'];
@@ -218,7 +219,7 @@ export async function loadWorld(ctx, cfg, opts = {}) {
   const groups = new Map();
   placements.forEach((p, i) => { if (!groups.has(p.prop)) groups.set(p.prop, []); groups.get(p.prop).push({ ...p, index: i }); });
   const propsMap = new Map();
-  const colliders = [];
+  const fits = new Map();                                       // each model's fit to its catalog size (fitScale)
   const lampPoints = [];
   const drifting = [];
   const libBase = opts.library ?? new URL('../../library/', import.meta.url).href;
@@ -230,6 +231,7 @@ export async function loadWorld(ctx, cfg, opts = {}) {
     else model = await loadModel(new URL(meta.file, libBase).href);
     // a replacement model is fitted to the catalog size (swap anything: an uploaded GLB in any unit still fits)
     const fit = fitScale(model, meta);
+    fits.set(id, fit);
     adoptMaterials(model, 'prop', { materials: meta.materials });
     model.updateMatrixWorld(true);
     const parts = [];
@@ -252,7 +254,6 @@ export async function loadWorld(ctx, cfg, opts = {}) {
     propsMap.set(id, list.map((p, k) => ({ ...p, matrix: instMats[k], meshes, instance: k })));
     if ((meta.tags ?? []).includes('cloud')) drifting.push({ meshes, mats: instMats, locals: parts.map(p => p.matrixWorld.clone()), speed: 0.4 });
     for (const [k, p] of list.entries()) {
-      for (const part of colliderParts(meta)) colliders.push(colliderOf(id, part, p, fit));   // a doorway: two posts and a lintel
       if (meta.light) lampPoints.push({ prop: id, position: new THREE.Vector3(...meta.light.at).multiplyScalar(fit).applyMatrix4(instMats[k] ?? matrixOf(p)), radius: meta.light.radius ?? 1 });
     }
   }));
@@ -282,24 +283,15 @@ export async function loadWorld(ctx, cfg, opts = {}) {
     // what hangs from the ceiling (lamps) goes with it in the cutaway
     for (const c of root.children) if (c.isInstancedMesh && (byId.get(c.userData.gfProp)?.tags ?? []).includes('ceiling')) hung.push(c);
   }
-  // invisible walls around the play area
-  if (cfg.bounds?.walls !== false) {
-    const h = cfg.bounds?.height ?? 4, t = 1;
-    const [w, d] = size;
-    colliders.push(
-      { prop: '#bounds', shape: 'box', size: [w + 2 * t, h, t], position: [0, h / 2, -d / 2 - t / 2], rotationY: 0 },
-      { prop: '#bounds', shape: 'box', size: [w + 2 * t, h, t], position: [0, h / 2, d / 2 + t / 2], rotationY: 0 },
-      { prop: '#bounds', shape: 'box', size: [t, h, d], position: [-w / 2 - t / 2, h / 2, 0], rotationY: 0 },
-      { prop: '#bounds', shape: 'box', size: [t, h, d], position: [w / 2 + t / 2, h / 2, 0], rotationY: 0 },
-    );
-  }
-  colliders.unshift({ prop: '#ground', shape: 'box', size: [size[0] + 40, 1, size[1] + 40], position: [0, -0.5, 0], rotationY: 0 });
+  // the colliders: one list (kit/world/colliders.js, open builder wave 10): the ground, every placement's catalog
+  // collider (a doorway: two posts and a lintel) at its model's fit, the invisible walls round the play area
+  const colliders = collidersOf(cfg, catalog, { fit: id => fits.get(id) ?? 1 });
   ctx.scene?.add(root);
 
   // ctx.physics is the Rapier world (CONTRACT §3) or K1's { RAPIER, world } (kit/core/boot.js); both work
   const phys = ctx.physics?.createRigidBody ? ctx.physics : ctx.physics?.world;
   const RAPIER = ctx.RAPIER ?? ctx.physics?.RAPIER ?? (phys ? (await import('@dimforge/rapier3d-compat')).default : null);
-  const rapierColliders = phys ? buildPhysics(phys, RAPIER, colliders) : [];
+  const rapierColliders = phys ? buildColliders(RAPIER, phys, colliders, MATERIALS.party) : [];
 
   const box = new THREE.Box3(new THREE.Vector3(-size[0] / 2, 0, -size[1] / 2), new THREE.Vector3(size[0] / 2, cfg.bounds?.height ?? 4, size[1] / 2));
   box.half = Math.max(size[0], size[1]) / 2;   // K1's stand-in API (world.bounds.half)
@@ -379,42 +371,6 @@ function fitScale(model, meta) {
   if (!(have > 0)) return 1;
   const r = want / have;
   return r > 0.67 && r < 1.5 ? 1 : r;   // the library's own models are within a few %; only a foreign replacement is rescaled
-}
-
-function colliderOf(id, c, p, fit) {
-  const rot = Array.isArray(p.rot) ? p.rot[1] : (p.rot ?? 0);
-  const sc = (Array.isArray(p.scale) ? p.scale : [p.scale ?? 1, p.scale ?? 1, p.scale ?? 1]).map(s => s * fit);
-  const off = new THREE.Vector3(...(c.offset ?? [0, 0, 0])).multiply(new THREE.Vector3(...sc)).applyAxisAngle(new THREE.Vector3(0, 1, 0), rot * DEG);
-  const at = v3(p.at).add(off);
-  const base = { prop: id, position: at.toArray().map(n => +n.toFixed(3)), rotationY: rot };
-  if (c.shape === 'box' || c.shape === 'ramp') return { ...base, shape: c.shape, size: c.size.map((n, i) => +(n * sc[i]).toFixed(3)) };
-  if (c.shape === 'cylinder') return { ...base, shape: 'cylinder', radius: c.radius * Math.max(sc[0], sc[2]), height: c.height * sc[1] };
-  if (c.shape === 'sphere') return { ...base, shape: 'sphere', radius: c.radius * Math.max(...sc) };
-  return { ...base, shape: 'box', size: [1, 1, 1] };
-}
-
-function buildPhysics(W, R, colliders) {
-  const body = W.createRigidBody(R.RigidBodyDesc.fixed());
-  const out = [];
-  for (const c of colliders) {
-    let d;
-    if (c.shape === 'box') d = R.ColliderDesc.cuboid(c.size[0] / 2, c.size[1] / 2, c.size[2] / 2);
-    else if (c.shape === 'cylinder') d = R.ColliderDesc.cylinder(c.height / 2, c.radius);
-    else if (c.shape === 'sphere') d = R.ColliderDesc.ball(c.radius);
-    else if (c.shape === 'ramp') {   // wedge rising toward -z (Kenney slope blocks); half extents
-      const [x, y, z] = c.size.map(n => n / 2);
-      d = R.ColliderDesc.convexHull(new Float32Array([-x, -y, -z, x, -y, -z, -x, -y, z, x, -y, z, -x, y, -z, x, y, -z]));
-    }
-    if (!d) continue;
-    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (c.rotationY ?? 0) * DEG);
-    // collision groups (kit/character/RIG.md §6): the ground and walls are WORLD, props are PROPS; both collide with everything
-    const member = c.prop.startsWith('#') ? 0x0001 : 0x0004;
-    d.setTranslation(...c.position).setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }).setFriction(c.prop === '#ground' ? 1 : 0.6).setCollisionGroups((member << 16) | 0xffff);
-    const col = W.createCollider(d, body);
-    col.__gf = { tag: c.prop.startsWith('#') ? c.prop.slice(1) : `prop:${c.prop}` };
-    out.push(col);
-  }
-  return out;
 }
 
 function zoneOf(name, z) {

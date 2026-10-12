@@ -16,11 +16,11 @@
 // and flowers, prop.<id> for each model, look.glow.* for the crystals.
 import * as THREE from 'three/webgpu';
 import { uniform } from 'three/tsl';
-import { WORLD_GROUPS } from '../../three/core/util.js';
+import { collidersOf, buildColliders, dungeonPieces, MATERIALS } from '../../three/world/colliders.js';
 import { HouseMaterial, U, adoptMaterials } from '../look/materials.js';
 import { createTerrainData, terrainColors, floorMaterial, runeNode, topGeometry, boxTopGeometry, cliffGeometry, rockMaterial, waterSurfaceMaterial, fallGeometry, fallMaterial } from './terrain.js';
 import { createGrass, createFoliage, createFlowers, leafRefs, pineRefs, towardCamera } from './vegetation.js';
-import { outlineRadius, walkRadius, rngOf, roundRectSdf } from './generate.js';
+import { outlineRadius, rngOf, roundRectSdf } from './generate.js';
 export { templates, templateInfo, worldConfig, SIZE_RADIUS, generate, terrainData, levelCount, palettes } from './generate.js';
 
 const FILE = 'config/world.json';
@@ -86,10 +86,9 @@ export async function loadWorld(ctx, cfg = {}) {
   const root = new THREE.Group(); root.name = `gf-scenic-world-${T}`; scene.add(root);
   const fixed = W.createRigidBody(RAPIER.RigidBodyDesc.fixed());
   const colliders = [];
-  const collider = (desc, tag) => { const c = W.createCollider(desc.setFriction(0.9).setCollisionGroups(WORLD_GROUPS), fixed); c.__gf = { tag }; colliders.push(c); return c; };
-  const rot = deg => { const a = (deg ?? 0) * DEG / 2; return { x: 0, y: Math.sin(a), z: 0, w: Math.cos(a) }; };
-  const box = (at, half, deg, tag) => collider(RAPIER.ColliderDesc.cuboid(half[0], half[1], half[2]).setTranslation(at[0], at[1], at[2]).setRotation(rot(deg)), tag);
-  const cyl = (at, r, h, tag) => collider(RAPIER.ColliderDesc.cylinder(h / 2, r).setTranslation(at[0], at[1] + h / 2, at[2]), tag);
+  // the colliders are built at the end, from one list (kit/world/colliders.js, open builder wave 10): the islands' tops
+  // and rims, the dungeons' floors and walls, the props whose models loaded, trees, crystals, the ruins' structures
+  const loaded = new Set();
   const tex = async (id, linear = false) => { try { const t = await assets.texture(id); if (t && linear) { t.colorSpace = THREE.NoColorSpace; t.needsUpdate = true; } return t; } catch (e) { console.warn(`gf-scenic world: ${id}: ${e.message}`); return null; } };
   const look = ctx.look ?? null;
   const rngW = rngOf((cfg.seed ?? 1) ^ 0x5eed);
@@ -109,7 +108,7 @@ export async function loadWorld(ctx, cfg = {}) {
   const rockColors = { cliff: cfg.ground?.cliff ?? '#575064', cliff2: cfg.ground?.cliff2 ?? '#3c3647', moss: cfg.ground?.moss ?? '#4f7f38' };
   look?.setBounce?.(cfg.ground?.grass ?? '#4f7d3e');
 
-  // ---- each level: its top, its rock, its water and falls, its ground and rim colliders ----
+  // ---- each level: its top, its rock, its water and falls (its ground and rim colliders come from the list) ----
   const waterMat = waterSurfaceMaterial(TD, C);
   for (const lv of levelCfgs) {
     const [cx, cy, cz] = lv.at;
@@ -142,21 +141,7 @@ export async function loadWorld(ctx, cfg = {}) {
       root.add(fall);
       lamps.push({ position: new THREE.Vector3(f.at[0], f.at[1] + 0.3, f.at[2]), color: cfg.water?.fall ?? '#a5ecff', radius: 0.55, intensity: 0.6 });
     }
-    // ground and rim colliders: the island's top (a convex hull of its outline), walls just inside its edge
-    if (isl) {
-      const N = 64, hull = [];
-      for (let i = 0; i < N; i++) { const a = (i / N) * Math.PI * 2, r = outlineRadius(lv.shape, a); hull.push(cx + Math.cos(a) * r, cy, cz + Math.sin(a) * r, cx + Math.cos(a) * r * 0.9, cy - 2, cz + Math.sin(a) * r * 0.9); }
-      collider(RAPIER.ColliderDesc.convexHull(new Float32Array(hull)), 'ground');
-      const M = 48;
-      for (let i = 0; i < M; i++) {
-        const a0 = (i / M) * Math.PI * 2, a1 = ((i + 1) / M) * Math.PI * 2;
-        const r0 = walkRadius(lv, a0) + 0.35, r1 = walkRadius(lv, a1) + 0.35;
-        const p0 = [cx + Math.cos(a0) * r0, cz + Math.sin(a0) * r0], p1 = [cx + Math.cos(a1) * r1, cz + Math.sin(a1) * r1];
-        const mx = (p0[0] + p1[0]) / 2, mz = (p0[1] + p1[1]) / 2, len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-        const yaw = Math.atan2(p1[0] - p0[0], p1[1] - p0[1]);
-        collider(RAPIER.ColliderDesc.cuboid(0.25, 3, len / 2 + 0.15).setTranslation(mx, cy + 3, mz).setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }), 'rim');
-      }
-    } else buildDungeon(lv);
+    if (!isl) buildDungeon(lv);
   }
   // the sea round an island (the island template)
   if (cfg.water?.sea && !cfg.void) {
@@ -166,51 +151,11 @@ export async function loadWorld(ctx, cfg = {}) {
     root.add(sea);
   }
 
-  // ---- dungeon rooms: walls with doorways, corridors, a floor collider ----
+  // ---- dungeon rooms: walls with doorways and the corridors' sides (their colliders and the floors' come from the list) ----
   function buildDungeon(lv) {
-    if (lv.tiles) {
-      // KayKit modules: the walls and doorways bring their own colliders; here the floor under the rooms and corridors
-      for (const rm of lv.rooms) { const [x0, z0, x1, z1] = rm.rect; box([(x0 + x1) / 2, -0.5, (z0 + z1) / 2], [(x1 - x0) / 2, 0.5, (z1 - z0) / 2], 0, 'ground'); }
-      for (const d of lv.doors ?? []) box([(d.from[0] + d.to[0]) / 2, -0.5, (d.from[1] + d.to[1]) / 2], [d.horiz ? Math.abs(d.to[0] - d.from[0]) / 2 : 1.6, 0.5, d.horiz ? 1.6 : Math.abs(d.to[1] - d.from[1]) / 2], 0, 'ground');
-      return;
-    }
+    if (lv.tiles) return;   // KayKit modules bring their own walls
+    const { walls } = dungeonPieces(lv);
     const H = lv.wall?.height ?? 3.2, th = lv.wall?.thickness ?? 0.6;
-    const walls = [];
-    const doorsOf = rm => (lv.doors ?? []).filter(d => d.rooms.includes(rm.id));
-    for (const rm of lv.rooms) {
-      const [x0, z0, x1, z1] = rm.rect;
-      box([(x0 + x1) / 2, -0.5, (z0 + z1) / 2], [(x1 - x0) / 2, 0.5, (z1 - z0) / 2], 0, 'ground');
-      const edges = [[[x0, z0], [x1, z0]], [[x1, z0], [x1, z1]], [[x1, z1], [x0, z1]], [[x0, z1], [x0, z0]]];
-      for (const [a, b] of edges) {
-        const horiz = a[1] === b[1];
-        // the doorways on this edge: where a corridor's line crosses it
-        const gaps = [];
-        for (const d of doorsOf(rm)) {
-          if (horiz && d.horiz === false && Math.min(d.from[1], d.to[1]) < a[1] && Math.max(d.from[1], d.to[1]) > a[1]) gaps.push(d.from[0]);
-          if (!horiz && d.horiz === true && Math.min(d.from[0], d.to[0]) < a[0] && Math.max(d.from[0], d.to[0]) > a[0]) gaps.push(d.from[1]);
-        }
-        const lo = horiz ? Math.min(a[0], b[0]) : Math.min(a[1], b[1]), hi = horiz ? Math.max(a[0], b[0]) : Math.max(a[1], b[1]);
-        let cur = lo;
-        for (const g of gaps.sort((p, q) => p - q)) { if (g - 1.3 > cur) walls.push(horiz ? [cur, a[1], g - 1.3, a[1]] : [a[0], cur, a[0], g - 1.3]); cur = g + 1.3; }
-        if (hi > cur) walls.push(horiz ? [cur, a[1], hi, a[1]] : [a[0], cur, a[0], hi]);
-      }
-    }
-    // corridors: a floor and two side walls across the gap between the rooms they join
-    for (const d of lv.doors ?? []) {
-      const ra = lv.rooms.find(r => r.id === d.rooms[0]), rb = lv.rooms.find(r => r.id === d.rooms[1]);
-      if (!ra || !rb) continue;
-      if (d.horiz) {
-        const [l, r] = ra.rect[2] < rb.rect[0] ? [ra.rect[2], rb.rect[0]] : [rb.rect[2], ra.rect[0]];
-        const z = d.from[1];
-        box([(l + r) / 2, -0.5, z], [(r - l) / 2 + 0.3, 0.5, d.width / 2 + 0.3], 0, 'ground');
-        walls.push([l, z - 1.3, r, z - 1.3], [l, z + 1.3, r, z + 1.3]);
-      } else {
-        const [l, r] = ra.rect[3] < rb.rect[1] ? [ra.rect[3], rb.rect[1]] : [rb.rect[3], ra.rect[1]];
-        const x = d.from[0];
-        box([x, -0.5, (l + r) / 2], [d.width / 2 + 0.3, 0.5, (r - l) / 2 + 0.3], 0, 'ground');
-        walls.push([x - 1.3, l, x - 1.3, r], [x + 1.3, l, x + 1.3, r]);
-      }
-    }
     const geo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
     const mat = new HouseMaterial({ color: cfg.stone ?? '#6d6679', flatShading: true }, 'prop');
     const mesh = new THREE.InstancedMesh(geo, mat, walls.length);
@@ -225,7 +170,6 @@ export async function loadWorld(ctx, cfg = {}) {
       const [ax, az, bx, bz] = w;
       const len = Math.hypot(bx - ax, bz - az) + th, yaw = Math.atan2(bz - az, bx - ax), h = camSide(w) ? Math.min(H, 0.9) : H;
       mesh.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3((ax + bx) / 2, 0, (az + bz) / 2), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -yaw), new THREE.Vector3(len, h, th)));
-      collider(RAPIER.ColliderDesc.cuboid(len / 2, H / 2, th / 2).setTranslation((ax + bx) / 2, H / 2, (az + bz) / 2).setRotation({ x: 0, y: Math.sin(-yaw / 2), z: 0, w: Math.cos(-yaw / 2) }), 'wall');
     });
     mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
     mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = `walls-${lv.id}`;
@@ -269,6 +213,7 @@ export async function loadWorld(ctx, cfg = {}) {
   await Promise.all([...groups.entries()].map(async ([id, list]) => {
     const meta = byId.get(id), model = await modelOf(id);
     if (!model) return;
+    loaded.add(id);
     const mats = list.map(p => matrixOf(p.at, p.rot, (p.scale ?? 1)));
     // a part on a hinge (KayKit's doorway door, chest lid): open it when the layout says so
     if (list.some(p => p.open)) for (const part of Object.values(meta?.parts ?? {})) {
@@ -282,13 +227,6 @@ export async function loadWorld(ctx, cfg = {}) {
     const meshes = instance(model, mats, id);
     propsMap.set(id, list.map((p, k) => ({ ...p, matrix: mats[k], meshes, instance: k })));
     list.forEach((p, k) => {
-      const s = (p.scale ?? 1);
-      const col = meta?.collider && meta.collider !== 'none' ? meta.collider : null;
-      for (const c of col ? (col.shape === 'compound' ? col.parts : [col]) : []) {
-        const at = new THREE.Vector3(...(c.offset ?? c.at ?? [0, (c.size?.[1] ?? 1) / 2, 0])).applyMatrix4(mats[k]);
-        if (c.shape === 'cylinder') cyl([at.x, at.y - (c.size[1] * s) / 2, at.z], (c.size[0] / 2) * s, c.size[1] * s, `prop:${id}`);
-        else if (c.size) box([at.x, at.y, at.z], [(c.size[0] / 2) * s, (c.size[1] / 2) * s, (c.size[2] / 2) * s], p.rot, `prop:${id}`);
-      }
       if (meta?.light) lamps.push({ position: new THREE.Vector3(...meta.light.at).applyMatrix4(mats[k]), color: meta.light.color ?? 'lantern', radius: meta.light.radius ?? 1, intensity: 1 });
     });
   }));
@@ -310,6 +248,7 @@ export async function loadWorld(ctx, cfg = {}) {
     const id = `tree-${kind}`;
     const model = kind === 'pine' ? null : await modelOf(id);
     if (!model && kind !== 'pine') return;
+    if (model) loaded.add(id);
     const refs = kind === 'pine' ? null : leafRefs(model);
     const mats = list.map(t => matrixOf(t.at, t.rot, kind === 'pine' ? [t.scale, t.scale * 0.9, t.scale] : t.scale));
     if (kind === 'pine') pineTrunks(mats);
@@ -319,7 +258,6 @@ export async function loadWorld(ctx, cfg = {}) {
     list.forEach((t, k) => {
       const local = kind === 'pine' ? pineRefs(8.5, rr) : refs.length ? refs : [];
       for (const r of local) leaves.push({ position: r.position.clone().applyMatrix4(mats[k]), scale: r.scale * (kind === 'pine' ? t.scale * 0.95 : t.scale) * 1.05 });
-      cyl(t.at, 0.3 * t.scale + 0.1, 4, `tree:${kind}`);
     });
     if (leaves.length && sdf) {
       const f = createFoliage(leaves, { sdf, colors: cfg.foliage?.[kind] ?? cfg.foliage?.oak, toward, seeThrough: seeThroughU, slot: slot('foliage', kind), name: `leaves-${kind}`, seed: kind.length * 17 });
@@ -350,7 +288,7 @@ export async function loadWorld(ctx, cfg = {}) {
     }
     lamps.push({ position: base.clone().add(new THREE.Vector3(0, 0.9 * scale, 0)), color: role, radius: 0.75 * scale + 0.2, intensity: 1.1 });
   };
-  for (const c of cfg.crystals ?? []) { addCluster(c.at, c.scale ?? 1, c.glow === 'rune' ? 'rune' : 'crystal', Math.round((c.at[0] + 31) * (c.at[2] + 17) * 13)); cyl(c.at, 0.45 * (c.scale ?? 1), 1.4, 'crystal'); }
+  for (const c of cfg.crystals ?? []) { addCluster(c.at, c.scale ?? 1, c.glow === 'rune' ? 'rune' : 'crystal', Math.round((c.at[0] + 31) * (c.at[2] + 17) * 13)); }
 
   // ---- islets and loose rocks floating round the islands ----
   for (const isl of cfg.islets ?? []) {
@@ -429,16 +367,16 @@ export async function loadWorld(ctx, cfg = {}) {
         const shaft = new THREE.CylinderGeometry(s.radius * 0.86, s.radius, s.height, 8, 3).translate(0, s.height / 2 + 0.3, 0);
         const plinth = new THREE.BoxGeometry(s.radius * 2.6, 0.3, s.radius * 2.6).translate(0, 0.15, 0);
         geo = new THREE.Group(); geo.add(new THREE.Mesh(shaft, stone), new THREE.Mesh(plinth, stone));
-        cyl(s.at, s.radius * 1.1, s.height + 0.3, 'pillar');
       } else {
         geo = new THREE.Group(); geo.add(new THREE.Mesh(new THREE.BoxGeometry(s.length, s.height, 0.7).translate(0, s.height / 2, 0), stone));
-        box([s.at[0], s.height / 2, s.at[2]], [s.length / 2, s.height / 2, 0.35], s.rot, 'wall');
       }
       geo.position.set(...s.at); geo.rotation.y = (s.rot ?? 0) * DEG; geo.name = s.kind;
       geo.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.gfSlot = slot('stone'); } });
       root.add(geo);
     }
   }
+  // ---- physics: the one collider list, on the world's fixed body ----
+  colliders.push(...buildColliders(RAPIER, W, collidersOf(cfg, catalog, { has: id => loaded.has(id) }), MATERIALS.scenic, fixed));
   look?.setLamps?.(lamps);
 
   // ---- spawns, zones, levels (CONTRACT §8) ----

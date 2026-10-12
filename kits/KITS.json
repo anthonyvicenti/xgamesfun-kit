@@ -3,8 +3,8 @@
  "about": "A sparse mirror of the games.fun repository at one commit: the kits games are built on and the tools that create and verify them. Written by scripts/sync-kits.mjs; never edited by hand (fix the kit in games.fun and sync again). tests/kits.test.mjs checks kits/ against this file.",
  "source": {
   "repo": "games.fun",
-  "commit": "0c019de57b58d341c108dcf4c8e4d712801ef89e",
-  "date": "2026-10-11T20:13:26-07:00"
+  "commit": "877af8067a0b03320312c5771fb007de4b277913",
+  "date": "2026-10-11T20:54:57-07:00"
  },
  "kits": {
   "gf-three": {
@@ -74,8 +74,8 @@
   "secrets": "no .env files; text files are scanned for key-shaped strings and the sync fails on any hit"
  },
  "totals": {
-  "files": 1172,
-  "bytes": 36888860,
+  "files": 1183,
+  "bytes": 36964645,
   "excluded": 152,
   "excludedBy": {
    "Meshy-generated (licence tier unconfirmed)": 3,
@@ -99,6 +99,7 @@
   "research/gf-three/tools/world.mjs",
   "research/gf-three/tools/flat-map.mjs",
   "research/gf-three/tools/items.mjs",
+  "research/gf-three/tools/places-reach.mjs",
   "research/multiplayer/p2p/signal-server.mjs",
   "research/multiplayer/p2p/serve-signal.mjs",
   "research/gf-three/loop/index.mjs"
@@ -197,8 +198,8 @@
   "research/multiplayer/p2p/vendor"
  ],
  "closure": {
-  "files": 135,
-  "bytes": 2238905,
+  "files": 136,
+  "bytes": 2257567,
   "modules": [
    "creator-studio/lib/asset-kinds.mjs",
    "creator-studio/lib/code-literals.mjs",
@@ -314,6 +315,7 @@
    "research/gf-three/tools/meshy-character.mjs",
    "research/gf-three/tools/meshy-prop.mjs",
    "research/gf-three/tools/optimize.mjs",
+   "research/gf-three/tools/places-reach.mjs",
    "research/gf-three/tools/play.mjs",
    "research/gf-three/tools/promises.mjs",
    "research/gf-three/tools/rig-check.mjs",
@@ -353,8 +355,8 @@
   {
    "path": "research/gf-three/kit",
    "why": "gf-three kit, vendored into each game as gf/three/",
-   "files": 216,
-   "bytes": 2026570
+   "files": 225,
+   "bytes": 2096046
   },
   {
    "path": "research/gf-three/library",
@@ -395,8 +397,8 @@
   {
    "path": "research/gf-scenic/kit",
    "why": "the scenic engine's look and world, vendored into a scenic game as gf/scenic/",
-   "files": 17,
-   "bytes": 211650
+   "files": 18,
+   "bytes": 199297
   },
   {
    "path": "research/gf-scenic/library",
@@ -653,11 +655,12 @@
   "research/gf-scenic/kit/look/sky.js": "108fd1067264d98b4a53ae23d7e26de800a75dfd82ff716de5ce99d550be2cf8",
   "research/gf-scenic/kit/look/slots.js": "4aace94d3473c319e4a795c93b27fd824f9ddfe1643a0703ccee6edfe71eadb6",
   "research/gf-scenic/kit/look/weather.js": "6fb2123d2bd40fbca2ee1d01fa440f86b04cddf8d73f9e7f99fd208e2c6316c3",
-  "research/gf-scenic/kit/world/README.md": "f8938d4d2010d8face742da08597e83badf70c5b38ff4698fb856d4217b11f10",
-  "research/gf-scenic/kit/world/generate.js": "7f21e9a8658c18e59b6c3d61a4498c8a13071eae32e049e4ebde2d01e5c714a7",
+  "research/gf-scenic/kit/world/README.md": "e897205c55309c523880cecc260586fe9fa4b036ed84f2061d0aa94c3fe203fb",
+  "research/gf-scenic/kit/world/generate.js": "7b729322abe6eb0a6da41885517f766cb57173e32bcff03f1b0afc783c4bddcf",
+  "research/gf-scenic/kit/world/recipes.js": "ea77b5f5b409eefbaa503b2e6eadb4a23a55e70a2228f6f40a9cb2cc46800a85",
   "research/gf-scenic/kit/world/terrain.js": "ce7b6f0da60bb9e61d70ebbefda0ce8c9fe6066b69a4f406e1159fa7ddf7c85d",
   "research/gf-scenic/kit/world/vegetation.js": "504f33d65e1253c1bd9b23470f8ba473ca2d9b63d3c6547816f99730662fd608",
-  "research/gf-scenic/kit/world/world.js": "f2a35788c824f0cb78a1ede6e2d620e1f13212adffd2a0e8e5b932a88180865c",
+  "research/gf-scenic/kit/world/world.js": "b5c3449f5d4694f7124206df32344ddb1b47f561991f5b0233ffb15ad6146ac2",
   "research/gf-scenic/library/LICENSES.json": "a7e112366030a1fae167bacc9b75935084ceb92198f98fc5d503c1840ab9d0eb",
   "research/gf-scenic/library/bodies.json": "661dd7133ed7174eeb98cb0182accb3713acd1f025e9abc8624470429fd69792",
   "research/gf-scenic/library/bodies/kaykit-barbarian.glb": "9cb8072e60039a47b20f3afef5760a90a9cb376bbf5b976ee0dd418c742cfd9d",
@@ -1044,9 +1047,18 @@
   "research/gf-three/kit/vfx/standin/dot.png": "56f648076c9beb937ee01853b1bc47f0fa771b75bdc2f60d1e302aba4c783050",
   "research/gf-three/kit/vfx/standin/glow.png": "84964a694a781c2bafbbd5fc9609b7aea3c2abd9703c7b1713665c95d42d0799",
   "research/gf-three/kit/vfx/standin/puff.png": "fe8409d5018acb27b7f54dcaf5faf1319313f9648fbccc44b8865c8826ad98fc",
-  "research/gf-three/kit/world/README.md": "7b75470ceb9bee703dd146e5fc1d6a3408c2aaf8cc86d501278875d072e8b257",
-  "research/gf-three/kit/world/generate.js": "592534263816c2c2333a2227d13d3cb90ab652055fdd8f226e536ccb357d5091",
+  "research/gf-three/kit/world/README.md": "906abb2b71fdedbfac119558f85934d699de5d1190b96febecb5e861190cc462",
+  "research/gf-three/kit/world/colliders.js": "a58c6e17b98a639e47de0e5d4e8fd8dced052ee58c1aa682eb098fc8283adc62",
+  "research/gf-three/kit/world/from-yard.js": "3980e38aad6f98b1f3129a20278963d5237981d97eb89b3bd3f5a7016c6a5040",
+  "research/gf-three/kit/world/generate.js": "ada9589567e8faff04cfcfdbd565c165d58d75f0b6b2de588c205958b092f04f",
   "research/gf-three/kit/world/layout.js": "5aed1278d6e03c3f0874ea337fe119bda83e40163a2721bae56093f8df0d87df",
+  "research/gf-three/kit/world/places/dress.js": "bd6146691a60e182a50e076f22f4c01f9695e7bc0bc3341786248315569b5296",
+  "research/gf-three/kit/world/places/index.js": "1dabeb286c3571a74b3c1f0eb2409df765c9b074cc486ed1de829746de2dcc94",
+  "research/gf-three/kit/world/places/island.js": "e0bba30e19887f9e861e7f691f5fcb30380cec76bb6c9bff836424b4bab8aad4",
+  "research/gf-three/kit/world/places/rect.js": "70a9e7b96d3dfd1d7b2c63224a9ecceae342af227b5352d69559f36efe05e0bd",
+  "research/gf-three/kit/world/places/shapes.js": "8eb078f0ea893bb22271d06a1e93a296d850ee65c3b43e2dd37e9d70f2cc989a",
+  "research/gf-three/kit/world/places/values.js": "70519fc32272a288411a69cd87bc16f3cadba5fc590295c4e5e7c487c8e3563e",
+  "research/gf-three/kit/world/reach.js": "e80aac509089344abb00df164cc95d8579dff249082fa0f2b618f9210732ecab",
   "research/gf-three/kit/world/templates/arena.json": "09ea2464d3c85e780629109fd034aef1110a968eb5a589e33bb3c4d9bc077f75",
   "research/gf-three/kit/world/templates/backyard.json": "0d15ebd8afab16180b5dd785fc72e9d5fb5d330be9cdd7d08fcef446b04c0f63",
   "research/gf-three/kit/world/templates/office.json": "34015742eb279220f0aa5b6eca850c5e1c9319ff89e387f4e36c93d5ed65ef8f",
@@ -1059,7 +1071,7 @@
   "research/gf-three/kit/world/voxel/signs.js": "77b99295184d5a1616c30e69f0aafa966f432e01e05cb84704928366206555aa",
   "research/gf-three/kit/world/voxel/terrain.mjs": "cc77b5e93649cb1da7f5315759d43e2b530f1b05c72dd9b01c9559422742e1bd",
   "research/gf-three/kit/world/voxel/world.js": "ae417780728e61943ec079b65d5a607b40dd846500a86c172d579e520fbd7726",
-  "research/gf-three/kit/world/world.js": "b5ac6d0be917d98c19d03dc27d5a0de98321e67ba513fd35e4741d6978b84ac1",
+  "research/gf-three/kit/world/world.js": "9edf3b11db5f5db58625a78e18f85a21bdacc211c4077e663e4b831a0e8c77a3",
   "research/gf-three/library/LICENSES.json": "a7765d73891e27aea691a0505ce7847047451ec9f0e1f89d1f53b9d27a5a1877",
   "research/gf-three/library/bodies.json": "15b6d713adc738c79ff2b2b4031827f74cb65f1db111cf678907290cf7e1e29f",
   "research/gf-three/library/bodies/bean-chunky.glb": "5e93e9ccaccbc3cb04e11d07747cfb0ef04b388f5725d884c9bafc4e1ec6b41c",
@@ -1423,7 +1435,7 @@
   "research/gf-three/tools/lib/standin-assets/slide.glb": "3f1560296335468aab298c4b792cf11986c712ee24a6c5e0d5913575aadb7ca3",
   "research/gf-three/tools/lib/stepped.mjs": "b734ebd7cd5792dcfc5706532938e045649cda9ce0df7d747b1dda48971330bc",
   "research/gf-three/tools/lib/turn-player.mjs": "2c6a6e235fb153edcb963e402a7128c21b3e8b9f6f83b5edf3f1c8f698e8f030",
-  "research/gf-three/tools/lib/vendor.mjs": "467659291923d01e4e3f28b6024a2af0ba19a92107f376a6c5158a1c0f75dd33",
+  "research/gf-three/tools/lib/vendor.mjs": "b16e6cfbd0d760dd1de4cd57c14ccf9d3ea449f30e5aabe7cc0d655ad37de9ef",
   "research/gf-three/tools/lib/vendor/three/LICENSE": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc",
   "research/gf-three/tools/lib/vendor/three/examples/jsm/animation/AnimationClipCreator.js": "0afb4c1b147420e7104a2c1d7f0e2ca19fef030572e95a10f53ebc09397c4dc5",
   "research/gf-three/tools/lib/vendor/three/examples/jsm/animation/CCDIKSolver.js": "63de99bc31ba9b4f134dd86cc33099964de2eb51e74eb3283f556a09bbc5a69e",
@@ -1643,7 +1655,7 @@
   "research/gf-three/tools/lib/vendor/three/examples/jsm/utils/WebGPUTextureUtils.js": "ddcb8051dc946e53163094c8f68304f549540f498aee35e7f2bfc784ce8ab47b",
   "research/gf-three/tools/lib/vendor/three/examples/jsm/utils/WorkerPool.js": "5ac7095fd566bc9ae48376055fd66edf27cb9ebbf9e1269dc206bfd4933ae9eb",
   "research/gf-three/tools/lib/verdict.mjs": "3b03b80f07bd5dec1c19935685dec370c8e30dee6b5e48bda1e841b3741440d0",
-  "research/gf-three/tools/lib/world-check.mjs": "debca0cdda61e9ff150e605a1d5a4bb2b990b1dd06dede957598b59621f63c60",
+  "research/gf-three/tools/lib/world-check.mjs": "44b054be8d708e0cd2f153e4e6978ffc919acb711724bcf5630f1e4fadf4c752",
   "research/gf-three/tools/lib/worlds-check.mjs": "add7b34bc057c3216313d344339dbe99a518d87d684166f91b9ca758d2961120",
   "research/gf-three/tools/lib/worlds-net-check.mjs": "3bf56a5bc66a5521664e96ce40ae690955bf369351e12936875a157f719ca7b0",
   "research/gf-three/tools/lib/worlds-room-check.mjs": "0490ff4756cd7b4ce20d1405980fe8e5576917ce4720537fc887c013a9f1767e",
@@ -1651,6 +1663,7 @@
   "research/gf-three/tools/meshy-character.mjs": "4efd617a553923ab132109384499b818f98cbf4d81a522af5b09fbe79c240fbb",
   "research/gf-three/tools/meshy-prop.mjs": "583f6fa3d463724d26c709c52820d4925dfbac9d3d892efc539f541cc1f0d6e9",
   "research/gf-three/tools/optimize.mjs": "fb4e75b9e08087af689846490be9ba880d5ed3fc0859b9af139725bee1e58b70",
+  "research/gf-three/tools/places-reach.mjs": "3a6bebbc268fcfdc396b1499e18a3f483bb898e909fc25be0c026a369b79fd9a",
   "research/gf-three/tools/play.mjs": "bbde8f825a84a0562472174d1e90c3e9dd817c825c38cb32e5f2b2291a8231b0",
   "research/gf-three/tools/promises.mjs": "112776859db2c552f75baa4c640cb3ed442a46f4d635c7f0d81a4e3214917f9e",
   "research/gf-three/tools/rig-check.mjs": "664d9d878e3c0cf93184778818122194e00f3df12b3866b0db572407a69123cb",

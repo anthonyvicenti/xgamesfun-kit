@@ -6,8 +6,9 @@ flowers and water (MIT, `brunosimon/folio-2025@41046b5`, `../LICENSE-folio-2025`
 
 | File | What it does |
 |---|---|
-| `generate.js` | pure and seeded (the title's hash): `worldConfig(spec)` (create, Node), `generate({template, size, seed, levels, preset})`, `terrainData(cfg)`, the shapes, the palettes |
-| `world.js` | `loadWorld(ctx, cfg)`: the island tops, cliffs, water, falls, grass, trees, bushes, flowers, props, crystals, islets, rocks, colliders, the levels API; `slotsFor(cfg, catalog)` |
+| `generate.js` | pure and seeded (the title's hash): `worldConfig(spec)` (create, Node), `generate({template, size, seed, levels, preset})`, `terrainData(cfg)`, the palettes; the shapes are gf-three's `kit/world/places/shapes.js`, re-exported. It imports the shared kit as a game sees it (`../../three/world/places/`): in Node, install `research/gf-three/tools/lib/kit-import.mjs`'s hook first |
+| `recipes.js` | the island, isles and ruins levels as recipes of the places vocabulary (gf-three `kit/world/places/`, open builder wave 10): `generate` runs one per island level over the world's one random stream (until wave 10 this was `islandLevel` and `dress`, code with a branch per template) |
+| `world.js` | `loadWorld(ctx, cfg)`: the island tops, cliffs, water, falls, grass, trees, bushes, flowers, props, crystals, islets, rocks, the levels API; its colliders come from gf-three's one list (`kit/world/colliders.js`); `slotsFor(cfg, catalog)` |
 | `terrain.js` | folio's Terrain, Floor and WaterSurface: the terrain data texture (r stone, g grass, b water depth, a island), the floor shader with folio's slabs and the glowing rune lines, the cliff skirts, the waterfalls |
 | `vegetation.js` | folio's Grass, Foliage, Bushes, Trees, Flowers: wind grass that follows the view, alpha-tested leaf clusters (with folio's see-through round the local player), pines as stacked clusters |
 
