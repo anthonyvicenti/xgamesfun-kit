@@ -156,7 +156,8 @@ export function diff(oldSpec, newSpec, { now = Math.floor(Date.now() / 1000), ne
     }
   }
   // Removed parts: switched off where the program lets them be (an item, box, recipe or schedule has no close).
-  const removed = (list) => (oldModel[list] ?? []).filter((x) => !(newModel[list] ?? []).some((y) => y.key === x.key));
+  // A part already switched off when it was removed stays in what is live (its number is never reused): nothing to do.
+  const removed = (list) => (oldModel[list] ?? []).filter((x) => x.active !== false && !(newModel[list] ?? []).some((y) => y.key === x.key));
   for (const [list, kind] of [['items', 'item'], ['boxes', 'box'], ['recipes', 'recipe'], ['schedules', 'schedule']])
     for (const part of removed(list)) {
       const step = partStep[kind]({ ...part, active: false }, oldModel);

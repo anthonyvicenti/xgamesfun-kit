@@ -7,7 +7,8 @@ import { LIMIT, RARITIES, RARITY_WEIGHTS, RuleError } from '../gf-web3/rules.js'
 import { chainStatus, mintInfo } from './chain.mjs';
 import { linkToken, removeBox, removeItem, saveBox, saveItem, setCurrency, setShop, unlinkToken } from './drafts.mjs';
 import { createFlowEngine, FlowError } from './flow-engine.mjs';
-import { launchFlow, publishFlow } from './flows.mjs';
+import { economyStatus } from './economy.mjs';
+import { economyFlow, launchFlow } from './flows.mjs';
 import { gameTitle, listPictures, playerLooks, readConfig, readPicture } from './game.mjs';
 import { handle, HttpError, readJson, sendBytes } from './http.mjs';
 import { getRequest, listRequests, removeRequest } from './requests.mjs';
@@ -96,7 +97,8 @@ export function createWeb3Api(ctx) {
     const input = request?.input ?? body.input ?? {};
     let spec;
     if (kind === 'launch') spec = await launchFlow(e, input, body.wallet);
-    else if (kind === 'publish') spec = await publishFlow(e, body.wallet);
+    // A game's shop is part of its economy (decision 2, 2026-10-11): the old "publish" starts the economy flow.
+    else if (kind === 'economy' || kind === 'publish') spec = await economyFlow(e, body.wallet, input);
     else throw new HttpError(400, 'Unknown kind of request.');
     if (request) {
       const finish = spec.onFinish;
@@ -145,6 +147,11 @@ export function createWeb3Api(ctx) {
       }, ctx.log),
     },
     { method: 'post', path: '/flow/start', handler: handle(startFlow, ctx.log) },
+    {
+      method: 'get',
+      path: '/economy/status',
+      handler: handle(async (req) => economyStatus(gameDir(), { ...(await env()), receipts: Number(queryOf(req).get('receipts') ?? 5) }), ctx.log),
+    },
     {
       method: 'post',
       path: '/flow/prepare',

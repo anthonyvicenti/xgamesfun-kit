@@ -113,8 +113,8 @@ test('gamesfun economy check|simulate|cost|plan on a fixture, and on a game', as
     assert.match(refused.stdout, /E-ODDS/);
     assert.match(refused.stdout, /Fix:/);
     const later = await run(process.execPath, [CLI, 'economy', 'publish', dir]).catch((e) => e);
-    assert.equal(later.code, 2);
-    assert.match(later.stderr, /not built yet/);
+    assert.equal(later.code, 1, 'publish refuses what the checker refuses');
+    assert.match(later.stdout, /E-ODDS/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

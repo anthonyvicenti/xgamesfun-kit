@@ -126,10 +126,11 @@ describe('studio Token and Shop tabs on core’s dev server, in Chrome (fake cha
     await tab.getByTestId('approve').click();
     await tab.getByTestId('approval').waitFor({ state: 'detached', timeout: 30_000 });
     const c = await config();
-    assert.ok(c.shop.collection, 'the collection was recorded');
-    assert.deepEqual(c.shop.items.map((i) => i.listed), [true, true]);
-    assert.equal(c.shop.boxes[0].listed, true);
-    assert.equal(c.shop.currency.mint, c.token.mint, 'priced in the game’s own token by default');
+    // The shop goes live as part of the game's economy (decision 2, 2026-10-11).
+    assert.ok(c.economy.live.collection, 'the collection was recorded');
+    assert.deepEqual(c.economy.items.map((i) => Number.isInteger(i.id)), [true, true]);
+    assert.ok(c.economy.live.transactions.some((t) => t.parts.includes('box:mystery-box')), 'the box landed');
+    assert.equal(c.economy.tokens.find((t) => t.key === c.economy.currency).mint, c.token.mint, 'priced in the game’s own token by default');
     const kinds = signed.map((s) => s.kind);
     assert.equal(kinds.at(-1), 'transaction');
     assert.equal(kinds.filter((k) => k === 'transaction').length, chain.sent.length - 1, 'every shop transaction in one approval');

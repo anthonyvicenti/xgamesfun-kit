@@ -50,7 +50,7 @@ export function migrateShop(config) {
       ...(same ? { name: linked.name } : {}),
       symbol: String(cur.symbol).slice(0, 10),
       decimals: cur.decimals,
-      program: same ? linked.program : 'spl-token',
+      program: same ? linked.program : cur.program === 'token-2022' ? 'token-2022' : 'spl-token',
       ...(same && linked.source === 'launched' ? { venue: 'games.fun' } : {}),
     });
   }

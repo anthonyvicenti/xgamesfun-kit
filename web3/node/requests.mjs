@@ -1,4 +1,4 @@
-// Requests an agent (the CLI or an MCP tool) leaves for the creator: "launch this token", "put the shop on sale".
+// Requests an agent (the CLI or an MCP tool) leaves for the creator: "launch this token", "put the economy live".
 // Agents prepare; humans approve. A request is a small file of public inputs in the git-ignored
 // `<kit>/.gamesfun/web3/requests/`, which the studio's Token and Shop tabs show with Review and Dismiss. Nothing in a
 // request can sign or spend: approving runs the normal flow, where the creator sees every step in their wallet.
@@ -7,7 +7,7 @@ import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir } from './game.mjs';
 
-export const REQUEST_KINDS = Object.freeze(['launch', 'publish']);
+export const REQUEST_KINDS = Object.freeze(['launch', 'publish', 'economy']);
 const ID = /^[A-Za-z0-9_-]{16}$/;
 const TTL_MS = 24 * 60 * 60_000;
 const MAX_REQUESTS = 50;

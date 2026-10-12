@@ -1,6 +1,7 @@
 // A small fake of the Solana JSON-RPC and the Irys node, for offline tests of the creator flows. It checks every
 // signature on what it is sent (so a flow that sends a half-signed transaction fails here), and applies the effects
-// the flows rely on: the loot program 0.3's create_game / upsert_item / upsert_box, a shop purchase's order
+// the flows rely on: the loot program 0.3's create_game / open_pool / upsert_item / upsert_box / upsert_recipe /
+// upsert_schedule / upsert_lottery / open_stake, a shop purchase's order
 // (buy_item opens it rolled, settle and refund close it), Metaplex Core's collection, and a Meteora DBC pool with its
 // mint and metadata.
 import { createHash } from 'node:crypto';
@@ -52,6 +53,20 @@ export function fakeChain({ irysFree = true } = {}) {
     } else if (name === 'upsert_box') {
       const old = accounts.get(at('loot_box')) ? read(at('loot_box'), 'LootBox') : null;
       loot(at('loot_box'), 'LootBox', { ...args.args, game: at('game'), box_id: args.box_id, opened: 0n, version: old ? old.version + 1 : 0, bump: 255 });
+    } else if (name === 'open_pool') {
+      const data = new Uint8Array(165);
+      data.set(addressBytes(at('mint')), 0);
+      data.set(addressBytes(at('game')), 32);
+      put(at('pool'), TOKEN_PROGRAM, data);
+    } else if (name === 'upsert_recipe') {
+      loot(at('recipe'), 'Recipe', { ...args.args, game: at('game'), id: args.id, bump: 255, version: 0 });
+    } else if (name === 'upsert_schedule') {
+      loot(at('schedule'), 'Schedule', { ...args.args, game: at('game'), id: args.id, bump: 255, runs: 0 });
+    } else if (name === 'upsert_lottery') {
+      const places = [...args.args.places, ...Array(8 - args.args.places.length).fill(0)];
+      loot(at('lottery'), 'Lottery', { ...args.args, places, game: at('game'), id: args.id, bump: 255, round: 0, status: 'Open', sold: 0n, asked_slot: 0n, winner: NO_ADDRESS, first_ticket: 0n, paid: 0, pot_at_payout: 0n });
+    } else if (name === 'open_stake') {
+      loot(at('stake'), 'Stake', { game: at('game'), id: args.id, bump: 255, mint: at('mint'), rewards_pool: args.rewards_pool, rewards_mint: at('rewards_mint'), lock: args.lock, total: 0n, reward_per_token: 0n });
     } else if (name === 'buy_item') {
       const item = read(at('item'), 'Item');
       loot(at('item'), 'Item', { ...item, issued: item.issued + 1 });
@@ -156,6 +171,12 @@ export function fakeChain({ irysFree = true } = {}) {
           });
         return ok([...accounts.entries()].filter(([, a]) => a.owner === program && match(a.data)).map(([pubkey, a]) => ({ pubkey, account: rawAccount(a) })));
       }
+      case 'getMinimumBalanceForRentExemption':
+        return ok((params[0] + 128) * 5080);
+      case 'getSignaturesForAddress':
+        return ok(sent.slice(-(params[1]?.limit ?? 10)).reverse().map((signature) => ({ signature, slot, err: null, blockTime: 1_800_000_000 })));
+      case 'getTransaction':
+        return ok({ meta: { logMessages: [] } });
       case 'getBalance':
         return ok({ context: { slot }, value: 5_000_000_000 });
       case 'getTokenAccountBalance': {

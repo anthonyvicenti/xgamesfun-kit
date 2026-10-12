@@ -464,14 +464,28 @@
     "live": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Written when the economy goes live: public addresses only.",
+      "description": "Written when the economy goes live (web3/node/economy.mjs): public addresses and signatures only.",
       "properties": {
         "program": { "$ref": "#/$defs/address" },
         "game": { "$ref": "#/$defs/address" },
         "collection": { "$ref": "#/$defs/address" },
         "treasury": { "$ref": "#/$defs/address" },
         "authority": { "$ref": "#/$defs/address" },
-        "at": { "type": "string", "maxLength": 40 }
+        "at": { "type": "string", "maxLength": 40, "description": "When it went live. \"publish\" in the spec means this moment." },
+        "published": { "type": "object", "description": "The spec as it is on chain: each part as it was when it landed. A change publishes only what differs from it." },
+        "transactions": {
+          "type": "array",
+          "maxItems": 60,
+          "description": "The latest transactions that set it up, newest last.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "signature": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{64,90}$" },
+              "parts": { "type": "array", "items": { "type": "string", "maxLength": 80 } }
+            }
+          }
+        }
       }
     }
   }

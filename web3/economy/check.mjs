@@ -4,6 +4,7 @@
 // Most refusals are the program's own (launchpad/loot/programs/loot/src in games.fun, cited by file), caught here
 // so the creator hears about them in words before a wallet is ever asked. The rest are traps the program's own
 // notes name: a stake that empties a lottery's pot (stake.rs), a pool nothing fills, a recipe too big to send.
+import { isSignature } from '../gf-web3/chain/base58.js';
 import { secretLike } from '../gf-web3/rules.js';
 import {
   FEES,
@@ -44,7 +45,9 @@ export function findSecrets(value, path = 'economy') {
     if (value.length >= 32 && value.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) return [path];
     return value.flatMap((v, i) => findSecrets(v, `${path}[${i}]`));
   }
-  if (value && typeof value === 'object') return Object.entries(value).flatMap(([k, v]) => [...(secretLike(`${k}:`) ? [`${path}.${k}`] : []), ...findSecrets(v, `${path}.${k}`)]);
+  // A transaction's signature is as long as a key; gamesfun.json keeps signatures in fields named "signature" only.
+  if (value && typeof value === 'object')
+    return Object.entries(value).flatMap(([k, v]) => (k === 'signature' && isSignature(v) ? [] : [...(secretLike(`${k}:`) ? [`${path}.${k}`] : []), ...findSecrets(v, `${path}.${k}`)]));
   return [];
 }
 
