@@ -65,12 +65,14 @@ export function readQueue(raw, hide = new Set()) {
   return { requests, permissions, sessions: Array.isArray(q.sessions) ? q.sessions : [], loop: q.loop ?? null, transport: q.transport ?? null };
 }
 
+/** The one command that brings a session here: the terminal listener (the connect picture shows it in a box to copy). */
+export const LISTEN_COMMAND = 'node bin/gamesfun.mjs session wait';
 /** No session has reached the studio. The one step that gets one here, with or without the plugin. */
-export const NONE_HINT = 'In your agent (Claude Code or Codex), in the kit folder, have it run node bin/gamesfun.mjs session wait in the background (the one line does that for you). What you send here waits for it.';
+export const NONE_HINT = `Ask your agent (Claude Code or Codex) to run ${LISTEN_COMMAND} in the kit folder, in the background.`;
 /** connect has run here and the plugin is in (its record, GET /api/studio/setup): either way works, nothing to reload. */
-export const RELOAD_HINT = 'Ask your session to start node bin/gamesfun.mjs session wait in the background (in Claude Code, /reload-plugins also links it). What you send here waits for it.';
+export const RELOAD_HINT = `Ask your session to run ${LISTEN_COMMAND} in the background (in Claude Code, /reload-plugins also links it).`;
 export const IDLE_HINT = 'Type go in its terminal: it picks up what you sent.';
-export const LISTENER_IDLE_HINT = 'It is not listening right now. Type go in its terminal, or ask it to start node bin/gamesfun.mjs session wait in the background again. What you send here waits for it.';
+export const LISTENER_IDLE_HINT = 'It is not listening right now: type go in its terminal, or run the command again.';
 export const STALLED_HINT = 'It has your request but has not started on it. Type go in its terminal: it gets the request again.';
 export const NO_WAKE_HINT = 'Its agent may not wake by itself (Codex waits for its next turn): after you send, type go in it.';
 export const TOOLS_CLI_NOTE = 'It builds with the kit\'s terminal commands (the kit\'s tools are not loaded in it, which is fine).';
@@ -102,3 +104,23 @@ export function connection(queue) {
   return { ...base, state: 'working', hint: 'Requests are handed over when its turn ends.' };
 }
 export const modeNote = mode => `Your session's own permission mode (${mode}) answers before this page does; some actions will never ask here.`;
+
+/**
+ * The connect picture (the studio and the agent's terminal, a light between them, one line, the command to copy) for a
+ * connection(): { light: 'off'|'on'|'busy'|'warn', title, line, command (null when nothing needs running) }.
+ * setup is GET /api/studio/setup (connect has run here and the plugin is in: the line says /reload-plugins also works).
+ * waiting: the person has a request no session has collected yet (the title says nothing is being made).
+ */
+export function connectView(c, { setup = null, waiting = false } = {}) {
+  switch (c?.state) {
+    case 'listening': return { light: 'on', title: 'Your session is listening', line: c.hint === 'Requests reach it at once.' ? 'What you send reaches it at once.' : c.hint, command: null };
+    case 'working': return { light: 'busy', title: c.open ? 'Your session is working on your request' : 'Your session is working', line: c.hint, command: null };
+    case 'stalled': return { light: 'warn', title: 'Waiting for your session', line: c.hint, command: null };
+    case 'idle': return { light: 'warn', title: waiting ? 'Your request is waiting: your session is not listening' : 'Your session is not listening', line: c.hint, command: c.via && c.via !== 'plugin' ? LISTEN_COMMAND : null };
+    default: return {
+      light: 'off', title: waiting ? 'Nothing is being made yet: no session is listening' : 'No session is listening yet',
+      line: setup?.connected && setup.plugin ? 'Ask your session to run this in the background (or /reload-plugins in Claude Code):' : 'Ask your agent (Claude Code or Codex) to run this in the kit folder:',
+      command: LISTEN_COMMAND,
+    };
+  }
+}

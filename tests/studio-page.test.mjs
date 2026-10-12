@@ -6,7 +6,7 @@ import path from 'node:path';
 import { startDevServer } from '../server/index.mjs';
 import { tempGame } from './helpers.mjs';
 import { sessionDriver } from './stubs/session-driver.mjs';
-import { IDLE_HINT, LISTENER_IDLE_HINT, NONE_HINT, STALLED_HINT, TERMINAL_NOTE, connection, describeEvent, inputLine, modeNote, normalizeEvent, readQueue, requestWords } from '../studio/lib/session.js';
+import { IDLE_HINT, LISTEN_COMMAND, LISTENER_IDLE_HINT, NONE_HINT, connectView, STALLED_HINT, TERMINAL_NOTE, connection, describeEvent, inputLine, modeNote, normalizeEvent, readQueue, requestWords } from '../studio/lib/session.js';
 import { loopView, playtestNotes } from '../studio/lib/loop-state.js';
 import { pendingChanges, sliderRange, tunables } from '../studio/lib/tune.js';
 
@@ -80,6 +80,24 @@ test('connection: what the contract says for each session state', () => {
   assert.equal(m.mode, 'acceptEdits');
   assert.match(modeNote(m.mode), /acceptEdits\) answers before this page does/);
   assert.equal(connection(readQueue(s({ guard: { status: 'waiting-on-question', why: 'x' } }))).guard.why, 'x');
+});
+
+test('the connect picture: a light, one line and the command to copy, for each state', () => {
+  const none = connectView(connection(readQueue(null)));
+  assert.deepEqual([none.light, none.title, none.command], ['off', 'No session is listening yet', LISTEN_COMMAND]);
+  assert.ok(none.line.length < 90 && !none.line.includes(LISTEN_COMMAND), 'one line; the command is in its own box');
+  assert.match(connectView(connection(readQueue(null)), { waiting: true }).title, /Nothing is being made yet: no session is listening/);
+  assert.match(connectView(connection(readQueue(null)), { setup: { connected: true, plugin: true } }).line, /reload-plugins/);
+  assert.doesNotMatch(none.line, /reload-plugins/);
+  const s = o => readQueue({ sessions: [{ id: 'a', state: 'working', connected: false, primary: true, ...o }] });
+  const on = connectView(connection(s({ state: 'idle', connected: true })));
+  assert.deepEqual([on.light, on.command], ['on', null], 'listening: green, nothing to run');
+  assert.equal(connectView(connection(s({}))).light, 'busy');
+  const idle = connectView(connection(s({ state: 'idle' })));
+  assert.deepEqual([idle.light, idle.command], ['warn', null], 'a plugin session: type go, nothing to run');
+  assert.equal(connectView(connection(s({ channel: 'terminal' }))).command, LISTEN_COMMAND, 'a terminal listener that closed: run it again');
+  assert.match(NONE_HINT, new RegExp(LISTEN_COMMAND));
+  assert.ok(NONE_HINT.length < 120, 'the hint is one short sentence');
 });
 
 const draft = {
