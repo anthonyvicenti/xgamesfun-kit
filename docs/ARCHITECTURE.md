@@ -83,7 +83,7 @@ kind `'ok'` or `'error'`. `mount` may return a cleanup function. Tabs are listed
 when first opened. The page is the conversation on the left (`studio/chat.js`: the person's requests, their session's
 steps, the build loop's concepts, stages and verdicts, permission questions, one box to ask) and the product on the right:
 the game preview with the tabs as tools in a bar over it, the open one in an inspector beside it. The tools are grouped
-(Edit, Test, Launch), each group in `order`; an optional `group` (a word) puts a tab under that heading, and a tab
+(Build, Test, Share; the older names Edit and Launch land in Build and Share), each group in `order`; an optional `group` (a word) puts a tab under that heading, and a tab
 without one goes under More. With no game open (`gamesfun dev` with no folder) the page is the start page
 (`studio/start.js`): describe a game (the idea goes to the session and starts the build loop on a fresh `games/<name>`),
 open one of yours, or start from an example. The dev server's open game can change while it runs: routes read
@@ -98,7 +98,7 @@ shell is not edited.
 export default {
   id: 'publish',                 // the tab's id: #publish links open it, tests click #tabs [data-id="publish"]
   label: 'Publish',              // its name in the tool bar and the inspector's title
-  group: 'Launch',               // Edit | Test | Launch (a new word makes a new group, shown after these; none: More)
+  group: 'Share',                // Build | Test | Share (a new word makes a new group, shown after these; none: More)
   order: 90,                     // its place inside the group
   action: { label: 'Publish' },  // optional: also a primary button beside the preview's bar, for the flow's last step
   icon: '<path d="M12 3v12M7 8l5-5 5 5M5 21h14"/>',   // optional: its icon, SVG shapes on a 24 x 24 grid, stroked
