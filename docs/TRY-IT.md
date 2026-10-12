@@ -173,24 +173,24 @@ Every picture, model, colour and number in a game is a "slot". You can swap one 
 **Do:**
 
 1. Have a picture of your own ready. A PNG file is best. Any picture works: it is laid over the lawn like a tile.
-2. In the studio page, click the tab **Slots & assets**.
+2. In the studio page, click the tool **Art & sound** (under Build, in the bar over the game).
 
-   ![Slots & assets: every colour, number, picture and model of the game](try-it/02-slots.jpg)
+   ![Art & sound: every picture, model, sound, word and colour of the game](try-it/02-slots.jpg)
 
-3. Tick the box **every slot (advanced too)**. Scroll down to the line "Ground pattern".
-4. Click **Replace…** on that line and choose your picture.
+3. Turn on the switch **Show every slot**. Scroll down to the picture "Ground pattern".
+4. Click **Replace** on that picture and choose your file (or drop the file on the picture).
 
 **You should see:** the game on the left reloads by itself, and the lawn shows your picture. No code changed.
 
 Before and after, with a picture of orange dots:
 
-![Before: the kit's own ground pattern, and the Ground pattern line with its Replace button](try-it/03-picture-before.jpg)
+![Before: the kit's own ground pattern, and the Ground pattern picture with its Replace button](try-it/03-picture-before.jpg)
 
 ![After: the same lawn with the new picture](try-it/04-picture-after.jpg)
 
 Then try two more:
 
-- Change a colour or a number in the same tab, for example "How many buckets". The game reloads and shows it.
+- Change a colour in the same tool, or a number in **Settings**, for example "How many buckets". The game reloads and shows it.
 - Ask your agent to do one for you, in your own words, with your own file's place:
 
   ```text
@@ -236,7 +236,7 @@ which of the two showed the question, and what happened when you clicked.
 
 **Do:**
 
-1. In the studio page, click the tab **Play with a friend**.
+1. In the studio page, click the tool **Play with friends** (under Test).
 2. Click **1. Host a room in the preview**. In the game on the left, type a name (or keep the one it offers) and click
    **Host a game**.
 3. Click **2. Open a second tab as your friend**. In the new tab, type another name and click **Join**.
@@ -286,7 +286,7 @@ says the same in its `online` line. Thing 5 (a second tab) works as before eithe
 2. Your friend needs the same game on their computer: the kit, and a copy of your game's folder in its `games` folder.
    They start it the same way (`node bin/gamesfun.mjs dev games/<your-game>`). A link that starts with
    `http://127.0.0.1` only works on the computer that made it, so do not send them yours.
-3. You open **Play with a friend** and host a room, as in thing 5. You get a six-letter room code.
+3. You open **Play with friends** and host a room, as in thing 5. You get a six-letter room code.
 4. Your friend opens the friends page of their own copy, chooses to join, and types your code. Both of you are then in
    the same round, each seeing the other as a character.
 

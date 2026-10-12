@@ -61,7 +61,7 @@ Meshy output is recorded as CC BY 4.0 crediting Meshy until the person confirms 
 
 ## Prove it shows
 
-`npx gamesfun dev games/<name>` reloads the game as files change; the studio's "Slots & assets" tab does the same
+`npx gamesfun dev games/<name>` reloads the game as files change; the studio's "Art & sound" tool does the same
 swaps with a click and a "Show" button for each model. Then `npx gamesfun verify games/<name> --quick`: check 4
 (every visible mesh is a slot) and check 8 (a swapped body and prop are on screen) must pass.
 
