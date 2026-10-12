@@ -15,7 +15,7 @@
 import { readFile } from 'node:fs/promises';
 import { addressBytes, encodeBase58 } from '../gf-web3/chain/base58.js';
 import { readTransaction, wireTransaction, compileMessage, signersOf } from '../gf-web3/chain/tx.js';
-import { currentFees, decodeLoot, decodePosition, LOOT_PROGRAM, LootAccount, lootPda } from '../gf-web3/chain/loot.js';
+import { currentFees, decodeLoot, decodePosition, LOOT_PROGRAM, LootAccount, lootPda, VRF_QUEUE } from '../gf-web3/chain/loot.js';
 import { NATIVE_MINT } from '../gf-web3/chain/pda.js';
 import { transferLamports } from '../gf-web3/chain/programs.js';
 import { pendingRewards, readTokenAccount, winnerCount } from '../gf-web3/econ/chain.js';
@@ -67,14 +67,21 @@ async function sendAs(rpc, signer, instructions) {
   return signature;
 }
 
-/** What one landed transaction cost its fee payer in network fees. */
-async function networkFee(rpc, signature) {
+/**
+ * What one landed transaction cost its fee payer outside the economy: the network fee, and what MagicBlock's oracle
+ * queue took for a roll (0.0005 SOL a request on devnet, 2026-10-11; the kit's cost model does not count it yet).
+ */
+async function txCosts(rpc, signature) {
   for (let i = 0; i < 5; i++) {
     const t = await rpc.call('getTransaction', [signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 }]).catch(() => null);
-    if (t?.meta) return BigInt(t.meta.fee ?? 0);
+    if (t?.meta) {
+      const keys = (t.transaction?.message?.accountKeys ?? []).map((k) => (typeof k === 'string' ? k : k.pubkey));
+      const q = keys.indexOf(VRF_QUEUE);
+      return { fee: BigInt(t.meta.fee ?? 0), oracle: q >= 0 ? BigInt(t.meta.postBalances[q] - t.meta.preBalances[q]) : 0n };
+    }
     await new Promise((r) => setTimeout(r, 800));
   }
-  return 5000n;
+  return { fee: 5000n, oracle: 0n, guessed: true };
 }
 
 /**
@@ -181,7 +188,12 @@ async function checkedOpen({ rpc, kit, e, box, player, platformFee }) {
   const afterPools = await tokens();
   const afterLamports = await rpc.balance(player.address);
   let fees = 0n;
-  for (const s of r.signatures ?? []) fees += await networkFee(rpc, s);
+  let oracle = 0n;
+  for (const s of r.signatures ?? []) {
+    const c = await txCosts(rpc, s);
+    fees += c.fee;
+    oracle += c.oracle;
+  }
   const onChain = decodeLoot(LootAccount.Box, (await rpc.accounts([lootPda.box(e.game, box.id)]))[0].data);
   const price = big(onChain.price);
   const prize = r.outcome?.kind === 'prize' ? big(r.outcome.units) : 0n;
@@ -193,11 +205,11 @@ async function checkedOpen({ rpc, kit, e, box, player, platformFee }) {
     const moved = afterPools[p.key] - beforePools[p.key];
     pools[p.key] = { before: beforePools[p.key], after: afterPools[p.key], moved, expected, ok: moved === expected };
   }
-  const expectedPlayer = isSol ? -price - platformFee - fees + prize : -platformFee - fees;
+  const expectedPlayer = (isSol ? -price + prize : 0n) - platformFee - fees - oracle;
   const movedPlayer = afterLamports - beforeLamports;
   return {
     outcome: r.outcome?.says ?? r.says, won: prize > 0n || r.outcome?.kind === 'item', price, prize, prizePool, signatures: r.signatures,
-    player: { before: beforeLamports, after: afterLamports, moved: movedPlayer, expected: expectedPlayer, networkFees: fees, unexplained: movedPlayer - expectedPlayer, ok: movedPlayer === expectedPlayer },
+    player: { before: beforeLamports, after: afterLamports, moved: movedPlayer, expected: expectedPlayer, networkFees: fees, oracleFee: oracle, unexplained: movedPlayer - expectedPlayer, ok: movedPlayer === expectedPlayer },
     pools, ok: movedPlayer === expectedPlayer && Object.values(pools).every((p) => p.ok),
   };
 }
@@ -259,7 +271,7 @@ export async function devnetCheck({ config, funder, rpc, rpcUrl, tries = 4, budg
       for (let i = 1; i <= tries; i++) {
         const r = await step(`${box.name}: open ${i} of at most ${tries} (pay, roll, claim), checked against the pools and the player`, async () => {
           const c = await checkedOpen({ rpc, kit, e, box, player, platformFee });
-          return { ...c, says: `${c.outcome} Player ${sol(c.player.moved)}; ${Object.entries(c.pools).map(([k, p]) => `${k} ${p.moved >= 0n ? '+' : ''}${sol(p.moved)}${p.ok ? '' : ` (expected ${sol(p.expected)})`}`).join(', ')}`, explorer: (c.signatures ?? []).map(tx) };
+          return { ...c, says: `${c.outcome} Player ${sol(c.player.moved)} (oracle ${sol(c.player.oracleFee)}, network ${sol(c.player.networkFees)}${c.player.ok ? '' : `, ${sol(c.player.unexplained)} unexplained`}); ${Object.entries(c.pools).map(([k, p]) => `${k} ${p.moved >= 0n ? '+' : ''}${sol(p.moved)}${p.ok ? '' : ` (expected ${sol(p.expected)})`}`).join(', ')}`, explorer: (c.signatures ?? []).map(tx) };
         });
         if (!r || r.won) break;
       }
@@ -285,7 +297,7 @@ export async function devnetCheck({ config, funder, rpc, rpcUrl, tries = 4, budg
   } finally {
     await finish();
   }
-  return record;
+  return json(record);
 
   async function finish() {
     if (record.finishedAt) return record;

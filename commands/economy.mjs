@@ -17,6 +17,7 @@ import { queueRequest } from '../web3/node/requests.mjs';
 import { chainContext } from '../web3/node/settings.mjs';
 import { devnetCheck, readKeyFile } from '../web3/node/economy-check.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 
 const usage = `Usage: gamesfun economy <action> [game-dir] [--spec <file>] [--json]      (devnet only)
 
@@ -120,7 +121,8 @@ async function status(target, values) {
 
 /** `check --devnet`: the live economy end to end on devnet, paid for by the key file the creator names. */
 async function checkDevnet(target, values) {
-  const dir = await resolveGame(target);
+  // any folder with a live gamesfun.json will do (a stand-in page too); else the game the usual way
+  const dir = target && existsSync(path.join(path.resolve(target), 'gamesfun.json')) ? path.resolve(target) : await resolveGame(target);
   const file = values.key ?? process.env.GAMESFUN_DEVNET_KEY;
   if (!file) throw new UsageError(`Name the devnet key file that pays for the run: --key <file> or GAMESFUN_DEVNET_KEY=<file>. It is read, never printed or stored.\n\n${usage}`);
   const config = JSON.parse(await readFile(path.join(dir, 'gamesfun.json'), 'utf8'));

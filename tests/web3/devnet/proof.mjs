@@ -1,234 +1,209 @@
-// The web3 devnet proof, without a human wallet. Core's real dev server (startDevServer) serves a real gf-three game
-// (created from the Soak Squad example, with gf-web3 installed) and the studio. Chrome (playwright-core) gets a Wallet
-// Standard wallet injected into the page, backed by a throwaway devnet key kept in the git-ignored .gamesfun/devnet/.
-// The creator's steps are clicks in the real Token and Shop tabs; the player's go through the game's own gf-web3:
-//   Irys uploads → token launch (no initial buy) → collection + loot game + items + box in one approval →
-//   a player buys an item → the player opens the box (MagicBlock VRF roll, then settle) → owned items → loadout.
-// The loot program 0.3 alone, without Chrome or the faucet (test keys from files): tests/web3/devnet/loot-0.3.mjs.
-// It funds the keys from the public devnet faucet only. When the faucet refuses, it says so, runs what needs no SOL
-// (Irys uploads are free under 100 KB) and stops; the offline tests cover the rest.
-//   node tests/web3/devnet/proof.mjs
-import { existsSync } from 'node:fs';
-import { generateKeyPairSync } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+// The in-browser devnet proof of a game's economy, end to end, without a human wallet. Core's real dev server serves
+// the studio and the game; Chrome (playwright-core) gets a Wallet Standard wallet injected into each page, backed by
+// a launchpad test key that stays in Node (tests/web3/inject-wallet.mjs). It replaced the Token-and-Shop-tab proof
+// when the Economy tab replaced those tabs (git history keeps the old one and its result.json).
+//
+//   1. The creator (test-creator's key stands in for the creator's approval) opens the studio's Economy tab and puts
+//      the coin-flip arena live through the real economy flow; the tab reads the status back.
+//   2. A player (test-buyer-1) opens the game in its own tab, hosted by studio/play.html: the host bridge offers the
+//      game the economy's buttons and lines (gf:host → economy, gf:economy). The player clicks Flip in the game's own
+//      menu, the bridge signs through gf-web3, and the HUD line shows what the flip came to; anything claimable is
+//      claimed from the results card.
+//   3. `gamesfun economy check --devnet` runs on the live game, paid for by test-buyer-2's key file.
+//
+// The game: until the kit's kits/ carries gf-three's side of the protocol (kit/net/host.js with gf:econ-action), it is
+// the stand-in game page of tests/web3/stand-in/ (the same protocol, drawn plainly). Seeds in SOL go in at 1/100 (the
+// house's 5 SOL as 0.05), and the arena's own token is the ARENA the K1 devnet run launched on the curve
+// (economies-result.json), so this run launches nothing.
+//
+// Devnet only (genesis checked). Keys are read from the launchpad's key folder (LAUNCHPAD_KEY_DIR, default
+// ~/.config/gamesfun-launchpad/devnet), never printed or copied.
+//   node tests/web3/devnet/proof.mjs [--fresh] [--flips 2]
+// The record goes to tests/web3/devnet/proof-economy-result.json; screenshots to .gamesfun/devnet/host-proof/shots/.
+import { execFile } from 'node:child_process';
+import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { chromium } from 'playwright-core';
 import { findChrome } from '../../../lib/chrome.mjs';
-import { createGame } from '../../../lib/create.mjs';
 import { startDevServer } from '../../../server/index.mjs';
-import { transferLamports } from '../../../web3/gf-web3/chain/programs.js';
-import { compileMessage, wireTransaction, withSignature } from '../../../web3/gf-web3/chain/tx.js';
 import { explorerUrl, networkConfig } from '../../../web3/gf-web3/network.js';
 import { rpcClient } from '../../../web3/gf-web3/rpc.js';
-import { keypairFromSecret } from '../../../web3/node/ed25519.mjs';
-import { installGfWeb3 } from '../../../web3/node/install.mjs';
+import { DEVNET_GENESIS, readKeyFile } from '../../../web3/node/economy-check.mjs';
 import { injectWallet } from '../inject-wallet.mjs';
-import { png } from '../helpers.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const kitRoot = path.resolve(here, '..', '..', '..');
-const keyDir = path.join(kitRoot, '.gamesfun', 'devnet');
+const work = path.join(kitRoot, '.gamesfun', 'devnet', 'host-proof');
+const gameDir = path.join(work, 'coin-flip');
+const shots = path.join(work, 'shots');
+const keyDir = process.env.LAUNCHPAD_KEY_DIR ?? path.join(homedir(), '.config', 'gamesfun-launchpad', 'devnet');
+const keyFile = (role) => path.join(keyDir, `${role}.keypair.json`);
+const ARENA = 'BHGDrgbNtaVPS2VP4fDffK27gG6Z5VDX5kMQqSmcPugU';
+const args = process.argv.slice(2);
+const flips = Number(args[args.indexOf('--flips') + 1] || 2) || 2;
 const network = networkConfig('devnet');
-const rpc = rpcClient(network.rpcUrl);
-const result = { network: 'devnet', startedAt: new Date().toISOString(), steps: [], blocked: null };
-const step = (name, data) => {
-  result.steps.push({ name, at: new Date().toISOString(), ...data });
-  console.log(`✓ ${name}`, JSON.stringify(data));
-};
+const rpc = rpcClient(process.env.GF_DEVNET_RPC ?? network.rpcUrl);
+const result = { network: 'devnet', program: network.loot.program, startedAt: new Date().toISOString(), game: 'stand-in (tests/web3/stand-in/)', steps: [], screenshots: [] };
+const sol = (l) => Number(l) / 1e9;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function key(name) {
-  const file = path.join(keyDir, `${name}.keypair.json`);
-  try {
-    return keypairFromSecret(Uint8Array.from(JSON.parse(await readFile(file, 'utf8'))));
-  } catch {
-    const jwk = generateKeyPairSync('ed25519').privateKey.export({ format: 'jwk' });
-    const secret = [...Buffer.from(jwk.d, 'base64url'), ...Buffer.from(jwk.x, 'base64url')];
-    await mkdir(keyDir, { recursive: true });
-    await writeFile(file, JSON.stringify(secret), { mode: 0o600 });
-    return keypairFromSecret(Uint8Array.from(secret));
+function step(name, data = {}) {
+  result.steps.push({ name, at: new Date().toISOString(), ok: data.ok !== false, ...data });
+  console.log(`${data.ok === false ? '✗' : '✓'} ${name}${data.says ? `: ${data.says}` : ''}`);
+}
+async function shot(page, name, opts = {}) {
+  const file = path.join(shots, `${name}.png`);
+  await page.screenshot({ path: file, ...opts });
+  result.screenshots.push(path.relative(kitRoot, file));
+  return file;
+}
+async function until(fn, ms, what) {
+  const end = Date.now() + ms;
+  for (;;) {
+    const v = await fn().catch(() => null);
+    if (v) return v;
+    if (Date.now() > end) throw new Error(`timed out after ${ms / 1000} s waiting for ${what}`);
+    await sleep(500);
   }
 }
 
-/** The public faucet only. → { ok, signature } or { ok: false, message } */
-async function airdrop(address, lamports) {
-  try {
-    const signature = await rpc.call('requestAirdrop', [address, lamports]);
-    await rpc.confirm(signature, { timeoutMs: 60_000 });
-    return { ok: true, signature };
-  } catch (error) {
-    return { ok: false, message: error.message };
-  }
-}
-
-async function fund(creator) {
-  const balance = await rpc.balance(creator.address);
-  if (balance >= 1_500_000_000n) return { balance };
-  const tries = [];
-  for (const lamports of [2_000_000_000, 1_000_000_000]) {
-    const r = await airdrop(creator.address, lamports);
-    tries.push({ lamports, ...r });
-    if (r.ok) return { balance: await rpc.balance(creator.address), airdrops: tries };
-  }
-  const now = await rpc.balance(creator.address);
-  return now >= 600_000_000n ? { balance: now, airdrops: tries } : { blocked: tries.map((t) => t.message).join(' | '), balance: now, airdrops: tries };
-}
-
-/** A transfer between the proof's own throwaway keys, signed here. */
-async function transfer(from, to, lamports) {
-  const { blockhash, lastValidBlockHeight } = await rpc.latestBlockhash();
-  const message = compileMessage({ payer: from.address, blockhash, instructions: [transferLamports(from.address, to, lamports)] });
-  const signature = await rpc.send(withSignature(wireTransaction(message), from.address, from.sign(message)));
-  await rpc.confirm(signature, { lastValidBlockHeight });
-  return signature;
-}
-
-const uploadsIn = (texts) => texts.flatMap((t) => [...t.matchAll(/devnet\.irys\.xyz\/([1-9A-HJ-NP-Za-km-z]{40,50})/g)].map((m) => m[1]));
-
-/** A real gf-three game (Soak Squad) with gf-web3 installed, a fresh gamesfun.json and small item pictures. */
-async function proofGame() {
-  const dir = path.join(keyDir, 'proof-game');
-  if (!existsSync(path.join(dir, 'gf-three.json'))) await createGame(dir, { from: 'soak-squad' });
-  await installGfWeb3(dir);
-  await writeFile(path.join(dir, 'gamesfun.json'), `${JSON.stringify({ version: 1, network: 'devnet' }, null, 2)}\n`);
-  await mkdir(path.join(dir, 'assets', 'web3'), { recursive: true });
-  await writeFile(path.join(dir, 'assets', 'web3', 'icon.png'), png(240, 180, 20, 16, 16));
-  await writeFile(path.join(dir, 'assets', 'web3', 'hat.png'), png(250, 210, 0, 16, 16));
-  await writeFile(path.join(dir, 'assets', 'web3', 'skin.png'), png(40, 180, 250, 16, 16));
-  return dir;
-}
-
-async function waitForApproval(tab, timeout) {
-  const outcome = await Promise.race([
-    tab.getByTestId('approval').waitFor({ state: 'detached', timeout }).then(() => 'done'),
-    tab.getByTestId('approval-done').waitFor({ timeout }).then(() => 'done'),
-    tab.locator('[data-testid="approval"] .note.error').waitFor({ timeout }).then(() => 'error'),
-  ]);
-  const texts = await tab.locator('[data-testid="approval"] .results li').allInnerTexts().catch(() => []);
-  const error = outcome === 'error' ? await tab.locator('[data-testid="approval"] .note.error').innerText() : null;
-  return { ok: outcome === 'done', texts, error };
+/** The coin-flip arena as this run puts it live: seeds in SOL at 1/100, ARENA the token already on the curve. */
+async function economy() {
+  const e = JSON.parse(await readFile(path.join(kitRoot, 'web3', 'economy', 'fixtures', 'coin-flip-arena.json'), 'utf8'));
+  for (const p of e.pools) if (p.seed) p.seed = Number((p.seed / 100).toFixed(9));
+  e.tokens = e.tokens.map((t) => (t.key === 'arena' ? { key: 'arena', source: 'existing', mint: ARENA, name: 'Arena', symbol: 'ARENA', decimals: 6 } : t));
+  return e;
 }
 
 async function main() {
-  const creator = await key('creator');
-  const player = await key('player');
-  Object.assign(result, { creator: creator.address, player: player.address });
-  const gameDir = await proofGame();
-  const config = async () => JSON.parse(await readFile(path.join(gameDir, 'gamesfun.json'), 'utf8'));
+  if ((await rpc.call('getGenesisHash')) !== DEVNET_GENESIS) throw new Error('The RPC is not devnet.');
+  const creator = await readKeyFile(keyFile('test-creator'));
+  const player = await readKeyFile(keyFile('test-buyer-1'));
+  const funder = await readKeyFile(keyFile('test-buyer-2'));
+  const start = { creator: await rpc.balance(creator.address), player: await rpc.balance(player.address), funder: await rpc.balance(funder.address) };
+  Object.assign(result, { creator: creator.address, player: player.address, funder: funder.address });
+  step('keys on devnet', { lamports: start, ok: start.creator > 300_000_000n && start.player > 250_000_000n && start.funder > 400_000_000n });
+  if (result.steps.at(-1).ok === false) throw new Error('A key runs low: stopping before anything is spent.');
 
-  const funding = await fund(creator);
-  step('fund the creator from the public devnet faucet', { creator: creator.address, ...funding, balance: String(funding.balance) });
-  if (funding.blocked) result.blocked = { faucet: funding.blocked };
+  await mkdir(shots, { recursive: true });
+  await mkdir(gameDir, { recursive: true });
+  await copyFile(path.join(kitRoot, 'tests', 'web3', 'stand-in', 'index.html'), path.join(gameDir, 'index.html'));
+  let config = null;
+  try {
+    config = JSON.parse(await readFile(path.join(gameDir, 'gamesfun.json'), 'utf8'));
+  } catch {}
+  if (!config || args.includes('--fresh')) {
+    config = { version: 1, network: 'devnet', economy: await economy() };
+    await writeFile(path.join(gameDir, 'gamesfun.json'), `${JSON.stringify(config, null, 2)}\n`);
+  }
 
+  process.env.GAMESFUN_WEB3 = '1';
   const server = await startDevServer({ gameDir, port: 0, log: () => {}, watch: false });
   const chrome = findChrome();
   const browser = await chromium.launch({ headless: true, ...(chrome ? { executablePath: chrome.path } : {}) });
   try {
+    // ---- 1. the creator puts it live from the Economy tab
+    if (!config.economy.live?.game) {
+      const signed = [];
+      const studio = await browser.newPage({ viewport: { width: 1400, height: 950 } });
+      studio.on('pageerror', (e) => console.error('studio page error:', e.message));
+      await injectWallet(studio, creator, { log: signed, name: 'Creator Test Wallet' });
+      await studio.goto(`${server.url}studio/?gamesfun_mock=0#economy`);
+      const tab = studio.locator('.panel:not([hidden]) [data-testid="tab-economy"]');
+      const go = tab.getByTestId('econ-go-live');
+      await until(async () => !(await go.isDisabled()), 60_000, '"Put it live"');
+      await go.click();
+      await tab.getByTestId('approve').click();
+      await until(async () => (await tab.getByTestId('econ-status').count()) > 0 || /error|failed/i.test(await tab.locator('[data-testid="approval"]').innerText().catch(() => '')), 240_000, 'the economy to go live');
+      config = JSON.parse(await readFile(path.join(gameDir, 'gamesfun.json'), 'utf8'));
+      const live = config.economy.live ?? {};
+      const status = await studio.evaluate(async () => (await fetch('/api/web3/economy/status', { cache: 'no-store' })).json());
+      await shot(studio, '1-economy-tab-live', { fullPage: true });
+      step('the Economy tab put the coin-flip arena live through the real flow (test-creator approving)', {
+        ok: Boolean(live.game) && status.live && status.parts.every((p) => p.onChain && !p.differs),
+        game: live.game, collection: live.collection, approvals: signed.map((s) => s.kind), transactions: live.transactions, explorer: explorerUrl(network, 'address', live.game ?? ''),
+        status: { live: status.live, parts: status.parts.map((p) => `${p.part}:${p.key} ${p.onChain ? (p.differs ? 'differs' : 'on chain') : 'missing'}`), pools: status.pools },
+        creatorSpent: sol(start.creator - (await rpc.balance(creator.address))),
+      });
+      await studio.close();
+      if (!live.game) throw new Error('The economy did not go live.');
+    } else step('the economy is already live from an earlier run (pass --fresh for a new one)', { game: config.economy.live.game, explorer: explorerUrl(network, 'address', config.economy.live.game) });
+
+    // ---- 2. a player plays it, hosted by studio/play.html
+    const ctx = await browser.newContext({ viewport: { width: 1100, height: 800 } });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => console.error('play page error:', e.message));
+    const logs = [];
+    page.on('console', (m) => /host bridge/.test(m.text()) && logs.push(m.text()));
     const signed = [];
-    const studio = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-    studio.on('pageerror', (e) => console.error('studio pageerror', e.message));
-    await injectWallet(studio, creator, { name: 'Proof Wallet', log: signed });
-    await studio.goto(`${server.url}studio/`);
-    const tab = studio.locator('.panel:not([hidden])');
+    await injectWallet(page, player, { log: signed, name: 'Player Test Wallet' });
+    await page.goto(`${server.url}studio/play.html?gamesfun_mock=0`);
+    const game = page.frameLocator('#game');
+    const g = () => page.frame({ url: /\/game\/$/ });
+    await game.locator('[data-where="menu"] [data-econ="box:flip:open"]').waitFor({ timeout: 60_000 });
+    const offered = await g().evaluate(() => window.__seen.host.economy.actions.map((a) => `${a.where} ${a.id}: ${a.label}${a.price ? ` · ${a.price.amount} ${a.price.currency}` : ''}`));
+    await shot(page, '2-game-menu-economy-buttons');
+    step('the game is offered the economy’s buttons by its host page', { offered });
 
-    // ---- Token tab: launch with no initial buy (two Irys uploads, one transaction)
-    await studio.getByRole('tab', { name: 'Token' }).click();
-    await tab.getByTestId('token-launch').click();
-    await tab.getByTestId('token-picture').click();
-    await studio.locator('.pickgrid button', { hasText: 'icon.png' }).click();
-    await tab.getByTestId('token-name').fill('Proof Brawl');
-    await tab.getByTestId('token-symbol').fill('PROOF');
-    await tab.getByTestId('token-launch-go').click();
-    await tab.getByTestId('approve').click();
-    const launch = await waitForApproval(tab, 180_000);
-    step('Irys uploads from the Token tab (signed by the wallet with signMessage, free under 100 KB)', { uploads: uploadsIn(launch.texts), prompts: signed.map((s) => s.kind) });
-    await studio.screenshot({ path: path.join(keyDir, 'proof-token.png'), fullPage: true });
-    if (!launch.ok) {
-      step('token launch transaction', { ok: false, error: launch.error });
-      if (result.blocked) return;
-      throw new Error(`launch failed: ${launch.error}`);
+    await sleep(4000);     // the bridge's first read of the state (and of any order left unclaimed)
+    const before = await rpc.balance(player.address);
+    for (let i = 1; i <= flips; i++) {
+      const lineBefore = await game.locator('[data-econ="hud:box:flip"] b').innerText().catch(() => '');
+      const done = logs.filter((t) => t.includes('box:flip:open:')).length;
+      const balanceBefore = await game.locator('[data-econ="hud:balance:sol"] b').innerText().catch(() => '');
+      await game.locator('[data-econ="box:flip:open"]').click();
+      await until(async () => logs.filter((t) => t.includes('box:flip:open:')).length > done, 300_000, `flip ${i} to finish`);
+      await until(async () => (await game.locator('[data-econ="hud:balance:sol"] b').innerText()) !== balanceBefore, 30_000, 'the balance line to follow').catch(() => {});
+      const s = await g().evaluate(() => window.__seen.economy);
+      const line = await game.locator('[data-econ="hud:box:flip"] b').innerText().catch(() => '');
+      const balance = await game.locator('[data-econ="hud:balance:sol"] b').innerText().catch(() => '');
+      await shot(page, `3-after-flip-${i}`);
+      step(`flip ${i}: clicked Flip in the game’s menu; the host page signed (test-buyer-1) and the HUD line followed`, {
+        ok: !s.error && Boolean(line), hudBefore: lineBefore, balanceBefore, hud: line, balanceLine: balance, error: s.error || undefined, bridge: logs.slice(-1)[0],
+      });
+      if (/won/i.test(line)) break;
     }
-    const token = (await config()).token;
-    step('token launched (Meteora DBC antisnipe-v1, MAIN-dev quote, no initial buy)', { mint: token.mint, pool: token.pool, signature: token.signature, metadataUri: token.metadataUri, explorer: explorerUrl(network, 'tx', token.signature) });
-
-    // ---- Shop tab: SOL currency, two items, one box, one approval for the transactions
-    signed.length = 0;
-    await studio.getByRole('tab', { name: 'Shop' }).click();
-    await tab.getByRole('radio', { name: 'SOL' }).click();
-    await tab.getByText('Your shop is priced in SOL.').waitFor();
-    for (const [name, picture, price] of [['Golden Hat', 'hat.png', '0.01'], ['Ice Skin', 'skin.png', '']]) {
-      await tab.getByTestId('shop-add-item').click();
-      await studio.getByTestId('item-picture').click();
-      await studio.locator('.pickgrid button', { hasText: picture }).click();
-      await studio.getByTestId('item-name').fill(name);
-      await studio.getByTestId('item-price').fill(price);
-      if (name === 'Golden Hat') await studio.getByTestId('look-character.tint.player').check();
-      await studio.getByTestId('item-save').click();
-      await tab.getByText(name, { exact: true }).waitFor();
-    }
-    await tab.getByTestId('shop-add-box').click();
-    await studio.getByTestId('box-price').fill('0.005');
-    await studio.getByTestId('box-save').click();
-    await tab.getByTestId('shop-box').waitFor();
-    await tab.getByTestId('shop-publish-go').click();
-    await tab.getByTestId('approve').click();
-    const publish = await waitForApproval(tab, 300_000);
-    const shop = (await config()).shop;
-    step('shop on sale: uploads, then collection + loot game + 2 items + 1 box in one wallet approval', {
-      ok: publish.ok,
-      error: publish.error,
-      prompts: signed.map((s) => s.kind),
-      collection: shop.collection ?? null,
-      game: shop.game ?? null,
-      items: shop.items.map((i) => ({ id: i.id, name: i.name, uri: i.uri ?? null, listed: i.listed })),
-      boxes: shop.boxes.map((b) => ({ id: b.id, listed: b.listed })),
-      results: publish.texts,
-    });
-    await studio.screenshot({ path: path.join(keyDir, 'proof-shop.png'), fullPage: true });
-    if (!publish.ok) throw new Error(`publish failed: ${publish.error}`);
-    const state = await (await fetch(`${server.url}api/web3/state`)).json();
-    step('chain status after publish', { shopLive: state.chain.shop.exists, items: state.chain.shop.items, boxes: state.chain.shop.boxes });
-
-    // ---- Player: funded by the creator, then buys and opens through the game's own gf-web3
-    step('fund the player from the creator (test keys)', { signature: await transfer(creator, player.address, 300_000_000n) });
-    const game = await browser.newPage();
-    game.on('pageerror', (e) => console.error('game pageerror', e.message));
-    await injectWallet(game, player, { name: 'Player Wallet' });
-    await game.goto(`${server.url}game/?gamesfun_mock=0`);
-    await game.waitForFunction(() => Boolean(window.__game), null, { timeout: 60_000 }).catch(() => {});
-    const gf = (fn) => game.evaluate(fn);
-    const bought = await gf(async () => {
-      const kit = (await import('/game/gf/web3/index.js')).default;
-      const r = await kit.shop.buy(1);
-      return { mock: kit.mock, item: r.item.name, asset: r.asset, signatures: r.signatures };
-    });
-    step('the player buys Golden Hat (buy_item with SOL wrapped around it, then settle: two approvals)', { ...bought, explorer: explorerUrl(network, 'tx', bought.signatures[0]) });
-    const opened = await gf(async () => {
-      const kit = (await import('/game/gf/web3/index.js')).default;
-      const r = await kit.openBox(1);
-      return { item: r.item.name, serial: r.item.serial, asset: r.asset, order: r.order, signatures: r.signatures };
-    });
-    step('the player opens Mystery Box (open_box → MagicBlock VRF callback_roll → settle)', { ...opened, explorer: opened.signatures.map((s) => explorerUrl(network, 'tx', s)) });
-    await game.waitForTimeout(4000);
-    const owned = await gf(async () => {
-      const kit = (await import('/game/gf/web3/index.js')).default;
-      const items = await kit.ownedItems();
-      const worn = await kit.wearOwned();
-      await new Promise((r) => setTimeout(r, 1500));
-      const looks = window.__game?.looks?.() ?? null;
-      return { items: items.map((i) => ({ id: i.id, name: i.name, asset: i.asset })), loadout: worn.loadout, gfThree: looks ? { local: looks.local, me: looks.players?.find((p) => p.id === looks.me) ?? null } : null };
-    });
-    step('the player’s items, read from the collection (getProgramAccounts on the public devnet RPC) and worn as a gf-three loadout', owned);
+    const results = await g().evaluate(() => window.__seen.host.economy.actions.filter((a) => a.where === 'results').map((a) => a.id));
+    if (results.length) {
+      for (const id of results) {
+        const done = logs.filter((t) => t.includes(`${id}:`)).length;
+        await game.locator(`[data-where="results"] [data-econ="${id}"]`).click();
+        await until(async () => logs.filter((t) => t.includes(`${id}:`)).length > done, 300_000, `claim ${id} to finish`);
+        step(`claimed ${id} from the results card`, { error: (await g().evaluate(() => window.__seen.economy.error)) || undefined, bridge: logs.slice(-1)[0] });
+      }
+      await shot(page, '4-after-claim');
+    } else step('nothing claimable on the results card (a flip pays its prize with the flip itself; the lottery draws in 7 days)', {});
+    step('the player’s wallet', { signed: signed.map((s) => s.kind), spentSol: sol(before - (await rpc.balance(player.address))), bridgeLog: logs });
+    await ctx.close();
   } finally {
     await browser.close();
     await server.close();
-    result.finishedAt = new Date().toISOString();
-    await writeFile(path.join(here, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
-    console.log('wrote tests/web3/devnet/result.json');
   }
+
+  // ---- 3. the economy check, as a creator runs it
+  const out = path.join(here, 'proof-economy-check.json');
+  const run = await promisify(execFile)(process.execPath, [path.join(kitRoot, 'bin', 'gamesfun.mjs'), 'economy', 'check', '--devnet', gameDir, '--tries', '3', '--out', out], { env: { ...process.env, GAMESFUN_DEVNET_KEY: keyFile('test-buyer-2') }, maxBuffer: 1 << 24, timeout: 1_200_000 }).catch((e) => e);
+  console.log(run.stdout ?? '');
+  const record = JSON.parse(await readFile(out, 'utf8').catch(() => 'null'));
+  step('gamesfun economy check --devnet (test-buyer-2 funds the synthetic player)', { ok: run.code === undefined || run.code === 0, verdict: record?.verdict, won: record?.won, spentSol: record?.spent ? sol(record.spent) : null, record: path.relative(kitRoot, out), stderr: run.stderr?.slice(-2000) || undefined });
+  result.end = { creator: await rpc.balance(creator.address), player: await rpc.balance(player.address), funder: await rpc.balance(funder.address) };
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+// earlier runs stay in the record (each run's own result, newest last)
+try {
+  const before = JSON.parse(await readFile(path.join(here, 'proof-economy-result.json'), 'utf8'));
+  result.earlierRuns = [...(before.earlierRuns ?? []), { ...before, earlierRuns: undefined }];
+} catch {}
+try {
+  await main();
+} catch (e) {
+  step('stopped', { ok: false, error: e.message });
+} finally {
+  result.finishedAt = new Date().toISOString();
+  result.ok = result.steps.every((s) => s.ok);
+  await writeFile(path.join(here, 'proof-economy-result.json'), `${JSON.stringify(result, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2)}\n`);
+  console.log(`wrote tests/web3/devnet/proof-economy-result.json (${result.ok ? 'ok' : 'problems'})`);
+}

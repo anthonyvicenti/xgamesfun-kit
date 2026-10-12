@@ -283,6 +283,14 @@ export function hostBridge({ win = window, accept, configUrl = '/game/gamesfun.j
     } catch (e) {
       log(`could not read the economy: ${e.message}`);
     }
+    // a paid open or purchase whose prize was never claimed (a declined claim, a slow roll, a closed tab) is claimable
+    // on the results card; claiming it finishes every such order of the player's (gf-web3 claim → claimOrders)
+    if (gf.address && !pending.size && typeof gf.orders === 'function') {
+      const part = config.economy.boxes?.[0] ? `box:${config.economy.boxes[0].key}` : config.economy.items?.[0] ? `item:${config.economy.items[0].key}` : null;
+      const open = await gf.orders().then((list) => list.some((o) => o.status === 'Rolled' || o.status === 'Failed')).catch(() => false);
+      for (const u of [...unclaimed]) if (!open) unclaimed.delete(u);
+      if (open && part) unclaimed.add(part);
+    }
     sendEconomy();
   }
 

@@ -1,0 +1,164 @@
+{
+  "network": "devnet",
+  "program": "88Labq6tdVnBQsjHSfic6qqgvo5b9NGmy99AYj7KVXqM",
+  "startedAt": "2026-10-12T03:08:54.516Z",
+  "game": "stand-in (tests/web3/stand-in/)",
+  "steps": [
+    {
+      "name": "keys on devnet",
+      "at": "2026-10-12T03:08:55.093Z",
+      "ok": true,
+      "lamports": {
+        "creator": "648876157",
+        "player": "295322502",
+        "funder": "497280200"
+      }
+    },
+    {
+      "name": "the economy is already live from an earlier run (pass --fresh for a new one)",
+      "at": "2026-10-12T03:08:55.209Z",
+      "ok": true,
+      "game": "7SuUwSw5ZN5awfw4BhWvbJP5YDzDd2yENR5wgUDFNJZ1",
+      "explorer": "https://explorer.solana.com/address/7SuUwSw5ZN5awfw4BhWvbJP5YDzDd2yENR5wgUDFNJZ1?cluster=devnet"
+    },
+    {
+      "name": "the game is offered the economy’s buttons by its host page",
+      "at": "2026-10-12T03:08:55.357Z",
+      "ok": true,
+      "offered": [
+        "menu box:flip:open: Coin flip · 0.1 SOL",
+        "menu lottery:weekly:tickets: Tickets: Weekly draw · 0.01 SOL",
+        "menu stake:backers:stake: Stake ARENA",
+        "menu stake:backers:unstake: Unstake ARENA",
+        "hud hud:balance:sol: Your SOL",
+        "hud hud:box:flip: Coin flip",
+        "hud hud:lottery:weekly: Weekly draw: tickets",
+        "hud hud:stake:backers: Back the house"
+      ]
+    },
+    {
+      "name": "flip 1: clicked Flip in the game’s menu; the host page signed (test-buyer-1) and the HUD line followed",
+      "at": "2026-10-12T03:10:08.496Z",
+      "ok": true,
+      "hudBefore": "",
+      "balanceBefore": "",
+      "hud": "You won 0.176 SOL!",
+      "balanceLine": "0.368812502 SOL",
+      "bridge": "host bridge: box:flip:open: You won 0.176 SOL! (4sLQ8ZPHiTXiSUN9cZnTZmaJXXac9xRRkde7xQhu16cmtGUmTkvvt7sKpy1mxRaQsGZvM6SrEmS7QYtcq3NtMR4H, 3v32LUzUQy2oRpArVMjq3Gd69wP8ydUU7aLjv2hsbAfgKo9vEBs99PFB6FuSEWMVgv1dhz15oS1UC5rGmCEaKoSa)"
+    },
+    {
+      "name": "nothing claimable on the results card (a flip pays its prize with the flip itself; the lottery draws in 7 days)",
+      "at": "2026-10-12T03:10:08.497Z",
+      "ok": true
+    },
+    {
+      "name": "the player’s wallet",
+      "at": "2026-10-12T03:10:08.777Z",
+      "ok": true,
+      "signed": [
+        "transaction",
+        "transaction"
+      ],
+      "spentSol": -0.07349,
+      "bridgeLog": [
+        "host bridge: box:flip:open: You won 0.176 SOL! (4sLQ8ZPHiTXiSUN9cZnTZmaJXXac9xRRkde7xQhu16cmtGUmTkvvt7sKpy1mxRaQsGZvM6SrEmS7QYtcq3NtMR4H, 3v32LUzUQy2oRpArVMjq3Gd69wP8ydUU7aLjv2hsbAfgKo9vEBs99PFB6FuSEWMVgv1dhz15oS1UC5rGmCEaKoSa)"
+      ]
+    },
+    {
+      "name": "gamesfun economy check --devnet (test-buyer-2 funds the synthetic player)",
+      "at": "2026-10-12T03:10:38.535Z",
+      "ok": true,
+      "verdict": "ok",
+      "won": true,
+      "spentSol": 0.0412332,
+      "record": "tests/web3/devnet/proof-economy-check.json"
+    }
+  ],
+  "screenshots": [
+    ".gamesfun/devnet/host-proof/shots/2-game-menu-economy-buttons.png",
+    ".gamesfun/devnet/host-proof/shots/3-after-flip-1.png"
+  ],
+  "creator": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+  "player": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+  "funder": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+  "end": {
+    "creator": "648876157",
+    "player": "368812502",
+    "funder": "456042000"
+  },
+  "finishedAt": "2026-10-12T03:10:38.991Z",
+  "ok": true,
+  "earlierRuns": [
+    {
+      "run": 1,
+      "note": "Copied from this run's console and record before the script kept earlier runs (2026-10-11, ~20:00 PT). It put the economy live; its economy check step failed to start (the CLI then required a gf-three game folder; fixed).",
+      "steps": [
+        {
+          "name": "the Economy tab put the coin-flip arena live through the real flow (test-creator approving)",
+          "ok": true,
+          "game": "7SuUwSw5ZN5awfw4BhWvbJP5YDzDd2yENR5wgUDFNJZ1",
+          "collection": "8Fceo3JycCA9xrdRVz25pRcAEjkGL2djDuNRvDmo36ub",
+          "transactions": [
+            "HACHxkupgkodPK8DxxfjB5AS5A5QCQ7biqxB5VsbKaLRu2ZLn7uBcU3zARBv79uoaVFg7oiTwa3e73dMXcPPWHY",
+            "3CtRzcc2f9DiWF7wqdod4Ht4A1jmzdja7z9ZT6NJMJHb5qmo5DMy2KDJwhx78efPMFdJrPRUxNgHubNiMX3HzPwJ"
+          ],
+          "status": "8 parts on chain, none differs; house 0.05 SOL",
+          "creatorSpentSol": 0.06464524
+        },
+        {
+          "name": "flip 1 (test-buyer-1, in the game's menu)",
+          "ok": true,
+          "hud": "Nothing this time.",
+          "signatures": [
+            "dVguLWfHYh1snVQjSVVEvx9HQPwGvTh8QcmEpijSZgXgddEs89GzPYgSs4i4KNehJNo4ogdX6ZCM1uHKHeLAXAL",
+            "3qF5HNmPDSnHra5V3VM6sFBfPZ3hQ9crFJq5sCnmu3481E47BSDofqTjudSB6NXmhtn2ycWd2LB64eS1E1GDiD6g"
+          ]
+        },
+        {
+          "name": "flip 2",
+          "ok": false,
+          "note": "the script did not wait for the second flip to finish and closed the page after its pay-and-roll; the order was left rolled and unclaimed (claimed from the results card in run 2)"
+        },
+        {
+          "name": "economy check --devnet",
+          "ok": false,
+          "error": "not a game folder (the stand-in had no gf-three.json); fixed: any folder with gamesfun.json"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "note": "Copied from this run's console and record (2026-10-11).",
+      "steps": [
+        {
+          "name": "flip 1",
+          "ok": true,
+          "hud": "Nothing this time.",
+          "signatures": [
+            "4AR9bhXVRKTKx7kybnNf9hTaCb4QknCyadVaXGcgZopVoExhJBYvRY6MoEegNBSfdNQCe2RkRG9FqVQATJZ7rVDX",
+            "5vXSaFgvadHQNj7NPhyZyqe4sxpaoaoNgype2DeF9PvfuCsbzxxksA79vLEkhWNXDue1ghjtYrqwa6rwsEX1UTKU"
+          ]
+        },
+        {
+          "name": "flip 2",
+          "ok": true,
+          "hud": "Nothing this time.",
+          "signatures": [
+            "3At88zLGnwqoBRehhfzGo98HopEyRTHUfNbm4zJrZGhtdJ6AdMad2Noot2F73fmqSuzssgkcwt7Rp1LqzJULmeTz",
+            "24L7muJ4jcSBuSzDiUcvqTBWKhMdjX2GckiLWcTycsydXK3EEgcGzCndJdJqqiCC8g74bRfwnaVDYb8aQcJfP8BN"
+          ]
+        },
+        {
+          "name": "claimed box:flip:claim from the results card (run 1's unclaimed flip)",
+          "ok": true,
+          "signature": "54MKFeeWDFCcyEtPYigPYyDWC2DPZ7CP1K6ossM8wSNPYpa9KNHZUgnpmr2BRCGdBuLxKJ2GUT7MePcDaDnbTLx"
+        },
+        {
+          "name": "economy check --devnet",
+          "ok": false,
+          "note": "the synthetic player won (0.176 SOL) and the pools moved exactly by their shares, but the player check failed by 0.0005 SOL per open (MagicBlock's oracle queue fee, not yet counted), and the record failed to save (a BigInt); both fixed"
+        }
+      ]
+    }
+  ]
+}
