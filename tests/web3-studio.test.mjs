@@ -122,8 +122,13 @@ describe('studio Economy tab on core’s dev server, in Chrome (fake chain)', { 
   it('has no title or wallet button of its own: it points at the header’s Connect wallet, which connects the wallet it signs with', async (t) => {
     if (!browser) return t.skip('no browser');
     await page.getByRole('tab', { name: 'Economy' }).click();
-    await tab().getByTestId('econ-flow').waitFor();
+    await tab().getByTestId('econ-add').waitFor();
     assert.equal(await tab().locator('h1, h2').count(), 0, 'the rail names the tab');
+    // a game with no economy yet opens on the empty picture and the "Add" buttons; the receipt is there all the same
+    assert.equal(await tab().getByTestId('econ-empty').count(), 1);
+    assert.equal(await tab().getByTestId('econ-empty').getByTestId('econ-add').count(), 1, 'the first part is added from the picture');
+    assert.equal(await tab().getByTestId('econ-go').count(), 1);
+    assert.match(await tab().getByTestId('econ-wallet').innerText(), /Wallet not connected/);
     assert.equal(await tab().getByRole('button', { name: /connect a wallet/i }).count(), 0, 'one wallet button: the header’s');
     assert.match(await tab().getByTestId('econ-wallet-note').innerText(), /Connect a wallet to put it live: Connect wallet, at the top of the studio/);
     await page.locator('#wallet-btn').click();
@@ -134,7 +139,8 @@ describe('studio Economy tab on core’s dev server, in Chrome (fake chain)', { 
   it('launches the game’s token from its part, through ctx.wallet, and the economy keeps its mint', async (t) => {
     if (!browser) return t.skip('no browser');
     await page.getByRole('tab', { name: 'Economy' }).click();
-    await tab().getByTestId('econ-flow').waitFor();
+    await tab().getByTestId('econ-add').waitFor();
+    assert.match(await tab().getByTestId('econ-wallet').innerText(), /Wallet \S+…\S+/, 'the wallet chip shows the connected wallet');
     await tab().getByTestId('econ-add-token-curve').click();
     const form = tab().getByTestId('launch-form');
     await form.waitFor();
@@ -170,6 +176,7 @@ describe('studio Economy tab on core’s dev server, in Chrome (fake chain)', { 
     await until(async () => /a ticket is worth/.test(await card.getByTestId('econ-facts').innerText()));
     assert.match(await card.getByTestId('econ-facts').innerText(), /The pot reaches about 35 SOL a draw/, '100 tickets a day × 7 days × 0.05');
     assert.ok(await tab().locator('[data-part="lotteries:weekly"]').count(), 'the lottery is in the picture');
+    assert.equal(await tab().getByTestId('econ-empty').count(), 0, 'a first part replaces the empty picture with the money flow');
   });
 
   it('shows a refusal next to its part with the fix, and "Put it live" waits for the fix', async (t) => {
@@ -178,6 +185,7 @@ describe('studio Economy tab on core’s dev server, in Chrome (fake chain)', { 
     await card.locator('[data-path="lotteries:weekly|places"]').fill('50, 30, 30');
     await card.getByTestId('econ-refusal').waitFor();
     assert.match(await card.getByTestId('econ-refusal').innerText(), /Fix:/);
+    assert.equal(await tab().locator('[data-part="lotteries:weekly"].flag-refusal').count(), 1, 'the picture rings the part that needs a fix');
     assert.equal(await tab().getByTestId('econ-go-live').isDisabled(), true);
     assert.match(await tab().getByTestId('econ-go-why').innerText(), /Fix the 1 note marked ✗ first/);
     await card.locator('[data-path="lotteries:weekly|places"]').fill('50, 30, 20');

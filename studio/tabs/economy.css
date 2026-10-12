@@ -1,0 +1,227 @@
+/* The Economy tab (studio/tabs/economy.js), scoped under .gfw3.econ: the money flow first, the cost as a receipt
+   beside it, "Add" as picture buttons, the parts as picture cards. Colours are the studio's tokens (studio/studio.css);
+   each kind of part has a tone (economy-look.js TONES) that its box, its card and its button share. */
+
+.gfw3.econ { max-width: none; gap: var(--s3, 12px); --econ-item: color-mix(in srgb, var(--accent-2, #b9f26c) 50%, var(--text, #e8ecf3)); }
+:root[data-wide=thumbnail] .gfw3.econ { padding-bottom: 190px; }      /* room to scroll past the game's thumbnail */
+
+/* ---- tones: --tone (lines, icons) and --tone-soft (fills) */
+.gfw3.econ .tone-ink { --tone: var(--ink, #e8ecf3); --tone-soft: var(--surface-3, #1f2434); }
+.gfw3.econ .tone-lav { --tone: var(--lav, #a99cff); --tone-soft: var(--lav-soft, rgba(169,156,255,.14)); }
+.gfw3.econ .tone-lime { --tone: var(--econ-item); --tone-soft: var(--lime-soft, rgba(185,242,108,.1)); }
+.gfw3.econ .tone-info { --tone: var(--info, #7fb2ff); --tone-soft: var(--info-soft, rgba(127,178,255,.1)); }
+.gfw3.econ .tone-warn { --tone: var(--warn, #fbbf24); --tone-soft: var(--warn-soft, rgba(251,191,36,.1)); }
+.gfw3.econ .tone-good { --tone: var(--good, #4ade80); --tone-soft: var(--good-soft, rgba(74,222,128,.1)); }
+.gfw3.econ .tone-bad { --tone: var(--bad, #f87171); --tone-soft: var(--bad-soft, rgba(248,113,113,.1)); }
+.gfw3.econ .tone-muted { --tone: var(--muted, #9ca2b0); --tone-soft: var(--surface-3, #1f2434); }
+
+/* ---- the top line: one sentence and the state chips */
+.gfw3 .econ-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.gfw3 .econ-top .econ-intro { margin: 0 6px 0 0; color: var(--ink-2, #c9ccd6); font-size: var(--fs-md, 13px); flex: 1 1 260px; min-width: 0; }
+.gfw3 .econ-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.gfw3 .econ-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 2px 10px 2px 8px; border-radius: var(--r-pill, 999px); font-size: var(--fs-sm, 12px); font-weight: 600; white-space: nowrap; border: 1px solid var(--line-strong, #343b50); background: var(--surface-2, #161a27); color: var(--ink, #e8ecf3); }
+.gfw3 .econ-chip .econ-ico { flex: none; }
+.gfw3 .econ-chip.ok { border-color: var(--good-line); background: var(--good-soft); }
+.gfw3 .econ-chip.ok .econ-ico { color: var(--good); }
+.gfw3 .econ-chip.warn { border-color: var(--warn-line); background: var(--warn-soft); }
+.gfw3 .econ-chip.warn .econ-ico { color: var(--warn); }
+.gfw3 .econ-chip.bad { border-color: var(--bad-line); background: var(--bad-soft); }
+.gfw3 .econ-chip.bad .econ-ico { color: var(--bad); }
+.gfw3 .econ-chip.info .econ-ico { color: var(--lav-ink, #b9afff); }
+.gfw3 button.econ-chip { min-height: 26px; font-size: var(--fs-sm, 12px); }
+
+/* "How this works": the explanations, folded */
+.gfw3 details.econ-how { flex: 1 1 100%; }
+.gfw3 details.econ-how > summary { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm, 12px); font-weight: 600; color: var(--lav-ink, #b9afff); list-style: none; }
+.gfw3 details.econ-how > summary::-webkit-details-marker { display: none; }
+.gfw3 details.econ-how > summary::before { content: '?'; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid currentColor; font-size: 10px; font-weight: 700; }
+.gfw3 .econ-how-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; margin-top: 8px; padding: 10px 12px; border-radius: var(--r-md, 8px); background: var(--surface-2, #161a27); border: 1px solid var(--line, #232838); font-size: var(--fs-md, 13px); color: var(--ink-2, #c9ccd6); }
+.gfw3 .econ-how-body p { margin: 0; }
+.gfw3 .econ-how-body b { color: var(--ink, #e8ecf3); }
+
+/* ---- the hero: the money flow beside the receipt */
+.gfw3 .econ-main { display: grid; grid-template-columns: minmax(0, 1fr) clamp(260px, 26%, 340px); gap: var(--s3, 12px); align-items: start; }
+.gfw3 .econ-aside { display: grid; gap: var(--s3, 12px); position: sticky; top: 0; }
+@container econ (max-width: 760px) { .gfw3 .econ-main { grid-template-columns: minmax(0, 1fr); } .gfw3 .econ-aside { position: static; } }
+.gfw3.econ { container: econ / inline-size; }
+.gfw3 .econ-hero { display: grid; gap: 8px; padding: 14px 14px 10px; }
+.gfw3 .econ-hero-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.gfw3 .econ-hero-head h3 { margin: 0; font-size: var(--fs-lg, 16px); font-weight: 700; color: var(--ink, #e8ecf3); flex: 1 1 auto; }
+.gfw3 .econ-hero-head .hint { flex-basis: 100%; margin: 0; color: var(--muted); font-size: var(--fs-sm, 12px); }
+.gfw3 .econ-legend { display: flex; flex-wrap: wrap; gap: 6px; }
+.gfw3 .econ-legend span { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: var(--r-pill, 999px); border: 1px solid var(--line-strong, #343b50); font-size: var(--fs-xs, 11px); font-weight: 600; color: var(--ink-2, #c9ccd6); background: var(--surface, #10131e); }
+.gfw3 .econ-legend i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; }
+.gfw3 .econ-legend i.dashed { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important; height: 2px; }
+.gfw3 [data-testid=econ-flow-box] { min-width: 0; }
+
+/* the picture */
+.gfw3 .econ-flow { display: block; max-width: 100%; height: auto; overflow: visible; }
+.gfw3 .econ-caption { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; fill: var(--muted, #9aa4b5); paint-order: stroke; stroke: var(--panel-2, #161a22); stroke-width: 5px; stroke-linejoin: round; }
+.gfw3 .econ-edge { fill: none; stroke-width: 2.25; opacity: .85; }
+.gfw3 .econ-edge.lock, .gfw3 .econ-edge.move { stroke-dasharray: 5 4; }
+.gfw3 .econ-label rect { fill: var(--panel, #0f1218); stroke-width: 1.25; }
+.gfw3 .econ-label text { font-size: 11px; font-weight: 700; fill: var(--text, #e8ecf3); }
+.gfw3 .econ-node .econ-node-box { fill: color-mix(in srgb, var(--tone, var(--muted)) 7%, var(--panel-2, #161a22)); stroke: var(--tone, var(--muted)); stroke-width: 1.5; }
+.gfw3 .econ-node.players .econ-node-box { stroke-width: 2; }
+.gfw3 .econ-node.pool .econ-node-box { stroke-width: 2; }
+.gfw3 .econ-node-tile { fill: var(--tone-soft, transparent); }
+.gfw3 .econ-node-icon { stroke: var(--tone, var(--muted)); }
+.gfw3 .econ-node-label { font-weight: 700; fill: var(--text, #e8ecf3); }
+.gfw3 .econ-node-sub { font-weight: 600; fill: var(--ink-2, #c9ccd6); }
+.gfw3 .econ-node.pick { cursor: pointer; }
+.gfw3 .econ-node.pick:hover .econ-node-box, .gfw3 .econ-node.pick:focus .econ-node-box { stroke-width: 3; fill: var(--tone-soft, var(--panel)); }
+.gfw3 .econ-node.on .econ-node-box { stroke-width: 3; fill: var(--tone-soft, var(--panel)); }
+.gfw3 .econ-node.pick:focus { outline: none; }
+.gfw3 .econ-node.pick:focus-visible .econ-node-box { stroke: var(--lime, #b9f26c); }
+.gfw3 .econ-node.flag-refusal .econ-node-box { stroke: var(--bad, #f87171); stroke-width: 2.5; }
+.gfw3 .econ-flag circle { stroke: none; }
+.gfw3 .econ-flag.refusal circle { fill: var(--bad, #f87171); }
+.gfw3 .econ-flag.warning circle { fill: var(--warn, #fbbf24); }
+.gfw3 .econ-flag text { font-size: 11px; font-weight: 700; fill: var(--on-lime, #0a0c16); }
+.gfw3 .econ-flag.refusal text { fill: #fff; }
+.gfw3 .econ-dot.live { fill: var(--good, #4fd18b); }
+.gfw3 .econ-dot.changed { fill: var(--warn, #ffcf5a); }
+
+/* the empty economy */
+.gfw3 .econ-empty { display: grid; justify-items: center; gap: 10px; padding: 18px 8px 8px; text-align: center; }
+.gfw3 .econ-empty-pic { width: min(420px, 100%); height: auto; }
+.gfw3 .econ-empty-pic .econ-node.ghost .econ-node-box { stroke-dasharray: 5 4; fill: var(--lime-soft, transparent); }
+.gfw3 .econ-empty-arrow { stroke: var(--muted, #9ca2b0); stroke-width: 2; fill: none; }
+.gfw3 .econ-empty-headpath { fill: var(--muted, #9ca2b0); }
+.gfw3 .econ-empty strong { font-size: var(--fs-lg, 16px); }
+.gfw3 .econ-empty p { margin: 0; color: var(--muted); max-width: 46ch; }
+
+/* ---- the receipt: what putting it live costs, and the one primary button */
+.gfw3 .econ-receipt { display: grid; gap: 10px; padding: 14px; border-top: 3px solid var(--lime, #b9f26c); }
+.gfw3 .econ-receipt-head { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: var(--fs-md, 13px); color: var(--ink-2, #c9ccd6); }
+.gfw3 .econ-receipt-head .econ-ico { color: var(--lime, #b9f26c); }
+:root[data-theme=light] .gfw3 .econ-receipt-head .econ-ico { color: var(--lav, #5b4fd6); }
+.gfw3 .econ-receipt dl { margin: 0; display: grid; gap: 3px; font-size: var(--fs-sm, 12px); }
+.gfw3 .econ-receipt dl > div { display: flex; gap: 6px; align-items: baseline; }
+.gfw3 .econ-receipt dt { color: var(--muted); flex: none; }
+.gfw3 .econ-receipt dd { margin: 0 0 0 auto; font-family: var(--mono); color: var(--ink-2); white-space: nowrap; }
+.gfw3 .econ-receipt dl > div::after { content: none; }
+.gfw3 .econ-receipt .leader { flex: 1; border-bottom: 1px dotted var(--line-strong, #343b50); transform: translateY(-3px); min-width: 12px; }
+.gfw3 .econ-total { display: flex; align-items: baseline; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--line-strong, #343b50); }
+.gfw3 .econ-total span { color: var(--muted); font-size: var(--fs-sm, 12px); }
+.gfw3 .econ-cost { margin-left: auto; font-size: 22px; font-weight: 700; color: var(--ink, #e8ecf3); white-space: nowrap; }
+.gfw3 .econ-receipt [data-testid=econ-cost-line] { font-size: var(--fs-sm, 12px); color: var(--muted); }
+.gfw3 .econ-receipt button[data-testid=econ-go-live] { width: 100%; min-height: 40px; font-size: var(--fs-base, 14px); }
+.gfw3 .econ-receipt .econ-why { margin: 0; font-size: var(--fs-sm, 12px); }
+.gfw3 .econ-receipt .econ-why.bad { color: var(--bad); }
+.gfw3 .econ-receipt [data-testid=econ-wallet-note] { margin: 0; font-size: var(--fs-sm, 12px); color: var(--muted); }
+.gfw3 .econ-receipt details > summary { font-size: var(--fs-sm, 12px); }
+.gfw3 .econ-receipt details ul { margin-top: 6px; }
+
+/* ---- a day, on these numbers: tiles and where the money goes */
+.gfw3 .econ-day-card { display: grid; gap: 10px; padding: 14px; }
+.gfw3 .econ-day-card h3 { margin: 0; font-size: var(--fs-md, 13px); color: var(--ink-2); }
+.gfw3 .econ-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.gfw3 .econ-tile { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: center; padding: 7px 9px; border-radius: var(--r-md, 8px); background: var(--surface, #10131e); border: 1px solid var(--line, #232838); }
+.gfw3 .econ-tile .econ-ico { grid-row: span 2; color: var(--tone); }
+.gfw3 .econ-tile b { font-size: var(--fs-md, 13px); overflow-wrap: anywhere; line-height: 1.25; }
+.gfw3 .econ-tile span { font-size: var(--fs-xs, 11px); color: var(--muted); line-height: 1.25; }
+.gfw3 .econ-bar { display: flex; height: 12px; border-radius: var(--r-pill, 999px); overflow: hidden; background: var(--surface-3, #1f2434); }
+.gfw3 .econ-bar i { display: block; height: 100%; min-width: 3px; }
+.gfw3 .econ-bar i + i { border-left: 2px solid var(--panel-2, #161a27); }
+.gfw3 .econ-bar .back { background: var(--good, #4ade80); }
+.gfw3 .econ-bar .treasury { background: var(--warn, #fbbf24); }
+.gfw3 .econ-bar .burned { background: var(--bad, #f87171); }
+.gfw3 .econ-bar .kept { background: var(--lav, #a99cff); }
+.gfw3 .econ-bar-keys { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: var(--fs-xs, 11px); color: var(--muted); margin-top: 4px; }
+.gfw3 .econ-bar-keys i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+.gfw3 .econ-bar-for { font-size: var(--fs-xs, 11px); color: var(--muted); margin-bottom: 3px; }
+.gfw3 details.econ-sim-notes > summary { font-size: var(--fs-sm, 12px); font-weight: 600; color: var(--warn); }
+.gfw3 details.econ-sim-notes[open] > summary { margin-bottom: 6px; }
+.gfw3 .econ-sim-note + .econ-sim-note { margin-top: 6px; }
+.gfw3 .econ-sim-note { margin: 0; font-size: var(--fs-sm, 12px); padding: 6px 9px; border-radius: var(--r-md, 8px); border-left: 3px solid var(--warn); background: var(--warn-soft); }
+
+/* ---- "Add": picture buttons, in groups */
+.gfw3 .econ-adder { display: grid; gap: 10px; padding: 14px; }
+.gfw3 .econ-adder > h3 { margin: 0; font-size: var(--fs-md, 13px); color: var(--ink-2); }
+.gfw3 .econ-add-groups { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.gfw3 .econ-add-group { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.gfw3 .econ-add-group > span { font-size: var(--fs-xs, 11px); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.gfw3 .econ-add { display: flex; flex-wrap: wrap; gap: 6px; }
+.panels .gfw3 .econ-add button.econ-pick { display: grid; justify-items: center; align-content: start; gap: 3px; padding: 9px 4px 8px; min-height: 0; text-align: center; width: 98px; border-radius: var(--r-md, 8px); background: var(--surface, #10131e); border: 1px solid var(--line-strong, #343b50); font-size: var(--fs-sm, 12px); font-weight: 700; line-height: 1.2; }
+.panels .gfw3 .econ-add button.econ-pick:hover:not(:disabled) { border-color: var(--tone); background: var(--tone-soft); }
+.gfw3 .econ-pick .tile { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--tone-soft); color: var(--tone); margin-bottom: 2px; }
+.gfw3 .econ-pick small { font-weight: 400; font-size: var(--fs-xs, 11px); color: var(--muted); }
+.gfw3 .econ-empty .econ-adder { border: 0; background: none; padding: 6px 0 0; width: 100%; text-align: left; }
+
+/* ---- the parts: picture cards */
+.gfw3 .econ-parts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: var(--s3, 12px); align-items: start; }
+.gfw3 .econ-parts > h3 { grid-column: 1 / -1; margin: 6px 0 0; font-size: var(--fs-xs, 11px); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.gfw3 .econ-part { display: grid; gap: 10px; scroll-margin: 12px; transition: box-shadow .3s; border-top: 3px solid var(--tone, var(--line)); min-width: 0; }
+.gfw3 .econ-part.flash, .gfw3 .econ-part.on { box-shadow: 0 0 0 2px var(--lav, #a99cff); }
+.gfw3 .econ-part.has-refusal { border-color: var(--bad-line); border-top-color: var(--bad); }
+.gfw3 .econ-part-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+.gfw3 .econ-part-head .tile { grid-row: span 2; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 11px; background: var(--tone-soft); color: var(--tone); }
+.gfw3 .econ-part-head strong { font-size: var(--fs-lg, 15px); overflow-wrap: anywhere; line-height: 1.25; }
+.gfw3 .econ-part-head .econ-big { grid-column: 2; font-size: var(--fs-md, 13px); font-weight: 700; color: var(--ink-2); }
+.gfw3 .econ-part-head .econ-head-side { grid-column: 3; grid-row: 1 / span 2; display: grid; justify-items: end; gap: 4px; }
+.gfw3 .econ-kind { font-size: var(--fs-xs, 11px); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+.gfw3 .econ-key { font-family: var(--mono, ui-monospace, monospace); font-size: 11px; color: var(--muted); }
+.gfw3 .econ-state { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs, 11px); font-weight: 700; padding: 1px 8px; border-radius: var(--r-pill, 999px); border: 1px solid var(--line-strong); white-space: nowrap; }
+.gfw3 .econ-state::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--faint, #6f7686); }
+.gfw3 .econ-state.live { color: var(--good); border-color: var(--good-line); background: var(--good-soft); }
+.gfw3 .econ-state.live::before { background: var(--good); }
+.gfw3 .econ-state.changed { color: var(--warn); border-color: var(--warn-line); background: var(--warn-soft); }
+.gfw3 .econ-state.changed::before { background: var(--warn); }
+.gfw3 .econ-state.draft { color: var(--muted); }
+.gfw3 .econ-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 10px; }
+.gfw3 .econ-fields label.field { font-size: 12px; }
+.gfw3 .econ-fields label.field.wide { grid-column: 1 / -1; }
+.gfw3 label.check { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text, #e8ecf3); }
+.gfw3 label.check input { width: auto; }
+.gfw3 .econ-rows { display: grid; gap: 6px; }
+.gfw3 .econ-rows-head { font-size: 12px; color: var(--muted, #9aa4b5); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.gfw3 .econ-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px; border: 1px dashed var(--line-strong, #2a3140); border-radius: 8px; }
+.gfw3 .econ-row > * { flex: 1 1 90px; min-width: 0; }
+.gfw3 .econ-row > .num { flex: 0 1 86px; }
+.gfw3 .econ-row > button.x { flex: 0 0 auto; padding: 4px 9px; }
+.gfw3 .econ-row .unit { flex: 0 0 auto; font-size: 12px; color: var(--muted, #9aa4b5); }
+.gfw3 .econ-facts { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; background: var(--tone-soft, var(--panel)); border-left: 3px solid var(--tone, var(--accent)); font-size: 13px; }
+.gfw3 .econ-facts b { font-weight: 700; }
+.gfw3 .econ-day { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted, #9aa4b5); }
+.gfw3 .econ-day input { width: 84px; }
+.gfw3 .econ-part-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.gfw3 .econ-part-foot details { flex: 1 1 100%; }
+.gfw3 .econ-part details > summary { font-size: var(--fs-sm, 12px); font-weight: 600; }
+.gfw3 .econ-bad-sum { color: var(--bad); }
+
+/* checker notes: coloured chips beside their part, each with its fix */
+.gfw3 .econ-notes { display: grid; gap: 6px; }
+.gfw3 .econ-note { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: start; padding: 7px 10px; border-radius: var(--r-md, 8px); font-size: var(--fs-md, 13px); border: 1px solid var(--line-strong); background: var(--surface, transparent); }
+.gfw3 .econ-note .econ-ico { margin-top: 1px; }
+.gfw3 .econ-note.refusal { border-color: var(--bad-line); background: var(--bad-soft); }
+.gfw3 .econ-note.refusal .econ-ico { color: var(--bad); }
+.gfw3 .econ-note.warning { border-color: var(--warn-line); background: var(--warn-soft); }
+.gfw3 .econ-note.warning .econ-ico { color: var(--warn); }
+.gfw3 .econ-note .fix { grid-column: 2; color: var(--ink-2); font-size: var(--fs-sm, 12px); }
+.gfw3 .econ-note .fix b { color: var(--ink); }
+
+/* ---- the rest */
+.gfw3 .econ-live { display: grid; gap: 8px; }
+.gfw3 .econ-live-head { display: flex; align-items: center; gap: 8px; }
+.gfw3 .econ-live-head h3 { margin: 0; }
+.gfw3 .econ-receipts { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: 13px; }
+.gfw3 .econ-receipts a { color: var(--lav-ink, #8b7cff); }
+.gfw3 .linkish { background: none; border: 0; padding: 0; color: var(--lav-ink, #8b7cff); cursor: pointer; font: inherit; text-decoration: underline; }
+.gfw3 input.bad, .gfw3 select.bad, .gfw3 textarea.bad { border-color: var(--bad, #ff7a7a); }
+.gfw3 .econ-token { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.gfw3 .econ-more-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: var(--s3, 12px); align-items: start; }
+.gfw3 details.econ-agent { font-size: var(--fs-sm, 12px); color: var(--muted); }
+.gfw3 details.econ-agent p { margin: 4px 0 0; }
+
+/* a phone: the picture and the receipt stack, the add buttons stay three across */
+@media (max-width: 900px) {
+  .gfw3 .econ-main { grid-template-columns: minmax(0, 1fr); }
+  .gfw3 .econ-aside { position: static; }
+  .gfw3 .econ-hero { padding: 12px 10px 8px; }
+  .gfw3 .econ-add-group { flex: 1 1 100%; }
+  .gfw3 .econ-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .panels .gfw3 .econ-add button.econ-pick { padding: 8px 2px 7px; font-size: var(--fs-xs, 11px); }
+  .gfw3 .econ-pick .tile { width: 32px; height: 32px; }
+  .panels .gfw3 .econ-add button.econ-pick { width: auto; }
+}
