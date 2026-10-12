@@ -40,6 +40,7 @@ import {
   payIx,
   payLotteryIx,
   priceAt,
+  refundable,
   refundOrderIx,
   settleOrderIxs,
   shareAccounts,
@@ -137,9 +138,9 @@ export function economyPlay(kit) {
   async function live() {
     const e = await spec();
     const game = e.game ?? (e.collection ? lootPda.game(e.collection) : null);
-    if (!game) throw said(`${e.name}’s economy is not live yet.`);
+    if (!game) throw said(`${e.name} is not on sale yet: its economy is not live.`);
     const [g, p] = await kit.rpc().accounts([game, lootPda.platform()]);
-    if (!g || !p) throw said(`${e.name}’s economy is not live yet.`);
+    if (!g || !p) throw said(`${e.name} is not on sale yet: its economy is not live.`);
     const gameAccount = decodeLoot(LootAccount.Game, g.data);
     if (gameAccount.paused) throw said(PLAIN.Paused);
     const platform = decodeLoot(LootAccount.Platform, p.data);
@@ -777,6 +778,22 @@ export function economyPlay(kit) {
     return { signatures, says: 'Claimed.' };
   }
 
+  /** Finish one order: claim it when it was rolled, refund it when it failed or waited too long. */
+  async function finish(order) {
+    const e = await spec();
+    const player = await kit.connect();
+    const { gameAccount } = await live();
+    const o = await readOrder(order);
+    if (!o) throw said('That order is gone: it was settled or refunded.');
+    if (o.status === OrderStatus.Rolled) {
+      const signature = await settle(e, player, order, o, gameAccount);
+      return { settled: true, outcome: outcomeOf(e, o, order), signatures: [signature] };
+    }
+    const when = refundable(o, await kit.rpc().call('getSlot', [{ commitment: 'confirmed' }]));
+    if (!when.ok) throw said(`This order can be refunded from slot ${when.atSlot} on (about ${inWords(Number(when.atSlot - BigInt(await kit.rpc().call('getSlot', [{ commitment: 'confirmed' }]))) * 0.4)}).`);
+    return { refunded: true, signatures: [await refund(player, order, o)] };
+  }
+
   /**
    * Collect what is the player's: a lottery's prize (drawing it first when due), a stake's rewards, a contest's
    * winnings or refund, a held collectible whose time is up, or an unclaimed box or purchase. `key`: the part
@@ -961,6 +978,6 @@ export function economyPlay(kit) {
     return run();
   }
 
-  return { buy, openBox, pay, craft, buyTickets, stake, unstake, hold, enter, claim, act, actions, state, reads, pools, boxOdds, lottery, stakePosition, contest, receipts };
+  return { buy, openBox, finish, pay, craft, buyTickets, stake, unstake, hold, enter, claim, act, actions, state, reads, pools, boxOdds, lottery, stakePosition, contest, receipts };
 }
 

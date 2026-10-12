@@ -1,0 +1,846 @@
+{
+  "network": "devnet",
+  "program": "88Labq6tdVnBQsjHSfic6qqgvo5b9NGmy99AYj7KVXqM",
+  "startedAt": "2026-10-12T02:38:01.706Z",
+  "steps": [
+    {
+      "name": "wallets on devnet",
+      "at": "2026-10-12T02:38:02.391Z",
+      "ok": true,
+      "lamports": {
+        "creator": "806552477",
+        "authority": "566967960",
+        "player1": "779089662",
+        "player2": "667257480"
+      }
+    },
+    {
+      "name": "setup: GOLD made and handed out (100 each), the collection, the game (authority: keeper), four pools, the house seeded with 0.05 SOL",
+      "at": "2026-10-12T02:38:02.393Z",
+      "ok": true,
+      "gold": "9Ru2FcXZX4BvycGUW5zjENppUNTDit6WLNY1AxaPew2N",
+      "collection": "FhoeYHdqRUMv1sYXnpV8x4bkR9KZfGMmWUtuEgJRgNZw",
+      "game": "2tJrLi4eFQmVstW3gXUXtegBgLoAuCHSu5kZT8LRTvYp",
+      "treasury": "rAqWmDKnGiesJtpCfJVdeAuDrshu3dwhwFYu94GKg2X",
+      "signatures": [
+        "3cbUjVMx8jFSVz31RSRRrQLi2m7stao5cKxQJVXahZxbQBkVSBvyU49ysW6mK8tiEWDKmtHWp3uvsowneRqTzkku",
+        "5miS1yjtzBrqdH3zBR2DM9qxcPvDZ9ukQzkr8DkEdu3uEndgajGUCvXFCNX4Y1n4Bf3pALqAELszWoXzTg9V22ht",
+        "facD8RC8z4NXVL6DS2RLAmsFCn3AKGt8SJxctnsKLuczV8LwjPd1QmscqmJCZSqez4TTcSoM7Nr8d4vKKb5W3vz"
+      ],
+      "house": "50000000",
+      "explorer": [
+        "https://explorer.solana.com/tx/3cbUjVMx8jFSVz31RSRRrQLi2m7stao5cKxQJVXahZxbQBkVSBvyU49ysW6mK8tiEWDKmtHWp3uvsowneRqTzkku?cluster=devnet",
+        "https://explorer.solana.com/tx/5miS1yjtzBrqdH3zBR2DM9qxcPvDZ9ukQzkr8DkEdu3uEndgajGUCvXFCNX4Y1n4Bf3pALqAELszWoXzTg9V22ht?cluster=devnet",
+        "https://explorer.solana.com/tx/facD8RC8z4NXVL6DS2RLAmsFCn3AKGt8SJxctnsKLuczV8LwjPd1QmscqmJCZSqez4TTcSoM7Nr8d4vKKb5W3vz?cluster=devnet"
+      ]
+    },
+    {
+      "name": "catalog: items relic and blade, box flip, recipe forge, lottery draw, stake back",
+      "at": "2026-10-12T02:38:07.430Z",
+      "ok": true,
+      "signatures": [
+        "3PmkEFjDNbK8jv3nUZqAWNka3DCgkmQYkt2TuQhEgtnwzuSpjHPv9hMhUhiaq1jPVFuvXobDFuEGFoY8Puzhi5Du",
+        "4u6NSUyFEA6y9tahVERxVDdxkcgkMxwbnMdqbGs16kCPvqJLFHNoKYhZyTUhujPBFco8GszLJqaYLpeKLmYTobt3"
+      ],
+      "drawsAt": 1791772927,
+      "explorer": [
+        "https://explorer.solana.com/tx/3PmkEFjDNbK8jv3nUZqAWNka3DCgkmQYkt2TuQhEgtnwzuSpjHPv9hMhUhiaq1jPVFuvXobDFuEGFoY8Puzhi5Du?cluster=devnet",
+        "https://explorer.solana.com/tx/4u6NSUyFEA6y9tahVERxVDdxkcgkMxwbnMdqbGs16kCPvqJLFHNoKYhZyTUhujPBFco8GszLJqaYLpeKLmYTobt3?cluster=devnet"
+      ]
+    },
+    {
+      "name": "lottery: player 1 buys 3 tickets, player 2 buys 2 (buyTickets), 1 GOLD each into the pot",
+      "at": "2026-10-12T02:38:10.585Z",
+      "ok": true,
+      "says": [
+        "You have 3 tickets in “Quick draw”; the draw is in 4 minutes.",
+        "You have 2 tickets in “Quick draw”; the draw is in 4 minutes."
+      ],
+      "signatures": [
+        "5S2YmVbMSK3Cw11QJtPfCgZLoJdqc7oPmUfAqRjrU5DpdSvf7oTvriD66TqC7gpwZ6yF43Z5s7F8ApdNfmgCB6at",
+        "3xFxrvnMbmhwEmHABrm9W3CD8jJz2f6VjxCr1mncsrve8D7UR9SFvRS7YchtxUvMGYy6N8Qw2DDXWAtfNYytjbFL"
+      ],
+      "pot": "5000000",
+      "paid": [
+        "3000000",
+        "2000000"
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/5S2YmVbMSK3Cw11QJtPfCgZLoJdqc7oPmUfAqRjrU5DpdSvf7oTvriD66TqC7gpwZ6yF43Z5s7F8ApdNfmgCB6at?cluster=devnet",
+        "https://explorer.solana.com/tx/3xFxrvnMbmhwEmHABrm9W3CD8jJz2f6VjxCr1mncsrve8D7UR9SFvRS7YchtxUvMGYy6N8Qw2DDXWAtfNYytjbFL?cluster=devnet"
+      ]
+    },
+    {
+      "name": "buy: each player buys a relic (pay, then claim); the treasury gets 0.001 SOL each",
+      "at": "2026-10-12T02:38:17.907Z",
+      "ok": true,
+      "assets": [
+        "fMJax95UHyYT53F4CP1REQKTGKT5tzv4bhsXLkBAs9E",
+        "B82MSXsuZsMinwE416xugwfbRmRvwTksefcQACSfNqTu"
+      ],
+      "owners": [
+        "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+        "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF"
+      ],
+      "treasuryGot": "2000000",
+      "signatures": [
+        "56FJLyCoY3j1g3o4cNHfehh6Ee2oLz81zQqafUe6UMYYVKKQVvWC5EaLFVbmEfvoUNEYSWRKX12FBPuF3fg4ZZsf",
+        "id5ak4PDnoqAxP9o71PNQynbPf1aGfggoRaMhGmwANWHhixtUSj1tJVwxahgNrYqQtpTEDC6qtbKkeS9HzFfwcM",
+        "3GrQ53U4rdXt8WnbZhXoQTLsykM6HrZhM7Gm23UfuTmHwxUXUG2M84TFe5MgCjU5Mvj5AfMu46TLonyRsdUsjhfy",
+        "CXQBDWD6RPn3dUjYV3agjnrjdVV89wtVYbX46EtMoSubNrAdk3L7DH2GRfG83wDsb1jyLWuz7UFFXxegasJ3PxU"
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/56FJLyCoY3j1g3o4cNHfehh6Ee2oLz81zQqafUe6UMYYVKKQVvWC5EaLFVbmEfvoUNEYSWRKX12FBPuF3fg4ZZsf?cluster=devnet",
+        "https://explorer.solana.com/tx/id5ak4PDnoqAxP9o71PNQynbPf1aGfggoRaMhGmwANWHhixtUSj1tJVwxahgNrYqQtpTEDC6qtbKkeS9HzFfwcM?cluster=devnet",
+        "https://explorer.solana.com/tx/3GrQ53U4rdXt8WnbZhXoQTLsykM6HrZhM7Gm23UfuTmHwxUXUG2M84TFe5MgCjU5Mvj5AfMu46TLonyRsdUsjhfy?cluster=devnet",
+        "https://explorer.solana.com/tx/CXQBDWD6RPn3dUjYV3agjnrjdVV89wtVYbX46EtMoSubNrAdk3L7DH2GRfG83wDsb1jyLWuz7UFFXxegasJ3PxU?cluster=devnet"
+      ]
+    },
+    {
+      "name": "openBox: each player flips (pay and roll, the oracle rolls on devnet, then claim); the house gets 90%, pays each win 0.015 SOL",
+      "at": "2026-10-12T02:38:29.230Z",
+      "ok": true,
+      "outcomes": [
+        {
+          "kind": "nothing",
+          "says": "Nothing this time."
+        },
+        {
+          "kind": "prize",
+          "pool": "house",
+          "units": "15000000",
+          "amount": "0.015 SOL",
+          "says": "You won 0.015 SOL!"
+        }
+      ],
+      "says": [
+        "Nothing this time.",
+        "You won 0.015 SOL!"
+      ],
+      "houseDelta": "3000000",
+      "expectedHouseDelta": "3000000",
+      "treasuryDelta": "2000000",
+      "signatures": [
+        "5fvQo25sFfq4iK4j1bbgkbJtD8v3dV1wdSBmiNTXhybJJ9BLipZWPrdBqTbT1DNnAUYQEuNzo8JEF3CpTYibyVSm",
+        "4awUWroy9H4jZhWwneABYc2v6Q49J4XqkkUe7XgJ5MTbBd7k8vviFJbZgpiHhaXYjThTHiYhmP3GBWetegxAiHdA",
+        "2mq4s6wZxn3CUXnAZmXNXSepUQkrrCsWZhHG9TMZ11DyYLquW1NP2YNTrSbpKMtqcqUVVbxRY5ickinAXqzNuHWn",
+        "1ETjFZJm52haVfKqTKQ5SNa8Sh6quBgravNhsKcp8sCqfS7srToMf1TJMJQf73eJTyJrzLJXoHGXGWhueyZ5WYJ"
+      ],
+      "receipts": [
+        [],
+        [
+          {
+            "name": "OrderSettled",
+            "data": {
+              "order": "5EiMkJc9xt7rzqvhhRpUcLGoG4oUigPMw2LUjkzdaFJd",
+              "game": "2tJrLi4eFQmVstW3gXUXtegBgLoAuCHSu5kZT8LRTvYp",
+              "player": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+              "outcome": "Nothing",
+              "serial": 0,
+              "asset": "11111111111111111111111111111111",
+              "amount": "10000000",
+              "burned": "0",
+              "shares": [
+                {
+                  "to": {
+                    "Pool": [
+                      0
+                    ]
+                  },
+                  "bps": 9000
+                }
+              ],
+              "to_treasury": "1000000"
+            }
+          }
+        ],
+        [],
+        [
+          {
+            "name": "OrderSettled",
+            "data": {
+              "order": "2fr99ebwUJbkHaLBvoeYqSgVwB9otgZv5AeLcWtxKFDT",
+              "game": "2tJrLi4eFQmVstW3gXUXtegBgLoAuCHSu5kZT8LRTvYp",
+              "player": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+              "outcome": {
+                "Pay": {
+                  "pool": 0,
+                  "amount": "15000000"
+                }
+              },
+              "serial": 0,
+              "asset": "11111111111111111111111111111111",
+              "amount": "10000000",
+              "burned": "0",
+              "shares": [
+                {
+                  "to": {
+                    "Pool": [
+                      0
+                    ]
+                  },
+                  "bps": 9000
+                }
+              ],
+              "to_treasury": "1000000"
+            }
+          }
+        ]
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/5fvQo25sFfq4iK4j1bbgkbJtD8v3dV1wdSBmiNTXhybJJ9BLipZWPrdBqTbT1DNnAUYQEuNzo8JEF3CpTYibyVSm?cluster=devnet",
+        "https://explorer.solana.com/tx/4awUWroy9H4jZhWwneABYc2v6Q49J4XqkkUe7XgJ5MTbBd7k8vviFJbZgpiHhaXYjThTHiYhmP3GBWetegxAiHdA?cluster=devnet",
+        "https://explorer.solana.com/tx/2mq4s6wZxn3CUXnAZmXNXSepUQkrrCsWZhHG9TMZ11DyYLquW1NP2YNTrSbpKMtqcqUVVbxRY5ickinAXqzNuHWn?cluster=devnet",
+        "https://explorer.solana.com/tx/1ETjFZJm52haVfKqTKQ5SNa8Sh6quBgravNhsKcp8sCqfS7srToMf1TJMJQf73eJTyJrzLJXoHGXGWhueyZ5WYJ?cluster=devnet"
+      ]
+    },
+    {
+      "name": "craft: player 1 burns the relic and pays 1 GOLD into fees for a blade (a new key for the blade signs)",
+      "at": "2026-10-12T02:38:41.782Z",
+      "ok": true,
+      "blade": "4cvhBqmLqubrWzTKwJQ7yNid3ePLE8YdJJq8rFZRfTLp",
+      "bladeOwner": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+      "relicBurned": true,
+      "feesDelta": "1000000",
+      "paid": "1000000",
+      "signatures": [
+        "4Rk38cvxteUwwbUPhCysfDBDy6WCCJVDm93ifRbrQBqhAP9kUm9DrhzxrcqVdMTftvTJYVeghCShAZG277srmy3A"
+      ],
+      "receipts": [
+        {
+          "name": "Crafted",
+          "data": {
+            "game": "2tJrLi4eFQmVstW3gXUXtegBgLoAuCHSu5kZT8LRTvYp",
+            "id": 1,
+            "version": 0,
+            "player": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+            "times": "1",
+            "burned": [
+              "fMJax95UHyYT53F4CP1REQKTGKT5tzv4bhsXLkBAs9E"
+            ],
+            "used": [],
+            "made": [
+              "4cvhBqmLqubrWzTKwJQ7yNid3ePLE8YdJJq8rFZRfTLp"
+            ]
+          }
+        }
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/4Rk38cvxteUwwbUPhCysfDBDy6WCCJVDm93ifRbrQBqhAP9kUm9DrhzxrcqVdMTftvTJYVeghCShAZG277srmy3A?cluster=devnet"
+      ]
+    },
+    {
+      "name": "hold: player 1 sends the blade on the quest (hold for 1h); the authority awards it to player 2",
+      "at": "2026-10-12T02:38:46.125Z",
+      "ok": true,
+      "says": "Your Blade is with the game; it comes home in 60 minutes at the latest.",
+      "heldBy": "2tJrLi4eFQmVstW3gXUXtegBgLoAuCHSu5kZT8LRTvYp",
+      "holdsInState": [
+        {
+          "asset": "4cvhBqmLqubrWzTKwJQ7yNid3ePLE8YdJJq8rFZRfTLp",
+          "freeAt": 1791776327,
+          "over": false
+        }
+      ],
+      "signatures": [
+        "3KzQALwjopVEVc5wRZFBk3e3WYH99bndH7hpbQPMyPaCUGcdGYbc2cHUrKp9nXXL9W1qRvrznuzjnkey7Lx63dAh",
+        "tacQM5iE5AXBsUQUSC76bco16LCYrngnGaG6gquweVgzoX7wJUkLCpE85AEX2DKb5TpXK9rUNr9K7AYMASCk3o5"
+      ],
+      "receipts": [
+        [
+          {
+            "name": "Held",
+            "data": {
+              "game": "2tJrLi4eFQmVstW3gXUXtegBgLoAuCHSu5kZT8LRTvYp",
+              "asset": "4cvhBqmLqubrWzTKwJQ7yNid3ePLE8YdJJq8rFZRfTLp",
+              "player": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+              "free_at": "1791776327",
+              "reference": {
+                "0": 0,
+                "1": 0,
+                "2": 0,
+                "3": 0,
+                "4": 0,
+                "5": 0,
+                "6": 0,
+                "7": 0,
+                "8": 0,
+                "9": 0,
+                "10": 0,
+                "11": 0,
+                "12": 0,
+                "13": 0,
+                "14": 0,
+                "15": 0,
+                "16": 0,
+                "17": 0,
+                "18": 0,
+                "19": 0,
+                "20": 0,
+                "21": 0,
+                "22": 0,
+                "23": 0,
+                "24": 0,
+                "25": 0,
+                "26": 0,
+                "27": 0,
+                "28": 0,
+                "29": 0,
+                "30": 0,
+                "31": 0
+              }
+            }
+          }
+        ],
+        [
+          {
+            "name": "Awarded",
+            "data": {
+              "game": "2tJrLi4eFQmVstW3gXUXtegBgLoAuCHSu5kZT8LRTvYp",
+              "authority": "Hby5BFRb3qfaDyY2Fza4UtjfRn4aFmvdnMAouigMurAs",
+              "asset": "4cvhBqmLqubrWzTKwJQ7yNid3ePLE8YdJJq8rFZRfTLp",
+              "player": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+              "to": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+              "reference": {
+                "0": 0,
+                "1": 0,
+                "2": 0,
+                "3": 0,
+                "4": 0,
+                "5": 0,
+                "6": 0,
+                "7": 0,
+                "8": 0,
+                "9": 0,
+                "10": 0,
+                "11": 0,
+                "12": 0,
+                "13": 0,
+                "14": 0,
+                "15": 0,
+                "16": 0,
+                "17": 0,
+                "18": 0,
+                "19": 0,
+                "20": 0,
+                "21": 0,
+                "22": 0,
+                "23": 0,
+                "24": 0,
+                "25": 0,
+                "26": 0,
+                "27": 0,
+                "28": 0,
+                "29": 0,
+                "30": 0,
+                "31": 0
+              }
+            }
+          }
+        ]
+      ],
+      "owner": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+      "explorer": [
+        "https://explorer.solana.com/tx/3KzQALwjopVEVc5wRZFBk3e3WYH99bndH7hpbQPMyPaCUGcdGYbc2cHUrKp9nXXL9W1qRvrznuzjnkey7Lx63dAh?cluster=devnet",
+        "https://explorer.solana.com/tx/tacQM5iE5AXBsUQUSC76bco16LCYrngnGaG6gquweVgzoX7wJUkLCpE85AEX2DKb5TpXK9rUNr9K7AYMASCk3o5?cluster=devnet"
+      ]
+    },
+    {
+      "name": "stake: player 1 stakes 10 GOLD, player 2 stakes 30; the creator deposits 8 GOLD of rewards; each collects their share; both unstake",
+      "at": "2026-10-12T02:38:55.189Z",
+      "ok": true,
+      "pendingBeforeCollecting": [
+        "2000000",
+        "6000000"
+      ],
+      "earned": [
+        "2000000",
+        "6000000"
+      ],
+      "net": [
+        "2000000",
+        "6000000"
+      ],
+      "stakedVault": "0",
+      "signatures": [
+        "5PCHY2g25hNuJ1VLwCbSmJPqgTfE4GUnaykSG7mZgbRF8BnDDs5rzkA62RcCp25Bd2JUJNdozWVNsgZkTZLxTfdn",
+        "NL8LykDB8Ani6DVzcxsH91zF4Ac3ebwL9xp8hu8ToTWaQbgjyh9dFVkZ2UATsTWFZVB6Bhs2gqjZqNuCbdHUYXa",
+        "5PU9XjC4H91DtLvdyuzW7Q1KQaHHEi4pZFefc1NECENp39VWY8d47giAHysVFPYZsTFeKJ6fJX4nJekQBHRxdDAx",
+        "46XsZjMJj89UszMUbM44dxcw7dGfsK2WadwHfmBXEKCVspezRFbFEKwrrvhrpWVDHW8aGD6z2sSSEU1tg4g8vMJA",
+        "5856LwQxRnwBfYudEawkWDRjuevVhuRoB5Viv5CDMsrQnrH4xaFhBEiywqm6zAB2NVEfMk8PgxWG4xA3ksNe7JB5",
+        "5PB8FHW3K7PUto7XnKvDVVf4PFiq6MHpsWLVb86zkyLdrmGkNgwUr3Zo6ZaFhvt4DhfeCdk84hviCsisNAXKU7iM",
+        "KJ9HyXFHw2dU8sWtZeRL77BHpSi86EtveeJ5diBEpbWNRuwySt7gNRvo6SZ1mqWLkTDox8r7nVAVPCDdxE29B7P"
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/5PCHY2g25hNuJ1VLwCbSmJPqgTfE4GUnaykSG7mZgbRF8BnDDs5rzkA62RcCp25Bd2JUJNdozWVNsgZkTZLxTfdn?cluster=devnet",
+        "https://explorer.solana.com/tx/NL8LykDB8Ani6DVzcxsH91zF4Ac3ebwL9xp8hu8ToTWaQbgjyh9dFVkZ2UATsTWFZVB6Bhs2gqjZqNuCbdHUYXa?cluster=devnet",
+        "https://explorer.solana.com/tx/5PU9XjC4H91DtLvdyuzW7Q1KQaHHEi4pZFefc1NECENp39VWY8d47giAHysVFPYZsTFeKJ6fJX4nJekQBHRxdDAx?cluster=devnet",
+        "https://explorer.solana.com/tx/46XsZjMJj89UszMUbM44dxcw7dGfsK2WadwHfmBXEKCVspezRFbFEKwrrvhrpWVDHW8aGD6z2sSSEU1tg4g8vMJA?cluster=devnet",
+        "https://explorer.solana.com/tx/5856LwQxRnwBfYudEawkWDRjuevVhuRoB5Viv5CDMsrQnrH4xaFhBEiywqm6zAB2NVEfMk8PgxWG4xA3ksNe7JB5?cluster=devnet",
+        "https://explorer.solana.com/tx/5PB8FHW3K7PUto7XnKvDVVf4PFiq6MHpsWLVb86zkyLdrmGkNgwUr3Zo6ZaFhvt4DhfeCdk84hviCsisNAXKU7iM?cluster=devnet",
+        "https://explorer.solana.com/tx/KJ9HyXFHw2dU8sWtZeRL77BHpSi86EtveeJ5diBEpbWNRuwySt7gNRvo6SZ1mqWLkTDox8r7nVAVPCDdxE29B7P?cluster=devnet"
+      ]
+    },
+    {
+      "name": "contest: the authority opens Duel; player 1 backs Red with 5 GOLD, player 2 Blue with 3; the authority names Red; 10% to fees, player 1 collects the rest",
+      "at": "2026-10-12T02:39:17.602Z",
+      "ok": true,
+      "says": [
+        "You put 5 GOLD on Red.",
+        "You put 3 GOLD on Blue.",
+        "You won “Duel”: your share is in your wallet.",
+        "Your side lost “Duel”."
+      ],
+      "claimableAfterDecide": [
+        {
+          "id": "contest:duel:claim",
+          "part": "contest:duel",
+          "says": "Red won “Duel”: collect your share."
+        }
+      ],
+      "net": [
+        "2200000",
+        "-3000000"
+      ],
+      "feesDelta": "800000",
+      "potLeft": "0",
+      "signatures": [
+        "4NVYzz3QRyWbjsiW6JdnqgGGBhg5FBKW3Y8xaoSBtEPAsn7NfiUSpiu1njpkTJC6qFo1oECw3jEnNMVhuodox5m1",
+        "31c3SKU1vJG153vV6z5VVtYP3LLdvE37WPe3GUVGBGQCY7GBHL98MiamZngdxDtfEZYpv5csj2WAZjNREAHzqxLt",
+        "4Cha1esynKfoWcy9Zwn9s4bbE2VhEFN7XjQioZLR11rQEmjaQ1hHSSRmX3ixxwPxCAaaRsK1aYVnQP2e1eLBhtSn",
+        "3jBa9aVpUyuHF8gthKehDFTKh3JaA6CRb7y6B9ZNTDieo3FMjbFrikQiZZ6kAfq5ymNVBWmcSW84irX3epWqu78Q",
+        "57sTJWE5Kvi8fpSjBFYuzZW1uGKNBtBMRZ3TJnddnui7A9FtjZTotAAbEr5paD9wiRaCdNATKpDYkGTLc6ER2YrC",
+        "44e4WXDAATvowRYViHPw5LGrEeRFTP47KrNHx1LHHNYJCuh3HcV6wpSBYcKTmyzSuwvAhKe3geKYZ27pcUJmeNfK"
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/4NVYzz3QRyWbjsiW6JdnqgGGBhg5FBKW3Y8xaoSBtEPAsn7NfiUSpiu1njpkTJC6qFo1oECw3jEnNMVhuodox5m1?cluster=devnet",
+        "https://explorer.solana.com/tx/31c3SKU1vJG153vV6z5VVtYP3LLdvE37WPe3GUVGBGQCY7GBHL98MiamZngdxDtfEZYpv5csj2WAZjNREAHzqxLt?cluster=devnet",
+        "https://explorer.solana.com/tx/4Cha1esynKfoWcy9Zwn9s4bbE2VhEFN7XjQioZLR11rQEmjaQ1hHSSRmX3ixxwPxCAaaRsK1aYVnQP2e1eLBhtSn?cluster=devnet",
+        "https://explorer.solana.com/tx/3jBa9aVpUyuHF8gthKehDFTKh3JaA6CRb7y6B9ZNTDieo3FMjbFrikQiZZ6kAfq5ymNVBWmcSW84irX3epWqu78Q?cluster=devnet",
+        "https://explorer.solana.com/tx/57sTJWE5Kvi8fpSjBFYuzZW1uGKNBtBMRZ3TJnddnui7A9FtjZTotAAbEr5paD9wiRaCdNATKpDYkGTLc6ER2YrC?cluster=devnet",
+        "https://explorer.solana.com/tx/44e4WXDAATvowRYViHPw5LGrEeRFTP47KrNHx1LHHNYJCuh3HcV6wpSBYcKTmyzSuwvAhKe3geKYZ27pcUJmeNfK?cluster=devnet"
+      ]
+    },
+    {
+      "name": "lottery: once due, player 1 claims (draw_lottery, MagicBlock’s oracle draws on devnet, then both places paid); 3.5 and 1.5 GOLD to the winners",
+      "at": "2026-10-12T02:39:36.902Z",
+      "ok": true,
+      "winners": [
+        {
+          "place": 1,
+          "winner": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc"
+        },
+        {
+          "place": 2,
+          "winner": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF"
+        }
+      ],
+      "says": "You won place 1 in “Quick draw”!",
+      "gained": {
+        "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc": "3500000",
+        "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF": "1500000"
+      },
+      "expected": {
+        "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc": "3500000",
+        "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF": "1500000"
+      },
+      "potLeft": "0",
+      "round": 1,
+      "status": "Open",
+      "signatures": [
+        "2Noa1ZDQ44PAVSiqEkWKFxVvJXgozMwJyHeUrRQFowdLGw3M51DrUxFAcTU2yjmeChqebWHcq1zGLYtyj8nDCUXR",
+        "3HNQqj3uq5yeC3MZs6aJgJQ2Ds4o4GJPRyhWPgWb8uBHCUstWqY3mwLrkBjTSFAB3N9NtQzfMCDZXiS3C32rfdLJ"
+      ],
+      "receipts": [
+        [],
+        [
+          {
+            "name": "LotteryPaid",
+            "data": {
+              "game": "2tJrLi4eFQmVstW3gXUXtegBgLoAuCHSu5kZT8LRTvYp",
+              "id": 1,
+              "round": 0,
+              "place": 0,
+              "winner": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+              "amount": "3500000"
+            }
+          },
+          {
+            "name": "LotteryPaid",
+            "data": {
+              "game": "2tJrLi4eFQmVstW3gXUXtegBgLoAuCHSu5kZT8LRTvYp",
+              "id": 1,
+              "round": 0,
+              "place": 1,
+              "winner": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+              "amount": "1500000"
+            }
+          }
+        ]
+      ],
+      "explorer": [
+        "https://explorer.solana.com/tx/2Noa1ZDQ44PAVSiqEkWKFxVvJXgozMwJyHeUrRQFowdLGw3M51DrUxFAcTU2yjmeChqebWHcq1zGLYtyj8nDCUXR?cluster=devnet",
+        "https://explorer.solana.com/tx/3HNQqj3uq5yeC3MZs6aJgJQ2Ds4o4GJPRyhWPgWb8uBHCUstWqY3mwLrkBjTSFAB3N9NtQzfMCDZXiS3C32rfdLJ?cluster=devnet"
+      ]
+    },
+    {
+      "name": "reads: the state the page sends the game, and player 1’s own receipts",
+      "at": "2026-10-12T02:42:20.023Z",
+      "ok": true,
+      "state": {
+        "player": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+        "live": true,
+        "balances": {
+          "sol": {
+            "amount": "0.742316422 SOL",
+            "symbol": "SOL"
+          },
+          "gold": {
+            "amount": "103.7 GOLD",
+            "symbol": "GOLD"
+          }
+        },
+        "pools": {
+          "house": {
+            "amount": "0.053 SOL",
+            "symbol": "SOL"
+          },
+          "pot": {
+            "amount": "0 GOLD",
+            "symbol": "GOLD"
+          },
+          "rewards": {
+            "amount": "0 GOLD",
+            "symbol": "GOLD"
+          },
+          "fees": {
+            "amount": "1.8 GOLD",
+            "symbol": "GOLD"
+          }
+        },
+        "tickets": {
+          "draw": {
+            "mine": 0,
+            "sold": 0,
+            "pot": "0 GOLD",
+            "status": "open",
+            "drawsAt": 1791773047,
+            "nextDraw": "in 2 minutes"
+          }
+        },
+        "stakes": {
+          "back": {
+            "staked": "0 GOLD",
+            "pending": "0 GOLD",
+            "locked": false,
+            "unlocksAt": 0
+          }
+        },
+        "contests": {
+          "duel": {
+            "open": false,
+            "sides": [
+              {
+                "name": "Red",
+                "total": "5 GOLD"
+              },
+              {
+                "name": "Blue",
+                "total": "3 GOLD"
+              }
+            ],
+            "mine": [],
+            "verdict": "won",
+            "winner": "Red"
+          }
+        },
+        "holds": {
+          "quest": []
+        },
+        "claimable": []
+      },
+      "receipts": [
+        {
+          "name": "LotteryPaid",
+          "signature": "3HNQqj3uq5yeC3MZs6aJgJQ2Ds4o4GJPRyhWPgWb8uBHCUstWqY3mwLrkBjTSFAB3N9NtQzfMCDZXiS3C32rfdLJ"
+        },
+        {
+          "name": "LotteryPaid",
+          "signature": "3HNQqj3uq5yeC3MZs6aJgJQ2Ds4o4GJPRyhWPgWb8uBHCUstWqY3mwLrkBjTSFAB3N9NtQzfMCDZXiS3C32rfdLJ"
+        },
+        {
+          "name": "Claimed",
+          "signature": "57sTJWE5Kvi8fpSjBFYuzZW1uGKNBtBMRZ3TJnddnui7A9FtjZTotAAbEr5paD9wiRaCdNATKpDYkGTLc6ER2YrC"
+        },
+        {
+          "name": "Entered",
+          "signature": "31c3SKU1vJG153vV6z5VVtYP3LLdvE37WPe3GUVGBGQCY7GBHL98MiamZngdxDtfEZYpv5csj2WAZjNREAHzqxLt"
+        },
+        {
+          "name": "Unstaked",
+          "signature": "5PB8FHW3K7PUto7XnKvDVVf4PFiq6MHpsWLVb86zkyLdrmGkNgwUr3Zo6ZaFhvt4DhfeCdk84hviCsisNAXKU7iM"
+        },
+        {
+          "name": "Unstaked",
+          "signature": "46XsZjMJj89UszMUbM44dxcw7dGfsK2WadwHfmBXEKCVspezRFbFEKwrrvhrpWVDHW8aGD6z2sSSEU1tg4g8vMJA"
+        },
+        {
+          "name": "Staked",
+          "signature": "5PCHY2g25hNuJ1VLwCbSmJPqgTfE4GUnaykSG7mZgbRF8BnDDs5rzkA62RcCp25Bd2JUJNdozWVNsgZkTZLxTfdn"
+        },
+        {
+          "name": "Awarded",
+          "signature": "tacQM5iE5AXBsUQUSC76bco16LCYrngnGaG6gquweVgzoX7wJUkLCpE85AEX2DKb5TpXK9rUNr9K7AYMASCk3o5"
+        },
+        {
+          "name": "Held",
+          "signature": "3KzQALwjopVEVc5wRZFBk3e3WYH99bndH7hpbQPMyPaCUGcdGYbc2cHUrKp9nXXL9W1qRvrznuzjnkey7Lx63dAh"
+        },
+        {
+          "name": "Crafted",
+          "signature": "4Rk38cvxteUwwbUPhCysfDBDy6WCCJVDm93ifRbrQBqhAP9kUm9DrhzxrcqVdMTftvTJYVeghCShAZG277srmy3A"
+        },
+        {
+          "name": "OrderSettled",
+          "signature": "4awUWroy9H4jZhWwneABYc2v6Q49J4XqkkUe7XgJ5MTbBd7k8vviFJbZgpiHhaXYjThTHiYhmP3GBWetegxAiHdA"
+        },
+        {
+          "name": "OrderSettled",
+          "signature": "id5ak4PDnoqAxP9o71PNQynbPf1aGfggoRaMhGmwANWHhixtUSj1tJVwxahgNrYqQtpTEDC6qtbKkeS9HzFfwcM"
+        },
+        {
+          "name": "OrderRolled",
+          "signature": "56FJLyCoY3j1g3o4cNHfehh6Ee2oLz81zQqafUe6UMYYVKKQVvWC5EaLFVbmEfvoUNEYSWRKX12FBPuF3fg4ZZsf"
+        },
+        {
+          "name": "TicketsBought",
+          "signature": "5S2YmVbMSK3Cw11QJtPfCgZLoJdqc7oPmUfAqRjrU5DpdSvf7oTvriD66TqC7gpwZ6yF43Z5s7F8ApdNfmgCB6at"
+        }
+      ]
+    }
+  ],
+  "checks": {},
+  "creator": "7eqbK77uXxrZmd8gi6wGogYgQ6Ks9BH8PLhEA3vtUHy4",
+  "authority": "Hby5BFRb3qfaDyY2Fza4UtjfRn4aFmvdnMAouigMurAs",
+  "player1": "43QBMgKHHkPuPZsN4KUwUkbxJkHfv4gZF1d7xNMP66gc",
+  "player2": "ACJCKRg7AVn6mE4vyggRKDrc3y1FiuTm6VqPqJEChfXF",
+  "economy": {
+    "version": 1,
+    "network": "devnet",
+    "name": "Play proof",
+    "currency": "sol",
+    "keys": {
+      "authority": "Hby5BFRb3qfaDyY2Fza4UtjfRn4aFmvdnMAouigMurAs"
+    },
+    "tokens": [
+      {
+        "key": "sol",
+        "source": "sol"
+      },
+      {
+        "key": "gold",
+        "source": "existing",
+        "name": "Gold (test)",
+        "symbol": "GOLD",
+        "decimals": 6,
+        "mint": "9Ru2FcXZX4BvycGUW5zjENppUNTDit6WLNY1AxaPew2N",
+        "venue": "other",
+        "powers": {
+          "mintAuthority": "someone else",
+          "freeze": false
+        }
+      }
+    ],
+    "collection": {
+      "name": "Play proof"
+    },
+    "items": [
+      {
+        "key": "relic",
+        "id": 1,
+        "name": "Relic",
+        "price": 0.001
+      },
+      {
+        "key": "blade",
+        "id": 2,
+        "name": "Blade"
+      }
+    ],
+    "pools": [
+      {
+        "key": "house",
+        "index": 0,
+        "currency": "sol",
+        "seed": 0.05
+      },
+      {
+        "key": "pot",
+        "index": 1,
+        "currency": "gold"
+      },
+      {
+        "key": "rewards",
+        "index": 2,
+        "currency": "gold",
+        "seed": 8,
+        "about": "The creator deposits the 8 GOLD once both players staked, so they share it 10 : 30."
+      },
+      {
+        "key": "fees",
+        "index": 3,
+        "currency": "gold"
+      }
+    ],
+    "boxes": [
+      {
+        "key": "flip",
+        "id": 1,
+        "name": "Coin flip",
+        "price": 0.01,
+        "split": [
+          {
+            "to": "pool:house",
+            "percent": 90
+          }
+        ],
+        "outcomes": [
+          {
+            "gives": "pay",
+            "chance": 50,
+            "pool": "house",
+            "amount": 0.015
+          },
+          {
+            "gives": "nothing",
+            "chance": 50
+          }
+        ]
+      }
+    ],
+    "recipes": [
+      {
+        "key": "forge",
+        "id": 1,
+        "name": "Forge a blade",
+        "in": [
+          {
+            "takes": "burn",
+            "item": "relic",
+            "count": 1
+          },
+          {
+            "takes": "pay",
+            "amount": 1,
+            "currency": "gold",
+            "to": "pool:fees"
+          }
+        ],
+        "out": [
+          {
+            "gives": "item",
+            "item": "blade"
+          }
+        ]
+      }
+    ],
+    "lotteries": [
+      {
+        "key": "draw",
+        "id": 1,
+        "name": "Quick draw",
+        "pot": "pot",
+        "price": 1,
+        "places": [
+          70,
+          30
+        ],
+        "every": "120s"
+      }
+    ],
+    "stakes": [
+      {
+        "key": "back",
+        "id": 1,
+        "name": "Back the house",
+        "stakes": "gold",
+        "rewards": "rewards"
+      }
+    ],
+    "contests": [
+      {
+        "key": "duel",
+        "name": "Duel",
+        "currency": "gold",
+        "sides": 2,
+        "sideNames": [
+          "Red",
+          "Blue"
+        ],
+        "entriesClose": "90s",
+        "resultDue": "10m",
+        "split": [
+          {
+            "to": "pool:fees",
+            "percent": 10
+          }
+        ],
+        "decidedBy": "the authority, in this script"
+      }
+    ],
+    "holds": [
+      {
+        "key": "quest",
+        "name": "Quest",
+        "item": "blade",
+        "for": "1h",
+        "decidedBy": "the authority, in this script"
+      }
+    ],
+    "live": {
+      "program": "88Labq6tdVnBQsjHSfic6qqgvo5b9NGmy99AYj7KVXqM",
+      "game": "2tJrLi4eFQmVstW3gXUXtegBgLoAuCHSu5kZT8LRTvYp",
+      "collection": "FhoeYHdqRUMv1sYXnpV8x4bkR9KZfGMmWUtuEgJRgNZw",
+      "treasury": "rAqWmDKnGiesJtpCfJVdeAuDrshu3dwhwFYu94GKg2X",
+      "authority": "Hby5BFRb3qfaDyY2Fza4UtjfRn4aFmvdnMAouigMurAs",
+      "at": "2026-10-12T02:38:10.580Z"
+    }
+  },
+  "specCheck": {
+    "ok": true,
+    "refusals": [],
+    "warnings": [
+      "W-MINT-POWERS",
+      "W-FEE",
+      "W-POOL",
+      "W-FEE",
+      "W-STAKE-LOCK",
+      "W-CHANCE-PRIZE",
+      "W-AUTHORITY",
+      "W-CHANCE-PRIZE"
+    ]
+  },
+  "actions": [
+    "item:relic:buy",
+    "box:flip:open",
+    "recipe:forge:craft",
+    "lottery:draw:tickets",
+    "lottery:draw:claim",
+    "stake:back:stake",
+    "stake:back:unstake",
+    "stake:back:claim",
+    "contest:duel:enter:0",
+    "contest:duel:enter:1",
+    "contest:duel:claim",
+    "hold:quest:hold",
+    "hold:quest:claim"
+  ],
+  "lamportsSpent": {
+    "creator": "75505720",
+    "authority": "3199680",
+    "player1": "36773240",
+    "player2": "14010880"
+  },
+  "finishedAt": "2026-10-12T02:43:29.958Z",
+  "ok": true
+}

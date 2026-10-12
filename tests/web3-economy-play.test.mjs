@@ -17,6 +17,8 @@ import { readMessage, readTransaction, withSignature } from '../web3/gf-web3/cha
 import { readEconomy } from '../web3/gf-web3/econ/spec.js';
 import { createGfWeb3 } from '../web3/gf-web3/index.js';
 import { economyState, parseActionId, playerActions } from '../web3/economy/actions.mjs';
+import { migrateShop } from '../web3/economy/migrate.mjs';
+import { economyFromShop } from '../web3/gf-web3/econ/shop.js';
 import { freshKeypair } from '../web3/node/ed25519.mjs';
 import { fakeChain } from './web3/fake-chain.mjs';
 
@@ -164,6 +166,27 @@ describe('playerActions and economyState', () => {
     assert.deepEqual(s.stakes.backers, { staked: '5 ARENA', pending: '0.0015 SOL', locked: true, unlocksAt: 86900 });
     assert.deepEqual(s.claimable.map((c) => c.id), ['lottery:weekly:claim', 'stake:backers:claim']);
     assert.match(s.claimable[0].says, /You won place 2/);
+  });
+});
+
+describe('a game that still has a shop', () => {
+  const collection = 'BT3Po8rB7Deq7HxWkFNbXQmc3mnBPfij7M89UEfuKGLx';
+  const shop = {
+    name: 'Bean Brawl Items', royaltyBps: 500, collection, game: lootPda.game(collection), treasury: collection,
+    currency: { mint: NATIVE_MINT, symbol: 'SOL', decimals: 9, native: true },
+    items: [{ id: 1, name: 'Golden Hat', rarity: 'Rare', price: '50000000', maxSupply: 0, soulbound: false, listed: true }, { id: 2, name: 'Ice Skin', rarity: 'Epic', price: '0', maxSupply: 0, soulbound: false, listed: true }],
+    boxes: [{ id: 1, name: 'Mystery Box', price: '10000000', entries: [{ item: 1, weight: 60 }, { item: 2, weight: 40 }], listed: true }],
+  };
+  it('reads as the economy migrate.mjs makes of it, live where gf-web3 2.0.0 put it live on 0.3', () => {
+    const config = { version: 1, network: 'devnet', shop };
+    const { live, ...mine } = economyFromShop(config);
+    const { previous, ...theirs } = migrateShop(config).config.economy;
+    assert.deepEqual(mine, theirs);
+    assert.deepEqual(live, { game: shop.game, collection, treasury: collection });
+    assert.equal(previous.game, shop.game, 'the migration keeps it as previous; the kit plays it where it is');
+    const old = economyFromShop({ version: 1, network: 'devnet', shop: { ...shop, game: 'FWVap91111111111111111111111111111111111111' } });
+    assert.equal(old.live, undefined, 'a 0.1/0.2 shop is not live on 0.3');
+    assert.equal(economyFromShop({ version: 1, network: 'devnet', shop, economy: { name: 'x' } }), null, 'an economy wins');
   });
 });
 
