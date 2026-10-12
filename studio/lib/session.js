@@ -66,7 +66,7 @@ export function readQueue(raw, hide = new Set()) {
 }
 
 /** No session has reached the studio. The one step that gets one here, with or without the plugin. */
-export const NONE_HINT = 'No agent session is listening yet. In your agent (Claude Code or Codex), in the kit folder, have it start this in the background: node bin/gamesfun.mjs session wait. The one line does that for you. What you send here waits for it.';
+export const NONE_HINT = 'In your agent (Claude Code or Codex), in the kit folder, have it run node bin/gamesfun.mjs session wait in the background (the one line does that for you). What you send here waits for it.';
 /** connect has run here and the plugin is in (its record, GET /api/studio/setup): either way works, nothing to reload. */
 export const RELOAD_HINT = 'Ask your session to start node bin/gamesfun.mjs session wait in the background (in Claude Code, /reload-plugins also links it). What you send here waits for it.';
 export const IDLE_HINT = 'Type go in its terminal: it picks up what you sent.';
