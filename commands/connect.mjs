@@ -21,7 +21,7 @@ export async function recordConnected(r, { remove = false, dir = STATE } = {}) {
 
 /** One line for a registration re-pointed at this checkout: the old folder, the new one, and how to switch back. */
 export function movedLine(m, { dryRun = false } = {}) {
-  const back = m.live ? `${m.from} still holds a kit: run connect in that folder to switch back` : 'that folder no longer holds a kit';
+  const back = m.live ? 'that folder still holds a kit: run connect in that folder to switch back' : 'that folder no longer holds a kit';
   return `${dryRun ? 'would move' : 'moved'}: ${m.what} was from ${m.from}, ${dryRun ? 'would be' : 'is now'} from ${m.to} (${back})`;
 }
 
