@@ -282,8 +282,11 @@ addEventListener('message', e => {
 /** Check 22: the wallet in the home menu, through a stand-in for the /play page. → {ok, detail, record, warnings}
  * clock: for an engine with no stepped time (forge: kit/core/boot-forge.js has no window.__game.step), the economy page
  * plays in real time on a round cut to `clock` seconds (config/game.json /round/seconds through the overrides, as check 6
- * does), and still reaches the results card. 0 (the party and scenic boots): stepped time. */
-export async function checkWallet({ newPage, url, log = () => {}, shot = null, clock = 0 }) {
+ * does), and still reaches the results card. 0 (the party and scenic boots): stepped time.
+ * world: a world (CONTRACT §9) has no round and no results card, so the economy's page is not played there (a note says
+ * so). Until 2026-10-12 it was: the round never ended, and the stepped frames' world polls ran the world server's limit
+ * of 120 reads a minute out, so every world check after 22 read 429 (Blockhaven's release verify). */
+export async function checkWallet({ newPage, url, log = () => {}, shot = null, clock = 0, world = false }) {
   const gameUrl = `${url}${url.includes('?') ? '&' : '?'}seed=4&bots=1`;
   const html = HOST_HTML(gameUrl), htmlStep = HOST_HTML(`${gameUrl}&gf-step=1`);
   // /step: the economy's page, the game in stepped time (kit/core/step.js) so a whole round ends in seconds
@@ -348,7 +351,8 @@ export async function checkWallet({ newPage, url, log = () => {}, shot = null, c
   finally { await T.ctx.close().catch(() => {}); }
   // the economy's buttons (CONTRACT §6g W2), on a page of their own
   const E = { steps: [], fail: [] };
-  if (!fail.length) {
+  if (world) warnings.push('the wallet in the menu: a world has no round or results card; the economy\'s buttons are not played here (check 22\'s economy page)');
+  else if (!fail.length) {
     try { await checkEconomy({ newPage, hostUrl: clock ? `${hostUrl}real` : `${hostUrl}step`, shot, E, clock }); }
     catch (e) { if (!E.fail.length) E.fail.push(`the economy: ${e.message}`); }
   }
@@ -356,7 +360,7 @@ export async function checkWallet({ newPage, url, log = () => {}, shot = null, c
   steps.push(...E.steps); fail.push(...E.fail);
   const ok = fail.length === 0 && steps.length > 0;
   log(`wallet: ${ok ? 'ok' : fail.join('; ')}`);
-  return { ok, detail: ok ? 'framed by a stand-in /play page: the menu listed its wallet, connected through the page, showed the address and 2 items, wore one through the page (the player drawn in its colour), disconnected, and Play with friends asked the page; with no economy offered nothing of it showed (home, wallet view, HUD, pause, results), then each of the page\'s economy buttons showed only where it said (results card, wallet view, pause menu) and a real click asked the page, and the HUD line showed and followed the page\'s state' + (clock ? ` (the economy page in real time on a ${clock} s round: this engine has no stepped time)` : '') : `the wallet in the menu: ${fail.slice(0, 5).join('; ')}`, record: { steps }, warnings };
+  return { ok, detail: ok ? 'framed by a stand-in /play page: the menu listed its wallet, connected through the page, showed the address and 2 items, wore one through the page (the player drawn in its colour), disconnected, and Play with friends asked the page' + (world ? ' (a world: no round or results card, so the economy\'s page was not played)' : '; with no economy offered nothing of it showed (home, wallet view, HUD, pause, results), then each of the page\'s economy buttons showed only where it said (results card, wallet view, pause menu) and a real click asked the page, and the HUD line showed and followed the page\'s state') + (clock ? ` (the economy page in real time on a ${clock} s round: this engine has no stepped time)` : '') : `the wallet in the menu: ${fail.slice(0, 5).join('; ')}`, record: { steps }, warnings };
 }
 
 // ---- check 22, the economy (CONTRACT §6g W2): the page's buttons and lines, drawn by the kit, clicks told to the page ----

@@ -450,6 +450,13 @@
         "note": "Check 5's loadout leg. True only of a game that draws players as characters."
       },
       {
+        "hash": "e587c925bbbf",
+        "starts": "- **A backend is the person's own** (`spec.backend`: their own d",
+        "home": "part",
+        "part": "backend",
+        "note": "Open builder wave 11 track L. True only of a game whose spec names a backend (loop/brief.mjs USES.backend; loop/backend.mjs). Verify runs every game with nothing connected; the check for each need is the kit's (track B)."
+      },
+      {
         "hash": "6eb711c6a5ad",
         "starts": "- **Generated models are the worker's.** A body or prop the spec",
         "home": "part",

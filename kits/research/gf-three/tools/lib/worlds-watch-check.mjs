@@ -20,7 +20,7 @@
 // 1.6.3; research/watch/evidence/own-room-or-solo-request-2026-10-10.json). The creator, 2026-10-11: "If I close my game
 // but want to stream live from the same link as before, how can I do that?" (gf-multiplayer 1.6.5, the streamer link).
 import { player } from './worlds-room-check.mjs';
-import { streamerLinkFrom } from './friends-watch-check.mjs';
+import { streamerLinkFrom, voiceSteps } from './friends-watch-check.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
@@ -73,6 +73,8 @@ export async function checkWorldWatch({ browser, server, log = () => {}, shot = 
     B = await viewer(browser, server, live.id, 'viewer B', errors);
     const keyed = await until(async () => { const w = (await B.party()).watch; return w?.keyed ? w : null; }, 15000, 'B tuned in').catch(() => null);
     step('a viewer tunes in to the stream (key frame taken)', !!keyed, keyed ? `following ${keyed.follow?.name} (${keyed.roster} in the stream)` : JSON.stringify((await B.party()).watch));
+    const voice = await voiceSteps({ streamer: A.page, streamerGame: A.page.frames().find(f => f.parentFrame() === A.page.mainFrame()), viewer: B.page, step });
+    if (voice.skipped) log(`  watch: ${voice.skipped}`);
     const bar = await B.page.evaluate(() => document.querySelector('#mp-watch:not([hidden])')?.textContent ?? null);
     step('the viewer\'s bar: LIVE, the streamer, Join', /LIVE/.test(bar ?? '') && /Ada/.test(bar ?? '') && /Join/.test(bar ?? ''), bar ?? 'no bar');
     // kit 1.6.3: the game alone beside Join; a world is one shared world per link, so no room of one's own

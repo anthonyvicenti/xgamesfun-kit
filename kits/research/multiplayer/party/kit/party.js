@@ -43,6 +43,11 @@
  * Kit 1.6.1: live rounds too. The streamer goes live from the game's menu or the waiting room (#mp-golive); a viewer's
  * page loads each round's game page with that round's seed as the stream reaches it, and Join opens the room's own
  * link (?join=<code>): the viewer plays from the next round.
+ * Kit 1.7.0 (2026-10-12; the creator: "How hard would it be to add in an audio stream from a mic for the stream
+ * watchers"): the streamer's voice. The Studio play page above this frame opens the microphone (never this page: the
+ * play origin is every game's) and posts compressed Opus packets ({type:'gf:voice'}, creator-studio/lib/voice-capture.mjs);
+ * this page sends them on its stream as `a` frames, and tells the page above when it is live ({type:'gf:live-state'}). A
+ * viewer turns the sound on with a tap (#mp-watch-sound) and hears the voice in step with the game, decoded by WebCodecs.
  * Query:  ?join=CODE (invite link) · ?signal=<url> (signaling endpoint) · ?watch=<id> (a stream to watch, kit 1.6.0)
  *         QA only: ?max=<seconds> (round cap; a world: its seats, 1-8) · ?gq=<query> (extra query for the game's page,
  *         e.g. a one-lap race) · ?min=<players> (a smaller start minimum, never below 1)
@@ -1110,7 +1115,36 @@
     });
     return LIVE_API;
   }
-  function liveChanged() { LV.fns.forEach(function (fn) { try { fn(LIVE_API); } catch (e) { console.error(e); } }); renderLiveBadge(); renderSaved(); if (!WORLD && S.phase === 'room') { cardKey = null; render(); } }
+  function liveChanged() { LV.fns.forEach(function (fn) { try { fn(LIVE_API); } catch (e) { console.error(e); } }); renderLiveBadge(); renderSaved(); liveTellPage(); if (!WORLD && S.phase === 'room') { cardKey = null; render(); } }
+
+  // ---- the streamer's voice (kit 1.7.0) ----
+  // Only the page directly above this one, and only from Studio's origin (this machine, with no Studio: this page's
+  // own origin), may hand voice in: a game below this page, or another page on the play origin, never can.
+  var VOICE = { on: false, frames: 0, bytes: 0, refused: 0, at: 0 };
+  function voiceFrom(e) { return e.source === window.parent && e.origin === (LV.studio || location.origin); }
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || typeof d !== 'object' || (d.type !== 'gf:voice' && d.type !== 'gf:voice-state' && d.type !== 'gf:live-ask')) return;
+    if (!voiceFrom(e)) { VOICE.refused++; return; }
+    if (d.type === 'gf:live-ask') return liveTellPage(true);
+    if (d.type === 'gf:voice-state') { var on = d.on === true && LV.state === 'on'; if (on !== VOICE.on) { VOICE.on = on; LV.metaAt = 0; liveChanged(); } return; }
+    if (LV.state !== 'on' || !LV.ws || LV.ws.readyState !== 1) return;
+    if (typeof d.d !== 'string' || !d.d || d.d.length > 3800 || !/^[A-Za-z0-9+/]+={0,2}$/.test(d.d)) return;
+    var ms = Math.max(10, Math.min(400, Number(d.ms) || 100)), f = Math.max(10, Math.min(60, Number(d.f) || 20));
+    // the time is this page's clock, as every delta's is: a viewer plays the voice in step with the game
+    LV.ws.send('{"k":"a","t":' + Math.round(performance.now() - ms) + ',"f":' + f + ',"d":"' + d.d + '"}');
+    VOICE.frames++; VOICE.bytes += d.d.length; VOICE.at = performance.now();
+    if (!VOICE.on) { VOICE.on = true; LV.metaAt = 0; liveChanged(); }
+  });
+  // The page above (Studio's play page) shows the microphone button while this stream is on.
+  var liveTold = '';
+  function liveTellPage(force) {
+    if (window.parent === window) return;
+    var msg = { type: 'gf:live-state', v: 1, state: LV.state, viewers: LV.viewers, mic: VOICE.on, id: LV.id }, k = JSON.stringify(msg);
+    if (k === liveTold && !force) return;
+    liveTold = k;
+    try { window.parent.postMessage(msg, LV.studio || location.origin); } catch (e) {}
+  }
   function setLive(st, err) { LV.state = st; LV.error = err || null; liveChanged(); }
   function rand36(n) { var a = new Uint8Array(n), s = ''; crypto.getRandomValues(a); for (var i = 0; i < n; i++) s += (a[i] % 36).toString(36); return s; }
   function rand64(n) { var a = new Uint8Array(n), s = ''; crypto.getRandomValues(a); for (var i = 0; i < n; i++) s += String.fromCharCode(a[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
@@ -1216,7 +1250,7 @@
     var ws = LV.ws; LV.ws = null;
     if (ws) { try { if (ws.readyState === 1) ws.send('{"k":"bye"}'); ws.close(1000); } catch (e) {} }
     try { sessionStorage.removeItem('gf-watch:on:' + gameRoot.pathname); } catch (e) {}
-    LV.viewers = 0; LV.popup = false; LV.parts = []; LV.size = 0;
+    LV.viewers = 0; LV.popup = false; LV.parts = []; LV.size = 0; VOICE.on = false;
     setLive('off');
     liveBadgeSend();
     void why;
@@ -1228,7 +1262,7 @@
   function liveMeta() {
     var list = liveRoster(), mine = list.filter(function (p) { return p.id === S.you; })[0];
     return { v: 1, game: gameId(), title: $('rail-title').textContent || '', mode: WORLD ? 'world' : 'live', name: mine ? mine.name : (WORLD ? WS.name : name(S.you)),
-      color: mine ? mine.color : null, room: { code: S.code || null, n: list.length, max: WORLD ? WS.max : 8, locked: !WORLD && S.locked,
+      color: mine ? mine.color : null, mic: VOICE.on, room: { code: S.code || null, n: list.length, max: WORLD ? WS.max : 8, locked: !WORLD && S.locked,
         phase: WORLD ? 'world' : (S.standing ? S.standing.phase : 'lobby'), round: WORLD ? 1 : (S.standing ? S.standing.round : 0),
         result: !WORLD && S.standing && S.standing.phase === 'results' ? resultLine(S.standing) : null } };
   }
@@ -1316,7 +1350,7 @@
     var names = others.map(function (k) { return name(k); }), list = names.length > 2 ? names.length + ' people' : names.join(' and ');
     var who = mine ? (LV.state === 'starting' ? 'Going live…' : LV.state === 'error' ? 'Stream stopped' : 'You’re live' + (others.length ? ', with ' + list : '')) : list + (others.length > 1 ? ' are live' : ' is live');
     if (LV.state === 'error') b.replaceChildren(el('i', { class: 'rec off' }), document.createTextNode(' ' + who + (LV.error ? ': ' + LV.error : '')));
-    else b.replaceChildren(el('i', { class: 'rec' }), el('b', { text: 'LIVE' }), document.createTextNode(' ' + who + (LV.state === 'starting' ? '' : ' · ' + n + ' watching')));
+    else b.replaceChildren(el('i', { class: 'rec' }), el('b', { text: 'LIVE' }), document.createTextNode(' ' + who + (LV.state === 'starting' ? '' : ' · ' + n + ' watching') + (mine && VOICE.on ? ' · mic on' : '')));
     b.dataset.state = mine ? LV.state : 'other';
     b.hidden = false;
     livePopup();
@@ -1396,7 +1430,7 @@
   function newWatch(id) {
     return { id: id, ws: null, state: 'connecting', live: false, ended: false, full: false, mismatch: false, meta: null, viewers: 0, since: null,
       roster: [], you: null, keyed: false, pendingKey: null, queue: [], offset: null, lastHost: null, joinOpen: false, retry: null, ping: null,
-      got: { key: 0, d: 0, msgs: 0 } };
+      got: { key: 0, d: 0, msgs: 0, a: 0 }, voice: newVoice() };
   }
   function watchConnect(W) {
     watchConfig().then(function (c) {
@@ -1425,6 +1459,7 @@
     var W = WS.watch; if (!W) return;
     WS.watch = null;
     clearTimeout(W.retry); clearInterval(W.ping); W.queue.length = 0;
+    try { if (W.voice.dec && W.voice.dec.state !== 'closed') W.voice.dec.close(); if (W.voice.ctx) W.voice.ctx.close(); } catch (e) {}
     if (W.ws) { var ws = W.ws; W.ws = null; try { ws.close(1000); } catch (e) {} }
     var bar = $('mp-watch'); if (bar) bar.hidden = true;
     root.dataset.watch = '';
@@ -1432,7 +1467,7 @@
   function cleanMeta(m) {
     if (!m || typeof m !== 'object') return null;
     var r = m.room && typeof m.room === 'object' ? m.room : {};
-    return { game: text(m.game, 120), title: text(m.title, 60), mode: m.mode === 'live' ? 'live' : 'world', name: text(m.name, 24) || 'Someone', color: hexColor(m.color),
+    return { game: text(m.game, 120), title: text(m.title, 60), mode: m.mode === 'live' ? 'live' : 'world', name: text(m.name, 24) || 'Someone', color: hexColor(m.color), mic: m.mic === true,
       room: { n: Math.max(0, Math.min(99, r.n | 0)), max: Math.max(1, Math.min(99, r.max | 0 || 8)), code: typeof r.code === 'string' && /^[A-Za-z0-9-]{3,32}$/.test(r.code) ? r.code : null,
         phase: ['lobby', 'loading', 'countdown', 'racing', 'results', 'world'].indexOf(r.phase) >= 0 ? r.phase : null, round: Math.max(0, r.round | 0), result: text(r.result, 60) || null, locked: r.locked === true } };
   }
@@ -1451,6 +1486,7 @@
       renderWorld();
     } else if (m.k === 'key') { W.got.key++; watchKeyFrame(W, m); }
     else if (m.k === 'd') { W.got.d++; watchDelta(W, m); }
+    else if (m.k === 'a') { W.got.a++; watchVoice(W, m); }
     else if (m.k === 'meta') { var mt = cleanMeta(m.meta); if (mt) { watchMeta(W, mt); renderWorld(); } }
     else if (m.k === 'viewers') { W.viewers = Math.max(0, m.n | 0); renderWatch(); }
     else if (m.k === 'end') { W.live = false; W.ended = true; W.keyed = false; W.queue.length = 0; tellWorldPlayers(); renderWorld(); }
@@ -1505,6 +1541,70 @@
       W.queue.push({ at: m.t + (Number(x[0]) || 0) + W.offset + PLAYOUT_MS, t: x[1], from: x[2], d: x[3] });
     }
     if (W.queue.length > 4000) W.queue.splice(0, W.queue.length - 4000);
+  }
+  // ---- the streamer's voice, for a viewer (kit 1.7.0) ----
+  // Off until the viewer turns it on (a browser plays sound only after a tap). Each `a` frame is 100 ms of Opus packets
+  // (2-byte length, then the bytes: creator-studio/lib/voice-capture.mjs packVoice) stamped with the streamer's clock,
+  // so it is played at the same moment as the game messages around it: t + offset + PLAYOUT_MS.
+  function newVoice() {
+    return { on: false, ctx: null, gain: null, dec: null, due: [], next: 0, supported: typeof AudioDecoder === 'function' && typeof EncodedAudioChunk === 'function',
+      heard: 0, frames: 0, decoded: 0, played: 0, late: 0, errors: 0, level: 0, peak: 0, error: null };
+  }
+  function voicePackets(b64) {
+    var s; try { s = atob(b64); } catch (e) { return []; }
+    var out = [];
+    for (var o = 0; o + 2 <= s.length;) {
+      var n = (s.charCodeAt(o) << 8) | s.charCodeAt(o + 1); o += 2;
+      if (!n || o + n > s.length) break;
+      var b = new Uint8Array(n); for (var i = 0; i < n; i++) b[i] = s.charCodeAt(o + i);
+      out.push(b); o += n;
+    }
+    return out;
+  }
+  function watchVoice(W, m) {
+    var V = W.voice, was = V.heard; V.heard = performance.now();
+    if (!was) renderWatch();
+    if (!V.on || !V.dec || V.dec.state !== 'configured' || typeof m.d !== 'string' || typeof m.t !== 'number' || W.offset === null) return;
+    var f = Math.max(10, Math.min(60, Number(m.f) || 20)), pk = voicePackets(m.d);
+    V.frames++;
+    for (var i = 0; i < pk.length; i++) {
+      V.due.push(m.t + i * f + W.offset + PLAYOUT_MS);
+      try { V.dec.decode(new EncodedAudioChunk({ type: 'key', timestamp: Math.round((m.t + i * f) * 1000), duration: f * 1000, data: pk[i] })); }
+      catch (e) { V.errors++; V.due.pop(); }
+    }
+  }
+  function voicePlay(V, data) {
+    var at = V.due.shift();
+    try {
+      if (at === undefined || !V.ctx || !V.on) return;
+      var n = data.numberOfFrames, buf = V.ctx.createBuffer(1, n, data.sampleRate), ch = buf.getChannelData(0);
+      data.copyTo(ch, { planeIndex: 0, format: 'f32-planar' });
+      var sq = 0, pk = 0; for (var i = 0; i < n; i++) { sq += ch[i] * ch[i]; if (Math.abs(ch[i]) > pk) pk = Math.abs(ch[i]); }
+      V.level = Math.sqrt(sq / Math.max(1, n)); V.peak = Math.max(V.peak * 0.98, pk); V.decoded++;
+      var t = V.ctx.currentTime, when = t + (at - performance.now()) / 1000;
+      if (when < t - 0.03) { V.late++; V.next = 0; return; }                      // behind: skip it, the next one lands on time
+      if (V.next && Math.abs(when - V.next) < 0.04) when = V.next;                 // no clicks between packets
+      when = Math.max(when, t);
+      var src = V.ctx.createBufferSource(); src.buffer = buf; src.connect(V.gain); src.start(when);
+      V.next = when + buf.duration; V.played++;
+    } catch (e) { V.errors++; }
+    finally { try { data.close(); } catch (e) {} }
+  }
+  function watchSound() {
+    var W = WS.watch; if (!W) return;
+    var V = W.voice;
+    if (V.on) { V.on = false; V.due.length = 0; V.next = 0; try { V.ctx.suspend(); } catch (e) {} renderWatch(); return; }
+    if (!V.supported) { V.error = 'Sound isn’t supported in this browser'; renderWatch(); return; }
+    try {
+      if (!V.ctx) { var AC = window.AudioContext || window.webkitAudioContext; V.ctx = new AC(); V.gain = V.ctx.createGain(); V.gain.connect(V.ctx.destination); }
+      V.ctx.resume();
+      if (!V.dec || V.dec.state === 'closed') {
+        V.dec = new AudioDecoder({ output: function (d) { voicePlay(V, d); }, error: function (e) { V.errors++; V.error = 'The sound stopped'; V.on = false; V.due.length = 0; renderWatch(); } });
+        V.dec.configure({ codec: 'opus', sampleRate: 48000, numberOfChannels: 1 });
+      }
+      V.on = true; V.error = null; V.due.length = 0; V.next = 0;
+    } catch (e) { V.error = 'Sound isn’t supported in this browser'; V.on = false; }
+    renderWatch();
   }
   // A stream that sends nothing for 6 s (the streamer's tab frozen: a phone switched apps) says it is paused (kit 1.6.2)
   setInterval(function () { var W = WS.watch; if (!W || !W.live || !W.keyed || W.paused || !W.lastFrameAt) return; if (performance.now() - W.lastFrameAt > 6000) { W.paused = true; renderWatch(); } }, 1000);
@@ -1571,7 +1671,8 @@
       : live ? (W.keyed || !WORLD ? who + roundWord(W) + ' · ' + W.viewers + ' watching' : 'Tuning in to ' + who + '…') : W.ended ? who + '’s stream has ended' : W.meta ? who + ' isn’t live right now'
       : W.gotState ? 'Nobody is live on this link yet' : 'Looking for the stream…';
     var shut = live && !WORLD && !!(W.meta && W.meta.room.locked);     // kit 1.6.6: the streamer locked their room
-    var key = JSON.stringify([line, live, !!W.paused, WS.status, W.joinOpen, shut]);
+    var V = W.voice, talks = live && !!(W.meta && W.meta.mic || V.heard && performance.now() - V.heard < 5000);   // kit 1.7.0: the streamer's mic is on
+    var key = JSON.stringify([line, live, !!W.paused, WS.status, W.joinOpen, shut, talks, V.on, V.error]);
     bar.hidden = false;
     if (key === watchKeyStr) return;
     watchKeyStr = key;
@@ -1580,6 +1681,8 @@
     var acts = [el('button', { id: 'mp-watch-join', class: 'primary', type: 'button', text: shut ? 'Room locked' : live ? 'Join' : WORLD ? 'Enter the world' : 'Play with friends', title: shut ? who + ' is playing on their own: start a room or play solo' : null, onclick: watchJoin, disabled: busy || (shut ? true : null) })];
     if (live && !WORLD) acts.push(el('button', { id: 'mp-watch-own', type: 'button', text: 'Start a room', title: 'Your own room, for you and your friends', onclick: watchOwn, disabled: busy }));
     acts.push(el('button', { id: 'mp-watch-solo', type: 'button', text: 'Play solo', title: WORLD ? 'A practice copy: nothing you build is saved' : 'On your own, right now', onclick: watchSolo, disabled: busy }));
+    if (talks || V.on) acts.unshift(el('button', { id: 'mp-watch-sound', class: V.on ? 'sound on' : 'sound', type: 'button', 'aria-pressed': V.on ? 'true' : 'false',
+      text: V.error ? V.error : V.on ? '\u{1F50A} Sound on' : '\u{1F507} Tap for sound', title: V.on ? 'Mute ' + who : 'Hear ' + who + ' talk', onclick: watchSound, disabled: V.error && !V.supported ? true : null }));
     var kids = [el('span', { class: 'watch-line', id: 'mp-watch-line', text: line }), el('span', { class: 'watch-acts' }, acts)];
     if (live && !W.paused) kids.unshift(el('span', { class: 'live-tag' }, [el('i', { class: 'rec' }), el('b', { text: 'LIVE' })]));
     bar.replaceChildren.apply(bar, kids);          // never a null child: replaceChildren writes null out as text
@@ -1597,9 +1700,12 @@
         world: WORLD ? { key: WS.key, status: WS.status, code: WS.status === 'in' ? S.code : null, n: WS.n, max: WS.max, host: WS.status === 'in' && isWorldHost(), handoffs: WS.handoffs,
           lastHandoffMs: WS.lastHandoffMs, lastWhy: WS.lastWhy, cid: WS.cid, name: WS.name, players: worldPlayers(), started: WS.started, frame: WS.frameUrl, session: !!S.session } : null,
         // kit 1.6.0: streaming (this copy's own stream) and watching (a viewer)
-        locked: S.locked, live: { available: liveAvailable(), state: LV.state, id: LV.id, saved: LV.saved, link: LV.link, viewers: LV.viewers, error: LV.error, sent: LV.sent, relay: LV.relay, badges: Object.keys(BADGES) },
+        locked: S.locked, live: { available: liveAvailable(), state: LV.state, id: LV.id, saved: LV.saved, link: LV.link, viewers: LV.viewers, error: LV.error, sent: LV.sent, relay: LV.relay, badges: Object.keys(BADGES),
+          mic: { on: VOICE.on, frames: VOICE.frames, bytes: VOICE.bytes, refused: VOICE.refused } },
         watch: WS.watch ? { id: WS.watch.id, state: WS.watch.state, live: WS.watch.live, ended: WS.watch.ended, keyed: WS.watch.keyed, mismatch: WS.watch.mismatch, full: WS.watch.full,
-          viewers: WS.watch.viewers, follow: watchInfo(WS.watch).follow, roster: WS.watch.roster.length, queued: WS.watch.queue.length, got: WS.watch.got, joinOpen: WS.watch.joinOpen } : null,
+          viewers: WS.watch.viewers, follow: watchInfo(WS.watch).follow, roster: WS.watch.roster.length, queued: WS.watch.queue.length, got: WS.watch.got, joinOpen: WS.watch.joinOpen,
+          voice: (function (V) { return { on: V.on, supported: V.supported, mic: !!(WS.watch.meta && WS.watch.meta.mic), frames: V.frames, decoded: V.decoded, played: V.played, late: V.late, errors: V.errors,
+            level: Math.round(V.level * 1e4) / 1e4, peak: Math.round(V.peak * 1e4) / 1e4, error: V.error, ctx: V.ctx ? V.ctx.state : null }; })(WS.watch.voice) } : null,
         results: S.results, card: card.hidden ? null : (card.firstElementChild && card.firstElementChild.dataset.view) || 'fatal',
         adapter: { kind: A.kind, ok: A.ok, armed: A.armed, started: A.started, done: A.done, live: A.live, progress: A.progress, value: A.value, won: A.won, polls: A.polls, sent: A.sent, moves: A.moves, error: A.error } }));
     },

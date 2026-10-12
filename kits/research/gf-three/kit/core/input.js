@@ -25,7 +25,8 @@
 //   input.cursorMode = 'look'             the 'first' camera in a world (CONTRACT §9): the pointer lock where the page
 //                                          allows it (any click only takes the mouse; then the mouse looks and a click is the
 //                                          action at the crosshair, held for as long as the button is); where the frame
-//                                          refuses it (a post on X), the 'drag' way; on touch, the 'drag' way's taps.
+//                                          refuses it (a post on X), the 'drag' way, or following in full screen (below); on
+//                                          touch, the 'drag' way's taps.
 //                                          A refused re-lock (Esc, then a quick click) never stops the next click trying
 //   input.aimFree                         true while the cursor or a finger aims (cursorMode true or 'drag', or 'look' with
 //                                          the lock refused or on touch); false while the middle of the screen does
@@ -37,8 +38,14 @@
 // Keys typed into a text field (a sign's words) never move the player or fire an action.
 //   input.lockRefused                     true once the page refused the pointer lock before any lock worked: a frame
 //                                          sandboxed without allow-pointer-lock (a post on X, 2026-10-08). Looking is then
-//                                          click-drag, and the HUD's full-screen button keeps the cursor on the game
-//                                          (CONTRACT §6d C5). An observation only: nothing switches on it
+//                                          click-drag in the card, and the HUD's full-screen button keeps the cursor on the
+//                                          game (CONTRACT §6d C5)
+//   input.following                       true while the lock is refused, the page is full screen and the camera looks
+//                                          with the mouse (cursorMode false, or 'look': a world in first person, which then
+//                                          aims at the crosshair as under the lock): the camera follows the mouse with no button
+//                                          held, keeps turning while the cursor rests at an edge of the screen (EDGE), and the
+//                                          cursor is hidden over the game; a click is the action at once. The creator in a
+//                                          post on X, 2026-10-12: "The mouse doesnt want to follow at all" (it took a held drag)
 //
 // Keys: WASD or arrows move, Space jumps, mouse button / F / J is primary, right button / Q is secondary, E / K is
 // interact, Shift sprints. Escape always gives the mouse back (the browser does it; we never re-take it on our own).
@@ -51,6 +58,10 @@ const KEYMAP = {
 };
 const STICK_RADIUS = 60;
 const DRAG_PX = 6, TAP_PX = 12, TAP_MS = 380, LONG_MS = 450;
+// following (input.following): the edge band (a share of the screen, at least EDGE_MIN pixels) where a resting cursor
+// keeps turning the camera, up to EDGE_SPEED pixels of look a second at the very edge; one move's look is capped at
+// MOVE_CAP pixels (a jump when the page goes full screen is not a turn)
+const EDGE = 0.04, EDGE_MIN = 18, EDGE_SPEED = 900, MOVE_CAP = 160;
 const typing = t => !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
 
 export function createInput(dom, { win = globalThis.window } = {}) {
@@ -68,8 +79,13 @@ export function createInput(dom, { win = globalThis.window } = {}) {
   let pending = null;             // 'drag' mode: a mouse button down, not yet a drag or a click {button, x, y, drag}
   const taps = new Map();         // 'drag' mode: touches that may be taps {x, y, t, moved, long}
   state.lockRefused = false;
+  state.following = false;
+  const cursor = { x: 0, y: 0, on: false };   // following: where the cursor rests, and whether it is over the game
+  let lastUpdate = 0;
+  const fullScreen = () => { try { return !!win.document.fullscreenElement; } catch { return false; } };
+  function following() { return (state.cursorMode === false || state.cursorMode === 'look') && state.lockRefused && !state.touch && fullScreen() && win.document.pointerLockElement !== dom; }
   // 'drag' semantics: the orbit camera always; a first-person world where the frame refuses the lock
-  const dragLike = () => state.cursorMode === 'drag' || (state.cursorMode === 'look' && state.lockRefused);
+  const dragLike = () => state.cursorMode === 'drag' || (state.cursorMode === 'look' && state.lockRefused && !following());
   const tapsAct = () => state.cursorMode === 'drag' || state.cursorMode === 'look';
   Object.defineProperty(state, 'aimFree', { enumerable: true, get: () => state.cursorMode === true || dragLike() || (state.cursorMode === 'look' && state.touch) });
   // A refusal before any lock ever worked on this page is the frame saying no (Chrome's message names the sandbox).
@@ -104,6 +120,8 @@ export function createInput(dom, { win = globalThis.window } = {}) {
     const a = mouseAction(e.button);
     const locked = win.document.pointerLockElement === dom;
     trackPointer(e);
+    // following (full screen, the lock refused): a click is the action at once, at the crosshair, held as long as the button is
+    if (following()) { state.lastInput = performance.now(); dragging = false; if (a) press(a, true); return; }
     if (dragLike()) { state.lastInput = performance.now(); pending = { button: e.button, x: e.clientX, y: e.clientY, drag: false }; lastX = e.clientX; lastY = e.clientY; return; }
     if (state.cursorMode === true) { state.lastInput = performance.now(); if (a) press(a, true); return; }
     if (state.cursorMode === 'look' && !locked) {
@@ -143,13 +161,19 @@ export function createInput(dom, { win = globalThis.window } = {}) {
       return;
     }
     if (state.cursorMode === true) return;
+    if (following()) {
+      const cap = v => Math.max(-MOVE_CAP, Math.min(MOVE_CAP, v || 0));
+      lookX += cap(e.movementX); lookY += cap(e.movementY);
+      cursor.x = e.clientX; cursor.y = e.clientY; cursor.on = e.target === dom;
+      return;
+    }
     if (win.document.pointerLockElement === dom) { lookX += e.movementX || 0; lookY += e.movementY || 0; }
     else if (dragging) { lookX += e.clientX - lastX; lookY += e.clientY - lastY; lastX = e.clientX; lastY = e.clientY; }
   };
   const onContext = e => { if (e.target === dom) e.preventDefault(); };
   const onWheel = e => { if (e.target === dom && state.cursorMode) { wheel += Math.sign(-e.deltaY); e.preventDefault(); } };
   const pointerAt = (x, y) => { const w = win.innerWidth || 1, h = win.innerHeight || 1; state.pointer.x = (x / w) * 2 - 1; state.pointer.y = -((y / h) * 2 - 1); state.pointer.inside = true; };
-  const onLeave = () => { state.pointer.inside = false; };
+  const onLeave = () => { state.pointer.inside = false; cursor.on = false; };
   const onLock = () => { state.locked = win.document.pointerLockElement === dom; if (state.locked) lockedOnce = true; };
   const onLockError = () => { if (!lockedOnce) refused(null); };
   const onBlur = () => { held.clear(); keysDown.clear(); for (const a of ACTIONS) btn[a] = 0; dragging = false; pending = null; taps.clear(); stick.id = null; lookTouch.id = null; };
@@ -196,6 +220,15 @@ export function createInput(dom, { win = globalThis.window } = {}) {
 
   function update() {
     const on = state.enabled;
+    const now = performance.now(), dt = lastUpdate ? Math.min(0.1, (now - lastUpdate) / 1000) : 0; lastUpdate = now;
+    const follow = following();
+    if (follow !== state.following) { state.following = follow; dom.style.cursor = follow ? 'none' : ''; if (!follow) cursor.on = false; }
+    if (follow && cursor.on && on) {
+      // a cursor resting in the edge band keeps turning: the deeper, the faster (the screen's edge stops the move itself)
+      const w = win.innerWidth || 1, h = win.innerHeight || 1, bx = Math.max(EDGE_MIN, w * EDGE), by = Math.max(EDGE_MIN, h * EDGE);
+      const push = (p, size, band) => (p < band ? -(band - p) / band : p > size - 1 - band ? (p - (size - 1 - band)) / band : 0);
+      lookX += push(cursor.x, w, bx) * EDGE_SPEED * dt; lookY += push(cursor.y, h, by) * EDGE_SPEED * dt;
+    }
     // a long press that has not moved: the secondary action where the finger is
     for (const tap of taps.values()) if (!tap.moved && !tap.long && performance.now() - tap.t >= LONG_MS) { tap.long = true; pointerAt(tap.x, tap.y); presses.secondary++; releases.secondary++; }
     keyEdges.clear(); if (on) for (const k of keyEdgesNext) keyEdges.add(k); keyEdgesNext.clear();

@@ -8,10 +8,10 @@ MIT, like the rest of the kit files. The Node server uses the repo's vendored ws
 
 | File | What |
 |---|---|
-| `core.mjs` | The rules as pure logic: `Channel` (hello/claim, replace, size limits, rate bucket, key-frame cache, caps, slow viewers, read-only, grace, `end`, counts, expiry), plus `route`, `originOk`, `parseOrigins`, `httpAnswer`. Sockets, clock, one wake-up timer and storage are injected |
+| `core.mjs` | The rules as pure logic: `Channel` (hello/claim, replace, size limits, rate bucket, key-frame cache, caps, slow viewers, read-only, grace, `end`, counts, expiry, voice), `Repeater` (one share of a channel's viewers, 2026-10-12), `shardFor`, plus `route`, `originOk`, `parseOrigins`, `httpAnswer`. Sockets, clock, one wake-up timer and storage are injected |
 | `node.mjs` | `attachWatchRelay(server, opts)` for any `http.Server`, and a CLI |
 | `cloudflare/` | `worker.mjs` (route + origin check + `/health`), `channel.mjs` (the Durable Object logic, testable under Node), `wrangler.toml` |
-| `tests/` | `core.test.mjs` (units), `channel-do.test.mjs` (the DO class on a fake runtime), `node.test.mjs` (`--data`, CLI, mount), `e2e.test.mjs` (real WebSockets; takes a base URL) |
+| `tests/` | `core.test.mjs` (units), `tree.test.mjs` (a channel and its repeaters, voice, the per-address rules), `channel-do.test.mjs` (the DO class on a fake runtime), `node.test.mjs` (`--data`, CLI, mount), `e2e.test.mjs` (real WebSockets; takes a base URL), `load.mjs` (thousands of scripted viewers against a test copy) |
 
 ## Protocol in short
 
@@ -19,11 +19,29 @@ All under `/watch/v1/`; `<id>` is `^[a-z0-9]{12}$` (else 400).
 
 - `GET /watch/v1/<id>` gives `{v, id, live, viewers, meta, since}` (`since` is epoch ms), `no-store`, CORS `*`. `GET /watch/v1/health` gives `{ok: true}`.
 - WebSocket `?role=pub` is the streamer (first frame `hello` within 5 s: `{k:'hello', v:1, key, meta}`), a bare WebSocket is a viewer. `Origin`, when present, must be in `WATCH_ORIGINS` (403 before the upgrade).
-- Streamer frames: `key` (64 KB), `d` (16 KB), `meta` (2 KB), `bye`, `ping`. At most 40 a second, burst 80, else close 4008.
+- Streamer frames: `key` (64 KB), `d` (16 KB), `meta` (2 KB), `a` (4 KB: voice, since 2026-10-12), `bye`, `ping`. At most 40 a second, burst 80, else close 4008. `a` frames also have a byte budget (8,000 bytes a second, burst 16,000): past it a frame is dropped, the stream goes on. They are fanned out as they come and never cached (a late viewer gets no old voice).
 - Viewers get `state`, then the cached key frame and deltas, then every `key`/`d`/`meta`, `viewers` (at most once a second) and `end` (`bye` at once, `lost` after a 10 s grace).
-- Close codes: 1008 viewer sent anything but `ping`; 4003 wrong key; 4008 rate; 4009 replaced; 4010 slow viewer (more than 1 MiB buffered); 4029 channel full (200 viewers).
+- Close codes: 1008 viewer sent anything but `ping`; 4003 wrong key; 4008 rate; 4009 replaced; 4010 slow viewer (more than 1 MiB buffered); 4029 channel full (200 viewers on Node; on Cloudflare every repeater full) or one network's limit.
 - Two codes the plan does not name: **4000** for a first frame that is not a valid `hello` (or no hello within 5 s, or a binary streamer frame) and **1009** for a frame over its limit. Both come after `{k:'error', code}`.
 - `end` is not followed by a `state` frame; the viewer socket stays open, and `state` (live) plus a key frame follow when the streamer returns.
+
+## A few thousand viewers: repeaters (2026-10-12)
+
+The creator: "How hard is it to scale this up to at least a few thousand?". One Durable Object sending every frame to every viewer tops out in the hundreds, so on Cloudflare a channel's viewers are spread over **repeaters**: `WATCH_SHARDS` objects named `<id>~<n>`, each holding up to `WATCH_SHARD_VIEWERS` viewers (20 × 250 = 5,000 in `wrangler.toml`).
+
+- The streamer still talks to the channel's own object (`<id>`), which keeps the key, the meta and the cache, and now also counts **relays**: a repeater's one WebSocket to it (`?role=relay`), made object to object, never through the Worker (the Worker answers 403 to `role=relay`, `shard` or `last` from outside). The channel sends a relay exactly what it sends a viewer.
+- A repeater forwards everything down to its viewers as it came, keeps the state, the key frame and the deltas after it for newcomers, answers `ping`, and says how many it serves (`{k:'count', n}`, at most once a second, capped at `WATCH_SHARD_VIEWERS` by the channel). The channel counts them in: the streamer, every viewer and `GET /watch/v1/<id>` see the whole audience (up to about two seconds late).
+- The Worker starts a viewer at the repeater its address picks (`shardFor`: one network's viewers share a repeater, so the per-address cap holds); a full repeater answers 503 before the upgrade and the next one is tried; the last takes the socket and turns it away the usual way (`state` full, 4029). `WATCH_SHARD_BY=random` spreads one address over all of them (a load test from one machine).
+- A repeater with no viewers lets its line go after 30 s (`WATCH_LINGER_MS`) and may hibernate; a broken line (a deploy) comes back with backoff while viewers keep their sockets. `WATCH_SHARDS=0` keeps the old shape: every viewer on the channel's object, capped at `WATCH_MAX_VIEWERS`.
+- One network: phones on one carrier share an address, so the per-address cap is 32 (it was 8) and joins are paced: at most 40 new viewers at once from one address, then one a second (`WATCH_MAX_PER_IP`, `WATCH_IP_JOIN_BURST`). Node uses the same rules on the channel's own viewers.
+
+Node (local play, verify, the worlds server) has no repeaters: a few hundred viewers at most on one machine.
+
+**Load test** (`tests/load.mjs`): one scripted streamer (a key frame every 2 s, deltas and voice 10 a second each) and N scripted viewers, against a test copy of the relay that lets one address in N times:
+
+```bash
+node research/watch/relay/tests/load.mjs https://<test relay> --viewers 3000 --ramp 30 --seconds 60 --out load.json
+```
 
 ## Run it locally
 
@@ -71,7 +89,7 @@ Wrangler 4.140.0's `deploy` uploads the script and then fails on a follow-up loo
 5. Check: `curl https://gf-watch.<subdomain>.workers.dev/watch/v1/health` gives `{"ok":true}`. Then set the play host's `WATCH_RELAY_URL` to that `wss://…/watch/v1/` (track S).
 6. A custom route (for example `watch.games.fun/watch/v1/*`) can be added under `routes` in `wrangler.toml`; the path must stay `/watch/v1/`.
 
-`WATCH_MAX_PER_IP` (default 8; `0` turns it off): at most that many viewers of one channel from one client address (`CF-Connecting-IP` on Cloudflare, the socket's address on Node), so one network can't fill the audience; the one turned away gets `{k:'state', full: true, why: 'network'}` and close 4029.
+`WATCH_MAX_PER_IP` (default 32 since 2026-10-12, it was 8; `0` turns it off): at most that many viewers of one channel's object or repeater from one client address (`CF-Connecting-IP` on Cloudflare, the socket's address on Node), so one network can't fill the audience; joins from one address are also paced (40 at once, then one a second; `WATCH_IP_JOIN_BURST`). The one turned away gets `{k:'state', full: true, why: 'network'}` and close 4029, and the kit tries again in 20 s.
 
 Do not set `WATCH_GRACE_MS` or `WATCH_HELLO_MS` in production (test knobs; defaults are 10 s and 5 s).
 
@@ -82,6 +100,7 @@ Do not set `WATCH_GRACE_MS` or `WATCH_HELLO_MS` in production (test knobs; defau
 - `ping` is answered by `setWebSocketAutoResponse` without waking the object.
 - Storage: one small key-value record per channel plus the id; writes happen on go-live, end, meta changes and key binding, not per frame. Channels are deleted 30 days after last use (alarm).
 - Worker requests: one per HTTP GET and per WebSocket connect.
+- With repeaters (2026-10-12): every repeater in use is awake while its stream is live (its line to the channel keeps it in memory), so a stream with 4,000 viewers on 20 repeaters is about 21 objects awake. Each repeater's frames from the channel arrive on a WebSocket it opened itself; each viewer's WebSocket connect adds one Worker request and one Durable Object request, plus one per repeater tried while the first ones are full. Voice adds about 10 incoming messages a second to the channel (0.5 request a second at 20 to 1).
 
 ## Notes on behaviour
 

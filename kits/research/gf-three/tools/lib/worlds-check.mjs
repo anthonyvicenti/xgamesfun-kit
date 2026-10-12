@@ -45,8 +45,11 @@ export async function findBuildSpot(p, { turn = null } = {}) {
           if (hidden) continue;
         }
         if (g.snapshot().players.some(q => Math.abs(q.x - to[0]) < 0.9 && Math.abs(q.z - to[2]) < 0.9)) continue;
-        out.push({ x, z, top, sx: s?.x, sy: s?.y, r });
+        out.push({ x, z, top, sx: s?.x, sy: s?.y, r, off: Math.abs(Math.atan2(Math.sin(a - (g.camera()?.yaw ?? 0)), Math.cos(a - (g.camera()?.yaw ?? 0)))) });
       }
+      // where the crosshair aims, the spot nearest ahead first: a short turn (a mouse that only follows, in a post's
+      // full screen, cannot turn half way round without reaching the screen's edge)
+      if (crosshair) out.sort((u, v) => u.off - v.off);
       return out[0] ?? null;
     }, [m, crosshair]);
   };
@@ -83,7 +86,7 @@ const same = (a, b) => !!a && !!b && a[0] === b[0] && a[1] === b[1] && a[2] === 
 /** First person: a click on the middle of the game takes the mouse (only takes it). → the camera after */
 export async function takeMouse(p) {
   const c = await camOf(p);
-  if (c.locked || c.mode !== 'first' || c.aimFree) return c;
+  if (c.locked || c.following || c.mode !== 'first' || c.aimFree) return c;
   const [w, h] = await G(p, () => [innerWidth, innerHeight]);
   const at = { x: w / 2, y: h / 2 }; cursors.set(p, at);
   await p.mouse.move(at.x, at.y); await sleep(60); await p.mouse.down(); await sleep(40); await p.mouse.up();

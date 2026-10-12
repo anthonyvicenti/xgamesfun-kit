@@ -4,6 +4,7 @@
 // (Studio: creator-studio/lib/pitch.mjs through tools/check-v2.mjs; a person's session: `create` checks the spec).
 import {STATE_SCHEMA,memoryStore,cancelState} from './state.mjs';
 import {specEconomy,readEconomy,paysForClears,KEEPER_HOLE,ECONOMY_FILE} from './economy.mjs';
+import {specBackend,specBackendProblems,lockedBackend} from './backend.mjs';
 
 export const TALK_STEPS=['pitch','spec','deliver','done'];
 
@@ -20,6 +21,9 @@ export const TALK_STEPS=['pitch','spec','deliver','done'];
  *                     refusals [{code, message, fix}]}. A locked spec that references an economy is held to it: the
  *                     economy is saved in <game>/gamesfun.json and its checker passes it. Absent (web3 off): a spec that
  *                     references an economy is not valid, and nothing else changes
+ *   backends          only in a session that can connect a backend (backend.mjs, wave 11 track L): true, or {check?(backend)
+ *                     → errors}. A locked spec with a `backend` is held to its shape and its answer carries the backend's
+ *                     words (`backend`). Absent: a spec with a backend is not valid, and nothing else changes
  *   say(key), log, checkpoint()
  *   hooks: prepare(loop) (the job folder), fastLock(loop) → true when the host locked the spec with no agent,
  *          beforeAgent(loop), afterAgent(loop), deliver(loop, answer) → the outcome
@@ -33,7 +37,15 @@ export async function openTalkLoop(host){
   const M={answer:null};
   const go=(next,why)=>({next,why});
   // The host's checker, then the economy a locked spec references (K3). A spec with no `economy` is the host's answer as it was.
+  // A spec with no `backend` (wave 11 track L) is the answer as the economy step left it.
   const check=async()=>{
+    const out=await checkEconomy();
+    if(out?.errors||out?.failure||out?.file!=='spec.json'||!specBackend(out.value))return out;
+    const B=host.backends,errors=[...specBackendProblems(out.value,B||null),...(B&&typeof B.check==='function'?(await B.check(specBackend(out.value)))??[]:[])];
+    if(errors.length)return {errors:errors.slice(0,12),file:out.file};
+    return {...out,backend:lockedBackend(specBackend(out.value))};
+  };
+  const checkEconomy=async()=>{
     const out=await host.check();
     if(out?.errors||out?.failure||out?.file!=='spec.json'||!specEconomy(out.value))return out;
     const E=host.economy,ref=specEconomy(out.value);
@@ -80,7 +92,7 @@ export async function openTalkLoop(host){
     },
     async deliver(){
       cp();
-      const r=await hooks.deliver?.(loop,M.answer??await check())??{outcome:M.answer?.errors?'invalid-output':M.answer?.failure?'agent-declined':M.answer?.file==='spec.json'?'locked':'pitched',...(M.answer?.economy&&!M.answer.errors?{economy:M.answer.economy}:{})};
+      const r=await hooks.deliver?.(loop,M.answer??await check())??{outcome:M.answer?.errors?'invalid-output':M.answer?.failure?'agent-declined':M.answer?.file==='spec.json'?'locked':'pitched',...(M.answer?.economy&&!M.answer.errors?{economy:M.answer.economy}:{}),...(M.answer?.backend&&!M.answer.errors?{backend:M.answer.backend}:{})};
       return {next:'done',why:'the answer was handed over',outcome:r};
     },
   };

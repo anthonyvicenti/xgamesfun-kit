@@ -48,6 +48,8 @@ export const USES={
   'assets:generated':spec=>(spec?.characters??[]).some(c=>MADE.has(c?.body?.from))||(spec?.world?.props??[]).some(p=>MADE.has(p?.from))||(spec?.characters?.length??0)>1,
   // a game played in rounds (a persistent world has no round to play with bots)
   'loop:round':spec=>spec?.round?.mode!=='world'&&spec?.engine!=='forge',
+  // the person's own database or server (loop/backend.mjs): only a spec that names one
+  backend:spec=>!!spec?.backend&&typeof spec.backend==='object',
 };
 export const usesPart=(part,spec)=>!part||!USES[part]||USES[part](spec);
 

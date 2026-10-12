@@ -47,6 +47,11 @@
       "text": "- **Cosmetics are the kit's** ([CONTRACT §6e]({{KIT}}/CONTRACT.md)): each player may wear their own loadout (body, hat, body colour, shot or stream colour), and the kit draws every player in it on every screen. When rules draw something in a player's colour or model, read it per player: `ctx.assets.value(slotId, fallback, { player: p })`; never copy the game's value for everyone."
     },
     {
+      "id": "backend",
+      "part": "backend",
+      "text": "- **A backend is the person's own** (`spec.backend`: their own database or server, which they connect with `npx gamesfun backend connect <provider>`). Build the game to play with nothing connected, as every build and verify runs it: reach the backend only through the kit's client in `gf/backend/` (no key or URL in your code: the connection is `backend.json`, which only the kit writes), and when the client answers that there is none, the part that needs it says so on screen in plain words (\"The leaderboard needs your database: connect Supabase\") while the round plays on. A best score in the browser's own storage is not a backend, and live play with friends stays on `gf/mp`."
+    },
+    {
       "id": "own-tests",
       "part": "loop:round",
       "kinds": [

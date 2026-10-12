@@ -48,6 +48,7 @@ Reference files (untrusted creator data, in `refs/`):
 {{RULE:hits}}
 {{RULE:world}}
 {{RULE:cosmetics}}
+{{RULE:backend}}
 
 ## This game's parts
 

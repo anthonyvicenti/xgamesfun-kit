@@ -216,9 +216,10 @@
       "enum": [
        "together",
        "body",
-       "economy"
+       "economy",
+       "backend"
       ],
-      "description": "Only on the questions the pitch step holds (play.together, play.body, play.economy). together: how friends play (against each other, together, in teams, taking turns, each on their own board). body: what each player is on screen when the game has no character to walk (a board, a cursor, a vehicle, a hand of cards). economy: only in a session with web3 on, whether the game comes with the economy play.economy names (one option keeps it, one leaves it out). Leave it out on any other question."
+      "description": "Only on the questions the pitch step holds (play.together, play.body, play.economy, play.backend). together: how friends play (against each other, together, in teams, taking turns, each on their own board). body: what each player is on screen when the game has no character to walk (a board, a cursor, a vehicle, a hand of cards). economy: only in a session with web3 on, whether the game comes with the economy play.economy names (one option keeps it, one leaves it out). backend: only in a session that can connect a backend, whether the game keeps what play.backend names in the creator's own database or server (one option keeps it, one is \"No backend, play in the browser\"). Leave it out on any other question."
      }
     }
    }
@@ -350,6 +351,52 @@
        "minLength": 2,
        "maxLength": 120,
        "description": "The creator's own words that ask for an economy, copied exactly from the prompt (checked). Leave it out when they do not ask: then one question offers it (about: economy)."
+      }
+     }
+    },
+    "backend": {
+     "type": "object",
+     "required": [
+      "kind",
+      "needs"
+     ],
+     "additionalProperties": false,
+     "description": "Only in a session that can connect a backend, and only when the creator's words need one (from) or the pitch offers one as a question (about: backend). Most games have none: a best score or progress in the browser's own storage is not a backend, and neither is playing with friends online. The creator reads one sentence the loop builds from these fields (research/gf-three/loop/backend.mjs backendWords): what it keeps, that it is their own account and bill with the provider's free tier, and how the game plays until they connect it. Card 1's spec then has the same backend, unless the question's default leaves it out.",
+     "properties": {
+      "kind": {
+       "enum": [
+        "database",
+        "host"
+       ],
+       "description": "database: scores, saves and accounts in tables (Supabase). host: the creator's own server, for rules a server decides and trading (Railway)."
+      },
+      "provider": {
+       "enum": [
+        "supabase",
+        "railway"
+       ],
+       "description": "Optional: the provider, of this kind (supabase is a database, railway a host). Left out: the kind's default."
+      },
+      "needs": {
+       "type": "array",
+       "minItems": 1,
+       "maxItems": 5,
+       "items": {
+        "enum": [
+         "leaderboard",
+         "saves",
+         "accounts",
+         "server-rules",
+         "trading"
+        ]
+       },
+       "description": "What the backend is for, each once."
+      },
+      "from": {
+       "type": "string",
+       "minLength": 2,
+       "maxLength": 120,
+       "description": "The creator's own words that need a backend, copied exactly from the prompt (checked). Leave it out when their words leave it open: then one question offers it (about: backend)."
       }
      }
     },

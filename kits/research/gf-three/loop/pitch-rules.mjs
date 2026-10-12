@@ -22,10 +22,15 @@
 //             only when the creator's words ask for one (copied into play.economy.from) or it is offered and asked
 //             (about: economy), never both; it carries what it is and its price, and says when it pays for clears.
 //             With web3 off nothing here changes, and a pitch that names an economy anyway is refused.
+//   backend   (wave 11 track L, only when the host can connect one: `backends: true`) the pitch names a backend only
+//             when the creator's words need one (copied into play.backend.from) or it is offered and asked (about:
+//             backend, with "No backend, play in the browser" as an option), never both (backend.mjs backendRules).
+//             A host that cannot connect one refuses a pitch that names one; a pitch with no backend is held as before.
 //
-// Pure: checkPlay(pitch, {request, catalog, kind, web3, economy}) → ['$.play.loop.wants: …'].
+// Pure: checkPlay(pitch, {request, catalog, kind, web3, economy, backends}) → ['$.play.loop.wants: …'].
 import { loopProblems } from '../tools/catalog.mjs';
 import { ECONOMY_ABOUT, paysForClears } from './economy.mjs';
+import { backendRules, backendOff } from './backend.mjs';
 
 export const MAX_QUESTIONS = 3;
 export const ABOUT = ['together', 'body'];
@@ -116,7 +121,7 @@ export function partAsks(cards, catalog) {
  * and the questions asked when it was first pitched.
  * → errors with JSON paths from the pitch root ($.play.loop.wants: …)
  */
-export function checkPlay(pitch, { request = {}, catalog = null, kind = request.kind ?? 'pitch', web3 = false, economy = null } = {}) {
+export function checkPlay(pitch, { request = {}, catalog = null, kind = request.kind ?? 'pitch', web3 = false, economy = null, backends = false } = {}) {
   const loops = Array.isArray(catalog?.loops) ? catalog.loops : [];
   if (!loops.length || !pitch || typeof pitch !== 'object') return [];
   const errors = [], cards = Array.isArray(pitch.cards) ? pitch.cards : [];
@@ -138,6 +143,8 @@ export function checkPlay(pitch, { request = {}, catalog = null, kind = request.
   }
   // an economy in a session with web3 off: no game here can carry one (a refine too)
   if (!web3) errors.push(...economyOff(pitch, cards));
+  // a backend in a session that cannot connect one (wave 11, track L): no game here can have one (a refine too)
+  if (!backends) errors.push(...backendOff(pitch, cards));
   if (!fresh) return errors;
 
   const play = pitch.play;
@@ -169,7 +176,7 @@ export function checkPlay(pitch, { request = {}, catalog = null, kind = request.
   const needs = Array.isArray(play.needs) ? play.needs : null;
   if (!needs && !pitch.research?.signature) errors.push('$.play.needs: list the 2-8 things the creator\'s words ask for, each {feature, support: "supported" | "approximated" | "missing", by, how, core}; a missing one goes in card 1\'s v1.notYet');
   if (needs) {
-    const mech = new Set((spec1.mechanics ?? []).map(m => m?.id)), allowed = new Set([...mech, spec1.world?.template, spec1.loop, ...BY_FIELDS].filter(Boolean));
+    const mech = new Set((spec1.mechanics ?? []).map(m => m?.id)), allowed = new Set([...mech, spec1.world?.template, spec1.loop, ...BY_FIELDS, ...(spec1.backend ? ['backend'] : [])].filter(Boolean));
     if (!needs.some(r => r?.core)) errors.push('$.play.needs: mark the one to three things without which it is not the game the creator asked for ("core": true)');
     for (const [k, r] of needs.entries()) {
       if (r?.support === 'missing') {
@@ -215,6 +222,8 @@ export function checkPlay(pitch, { request = {}, catalog = null, kind = request.
   if ((noBody || bodyPart) && !qB && !bodySaid && B.from == null && left > 0) errors.push(`$.questions: ${noBody ? `a player in this idea is not a character that walks about (play.body.what: "${B.what}")` : `"${bodyPart.part}" has no player body of its own (${bodyPart.why})`}, and the creator's words do not say how each player is shown: ask it as one of the questions ("about": "body"; e.g. a character walking beside it, or a marker in each player's colour), with the cards' choice as the default`);
   // the economy, in a session with web3 on: named only when asked for, or offered and asked; with its price
   if (web3) errors.push(...economyRules(play, { words, questions, left, economy }));
+  // the backend, in a session that can connect one: named only when the creator's words need one, or offered and asked
+  if (backends) errors.push(...backendRules(play, { words, questions, left, cards }));
   return errors;
 }
 

@@ -19,6 +19,7 @@ import * as words from './messages.mjs';
 import {kitTools} from './tools.mjs';
 import {PROMPTS_DIR} from './brief.mjs';
 import {specEconomy,economyLock,economyAtDelivery} from './economy.mjs';
+import {specBackend,backendAtDelivery} from './backend.mjs';
 
 export const STEPS=['create','agent','fix','verify','playtest','repair','deliver','done'];
 const SAY={verify:'repairing',play:'playRepairing',rescue:'rescuing'};
@@ -64,6 +65,10 @@ const same=s=>s;
  *                        refusals}), status() → the kit's economy_status answer ({live, parts})}. The lock then holds
  *                        the economy as agreed, and delivery hands over the approval link without waiting for it
  *                        (outcome.economy, state.economy). Either function may be missing; nothing here signs
+ *   backend              for a spec with a `backend` (backend.mjs, wave 11 track L): {status() → {connected, provider,
+ *                        url}} (the kit's backend status). Absent: <game>/backend.json is read. Delivery never waits for
+ *                        a connection: outcome.backend (and state.backend) says whether one is connected and, when none
+ *                        is, what to connect. The spec's `backend` is locked with the spec; the connection is not
  *   hooks                what only the host can do, each optional:
  *     prepare(loop)        make the game folder (the create step). → {end: outcome} to stop there
  *     settle(loop)         after the first agent round and its fix (or straight after create when resumed), before the
@@ -414,6 +419,9 @@ export async function openBuildLoop(host){
       // going live (K3): the approval link, shown; delivery does not wait for the creator's wallet
       const ref=S.lock?.economy?{in:S.lock.economy.file}:specEconomy(host.spec);
       if(ref){outcome.economy=await economyAtDelivery({game:D.game,adapter:host.economy??null,ref});S.economy=outcome.economy;}
+      // the backend the locked spec plans (wave 11 track L): connected, or playable in the browser and what to connect
+      const backend=specBackend(S.lock?.spec?.text)??specBackend(host.spec);
+      if(backend){outcome.backend=await backendAtDelivery({game:D.game,backend,adapter:host.backend??null,verdict:M.verdict});S.backend=outcome.backend;}
       return end(outcome,'verify ran on the files as they are, and no proof on record is stale');
     },
   };
