@@ -33,7 +33,7 @@
   /* ink */
   --ink: #f4f4f5;
   --ink-2: #c9ccd6;
-  --muted: #9ca2b0;         /* secondary text: 7.4:1 on --surface */
+  --muted: #9ca2b0;         /* secondary text: 7.2:1 on --surface */
   --faint: #6f7686;         /* non-text marks only */
   /* brand */
   --lime: #b9f26c; --lime-hi: #cff88f; --on-lime: #0a0c16;
