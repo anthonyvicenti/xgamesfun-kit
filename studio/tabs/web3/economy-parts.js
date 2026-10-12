@@ -403,9 +403,9 @@ export function flowGraph(spec) {
 const PAD = 8;
 const GAP_X = 10;
 const ROW_GAP = 10;
-const NODE_H = 44;
-const CAPTION_H = 18;
-const LAYER_GAP = 44;
+const NODE_H = 56;
+const CAPTION_H = 22;
+const LAYER_GAP = 52;
 const labelWidth = (text) => Math.ceil(String(text).length * 6.1) + 12;
 
 /** A cubic Bézier's point at t. */
@@ -430,7 +430,8 @@ const LABEL_ROW = 20;
 
 function place(graph, width, gaps) {
   const W = Math.max(280, Math.floor(width));
-  const minW = W < 480 ? 92 : 150;
+  const minW = W < 480 ? 92 : 160;
+  const maxW = W >= 1100 ? 240 : 210;
   const placed = new Map();
   const captions = [];
   const layerBottom = [];
@@ -451,10 +452,10 @@ function place(graph, width, gaps) {
       };
       list = list.map((n, i) => ({ n, c: centre(n), i })).sort((a, b) => a.c - b.c || a.i - b.i).map((x) => x.n);
     }
-    captions.push({ text: LAYER_CAPTIONS[layer], y: y + 12 });
+    captions.push({ text: LAYER_CAPTIONS[layer], y: y + 13 });
     y += CAPTION_H;
     const perRow = layer === 0 ? 1 : Math.max(1, Math.min(list.length, Math.floor((W - 2 * PAD + GAP_X) / (minW + GAP_X))));
-    const w = layer === 0 ? Math.min(W - 2 * PAD, 240) : Math.min(200, Math.floor((W - 2 * PAD - (perRow - 1) * GAP_X) / perRow));
+    const w = layer === 0 ? Math.min(W - 2 * PAD, 240) : Math.min(maxW, Math.floor((W - 2 * PAD - (perRow - 1) * GAP_X) / perRow));
     for (let i = 0; i < list.length; i += perRow) {
       const row = list.slice(i, i + perRow);
       const rowW = row.length * w + (row.length - 1) * GAP_X;

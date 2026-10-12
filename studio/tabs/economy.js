@@ -10,7 +10,8 @@
 import { explorer, pictureUrl, short } from './web3/client.js';
 import { approvalPanel, choosePicture, fill, h, keepFresh, note, requestBanner, styles, tabContext } from './web3/ui.js';
 import { SECTIONS, addPart, amountText, fmt, isLivePart, nameOf, notesByPart, parseAmount, parseDuration, parseNumber, parseNumberList, parseWhole, parseWordList, partId, removePart, sectionOf, symbolOf } from './web3/economy-parts.js';
-import { LEGEND, drawFlow, econStyles, edgeColour } from './web3/economy-view.js';
+import { LEGEND, drawFlow, econStyles, edgeColour, emptyPicture, icon } from './web3/economy-view.js';
+import { ADD_GROUPS, SPLIT_WORDS, TONES, daySplit, isEmpty, keyNumber, kindOfSection, lookOf, receiptLines, shortAmount, titleOf, walletLook } from './web3/economy-look.js';
 import { createDecide } from './web3/economy-decide.js';
 
 const DEBOUNCE_MS = 450;
@@ -201,7 +202,10 @@ const STATE_WORDS = { live: 'Live', changed: 'Changed since it went live', draft
 export default {
   id: 'economy',
   label: 'Economy',
+  group: 'Share',
   order: 40,
+  // the money flow needs room: the whole product side, the game a thumbnail in the corner (studio/studio.js)
+  wide: true,
   mount(el, ctx) {
     styles();
     econStyles();
@@ -229,6 +233,7 @@ export default {
     const launch = {}; // token key → { picture, description, initialBuy }
     const lookups = {}; // token key → { info, error, looking }
     let flowBox = null;
+    let flowFlags = new Map(); // partId → 'refusal' | 'warning', marked on the picture's boxes
     let lastWidth = 0;
     let asked = linkAsks(location.hash); // what the link that opened the page asks for; never started by itself
     const onHash = () => ((asked = linkAsks(location.hash)), render());
@@ -386,10 +391,12 @@ export default {
     }
 
     function noteView(n) {
-      return h('div', { class: `econ-note ${n.level}`, 'data-testid': n.level === 'refusal' ? 'econ-refusal' : 'econ-warning', role: n.level === 'refusal' ? 'alert' : null },
-        h('div', {}, h('strong', {}, n.level === 'refusal' ? '✗ ' : '! '), n.message, ' ', h('span', { class: 'code' }, n.code)),
-        n.fix ? h('div', { class: 'fix' }, n.level === 'refusal' ? 'Fix: ' : '', n.fix) : null);
+      const refusal = n.level === 'refusal';
+      return h('div', { class: `econ-note ${n.level}`, 'data-testid': refusal ? 'econ-refusal' : 'econ-warning', role: refusal ? 'alert' : null, title: n.code ? `The checker's ${n.code}` : null },
+        icon(refusal ? 'cross' : 'alert', 16), h('div', {}, n.message),
+        n.fix ? h('div', { class: 'fix' }, refusal ? h('b', {}, 'Fix: ') : null, n.fix) : null);
     }
+    const notesView = (notes) => (notes.length ? h('div', { class: 'econ-notes' }, notes.map(noteView)) : null);
 
     /** One input for a field `f` of `part` (in `section`), named by data-path so focus survives a redraw. */
     function field(section, part, f, notes, locked) {
@@ -589,19 +596,26 @@ export default {
 
     // ------------------------------------------------------------ the cards
 
-    function head(section, part, title, liveState) {
-      const id = partId(section, part.key);
+    /** A card's face: its kind's icon, its name, its one number, and whether it is live. */
+    function head(section, part, title, liveState, iconName = null) {
       const sect = sectionOf(section);
-      const removing = confirmRemove === id;
+      const look = lookOf(kindOfSection(section));
       return h('div', { class: 'econ-part-head' },
-        h('span', { class: 'econ-kind' }, sect.one),
+        h('span', { class: 'tile' }, icon(iconName ?? look.icon, 24)),
         h('strong', {}, title),
-        h('span', { class: 'econ-key', title: 'Its key: other parts name it by this' }, part.key),
-        h('span', { class: `econ-state ${liveState}` }, STATE_WORDS[liveState]),
-        removing
-          ? h('span', { class: 'w3-row' }, h('button', { 'data-testid': 'econ-remove-yes', onclick: () => ((confirmRemove = null), removePart(spec, section, part.key), open.delete(id), edited(true)) }, isLivePart(section, part) ? 'Remove (switched off when you put it live)' : 'Yes, remove it'), h('button', { onclick: () => ((confirmRemove = null), render()) }, 'Keep it'))
-          : h('button', { class: 'link', 'data-testid': 'econ-remove', onclick: () => ((confirmRemove = id), render()) }, 'Remove'));
+        h('span', { class: 'econ-big' }, keyNumber(spec, section, part)),
+        h('span', { class: 'econ-head-side' },
+          h('span', { class: `econ-state ${liveState}` }, STATE_WORDS[liveState]),
+          h('span', { class: 'econ-kind', title: `Its key: other parts name it by this (${part.key})` }, sect.one)));
     }
+    /** "Remove", asked twice, at the foot of a card. */
+    function removeButton(section, part) {
+      const id = partId(section, part.key);
+      return confirmRemove === id
+        ? h('span', { class: 'w3-row' }, h('button', { class: 'small danger', 'data-testid': 'econ-remove-yes', onclick: () => ((confirmRemove = null), removePart(spec, section, part.key), open.delete(id), edited(true)) }, isLivePart(section, part) ? 'Remove (switched off when you put it live)' : 'Yes, remove it'), h('button', { class: 'small', onclick: () => ((confirmRemove = null), render()) }, 'Keep it'))
+        : h('button', { class: 'link', 'data-testid': 'econ-remove', onclick: () => ((confirmRemove = id), render()) }, 'Remove');
+    }
+    const toneOf = (section) => `tone-${TONES[lookOf(kindOfSection(section)).icon] ?? 'muted'}`;
 
     function partCard(section, part, byPart, live) {
       const id = partId(section, part.key);
@@ -610,11 +624,14 @@ export default {
       const liveState = live.get(id) ?? (isLivePart(section, part) ? 'live' : 'draft');
       const locked = section === 'stakes' && isLivePart(section, part); // a stake can't change once open
       const shown = (list) => (list ?? []).filter((f) => !f.when || f.when(part));
-      const title = section === 'pools' ? `Pool “${part.key}”` : section === 'decisions' ? part.when || 'A rule' : nameOf(part);
+      const title = titleOf(section, part);
       const more = shown(fieldsOf.more);
       const lists = fieldsOf.lists ?? [];
-      return h('div', { class: 'card econ-part', 'data-part-card': id, 'data-testid': `econ-part-${section}` },
+      const refused = notes.some((n) => n.level === 'refusal');
+      return h('div', { class: `card econ-part ${toneOf(section)}${refused ? ' has-refusal' : ''}${selected === id ? ' on' : ''}`, 'data-part-card': id, 'data-testid': `econ-part-${section}` },
         head(section, part, title, liveState),
+        notesView(notes),
+        facts(section, part),
         locked ? h('p', { class: 'note' }, 'This stake is open: the program does not let it change. Make a new one to change its terms.') : null,
         section === 'items' ? itemPicture(part) : null,
         h('div', { class: 'econ-fields' }, shown(fieldsOf.main).map((f) => field(section, part, f, notes, locked))),
@@ -622,14 +639,15 @@ export default {
         lists.includes('in') ? recipeRows(part, 'in', locked) : null,
         lists.includes('out') ? recipeRows(part, 'out', locked) : null,
         lists.includes('split') && section !== 'items' ? splitRows(section, part, locked) : null,
-        facts(section, part),
         dayInput(section, part),
-        notes.map(noteView),
-        more.length || (lists.includes('split') && section === 'items')
-          ? h('details', { open: open.has(id), ontoggle: (e) => (e.target.open ? open.add(id) : open.delete(id)) }, h('summary', {}, 'More'),
-              h('div', { class: 'econ-fields', style: 'margin-top:8px' }, more.map((f) => field(section, part, f, notes, locked))),
-              section === 'items' ? splitRows(section, part, locked) : null)
-          : null);
+        h('div', { class: 'econ-part-foot' },
+          more.length || (lists.includes('split') && section === 'items')
+            ? h('details', { open: open.has(id), ontoggle: (e) => (e.target.open ? open.add(id) : open.delete(id)) }, h('summary', {}, 'More settings'),
+                h('div', { class: 'econ-fields', style: 'margin-top:8px' }, more.map((f) => field(section, part, f, notes, locked))),
+                section === 'items' ? splitRows(section, part, locked) : null)
+            : null,
+          h('span', { class: 'dim econ-key', title: 'Its key: other parts name it by this' }, part.key),
+          removeButton(section, part)));
     }
 
     function itemPicture(part) {
@@ -656,12 +674,14 @@ export default {
       else if (tok.source === 'curve') body.push(launchForm(tok, notes));
       else if (tok.source === 'existing') body.push(existingToken(tok, notes));
       else body.push(h('p', { class: 'dim' }, 'A token the game mints itself: points, tickets, shards. It is made when the economy goes live.'), h('div', { class: 'econ-fields' }, [{ p: 'name', label: 'Name', type: 'text', max: 32 }, { p: 'symbol', label: 'Ticker', type: 'text', max: 10 }, { p: 'decimals', label: 'Decimals (0: whole points)', type: 'whole' }].map((f) => field('tokens', tok, f, notes, Boolean(spec.live)))));
-      return h('div', { class: 'card econ-part', 'data-part-card': id, 'data-testid': 'econ-part-tokens' },
-        head('tokens', tok, title, liveState),
+      const kindIcon = tok.source === 'curve' ? 'token-curve' : tok.source === 'existing' ? 'token-existing' : tok.source === 'game' ? 'token-game' : 'token';
+      return h('div', { class: `card econ-part tone-warn${notes.some((n) => n.level === 'refusal') ? ' has-refusal' : ''}${selected === id ? ' on' : ''}`, 'data-part-card': id, 'data-testid': 'econ-part-tokens' },
+        head('tokens', tok, title, liveState, kindIcon),
+        notesView(notes),
         h('label', { class: 'check' }, h('input', { type: 'radio', name: 'econ-currency', checked: isCurrency, disabled: Boolean(spec.live), 'data-testid': 'econ-currency', onchange: () => ((spec.currency = tok.key), edited(true)) }),
           isCurrency ? 'The game’s currency: items are priced in it and your treasury holds it' : 'Make it the game’s currency', spec.live ? ' (fixed once live)' : ''),
         body,
-        notes.map(noteView));
+        h('div', { class: 'econ-part-foot' }, h('span', { class: 'dim econ-key' }, tok.key), removeButton('tokens', tok)));
     }
 
     function launchedToken(tok) {
@@ -746,8 +766,8 @@ export default {
           else c[p] = v ?? '';
           edited();
         }, ...extra }));
-      return h('div', { class: 'card econ-part', 'data-testid': 'econ-collection' },
-        h('div', { class: 'econ-part-head' }, h('span', { class: 'econ-kind' }, 'collection'), h('strong', {}, c.name || 'Collectibles')),
+      return h('div', { class: 'card econ-part tone-lime', 'data-testid': 'econ-collection' },
+        h('div', { class: 'econ-part-head' }, h('span', { class: 'tile' }, icon('gem', 24)), h('strong', {}, c.name || 'Collectibles'), h('span', { class: 'econ-big' }, 'where the items are minted'), h('span', { class: 'econ-head-side' }, h('span', { class: 'econ-kind' }, 'collection'))),
         h('p', { class: 'dim' }, 'The collection the items are minted into (Metaplex Core). Your wallet controls it, not games.fun.'),
         h('div', { class: 'econ-fields' }, f('name', 'Name', 'text', { maxLength: 32 }), f('royaltyPercent', 'Royalty on resales (%)', 'percent'), f('description', 'Describe it', 'words')));
     }
@@ -756,8 +776,8 @@ export default {
       const authority = spec.keys?.authority ?? 'owner';
       const other = authority !== 'owner';
       const needed = ['contests', 'holds', 'decisions'].some((s) => (spec[s] ?? []).length);
-      return h('div', { class: 'card econ-part', 'data-testid': 'econ-settings' },
-        h('div', { class: 'econ-part-head' }, h('span', { class: 'econ-kind' }, 'settings'), h('strong', {}, 'The whole economy')),
+      return h('div', { class: 'card econ-part tone-muted', 'data-testid': 'econ-settings' },
+        h('div', { class: 'econ-part-head' }, h('span', { class: 'tile' }, icon('settings', 24)), h('strong', {}, 'The whole economy'), h('span', { class: 'econ-big' }, `its name, ${spec.scenario?.days ?? 30} days of numbers`), h('span', { class: 'econ-head-side' }, h('span', { class: 'econ-kind' }, 'settings'))),
         h('div', { class: 'econ-fields' },
           h('label', { class: 'field' }, 'Its name', h('input', { value: spec.name ?? '', maxLength: 80, 'data-path': 'settings|name', oninput: (e) => ((spec.name = e.target.value || undefined), edited()) })),
           h('label', { class: 'field' }, 'The numbers look ahead', h('input', { inputMode: 'decimal', value: String(spec.scenario?.days ?? ''), placeholder: '30', 'data-path': 'settings|days', oninput: (e) => {
@@ -776,6 +796,7 @@ export default {
           other ? h('label', { class: 'field wide' }, 'That wallet’s public address (never a private key)', h('input', { value: authority, spellcheck: false, 'data-path': 'settings|authority-address', oninput: (e) => ((spec.keys = { authority: e.target.value.trim() }), edited()) })) : null));
     }
 
+    /** "Add": one picture button per kind of part, in groups. Each part starts with numbers that pass the checker. */
     function addMenu() {
       const title = state?.game?.title ?? spec.name ?? '';
       const add = (kind, variant) => () => {
@@ -786,32 +807,49 @@ export default {
         pick({ section, key });
       };
       const hasCurve = (spec.tokens ?? []).some((x) => x.source === 'curve');
-      return h('div', { class: 'card', 'data-testid': 'econ-add' },
-        h('h3', {}, 'Add a part'),
-        h('div', { class: 'econ-add' },
-          SECTIONS.filter((s) => s.section !== 'tokens').map((s) => h('button', { 'data-testid': `econ-add-${s.kind}`, onclick: add(s.kind) }, `+ ${s.add[0].toUpperCase()}${s.add.slice(1)}`)),
-          hasCurve ? null : h('button', { 'data-testid': 'econ-add-token-curve', onclick: add('token', 'curve') }, '+ Launch a token for this game'),
-          h('button', { 'data-testid': 'econ-add-token-existing', onclick: add('token', 'existing') }, '+ A token I already have'),
-          h('button', { 'data-testid': 'econ-add-token-game', onclick: add('token', 'game') }, '+ Points the game mints')),
-        h('p', { class: 'dim' }, 'Each starts with numbers that work. Change them in its card.'));
+      return h('div', { class: 'card econ-adder', 'data-testid': 'econ-add' },
+        h('h3', {}, isEmpty(spec) ? 'Pick a first part' : 'Add a part'),
+        h('div', { class: 'econ-add-groups' },
+          ADD_GROUPS.map((g) => {
+            const parts = g.parts.filter((p) => !(p.once === 'curve' && hasCurve));
+            return parts.length
+              ? h('div', { class: 'econ-add-group' }, h('span', {}, g.title),
+                  h('div', { class: 'econ-add' }, parts.map((p) => {
+                    const look = lookOf(p.kind);
+                    return h('button', { class: `econ-pick tone-${TONES[p.icon] ?? look.tone}`, 'data-testid': `econ-add-${p.id}`, title: `Add ${p.label.toLowerCase()}: ${p.hint}`, onclick: add(p.kind, p.variant) },
+                      h('span', { class: 'tile' }, icon(p.icon ?? look.icon, 22)), p.label, h('small', {}, p.hint));
+                  })))
+              : null;
+          })));
     }
 
     // ------------------------------------------------------------ the page
 
-    function flowCard() {
+    /** The hero: the money flow, players → what they pay into → pools → who gets paid; or, empty, a picture and "Add". */
+    function flowCard(byPart) {
+      if (isEmpty(spec)) {
+        flowBox = null;
+        return h('div', { class: 'card econ-hero', 'data-testid': 'econ-empty' },
+          h('div', { class: 'econ-empty' },
+            emptyPicture(),
+            h('strong', {}, 'No money moves in this game yet'),
+            h('p', {}, 'Pick a first part below: the picture of where the money goes draws itself as you add.'),
+            addMenu()));
+      }
       flowBox = h('div', { 'data-testid': 'econ-flow-box' });
-      const card = h('div', { class: 'card' },
-        h('h3', {}, 'Where the money goes'),
-        h('p', { class: 'dim', style: 'margin:0 0 8px' }, 'Players pay into the parts, the parts fill the pools, and the pools pay out. Click a box to change it.'),
-        flowBox,
-        h('div', { class: 'econ-legend' }, LEGEND.map(([kind, words]) => h('span', {}, h('i', { style: `background:${edgeColour(kind)}` }), words))));
-      return card;
+      flowFlags = new Map([...byPart].map(([id, notes]) => [id, notes.some((n) => n.level === 'refusal') ? 'refusal' : 'warning']));
+      return h('div', { class: 'card econ-hero' },
+        h('div', { class: 'econ-hero-head' },
+          h('h3', {}, 'Where the money goes'),
+          h('div', { class: 'econ-legend', 'aria-label': 'What the colours of the lines mean' }, LEGEND.map(([kind, words]) => h('span', {}, h('i', { class: kind === 'lock' ? 'dashed' : '', style: `background:${edgeColour(kind)};color:${edgeColour(kind)}` }), words))),
+          h('p', { class: 'hint' }, 'Click a box to change it.')),
+        flowBox);
     }
     function drawFlowNow() {
       if (!flowBox || !spec) return;
       const width = flowBox.clientWidth || root.clientWidth - 30 || 520;
       lastWidth = width;
-      flowBox.replaceChildren(drawFlow(spec, width, { onPick: pick, live: liveMap(), selected }));
+      flowBox.replaceChildren(drawFlow(spec, width, { onPick: pick, live: liveMap(), selected, flags: flowFlags }));
     }
 
     /**
@@ -822,27 +860,48 @@ export default {
       if (t.wallet.address()) return null;
       const none = typeof ctx?.wallet?.list === 'function' && !ctx.wallet.list().length;
       return h('p', { class: 'dim', 'data-testid': 'econ-wallet-note' }, none
-        ? 'No Solana wallet in this browser yet. Install one (Phantom, Solflare, Backpack…) and reload, then connect it with Connect wallet at the top of the studio to put it live.'
-        : 'Connect a wallet to put it live: Connect wallet, at the top of the studio. Or press Put it live, and your wallet asks first.');
+        ? 'No Solana wallet in this browser yet: install one (Phantom, Solflare, Backpack…) and reload.'
+        : 'Connect a wallet to put it live: Connect wallet, at the top of the studio.');
+    }
+    function walletChip() {
+      const none = typeof ctx?.wallet?.list === 'function' ? ctx.wallet.list().length : null;
+      const w = walletLook(t.wallet.address(), none);
+      return h('span', { class: `econ-chip ${w.tone}`, 'data-testid': 'econ-wallet', title: w.tone === 'ok' ? 'Your wallet signs; no keys leave it.' : 'Connect wallet is at the top of the studio.' }, icon('wallet', 14), w.text);
+    }
+    /** The economy's state as one chip: live, changed since, or a draft. */
+    function stateChip() {
+      if (!status?.live && !spec.live) return h('span', { class: 'econ-chip', 'data-testid': 'econ-state-chip' }, icon('live', 14), 'Not live yet');
+      const map = liveMap();
+      const waiting = ON_CHAIN.flatMap((section) => (spec[section] ?? []).map((p) => map.get(partId(section, p.key)) ?? 'draft')).filter((x) => x !== 'live').length;
+      return waiting
+        ? h('span', { class: 'econ-chip warn', 'data-testid': 'econ-state-chip' }, icon('live', 14), `Live · ${waiting} change${waiting === 1 ? '' : 's'} to put live`)
+        : h('span', { class: 'econ-chip ok', 'data-testid': 'econ-state-chip' }, icon('live', 14), 'Live on devnet');
+    }
+    function checkChip() {
+      if (!analysis.check) return h('span', { class: 'econ-chip' }, icon('check', 14), 'Checking…');
+      const n = refusals().length;
+      const w = (analysis.check.warnings ?? []).length;
+      if (n) return h('button', { class: 'econ-chip bad', onclick: showRefusal, title: 'Show me the first one' }, icon('cross', 14), `${n} to fix`);
+      return h('span', { class: `econ-chip ${w ? 'warn' : 'ok'}`, title: w ? 'Notes, not blockers: each sits on its part' : 'The checker found nothing to fix' }, icon(w ? 'alert' : 'check', 14), w ? `Checks out · ${w} note${w === 1 ? '' : 's'}` : 'Checks out');
     }
 
+    /** The receipt: what putting it live costs, line by line, and the tab's one primary button. */
     function goCard() {
       const c = analysis.cost;
       const why = whyNot();
       const firstRefusal = refusals()[0];
       const setup = c?.ok ? c.setup : null;
       const seeds = setup ? Object.entries(setup.seeds ?? {}).map(([k, v]) => `${fmt(v)} ${k}`) : [];
-      return h('div', { class: 'card econ-live', 'data-testid': 'econ-go' },
-        h('div', { class: 'econ-go' },
-          h('div', { class: 'why' },
-            h('div', { class: 'dim' }, 'Putting it live costs about'),
-            h('div', { class: 'econ-cost', 'data-testid': 'econ-cost' }, setup ? `${fmt(setup.totalSol)} SOL` : '–'),
-            setup
-              ? h('div', { class: 'dim', 'data-testid': 'econ-cost-line' }, [`rent ${fmt(setup.rentSol)} SOL (${setup.accounts.length} accounts)`, seeds.length ? `seeds ${seeds.join(' + ')}` : null, `fees ${fmt(setup.programFeesSol + setup.networkFeesSol)} SOL`, `${setup.transactions} transaction${setup.transactions === 1 ? '' : 's'}, ${setup.approvals} approval${setup.approvals === 1 ? '' : 's'}`].filter(Boolean).join(' · '))
-              : h('div', { class: 'dim' }, c?.error ?? (refusals().length ? 'The cost comes once the notes marked ✗ are fixed.' : 'Working it out…'))),
-          h('div', { class: 'w3-row', style: 'align-items:center' },
-            h('button', { class: 'primary', 'data-testid': 'econ-go-live', disabled: Boolean(why), title: why || 'One approval in your wallet', onclick: goLive }, status?.live ? 'Put the changes live' : 'Put it live'))),
-        why ? h('p', { class: refusals().length ? 'note error' : 'dim', 'data-testid': 'econ-go-why', role: 'status' }, why, ' ', firstRefusal ? h('button', { class: 'linkish', onclick: showRefusal }, 'Show me') : null) : h('p', { class: 'dim' }, 'One approval in your wallet sets up everything below on devnet. Your wallet owns it, not games.fun.'),
+      return h('div', { class: 'card econ-receipt', 'data-testid': 'econ-go' },
+        h('div', { class: 'econ-receipt-head' }, icon('receipt', 18), status?.live ? 'Putting the changes live' : 'Putting it live'),
+        setup ? h('dl', {}, receiptLines(setup).map((l) => h('div', {}, h('dt', {}, l.label), h('span', { class: 'leader' }), h('dd', {}, l.amount)))) : null,
+        h('div', { class: 'econ-total' }, h('span', {}, 'about'), h('div', { class: 'econ-cost', 'data-testid': 'econ-cost' }, setup ? `${fmt(setup.totalSol)} SOL` : '–')),
+        setup
+          ? h('div', { 'data-testid': 'econ-cost-line', title: [`rent ${fmt(setup.rentSol)} SOL (${setup.accounts.length} accounts)`, seeds.length ? `seeds ${seeds.join(' + ')}` : null, `fees ${fmt(setup.programFeesSol + setup.networkFeesSol)} SOL`].filter(Boolean).join(' · ') }, `${setup.transactions} transaction${setup.transactions === 1 ? '' : 's'} · ${setup.approvals} approval${setup.approvals === 1 ? '' : 's'} in your wallet`)
+          : h('div', { class: 'dim', 'data-testid': 'econ-cost-line' }, c?.error ?? (refusals().length ? 'The cost comes once the notes marked ✗ are fixed.' : 'Working it out…')),
+        // the one primary button, once there is something to put live (an empty economy's next step is "Add")
+        h('button', { class: isEmpty(spec) ? 'ghost' : 'primary', 'data-testid': 'econ-go-live', disabled: Boolean(why), title: why || 'One approval in your wallet', onclick: goLive }, status?.live ? 'Put the changes live' : 'Put it live'),
+        why ? h('p', { class: `econ-why ${refusals().length ? 'bad' : 'dim'}`, 'data-testid': 'econ-go-why', role: 'status' }, why, ' ', firstRefusal ? h('button', { class: 'linkish', onclick: showRefusal }, 'Show me') : null) : null,
         walletNote(),
         setup?.notes?.length || setup?.accounts?.length
           ? h('details', {}, h('summary', {}, 'What the cost is made of'),
@@ -880,28 +939,38 @@ export default {
       return decide.askedCard(asked, forget);
     }
 
+    /** A day, on these numbers: what players pay, win back, the treasury, burned, the fees; and a bar of where it goes. */
     function summaryCard() {
       const sim = analysis.sim;
-      if (!sim?.ok) return h('div', { class: 'card dim', 'data-testid': 'econ-summary' }, sim?.error ?? 'The numbers come once the economy checks out.');
+      if (!sim?.ok) return h('div', { class: 'card econ-day-card dim', 'data-testid': 'econ-summary' }, h('h3', {}, 'A day, on these numbers'), sim?.error ?? 'The numbers come once the economy checks out.');
       const d = sim.perDay ?? {};
-      const money = (obj) => Object.entries(obj ?? {}).map(([k, v]) => `${fmt(v)} ${k.toUpperCase() === 'SOL' ? 'SOL' : symbolOf(spec, k)}`).join(' + ') || 'nothing';
-      return h('div', { class: 'card', 'data-testid': 'econ-summary' },
-        h('h3', {}, 'A day, on these numbers'),
-        h('p', { class: 'dim', style: 'margin:0 0 8px' }, 'From the quick simulation: what players do a day is the "a day" number on each card.'),
-        h('div', { class: 'econ-sum' },
-          h('div', {}, h('b', {}, money(d.players?.pay)), h('span', {}, 'players pay in')),
-          h('div', {}, h('b', {}, money(d.players?.getBack)), h('span', {}, 'players win back, on average')),
-          h('div', {}, h('b', {}, money(d.creator?.treasury)), h('span', {}, 'to your treasury')),
-          h('div', {}, h('b', {}, money(d.burned)), h('span', {}, 'burned')),
-          h('div', {}, h('b', {}, `${fmt(d.platform?.totalSol ?? 0)} SOL`), h('span', {}, 'games.fun’s fees, paid by players'))),
-        (sim.notes ?? []).map((n) => h('p', { class: 'econ-note warning' }, n)));
+      const sym = (k) => (k.toUpperCase() === 'SOL' ? 'SOL' : symbolOf(spec, k));
+      const money = (obj) => Object.entries(obj ?? {}).map(([k, v]) => `${shortAmount(v)} ${sym(k)}`).join(' + ') || 'nothing';
+      const tile = (name, tone, value, words) => h('div', { class: `econ-tile tone-${tone}` }, icon(name, 18), h('b', {}, value), h('span', {}, words));
+      const splits = daySplit(d).slice(0, 2);
+      return h('div', { class: 'card econ-day-card', 'data-testid': 'econ-summary' },
+        h('h3', { title: 'From the quick simulation: what players do a day is the "a day" number on each card.' }, 'A day, on these numbers'),
+        h('div', { class: 'econ-tiles' },
+          tile('players', 'ink', money(d.players?.pay), 'players pay in'),
+          tile('winners', 'good', money(d.players?.getBack), 'won back, on average'),
+          tile('treasury', 'warn', money(d.creator?.treasury), 'to your treasury'),
+          tile('burn', 'bad', money(d.burned), 'burned'),
+        ),
+        splits.map((s) => h('div', { 'data-testid': 'econ-day-split' },
+          h('div', { class: 'econ-bar-for' }, `Where each ${sym(s.token)} players pay goes`),
+          h('div', { class: 'econ-bar', role: 'img', 'aria-label': s.parts.map((p) => `${fmt(p.percent)}% ${SPLIT_WORDS[p.key]}`).join(', ') }, s.parts.map((p) => h('i', { class: p.key, style: `width:${p.percent}%`, title: `${fmt(p.percent)}% ${SPLIT_WORDS[p.key]}` }))),
+          h('div', { class: 'econ-bar-keys' }, s.parts.map((p) => h('span', {}, h('i', { class: p.key, style: `background:var(--${{ back: 'good', treasury: 'warn', burned: 'bad', kept: 'lav' }[p.key]})` }), `${fmt(p.percent)}% ${SPLIT_WORDS[p.key]}`))))),
+        h('p', { class: 'dim', style: 'margin:0;font-size:12px' }, `Players also pay games.fun ${fmt(d.platform?.totalSol ?? 0)} SOL in fees a day.`),
+        (sim.notes ?? []).length
+          ? h('details', { class: 'econ-sim-notes' }, h('summary', {}, `${sim.notes.length} note${sim.notes.length === 1 ? '' : 's'} on these numbers`), sim.notes.map((n) => h('p', { class: 'econ-sim-note' }, n)))
+          : null);
     }
 
     function liveCard() {
       const receipts = status?.receipts ?? [];
       if (!status?.live && !spec.live) return null;
       return h('div', { class: 'card econ-live', 'data-testid': 'econ-status' },
-        h('h3', {}, 'Live on devnet'),
+        h('div', { class: 'econ-live-head' }, h('span', { class: 'econ-chip ok' }, icon('live', 14), 'Live on devnet'), h('h3', {}, 'What is live')),
         statusError && !status ? h('p', { class: 'note error' }, `Could not read what is live: ${statusError}`) : null,
         status?.game || spec.live?.game ? h('p', { class: 'mono' }, 'Game ', h('a', { href: explorer(state, 'address', status?.game ?? spec.live.game), target: '_blank', rel: 'noreferrer' }, short(status?.game ?? spec.live.game))) : null,
         status ? h('p', { class: 'dim' }, (() => {
@@ -921,12 +990,23 @@ export default {
           : h('p', { class: 'dim' }, 'No receipts yet.'));
     }
 
+    /** What used to be the tab's paragraphs, one short block each, folded under "How this works". */
+    function howItWorks() {
+      const game = state.game?.title ?? 'the game';
+      return h('details', { class: 'econ-how', 'data-testid': 'econ-how' }, h('summary', {}, 'How this works'),
+        h('div', { class: 'econ-how-body' },
+          h('p', {}, h('b', {}, 'One place. '), `Everything ${game} sells, pays and burns. Change any number and the rest follows: the picture, the numbers of a day and the cost.`),
+          h('p', {}, h('b', {}, 'The picture. '), 'Players pay into the parts, the parts fill the pools, and the pools pay out. Click a box to open its card.'),
+          h('p', {}, h('b', {}, 'Parts. '), 'Each new part starts with numbers that work. The checker’s notes sit on the part they are about, with their fix.'),
+          h('p', {}, h('b', {}, 'Putting it live. '), 'One approval in your wallet sets it all up on devnet (test money only). Your wallet owns it, not games.fun; nothing is live until you approve.')));
+    }
+
     function render() {
       if (loadError && !spec) {
         fill(root, note('error', `Could not load the game’s economy: ${loadError}`), h('button', { onclick: refresh }, 'Try again'));
         return;
       }
-      if (!spec || !state) return fill(root, h('p', { class: 'dim' }, 'Loading the economy…'));
+      if (!spec || !state) return fill(root, h('div', { class: 'card econ-hero' }, h('p', { class: 'dim' }, 'Loading the economy…')));
       // keep the caret where the creator is typing
       const active = document.activeElement;
       const focus = root.contains(active) && active.dataset?.path ? { path: active.dataset.path, start: active.selectionStart, end: active.selectionEnd } : null;
@@ -947,16 +1027,23 @@ export default {
       }
       const { byPart, general } = notesByPart(spec, analysis.check);
       const live = liveMap();
-      const groups = [];
+      const empty = isEmpty(spec);
+      const cards = [];
       for (const s of SECTIONS) {
-        const list = spec[s.section] ?? [];
-        if (!list.length) continue;
-        groups.push(h('div', { class: 'econ-group', 'data-testid': `econ-group-${s.section}` }, h('h3', {}, s.many), list.map((p) => (s.section === 'tokens' ? tokenCard(p, byPart, live) : partCard(s.section, p, byPart, live)))));
-        if (s.section === 'items' && spec.collection) groups.push(collectionCard());
+        for (const p of spec[s.section] ?? []) cards.push(s.section === 'tokens' ? tokenCard(p, byPart, live) : partCard(s.section, p, byPart, live));
+        if (s.section === 'items' && spec.collection) cards.push(collectionCard());
       }
       const requests = ['economy', 'publish', 'launch'].flatMap((kind) => requestBanner(t, state, kind, { onReview: (r) => start({ requestId: r.id }), onDone: refresh }));
       fill(root,
-        h('p', { class: 'dim', style: 'margin:0', 'data-testid': 'econ-intro' }, `Everything ${state.game?.title ?? 'the game'} sells, pays and burns, in one place. Change any number and the rest follows. Nothing is live until you approve it in your wallet. On devnet: test money only.`),
+        h('div', { class: 'econ-top' },
+          h('p', { class: 'econ-intro', 'data-testid': 'econ-intro' }, `What ${state.game?.title ?? 'the game'} sells, pays and burns. Nothing is live until your wallet approves.`),
+          h('div', { class: 'econ-chips' },
+            h('span', { class: 'econ-chip info', title: 'Test money only' }, icon('token', 14), 'Devnet'),
+            stateChip(),
+            empty ? null : checkChip(),
+            walletChip(),
+            dirty || saving ? h('span', { class: 'econ-chip', 'data-testid': 'econ-saving' }, 'Saving…') : null),
+          howItWorks()),
         message ? note(message.kind, message.text) : null,
         state.chainError ? note('error', state.chainError) : null,
         saveError ? h('div', { class: 'note error', role: 'alert', 'data-testid': 'econ-save-error' }, saveError) : null,
@@ -965,16 +1052,17 @@ export default {
           : null,
         requests,
         askedCard(),
-        goCard(),
-        flowCard(),
-        general.length ? h('div', { class: 'card econ-rows', 'data-testid': 'econ-general' }, h('h3', {}, 'About the whole economy'), general.map(noteView)) : null,
-        summaryCard(),
-        groups.length ? groups : h('div', { class: 'card' }, h('p', {}, 'No parts yet. Add one below: a box players pay to roll, a lottery, a stake, an item for sale…')),
-        addMenu(),
-        settingsCard(),
+        h('div', { class: 'econ-main' },
+          flowCard(byPart),
+          h('div', { class: 'econ-aside' }, goCard(), empty ? null : summaryCard())),
+        general.length ? h('div', { class: 'card econ-rows', 'data-testid': 'econ-general' }, h('h3', {}, 'About the whole economy'), notesView(general)) : null,
+        empty ? null : addMenu(),
+        h('div', { class: 'econ-parts' }, h('h3', {}, empty ? 'Money' : 'The parts'), cards),
+        h('div', { class: 'econ-more-cards' }, settingsCard(), liveCard()),
         decide.sectionCard(openDecision),
-        liveCard(),
-        h('p', { class: 'dim' }, `RPC: ${state.rpc?.shown ?? ''}${state.rpc?.custom ? ' (yours)' : ' (public; set your own with gamesfun web3 settings --rpc)'} · saved in gamesfun.json${dirty || saving ? ' · saving…' : ''}`),
+        h('details', { class: 'econ-agent' }, h('summary', {}, 'For your agent'),
+          h('p', {}, `Saved in gamesfun.json (economy)${dirty || saving ? ' · saving…' : ''}.`),
+          h('p', {}, `RPC: ${state.rpc?.shown ?? ''}${state.rpc?.custom ? ' (yours)' : ' (public; set your own with gamesfun web3 settings --rpc)'}`)),
       );
       drawFlowNow();
       if (focus) {

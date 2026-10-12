@@ -269,6 +269,8 @@ describe('the host bridge in the studio, end to end on the fake chain (Chrome)',
   it('the preview’s game is offered the economy’s buttons, and a click on Flip opens the box on the fake chain', async (t) => {
     if (!browser) return t.skip('no browser');
     const sentBefore = chain.sent.length;
+    // the Economy tool is wide: the game is a thumbnail under a cover; a click on it gives the game its room back
+    if (await page.locator('.preview-cover').isVisible()) await page.locator('.preview-cover').click();
     await page.click('#preview-reload');
     const flip = frame().locator('[data-where="menu"] [data-econ="box:flip:open"]');
     await flip.waitFor({ timeout: 20_000 });
