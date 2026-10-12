@@ -76,7 +76,7 @@ async function checkCmd(values, gameArg) {
 
 export default {
   name: 'backend',
-  summary: 'optional: connect a game to its own backend (Supabase), check access rules and secrets',
+  summary: 'optional: a game\'s own backend (backend connect supabase|railway), check access rules and secrets',
   usage,
   run: args => guard(async () => {
     const { values, positionals } = parse(args, options, usage);

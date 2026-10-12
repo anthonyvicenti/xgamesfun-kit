@@ -23,7 +23,8 @@ export default {
         try {
           if (connection(await sessionApi('queue')).state === 'none') throw new Error('no session');
           const { text } = await ctx.api('backend/request', { provider: 'supabase' });
-          await sessionApi('request', { text });
+          // through the conversation when the page has one (the request shows in the thread), else straight to the bridge
+          if (ctx.chat?.send) await ctx.chat.send(text); else await sessionApi('request', { text });
           said.replaceChildren(line('ok', 'Asked your session. It adds Supabase\'s MCP server and tells you how to sign in: your browser opens Supabase, you sign in and allow access to your organization. Nothing is registered, and the kit keeps no token.'));
         } catch {
           said.replaceChildren(line('warn', 'No session is connected to this page. Press "Add Supabase to my agents" and sign in from your agent, or follow these steps:'), steps());

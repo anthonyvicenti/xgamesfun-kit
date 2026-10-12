@@ -5,6 +5,10 @@
 //
 // A panel module exports `default { id, mount(el, pctx) }`; pctx is this tab's ctx plus { provider (its status
 // entry), game (the game's backend status), refresh(), line(tone, text), el }. mount may return a cleanup function.
+//
+// A tool of the studio's layout (docs/ARCHITECTURE.md): in the Launch group after Publish and before Economy, in the
+// inspector beside the game. It asks the person's session only through the conversation (ctx.chat.ask / send); a page
+// with no conversation (a test page) has no ctx.chat, and the tab then only says what to ask.
 const el = (tag, attrs = {}, ...kids) => {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) if (v != null) (k in e && k !== 'list') ? (e[k] = v) : e.setAttribute(k, v);
@@ -17,7 +21,8 @@ export default {
   id: 'backend',
   label: 'Backend',
   group: 'Launch',
-  order: 35,
+  order: 35,                     // Publish is 30, Economy 40 (web3 keeps Economy last)
+  icon: '<path d="M4.5 5.5a7.5 2.5 0 1 0 15 0a7.5 2.5 0 1 0-15 0"/><path d="M4.5 5.5v13c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-13"/><path d="M4.5 12c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5"/>',
   async mount(root, ctx) {
     let cleanup = null, picked = null;
     const body = el('div');
@@ -39,6 +44,17 @@ export default {
         line(c.scan.ok ? 'ok' : 'bad', c.scan.ok ? `No secrets in the game's ${c.scan.files} files.` : `Secrets in the game's files: ${c.scan.hits.map(h => `${h.file}: ${h.kind}`).join('; ')}`),
         line(c.rls.ok ? 'ok' : 'bad', c.rls.migrations.length || c.rls.used.length ? `Row-level security: ${c.rls.ok ? 'on every table' : 'refused'} (${c.rls.migrations.length} migration${c.rls.migrations.length === 1 ? '' : 's'}; the game reads ${c.rls.used.join(', ') || 'no table'}).` : 'No tables yet. Ask your session for one, for example "a high-score table" or "save each player\'s progress".'),
         ...c.rls.refused.map(r => line('bad', r)), ...c.rls.warned.map(w => line('warn', w)));
+      // a table is the session's work: ask it in the conversation's one box, with this backend as the chip
+      if (ctx.chat?.ask) {
+        const ask = el('button', { type: 'button', className: 'ghost small' }, c.rls.migrations.length ? 'Ask my session for another table' : 'Ask my session for a table');
+        ask.addEventListener('click', () => ctx.chat.ask({
+          label: 'Backend',
+          placeholder: 'e.g. a high-score table, or save each player\'s progress',
+          compose: words => `For this game's backend (backend.json): ${words}. Follow the gamesfun-backend skill: a migration in supabase/migrations/ with row-level security on every table, the game reaches it only through gf/backend/, then npx gamesfun backend check passes.`,
+          button: 'Ask my session',
+        }));
+        box.append(el('div', { className: 'toolbar' }, ask));
+      }
     }
 
     async function paint() {

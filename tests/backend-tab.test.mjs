@@ -38,6 +38,17 @@ describe('studio Backend tab in Chrome', { skip: !chromium && 'playwright-core i
   });
   after(async () => { await browser?.close(); await server?.close(); await game?.cleanup(); await cfg?.cleanup(); });
 
+  it('is a Launch tool of the layout: after Publish, before Economy (Economy stays last)', async t => {
+    if (!browser) return t.skip('no browser');
+    await page.getByRole('tab', { name: 'Backend' }).waitFor();
+    const tabs = await page.locator('#tabs [role="tab"]').evaluateAll(bs => bs.map(b => ({ id: b.dataset.id, group: b.dataset.group })));
+    const at = id => tabs.findIndex(x => x.id === id);
+    assert.equal(tabs.find(x => x.id === 'backend')?.group, 'Launch', JSON.stringify(tabs));
+    assert.ok(at('publish') < at('backend') && at('backend') < at('economy'), JSON.stringify(tabs));
+    assert.equal(tabs.at(-1).id, 'economy');
+    assert.equal(await page.locator('#tabs [data-id="backend"] svg.ico path').count(), 3, 'its own icon');
+  });
+
   it('with no backend: one quiet line and one button', async t => {
     if (!browser) return t.skip('no browser');
     await page.getByRole('tab', { name: 'Backend' }).click();
@@ -74,7 +85,16 @@ describe('studio Backend tab in Chrome', { skip: !chromium && 'playwright-core i
     await page.getByText(/No secrets in the game/).waitFor();
     const written = JSON.parse(await readFile(path.join(game.dir, 'backend.json'), 'utf8'));
     assert.equal(written.key, KEY);
+    // a table is asked for in the conversation's box, with the backend as its chip
+    await page.getByRole('button', { name: 'Ask my session for a table' }).click();
+    await page.locator('.chat-context-label', { hasText: 'Backend' }).waitFor();
     await shot('4-connected');
+    if (shots) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await panel().scrollIntoViewIfNeeded();
+      await shot('5-connected-phone');
+      await page.setViewportSize({ width: 1440, height: 900 });
+    }
     await page.getByRole('button', { name: 'Remove the backend from this game' }).click();
     await page.getByRole('button', { name: 'Add a backend (optional)' }).waitFor();
     await assert.rejects(stat(path.join(game.dir, 'backend.json')));
