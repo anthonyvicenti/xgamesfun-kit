@@ -31,6 +31,7 @@ import {
 } from '../../kits/research/gf-three/loop/index.mjs';
 import { check as schemaProblems } from '../../kits/research/gf-three/tools/lib/schema.mjs';
 import { clearCancel, readCancel } from '../../lib/cancel.mjs';
+import { web3On as web3Switch } from '../../lib/web3-switch.mjs';
 import { catalog as kitCatalog } from '../../lib/catalog.mjs';
 import { CHAR_DEPS, npmCli } from '../../lib/char-deps.mjs';
 import { checkpointStore, gameFiles, treeHash } from '../../lib/checkpoint.mjs';
@@ -46,9 +47,10 @@ export const PLAYTESTER = 'playtester';
 /** Tests only: `seams.tools` replaces kit scripts by name (a verify with no browser). Never set in the product. */
 export const seams = { tools: null, catalog: null };
 const TALK = ['pitch', 'refine'];
-// The economy (K3): only with web3 on (GAMESFUN_WEB3, the switch mcp/server.mjs reads for the economy_* tools). Off,
-// nothing below changes: no prompt line, no pitch rule, no host function, nothing in an answer.
-const web3On = () => /^(1|true|yes|on)$/i.test(String(process.env.GAMESFUN_WEB3 ?? '').trim());
+// The economy (K3): only with web3 on (lib/web3-switch.mjs, the one switch for the economy_* tools and the Economy tab:
+// on unless GAMESFUN_WEB3 is 0, off, false or no). Off, nothing below changes: no prompt line, no pitch rule, no host
+// function, nothing in an answer.
+const web3On = () => web3Switch(process.env);
 const economyTools = async () => Object.fromEntries((await import('./economy.mjs')).tools.map(t => [t.name, t]));
 const economyAsked = pitch => (Array.isArray(pitch?.questions) ? pitch.questions : []).some(q => q?.about === ECONOMY_ABOUT);
 const ROUND_STEPS = ['agent', 'repair'];
