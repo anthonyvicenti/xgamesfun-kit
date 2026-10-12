@@ -111,7 +111,7 @@ describe('the studio shows no game before the first prompt', { skip: !chromium &
     assert.equal(await empty.isVisible(), true);
     await empty.locator('h2').waitFor();
     assert.equal(await empty.locator('h2').textContent(), 'Waiting for your session', 'no session: nothing is being made, and the page says so');
-    assert.match(await empty.locator('p').textContent(), /nothing is being made yet.*session wait/);
+    assert.match(await empty.textContent(), /nothing is being made yet.*session wait/, 'the words, then the connect picture with the one command');
     assert.equal(await v.page.locator('.frame-wrap').isVisible(), false, 'no game frame on the page');
     await noGame(v, 'after the first idea');
     const name = (await v.page.evaluate(() => fetch('/api/studio/project').then(r => r.json()))).project.name;

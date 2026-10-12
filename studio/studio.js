@@ -357,11 +357,17 @@ async function main() {
       box.dataset.part = acting ? 'making' : 'waiting';
       box.dataset.session = c.state;
       const h = document.createElement('h2'), para = document.createElement('p');
-      const mark = Object.assign(document.createElement('div'), { className: 'product-empty-mark' });
+      // a picture of where it stands: blocks stacking while the session makes the game; the connect picture (the
+      // studio, a wire with its light, your agent, the one command) while nothing is listening yet
+      const mark = Object.assign(document.createElement('div'), { className: `product-empty-mark${acting ? ' building' : ''}` });
       mark.setAttribute('aria-hidden', 'true');
-      if (acting) { h.textContent = 'Making your game'; para.textContent = 'Your session pitches a few takes first, in the conversation. Pick one and it makes the game from it. Your game appears here when its first build is done: then you play it here and change it with the tools.'; }
-      else { h.textContent = 'Waiting for your session'; para.textContent = `Your idea is saved; nothing is being made yet. ${c.state === 'none' ? 'No agent session is listening. ' : ''}${c.hint}`; }
-      box.append(mark, h, para);
+      if (acting) { mark.innerHTML = '<span></span><span></span><span></span><span></span>'; h.textContent = 'Making your game'; para.textContent = 'Pick one of the takes in the conversation. Your game appears here when its first build is done.'; }
+      else {
+        h.textContent = 'Waiting for your session'; para.textContent = 'Your idea is saved; nothing is being made yet.';
+        try { const { connectPicture, useTalkStyles } = await import('./lib/connect-picture.js'); useTalkStyles(); let setup = null; try { setup = await api('studio/setup'); } catch {} mark.className = 'product-empty-connect'; mark.removeAttribute('aria-hidden'); mark.append(connectPicture(c, { setup, waiting: true, part: 'making' })); }
+        catch { para.textContent += ` ${c.hint}`; }
+      }
+      if (acting) box.append(mark, h, para); else box.append(h, para, mark);
       empty.replaceChildren(box);
     };
     await paintMaking();

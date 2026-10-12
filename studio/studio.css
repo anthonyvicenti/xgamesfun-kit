@@ -239,6 +239,16 @@ ol.stages li.waiting::before { background: var(--warn); }
 .product-empty h2 { font-size: var(--fs-xl); margin: var(--s4) 0 var(--s2); color: #f4f4f5; }
 .product-empty p { color: #b7bcc8; margin: 0; }
 .product-empty-mark { width: 72px; height: 72px; margin: 0 auto; border-radius: 20px; border: 2px dashed rgba(255,255,255,.22); }
+/* making: four blocks that stack and settle, over and over (still for a person who asks for less motion) */
+.product-empty-mark.building { position: relative; border: 0; width: 96px; height: 80px; }
+.product-empty-mark.building span { position: absolute; width: 40px; height: 32px; border-radius: 8px; background: var(--lime); opacity: .9; animation: gf-stack 2.4s ease-in-out infinite; }
+.product-empty-mark.building span:nth-child(1) { left: 6px; bottom: 0; background: var(--lav); animation-delay: 0s; }
+.product-empty-mark.building span:nth-child(2) { right: 6px; bottom: 0; background: var(--info); animation-delay: .3s; }
+.product-empty-mark.building span:nth-child(3) { left: 28px; bottom: 36px; animation-delay: .6s; }
+.product-empty-mark.building span:nth-child(4) { left: 40px; bottom: 70px; width: 16px; height: 12px; border-radius: 4px; background: var(--warn); animation-delay: .9s; }
+@keyframes gf-stack { 0%, 15% { transform: translateY(-26px); opacity: 0; } 35%, 85% { transform: none; opacity: .95; } 100% { transform: none; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .product-empty-mark.building span { animation: none; } }
+.product-empty-connect { text-align: left; margin: 0 auto; max-width: 440px; }
 /* the tool bar: the tools in three groups (Build, Test, Share), each a cluster with its name small over it; every tool
    is its icon over its name, so the whole bar is one row at laptop width and reads as pictures first */
 .tabs { grid-area: tabs; display: flex; align-items: stretch; gap: 0; padding: 4px var(--s2) 0; background: var(--bg); border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }

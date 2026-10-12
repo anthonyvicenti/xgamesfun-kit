@@ -107,7 +107,7 @@ describe('the first prompt: what the page says about the session', { skip: !chro
     await page.waitForFunction(id => /Waiting for your session/.test(document.querySelector(`[data-request="${id}"]`)?.textContent ?? ''), r.id, { timeout: 8000 });
     await page.waitForFunction(() => document.querySelector('.conn[data-state="stalled"]'));
     assert.match(await text(page, '.conn[data-state="stalled"] .small'), /Type go in its terminal/);
-    await page.waitForFunction(() => document.querySelector('#product-empty h2')?.textContent === 'Waiting for your session' && /has not started on it/.test(document.querySelector('#product-empty p')?.textContent ?? ''), null, { timeout: 8000 });
+    await page.waitForFunction(() => document.querySelector('#product-empty h2')?.textContent === 'Waiting for your session' && /has not started on it/.test(document.querySelector('#product-empty')?.textContent ?? ''), null, { timeout: 8000 });
     await snap(page, '6-stalled-hook-quiet');
     await page.close();
   });
