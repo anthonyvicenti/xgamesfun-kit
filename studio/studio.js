@@ -2,8 +2,8 @@
 // own agent session on the left (studio/chat.js), and the product on the right: the game preview, with the tools (the
 // tabs seam) in a bar over it and the open tool in an inspector beside it. Also the wallet, live reload and the theme.
 // A tab is studio/tabs/<id>.js exporting `default { id, label, order, group?, action?, wide?, icon?, mount(el, ctx) }`
-// (docs/ARCHITECTURE.md). `group` names the tool bar's group it sits in (Edit, Test, Launch; the built-in tabs have theirs
-// in GROUPS below, a new tab without one goes under More). `action` (true, or { label }) also gives it a primary button
+// (docs/ARCHITECTURE.md). `group` names the tool bar's group it sits in (Build, Test, Share; the built-in tabs have
+// theirs in GROUPS below, a new tab without one goes under More; the old Edit and Launch still work). `action` (true, or { label }) also gives it a primary button
 // beside the preview's bar: the flow's last step, e.g. Publish. A click opens the tab like its tool bar entry does.
 // `wide` (true, or { game: 'thumbnail' | 'hidden' }) gives the open tab the whole product side, the game a thumbnail
 // in its corner (true) or hidden, back when the tab closes. mount may return a function, called when the studio page goes away. ctx holds:
@@ -82,7 +82,7 @@ const frame = $('#preview');
 const preview = {
   frame,                      // the iframe element (same origin: a tab may read the game's page, never write it)
   path: store.get('preview') || '/game/',
-  show(path) { this.path = path; frame.src = path; const opt = [...$('#preview-mode').options].find(o => o.value === path); $('#preview-mode').value = opt ? path : $('#preview-mode').value; },
+  show(path) { this.path = path; frame.src = path; paintModes(path); },
   reload() { try { frame.contentWindow.location.reload(); } catch { frame.src = this.path; } },
   // an editor's own view laid over the game (the map painter, the layout's top view); null takes it away
   overlay(node) { const wrap = frame.parentElement; wrap.querySelector(':scope > .preview-overlay')?.remove(); if (node) { node.classList.add('preview-overlay'); wrap.append(node); } },
@@ -103,7 +103,11 @@ const preview = {
   hold(files, ms = 4000) { held = { files: new Set(files), until: Date.now() + ms }; },
 };
 let held = null;
-$('#preview-mode').addEventListener('change', e => { store.set('preview', e.target.value); preview.show(e.target.value); });
+// the two picture pills over the preview: the game alone (with bots) or the friends lobby; another path (a tool's
+// "Show it in the game") lights neither
+const modes = [...document.querySelectorAll('.preview-mode')];
+function paintModes(path) { for (const b of modes) b.setAttribute('aria-checked', String(b.dataset.path === path)); }
+for (const b of modes) b.addEventListener('click', () => { store.set('preview', b.dataset.path); preview.show(b.dataset.path); });
 $('#preview-reload').addEventListener('click', () => preview.reload());
 
 // ---- the host bridge: a game with a live economy gets its buttons from this page (studio/host-bridge.js) ----
@@ -172,10 +176,12 @@ const WEB3_TABS = new Set(['economy']);
 let networkShown = false;
 const paintNetwork = id => { $('#network').hidden = !(networkShown || WEB3_TABS.has(id)); };
 
-// The tool bar's groups, in order. A tab may name its own (`group: 'Edit'`); one that names none goes under More.
-// (Session and Build are not tools: they are the conversation, on the left.)
-const GROUPS = { map: 'Edit', skins: 'Edit', items: 'Edit', assets: 'Edit', tune: 'Edit', verify: 'Test', friends: 'Test', economy: 'Launch' };
-const GROUP_ORDER = ['Edit', 'Test', 'Launch'];
+// The tool bar's groups, in order: Build (change the game), Test (try it), Share (put it out). A tab may name its own
+// (`group: 'Build'`); one that names none goes under More. The old names (Edit, Launch) still land in their group.
+// (Making a game and the build loop are not tools: they are the conversation, on the left.)
+const GROUPS = { map: 'Build', skins: 'Build', items: 'Build', assets: 'Build', tune: 'Build', verify: 'Test', friends: 'Test', publish: 'Share', backend: 'Share', economy: 'Share' };
+const GROUP_ORDER = ['Build', 'Test', 'Share'];
+const GROUP_ALIAS = { Edit: 'Build', Launch: 'Share', Make: 'Build' };
 const TAB_ICONS = {
   map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
   skins: '<circle cx="12" cy="7" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>',
@@ -185,6 +191,7 @@ const TAB_ICONS = {
   verify: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
   friends: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/><path d="M16 5.5a3 3 0 0 1 0 5M18 14a5.5 5.5 0 0 1 3 5v1"/>',
   economy: '<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/>',
+  publish: '<path d="M12 15V4M7.5 8.5L12 4l4.5 4.5"/><path d="M4 14v4.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V14"/>',
 };
 const tabIcon = (id, own = null) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'ico'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = TAB_ICONS[id] ?? (typeof own === 'string' && /^<(path|circle|rect|line|polyline|polygon)\b[^<>]*\/>(\s*<(path|circle|rect|line|polyline|polygon)\b[^<>]*\/>)*$/.test(own.trim()) ? own : '<rect x="5" y="5" width="14" height="14" rx="3"/>'); return s; };
 
@@ -196,7 +203,8 @@ async function loadTabs(ctx) {
       const mod = await import(`${t.url}?v=${Date.now()}`);
       const d = mod.default;
       if (!d || typeof d.id !== 'string' || typeof d.label !== 'string' || typeof d.mount !== 'function') throw new Error('must export default { id, label, order, mount(el, ctx) }');
-      tabs.push({ ...d, order: Number.isFinite(d.order) ? d.order : 100, group: typeof d.group === 'string' && d.group ? d.group : GROUPS[d.id] ?? 'More', file: t.file });
+      const own = typeof d.group === 'string' && d.group ? GROUP_ALIAS[d.group] ?? d.group : null;
+      tabs.push({ ...d, order: Number.isFinite(d.order) ? d.order : 100, group: own ?? GROUPS[d.id] ?? 'More', file: t.file });
     } catch (e) {
       tabs.push({ id: `broken-${t.file}`, label: `${t.file} ⚠`, order: 999, group: 'More', file: t.file, mount: el => { el.innerHTML = '<p class="error-box"></p>'; el.firstChild.textContent = `studio/tabs/${t.file} did not load: ${e.message}`; } });
     }
@@ -218,6 +226,7 @@ async function loadTabs(ctx) {
     const wide = tab.wide === true ? 'thumbnail' : tab.wide?.game === 'hidden' ? 'hidden' : tab.wide ? 'thumbnail' : null;
     if (wide) document.documentElement.dataset.wide = wide; else delete document.documentElement.dataset.wide;
     $('#inspector-title').textContent = tab.label;
+    $('#inspector-icon').replaceChildren(tabIcon(tab.id, tab.icon));
     if (!mounted.has(id)) {
       const el = panels.querySelector(`[data-id="${CSS.escape(id)}"]`);
       mounted.set(id, true);
@@ -238,21 +247,28 @@ async function loadTabs(ctx) {
   $('#inspector-close').addEventListener('click', closeTool);
   // the game as a thumbnail (a wide tool is open): a click on it gives the game its room back
   $('.preview').addEventListener('click', e => { if (document.documentElement.dataset.wide === 'thumbnail' && e.target.closest('.preview-cover')) closeTool(); });
-  let lastGroup = null;
+  // each group is a cluster: its name small over its tools, every tool an icon over its name (one row at laptop width)
+  let lastGroup = null, cluster = null;
   for (const t of tabs) {
     if (t.group !== lastGroup) {
       lastGroup = t.group;
+      cluster = document.createElement('div');
+      cluster.className = 'tab-cluster'; cluster.dataset.group = t.group; cluster.setAttribute('role', 'presentation');
       const g = document.createElement('div');
       g.className = 'tab-group'; g.setAttribute('aria-hidden', 'true'); g.textContent = t.group;
-      bar.append(g);
+      const row = document.createElement('div');
+      row.className = 'tab-row'; row.setAttribute('role', 'presentation');
+      cluster.append(g, row);
+      bar.append(cluster);
     }
     const b = document.createElement('button');
     b.type = 'button'; b.role = 'tab'; b.dataset.id = t.id; b.dataset.group = t.group; b.id = `tab-${t.id}`; b.tabIndex = -1;
     b.setAttribute('aria-selected', 'false');
     b.append(tabIcon(t.id, t.icon), Object.assign(document.createElement('span'), { textContent: t.label }));
     b.setAttribute('aria-controls', `panel-${t.id}`);
+    b.title = t.label;
     b.addEventListener('click', () => select(t.id));
-    bar.append(b);
+    cluster.lastChild.append(b);
     const p = document.createElement('div');
     p.className = 'panel'; p.dataset.id = t.id; p.hidden = true; p.role = 'tabpanel'; p.id = `panel-${t.id}`; p.setAttribute('aria-labelledby', `tab-${t.id}`);
     panels.append(p);

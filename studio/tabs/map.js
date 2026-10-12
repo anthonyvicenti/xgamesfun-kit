@@ -5,7 +5,8 @@ import { useStyles } from '../lib/editors/ui.js';
 
 export default {
   id: 'map',
-  label: 'Map',
+  label: 'World',
+  group: 'Build',
   order: 6,
   async mount(root, ctx) {
     useStyles();

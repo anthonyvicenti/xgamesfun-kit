@@ -9,7 +9,8 @@ import { askBox, el, onShown, pixelsOf, swatchRow, undoBar, useStyles } from '..
 
 export default {
   id: 'skins',
-  label: 'Skins',
+  label: 'Characters',
+  group: 'Build',
   order: 7,
   async mount(root, ctx) {
     useStyles();

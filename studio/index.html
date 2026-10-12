@@ -26,7 +26,6 @@
   <nav class="links" aria-label="Game">
     <span class="badge" id="network" title="Solana network for this game (gamesfun.json)" hidden></span>
     <a id="open-game" class="btn ghost game-only" href="/game/" target="_blank" rel="noopener">Open game<span class="ext" aria-hidden="true">↗</span></a>
-    <a id="open-friends" class="btn ghost game-only" href="/game/gf/mp/" target="_blank" rel="noopener">Play with friends<span class="ext" aria-hidden="true">↗</span></a>
     <button type="button" id="wallet-btn" class="ghost" hidden>Connect wallet</button>
     <button type="button" id="theme-btn" class="ghost icon" title="Switch to the light theme" aria-label="Switch to the light theme"><span aria-hidden="true">◐</span></button>
   </nav>
@@ -42,14 +41,22 @@
       <!-- the flow's last step: a tool that declares `action` (e.g. Publish) gets a primary button here -->
       <div class="product-actions" id="product-actions"></div>
       <div class="preview-bar">
-        <label class="preview-pick"><span class="preview-label">Preview</span>
-          <select id="preview-mode">
-            <option value="/game/">The game (alone, with bots)</option>
-            <option value="/game/gf/mp/">Friends lobby (host here)</option>
-          </select>
-        </label>
-        <button type="button" id="preview-reload" class="ghost small" title="Reload the preview">Reload</button>
-        <span class="hint" id="preview-hint">Saves reload the game by themselves.</span>
+        <!-- what the preview shows: the game alone (with bots) or the friends lobby, as two picture pills -->
+        <div class="preview-modes" role="radiogroup" aria-label="What the preview shows">
+          <button type="button" role="radio" class="preview-mode" data-path="/game/" aria-checked="true" title="Play the game alone, with bots">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r="1"/><circle cx="17.5" cy="13.5" r="1"/></svg>
+            <span>Solo with bots</span>
+          </button>
+          <button type="button" role="radio" class="preview-mode" data-path="/game/gf/mp/" aria-checked="false" title="The friends lobby: host a room here">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/><path d="M16 5.5a3 3 0 0 1 0 5M18 14a5.5 5.5 0 0 1 3 5v1"/></svg>
+            <span>Friends lobby</span>
+          </button>
+        </div>
+        <button type="button" id="preview-reload" class="ghost small icon-text" title="Start the game over">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+          <span>Restart</span>
+        </button>
+        <span class="hint" id="preview-hint" title="Every saved change reloads the game by itself"><span class="dot ok" aria-hidden="true"></span> Live</span>
       </div>
     </div>
     <div class="product-body">
@@ -59,7 +66,7 @@
         <button type="button" class="preview-cover" title="Back to the game" aria-label="Back to the game"></button>
       </div>
       <aside class="inspector side" id="inspector" aria-label="Tool" hidden><!-- .side: the name tests/economy-shots.mjs scrolls to on a phone -->
-        <div class="inspector-head"><h2 id="inspector-title"></h2><button type="button" id="inspector-close" class="ghost icon small" title="Close the tool (the game gets the room)" aria-label="Close the tool">×</button></div>
+        <div class="inspector-head"><h2><span id="inspector-icon" aria-hidden="true"></span><span id="inspector-title"></span></h2><button type="button" id="inspector-close" class="ghost icon small" title="Close the tool (the game gets the room)" aria-label="Close the tool">×</button></div>
         <div class="panels" id="panels"></div>
       </aside>
     </div>

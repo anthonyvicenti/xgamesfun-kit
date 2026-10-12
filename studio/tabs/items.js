@@ -17,6 +17,7 @@ const ICON = { entry: '➶', single: '◆', switches: '✦' };
 export default {
   id: 'items',
   label: 'Items',
+  group: 'Build',
   order: 8,
   async mount(root, ctx) {
     useStyles();
