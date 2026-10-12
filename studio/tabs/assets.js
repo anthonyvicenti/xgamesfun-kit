@@ -400,7 +400,11 @@ export default {
         edit = el('select', { 'aria-label': s.label });
         for (const o of c.options ?? c.enum ?? []) { const val = o && typeof o === 'object' ? o.value : o; edit.append(el('option', { value: String(val), selected: String(val) === String(v) }, o?.label ?? String(val))); }
         edit.addEventListener('change', () => save(s, edit.value));
-      } else edit = el('span', { className: 'mono muted' }, (JSON.stringify(v) ?? '').slice(0, 40));
+      } else if (/^world\.[a-z0-9-]+\.layout$/.test(s.id) || (s.id === 'world.map' && c.editor === 'tilemap')) {
+        // the level itself: never raw data here, the World tool draws it
+        edit = el('button', { type: 'button', className: 'ghost small' }, 'Edit it in World');
+        edit.addEventListener('click', () => { location.hash = 'map'; });
+      } else edit = el('span', { className: 'muted small' }, Array.isArray(v) ? `a list of ${v.length}` : v && typeof v === 'object' ? 'a set of values' : String(v ?? ''));
       return el('div', { className: 'row art-setting', 'data-slot': s.id }, el('div', { className: 'name' }, s.label), el('div', { className: 'edit' }, edit, details(slotDetails(s))));
     }
 
