@@ -1,6 +1,5 @@
 import { guard, parse, printJson } from '../lib/cli.mjs';
 import { createGame } from '../lib/create.mjs';
-import { installGfWeb3 } from '../web3/node/install.mjs';
 
 const usage = `Usage: gamesfun create <dir> (--from <example> | --spec <spec.json>) [--force] [--json]
 
@@ -18,14 +17,13 @@ export default {
   run: args => guard(async () => {
     const { values, positionals } = parse(args, { from: { type: 'string' }, spec: { type: 'string' }, force: { type: 'boolean' } }, usage);
     const r = await createGame(positionals[0], { from: values.from, spec: values.spec, force: values.force });
-    r.web3 = await installGfWeb3(r.dir);   // the in-game kit gf-web3 at gf/web3/, and a gamesfun.json stub
     if (values.json) return printJson(r);
     for (const n of r.notes) console.log(`note     ${n}`);
     for (const w of r.warnings) console.log(`warning  ${w}`);
     for (const k of r.kept) console.log(`kept     ${k} (yours)`);
     for (const a of r.applied) console.log(`example  ${a}`);
     for (const g of r.guide) console.log(`guide    ${g}${g === 'AGENTS.md' ? ' (what your agent reads first in this game)' : ''}`);
-    console.log(`web3     gf/web3/ (gf-web3 ${r.web3.version}: items, shop, loot boxes, token; skill gamesfun-web3)${r.web3.stub ? ' and gamesfun.json' : ''}`);
+    if (r.web3) console.log(`web3     gf/web3/ (gf-web3 ${r.web3.version}: items, shop, loot boxes, token; skill gamesfun-web3)${r.web3.stub ? ' and gamesfun.json' : ''}`);
     console.log(`create: OK ${r.shown}: "${r.title}"${r.example ? ` from example ${r.example}` : ''} · ${r.slots} slots (${r.main} main) · ${r.wrote} files written`);
     console.log(`\nNext:\n  npx gamesfun dev ${r.shown}              play it in the studio (slots, verify, friends)\n  npx gamesfun verify ${r.shown} --quick   the checks a game must pass\nThen open this folder in your agent (Claude Code, Codex, Cursor, …) and say what you want.`);
   }),
