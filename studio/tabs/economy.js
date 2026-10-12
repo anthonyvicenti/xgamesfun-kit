@@ -113,7 +113,7 @@ const FIELDS = {
     more: [
       { p: 'cutPercent', label: 'Your cut of ticket money (%)', type: 'percent' },
       { p: 'firstDraw', label: 'First draw (publish+7d, or a date)', type: 'time' },
-      { p: 'ticketCurrency', label: 'Tickets paid in (burned)', type: 'select', options: (s) => tokenOptions(s, 'the pot’s money (goes into the pot)') },
+      { p: 'ticketCurrency', label: 'Tickets paid in (burned)', type: 'select', options: (s) => tokenOptions(s, 'the pot’s money') },
     ],
   },
   stakes: {

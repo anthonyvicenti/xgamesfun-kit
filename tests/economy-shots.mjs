@@ -59,7 +59,7 @@ const LIVE = {
   ],
 };
 
-async function page(id, w, h, scheme, { live = false } = {}) {
+async function page(id, w, h, scheme, { live = false, hash = '' } = {}) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1, colorScheme: scheme });
   const p = await ctx.newPage();
   p.errors = [];
@@ -74,7 +74,7 @@ async function page(id, w, h, scheme, { live = false } = {}) {
       localStorage.setItem('gamesfun.tab', 'economy');
     } catch {}
   });
-  await p.goto(`http://127.0.0.1:${servers[id].srv.port}/studio/`, { waitUntil: 'load' });
+  await p.goto(`http://127.0.0.1:${servers[id].srv.port}/studio/${hash}`, { waitUntil: 'load' });
   await p.locator('.panel:not([hidden]) [data-testid="econ-flow"]').waitFor({ timeout: 20_000 });
   await sleep(1500);
   return p;
@@ -158,6 +158,17 @@ try {
     if (saved.economy.boxes[0].price !== 0.2) problems.push(`the typed price was not saved: ${saved.economy.boxes[0].price}`);
     if ((saved.economy.lotteries ?? []).length !== 2) problems.push('the new lottery was not saved');
     await p.context().close();
+  }
+  // ---- links from the agent's tools: "Put it live" offered (not started), and a decision shown for K4 ----
+  {
+    const p = await page('forge', 390, 844, 'dark', { hash: '#economy?flow=economy' });
+    await p.evaluate(() => document.querySelector('.side').scrollIntoView());
+    await shot(p, 'phone-dark-forge-3-link-publish', 'Opened from economy_publish\'s link (#economy?flow=economy): the Economy tab is selected and "Put it live" is offered at once; nothing starts until the click');
+    await p.context().close();
+    const q = await page('duel', 1440, 900, 'light', { hash: '#economy?decide=duel-result&side=2' });
+    await shot(q, 'desktop-light-duel-3-link-decide', 'Opened from a decision link (#economy?decide=…): the "Decision (coming in K4)" note with the link\'s values; nothing is signed');
+    await check(q, 'decide');
+    await q.context().close();
   }
   // ---- a game with a shop and no economy yet: shown migrated, at phone width ----
   {

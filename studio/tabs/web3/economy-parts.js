@@ -95,6 +95,9 @@ export function tickerOf(title) {
 // ---------------------------------------------------------------- adding and removing parts
 
 const push = (spec, section, part) => {
+  // a second "Weekly draw" is "Weekly draw 2", so the cards and the picture tell them apart
+  const names = new Set((spec[section] ?? []).map((p) => p.name));
+  if (part.name && names.has(part.name)) for (let n = 2; ; n += 1) if (!names.has(`${part.name} ${n}`)) { part.name = `${part.name} ${n}`; break; }
   spec[section] = [...(spec[section] ?? []), part];
   return { section, key: part.key };
 };
@@ -250,7 +253,7 @@ export function flowGraph(spec) {
   const sym = (key) => symbolOf(spec, key);
   const pools = new Set((spec.pools ?? []).map((p) => p.key));
   const sinks = {
-    winners: () => node('winners', 3, 'winners', 'Players who win', 'prizes from the pools'),
+    winners: () => node('winners', 3, 'winners', 'Winners', 'paid from the pools'),
     treasury: () => node('treasury', 3, 'treasury', 'Your treasury', 'what the shares leave'),
     burn: () => node('burn', 3, 'burn', 'Burned', 'gone for good'),
     accounts: () => node('accounts', 3, 'account', 'Partner accounts', 'a share to a wallet'),
