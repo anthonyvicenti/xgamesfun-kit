@@ -93,7 +93,7 @@ web3 layer and read by the in-game kit. It holds public addresses only, never se
 | --- | --- |
 | `/` | redirect to `/studio/` |
 | `/studio/…` | `studio/` (index, shell, `tabs/*.js`) |
-| `/game/…` | the game folder; HTML pages get the live-reload script; `/game/gf/mp/` is the friends lobby |
+| `/game/…` | the game folder; HTML pages get the live-reload script; `/game/gf/mp/` is the friends lobby; `/game/gamesfun.json` answers 204 (no web3 settings) when the game has none, so the host bridge's reads print no 404 |
 | `/signal` (WebSocket), `/signal/v1`, `/signal/v1/ice` | gf-multiplayer signaling, from the kits' own signal server |
 | `/api/<area>/…` | routes; core areas: `game` (info, slots, verify), `studio` (tabs), `dev` (status) |
 | `/__gamesfun/events`, `/__gamesfun/reload.js` | live reload (Server-Sent Events) |

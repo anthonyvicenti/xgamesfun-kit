@@ -171,7 +171,7 @@ export function askDialog(doc = document) {
  * Start the bridge on a page. Options:
  *   win          the hosting page's window
  *   accept(src)  whether a message's source window is the game this page hosts
- *   configUrl    the game's gamesfun.json ('/game/gamesfun.json')
+ *   configUrl    the game's gamesfun.json ('/game/gamesfun.json'; the dev server answers 204 when the game has none)
  *   kitUrl       the kit's gf-web3 ('/__gamesfun/gf-web3/index.js')
  *   ask          (action) → answers | null: the asker for an action's `asks` (askDialog by default)
  *   pollMs       how often the state is read again while a game is listening (15 s; the public devnet RPC is rate-limited)

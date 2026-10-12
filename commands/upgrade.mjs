@@ -32,7 +32,10 @@ export default {
     if (values.world) flags.push('--world');
     if (values.json) flags.push('--json');
     const r = await runTool('upgrade', [dir, ...flags]);
-    if (r.code === 0) await installGfWeb3(values.out ? path.resolve(values.out) : dir);   // refresh gf/web3/
+    if (r.code === 0) {
+      const g = await installGfWeb3(values.out ? path.resolve(values.out) : dir);   // refresh gf/web3/
+      if (!values.json && g.previous !== g.version) console.log(`gf/web3 (the in-game web3 kit): ${g.previous ?? 'none'} → ${g.version}`);
+    }
     if (r.code === 0) {
       const moved = await migrateFile(values.out ? path.resolve(values.out) : dir, { write: true });   // shop → economy
       if (!values.json && moved.changed) console.log(moved.notes.join('\n'));

@@ -1,7 +1,7 @@
 // Small DOM pieces the Economy tab uses: an element helper, the tabs' styles (scoped under .gfw3, themed
-// through the studio's --studio-* variables when it sets them), the wallet chip, the request banner, the picture
-// picker and the approval panel that walks a flow in the creator's wallet.
-import { apiOf, cancelled, pictureUrl, runFlow, short, walletOf } from './client.js';
+// through the studio's --studio-* variables when it sets them), the request banner, the picture picker and the
+// approval panel that walks a flow in the creator's wallet. The wallet's button is the studio header's (studio/studio.js).
+import { apiOf, cancelled, pictureUrl, runFlow, walletOf } from './client.js';
 
 /** Replace an element's children, skipping null, undefined and false (the DOM would print them as text). */
 export function fill(el, ...children) {
@@ -29,9 +29,6 @@ const CSS = `
 .gfw3 *{box-sizing:border-box}
 .gfw3 h2{font-size:18px;margin:0}.gfw3 h3{font-size:14px;margin:0 0 8px;text-transform:none;letter-spacing:0;color:var(--text,#e8ecf3)}.gfw3 p{margin:4px 0}
 .gfw3 .dim{color:var(--muted,#9aa4b5)}.gfw3 .mono{font-family:var(--mono,ui-monospace,Menlo,monospace);font-size:12px;overflow-wrap:anywhere}
-.gfw3 .w3-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
-.gfw3 .w3-badge{display:inline-block;padding:2px 9px;border-radius:999px;border:1px solid var(--line,#2a3140);color:var(--muted,#9aa4b5);font-size:12px;background:var(--panel-2,transparent)}
-.gfw3 .w3-badge.dev{color:var(--warn,#ffcf5a)}
 .gfw3 .card{background:var(--panel-2,#161a22);border:1px solid var(--line,#2a3140);border-radius:var(--radius,12px);padding:14px}
 .gfw3 button{font:inherit;padding:7px 13px;border-radius:8px;border:1px solid var(--line,#2a3140);background:transparent;color:var(--text,#e8ecf3);cursor:pointer}
 .gfw3 button.primary{background:var(--accent,#8b7cff);border-color:var(--accent,#8b7cff);color:#fff;font-weight:600}
@@ -87,31 +84,6 @@ export function pickWallet(list) {
 /** The tab's shared context: api, wallet, and a re-render hook. */
 export function tabContext(ctx) {
   return { api: apiOf(ctx), wallet: walletOf(ctx, pickWallet), toast: ctx?.toast ?? (() => {}) };
-}
-
-/** "Connect a wallet" / the connected address. */
-export function walletChip(t, onChange) {
-  const address = t.wallet.address();
-  if (address) return h('span', { class: 'w3-badge mono', title: address, 'data-testid': 'wallet-address' }, `${t.wallet.name}: ${short(address)}`);
-  return h(
-    'button',
-    {
-      'data-testid': 'wallet-connect',
-      onclick: async (e) => {
-        e.target.disabled = true;
-        try {
-          await t.wallet.connect();
-          onChange();
-        } catch (error) {
-          t.toast(error.message, 'error');
-          onChange(error.message);
-        } finally {
-          e.target.disabled = false;
-        }
-      },
-    },
-    'Connect a wallet',
-  );
 }
 
 const ASKED = { launch: (r) => `Your agent asked to launch $${r.input?.symbol ?? 'a token'}`, publish: () => 'Your agent asked to put the shop on sale', economy: () => 'Your agent asked to put the economy live' };
@@ -243,7 +215,7 @@ export function keepFresh(ctx, el, t, { busy, refresh, render }) {
   };
 }
 
-/** A short-lived note under the header. */
+/** A short-lived note at the top of the tab. */
 export function note(kind, text) {
   return text ? h('div', { class: `note ${kind}`, role: kind === 'error' ? 'alert' : 'status' }, text) : null;
 }

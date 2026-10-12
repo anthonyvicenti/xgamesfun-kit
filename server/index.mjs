@@ -4,7 +4,9 @@
 //   /                      → /studio/
 //   /studio/…              the studio page (studio/index.html, studio.js, tabs/*.js)
 //   /game/…                the game folder (its pages get the live-reload script and, when the game's multiplayer kit
-//                          knows online play and GAMESFUN_ONLINE is not off, the online-play line); /game/gf/mp/ plays with friends
+//                          knows online play and GAMESFUN_ONLINE is not off, the online-play line); /game/gf/mp/ plays with friends.
+//                          /game/gamesfun.json is optional: a game without one answers 204 (no web3 settings, no body),
+//                          which the host bridge and gf-web3 read as "no economy", without a failed request in the console
 //   /signal, /signal/v1    gf-multiplayer signaling: the WebSocket the kit uses on 127.0.0.1, and HTTP (kits' signal server)
 //   /api/<area>/…          routes from server/routes/<area>.mjs
 //   /__gamesfun/online.js  online play's readable side, for a game page that got the online line (server/online.mjs)
@@ -12,7 +14,7 @@
 //                          the page that hosts the game signs with the kit's code, never with code from the game's folder
 //   /__gamesfun/events     live reload (Server-Sent Events): `game` when the game's files change, `studio` for the studio's
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readJson } from '../lib/games.mjs';
@@ -70,6 +72,7 @@ export async function startDevServer({ gameDir, port = null, log = console.log, 
       if (url.pathname === '/studio' || url.pathname === '/game') { res.writeHead(301, { ...BASE_HEADERS, location: `${url.pathname}/${url.search}` }); return res.end(); }
       if (url.pathname.startsWith('/__gamesfun/gf-web3/')) return await serveStatic(req, res, { base: GF_WEB3, rest: url.pathname.slice('/__gamesfun/gf-web3'.length), mount: '/__gamesfun/gf-web3', search: url.search });
       if (url.pathname.startsWith('/studio/')) return await serveStatic(req, res, { base: STUDIO, rest: url.pathname.slice('/studio'.length), mount: '/studio', search: url.search });
+      if (url.pathname === '/game/gamesfun.json' && !(await stat(path.join(gameDir, 'gamesfun.json')).catch(() => null))) { res.writeHead(204, BASE_HEADERS); return res.end(); }
       if (url.pathname.startsWith('/game/')) {
         return await serveStatic(req, res, {
           base: gameDir, rest: url.pathname.slice('/game'.length), mount: '/game', search: url.search,
