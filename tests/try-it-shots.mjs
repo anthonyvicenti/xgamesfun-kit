@@ -74,7 +74,7 @@ try {
   // 3. a friend in a second tab
   const host = await page(party.url);
   await tab(host, 'friends');
-  await shot(host, '05-friend-tab', 'Play with a friend: the two steps');
+  await shot(host, '05-friend-tab', 'Play with friends: the steps');
   await host.click('text=1. Host a room in the preview');
   await sleep(3000);
   await shot(host, '05b-friend-lobby', 'after step 1: the friends page in the preview, a name and the button to host');

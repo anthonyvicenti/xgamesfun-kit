@@ -1,0 +1,101 @@
+/* Play with friends (studio/tabs/friends.js): the two screens, the steps, the room code, the players, the keys.
+   On the studio's tokens (studio/studio.css). Scoped under .friends-tool. */
+.friends-tool .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* the picture: your screen hosts, your friend's joins, a wire between them */
+.friends-tool .fr-scene { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--s2); padding: var(--s4) var(--s3) var(--s3); margin-bottom: var(--s4); border-radius: var(--r-lg); background: radial-gradient(120% 90% at 50% 0%, var(--lav-soft), transparent 70%), var(--surface-2); border: 1px solid var(--line); }
+.friends-tool .fr-screen { margin: 0; display: flex; flex-direction: column; align-items: center; min-width: 0; transition: opacity .3s; }
+.friends-tool .fr-screen.off { opacity: .45; }
+.friends-tool .fr-display { position: relative; width: 100%; max-width: 150px; aspect-ratio: 16 / 10; border-radius: var(--r-md); background: var(--stage); border: 2px solid var(--line-strong); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 6px; }
+.friends-tool .fr-screen.you .fr-display { border-color: var(--lime-line); }
+.friends-tool .fr-scene[data-state=joined] .fr-screen .fr-display { border-color: var(--good-line); box-shadow: 0 0 0 3px var(--good-soft); }
+.friends-tool .fr-screen.friend.off .fr-display { border-style: dashed; }
+.friends-tool .fr-stand { width: 30%; height: 6px; margin-top: 3px; border-radius: 0 0 6px 6px; background: var(--line-strong); }
+.friends-tool .fr-screen figcaption { margin-top: 6px; text-align: center; line-height: 1.25; min-width: 0; max-width: 100%; }
+.friends-tool .fr-screen figcaption b { display: block; font-size: var(--fs-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friends-tool .fr-screen figcaption small { color: var(--muted); font-size: var(--fs-xs); }
+.friends-tool .fr-avs { display: flex; align-items: center; gap: 4px; }
+.friends-tool .fr-badge { font: 700 var(--fs-xs)/1 var(--mono); letter-spacing: .08em; color: #f4f4f5; background: rgba(255, 255, 255, .1); border-radius: var(--r-pill); padding: 3px 7px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friends-tool .fr-badge.muted { font-family: var(--font); letter-spacing: 0; font-weight: 600; color: #b7bcc8; }
+.friends-tool .fr-wire { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; position: relative; padding: 0 2px; }
+.friends-tool .fr-wire::before { content: ''; position: absolute; top: 10px; left: -14px; right: -14px; border-top: 2px dashed var(--line-strong); z-index: 0; }
+.friends-tool .fr-wire svg { position: relative; z-index: 1; background: var(--surface-2); border-radius: 50%; padding: 2px; box-sizing: content-box; }
+.friends-tool .fr-scene[data-state=hosted] .fr-wire { color: var(--warn); }
+.friends-tool .fr-scene[data-state=hosted] .fr-wire::before { border-color: var(--warn-line); animation: fr-flow 1.2s linear infinite; }
+.friends-tool .fr-scene[data-state=joined] .fr-wire { color: var(--good); }
+.friends-tool .fr-scene[data-state=joined] .fr-wire::before { border-top-style: solid; border-color: var(--good); }
+@keyframes fr-flow { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .friends-tool .fr-scene .fr-wire::before { animation: none !important; } }
+
+/* avatars: a round colour with an initial */
+.friends-tool .fr-av { display: inline-grid; place-items: center; flex: none; border-radius: 50%; background: var(--lav); color: #0a0c16; font-weight: 700; border: 2px solid rgba(255, 255, 255, .25); text-shadow: 0 1px 0 rgba(255, 255, 255, .3); }
+.friends-tool .fr-av.lg { width: 34px; height: 34px; font-size: 15px; }
+.friends-tool .fr-av.md { width: 28px; height: 28px; font-size: 13px; }
+.friends-tool .fr-av.sm { width: 20px; height: 20px; font-size: 10px; }
+.friends-tool .fr-av.ghost { background: transparent; color: #8a91a1; border: 2px dashed #4a5166; text-shadow: none; }
+
+/* the room code, big, with Copy */
+.friends-tool .fr-code { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: var(--s3); align-items: center; padding: var(--s3) var(--s4); margin-bottom: var(--s4); border-radius: var(--r-lg); border: 1px solid var(--lime-line); background: var(--lime-soft); }
+.friends-tool .fr-code-label { grid-column: 1; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+.friends-tool .fr-code b { grid-column: 1; font: 700 32px/1.15 var(--mono); letter-spacing: .14em; color: var(--lime); overflow-wrap: anywhere; }
+:root[data-theme=light] .friends-tool .fr-code b { color: var(--ink); }
+.friends-tool .fr-code-acts { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+
+/* the steps: a number that becomes a tick */
+.friends-tool .fr-steps { list-style: none; margin: 0 0 var(--s4); padding: 0; display: flex; flex-direction: column; }
+.friends-tool .fr-step { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: var(--s3); padding-bottom: var(--s4); }
+.friends-tool .fr-step:last-child { padding-bottom: 0; }
+.friends-tool .fr-step:not(:last-child)::after { content: ''; position: absolute; left: 13px; top: 30px; bottom: 2px; width: 2px; background: var(--line-strong); border-radius: 1px; }
+.friends-tool .fr-step[data-state=done]:not(:last-child)::after { background: var(--good-line); }
+.friends-tool .fr-num { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: var(--fs-md); background: var(--surface-3); color: var(--muted); border: 2px solid var(--line-strong); }
+.friends-tool .fr-step[data-state=now] .fr-num { background: var(--lime); color: var(--on-lime); border-color: var(--lime); box-shadow: 0 0 0 4px var(--lime-soft); }
+.friends-tool .fr-step[data-state=done] .fr-num { background: var(--good); color: var(--bg); border-color: var(--good); }
+.friends-tool .fr-step-body { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; padding-top: 4px; }
+.friends-tool .fr-step-body b { font-size: var(--fs-base); }
+.friends-tool .fr-step[data-state=todo] .fr-step-body b { color: var(--muted); font-weight: 600; }
+.friends-tool .fr-step-body small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; }
+.friends-tool .fr-step[data-state=done] .fr-step-body small { color: var(--good); }
+.friends-tool .fr-step-body > button, .friends-tool .fr-step-body > a { margin-top: 6px; max-width: 100%; text-decoration: none; }
+
+/* the players in the room */
+.friends-tool .fr-people h3 { margin-top: 0; }
+.friends-tool .fr-roster { list-style: none; margin: 0 0 var(--s4); padding: 0; display: flex; flex-wrap: wrap; gap: var(--s2); }
+.friends-tool .fr-roster li { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: var(--r-pill); background: var(--surface-2); border: 1px solid var(--line); min-width: 0; max-width: 100%; }
+.friends-tool .fr-roster li.waiting { border-style: dashed; background: transparent; }
+.friends-tool .fr-name { font-weight: 600; font-size: var(--fs-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* the controls: keycaps and a mouse */
+.friends-tool .fr-controls h3 { margin-top: var(--s2); }
+.friends-tool .fr-keys { list-style: none; margin: 0 0 var(--s4); padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.friends-tool .fr-keys li { display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: var(--s3); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.friends-tool .fr-caps { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.friends-tool .fr-key { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 6px; font: 700 var(--fs-sm)/1 var(--font); color: var(--ink); background: linear-gradient(var(--surface-3), var(--surface-2)); border: 1px solid var(--line-strong); box-shadow: 0 2px 0 var(--line-strong); }
+.friends-tool .fr-key.wide { min-width: 52px; }
+.friends-tool .fr-wasd { display: grid; grid-template-columns: repeat(3, 26px); grid-template-rows: repeat(2, 26px); gap: 3px; }
+.friends-tool .fr-wasd .fr-key:nth-child(1) { grid-column: 2; grid-row: 1; }
+.friends-tool .fr-wasd .fr-key:nth-child(2) { grid-column: 1; grid-row: 2; }
+.friends-tool .fr-wasd .fr-key:nth-child(3) { grid-column: 2; grid-row: 2; }
+.friends-tool .fr-wasd .fr-key:nth-child(4) { grid-column: 3; grid-row: 2; }
+.friends-tool .fr-or { font-size: var(--fs-xs); color: var(--muted); }
+.friends-tool .fr-mousecap { display: inline-grid; place-items: center; color: var(--ink-2); }
+.friends-tool .fr-mouse .lit { fill: var(--lime); stroke: none; }
+:root[data-theme=light] .friends-tool .fr-mouse .lit { fill: var(--lav); }
+.friends-tool .fr-does { font-size: var(--fs-md); color: var(--ink); line-height: 1.35; min-width: 0; }
+.friends-tool .fr-does small { display: block; color: var(--muted); font-size: var(--fs-xs); }
+
+/* one short honest line */
+.friends-tool .fr-note { display: flex; gap: 6px; align-items: flex-start; margin-top: var(--s2); }
+.friends-tool .fr-note svg { flex: none; margin-top: 1px; }
+
+/* a game for one player */
+.friends-tool .fr-solo { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: var(--s5) var(--s4); margin-bottom: var(--s4); border: 1px dashed var(--line-strong); border-radius: var(--r-lg); color: var(--ink-2); }
+.friends-tool .fr-solo svg { color: var(--lav); }
+.friends-tool .fr-solo p { margin: 0; }
+.friends-tool .fr-solo button { margin-top: var(--s2); }
+
+@media (max-width: 480px) {
+  .friends-tool .fr-scene { padding: var(--s3) var(--s2); }
+  .friends-tool .fr-wire span { display: none; }
+  .friends-tool .fr-code b { font-size: 26px; }
+  .friends-tool .fr-keys li { grid-template-columns: 96px minmax(0, 1fr); }
+}
