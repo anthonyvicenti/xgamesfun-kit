@@ -269,8 +269,8 @@ test('a paused project is said plainly', async () => {
 // ---------------------------------------------------------------- the command
 const cli = (args, opts = {}) => spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', cwd: KIT_ROOT, env: envWith({ GAMESFUN_NO_UPDATE_CHECK: '1', ...opts.env }), input: opts.input });
 
-test('gamesfun backend: the agent\'s way by default, use, check, and the exit codes', async () => {
-  const steps = JSON.parse(cli(['backend', 'connect', 'supabase', '--json']).stdout);
+test('gamesfun backend: the agent\'s way (--agent; the one button is the default: tests/backend-one-button.test.mjs), use, check, and the exit codes', async () => {
+  const steps = JSON.parse(cli(['backend', 'connect', 'supabase', '--agent', '--json']).stdout);
   assert.equal(steps.way, 'mcp');
   assert.equal(steps.url, 'https://mcp.supabase.com/mcp');
   const dir = await fakeGame('cli');

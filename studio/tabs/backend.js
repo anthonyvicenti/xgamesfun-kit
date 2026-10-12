@@ -37,11 +37,14 @@ export default {
       } catch (e) { where.replaceChildren(el('p', { className: 'error-box' }, `${prov.panel} did not load: ${e.message}`)); }
     }
 
-    async function checks(box) {
+    async function checks(box, kind) {
       let c;
       try { c = await ctx.api('backend/check'); } catch (e) { box.replaceChildren(line('bad', e.message)); return; }
+      const secrets = line(c.scan.ok ? 'ok' : 'bad', c.scan.ok ? `No secrets in the game's ${c.scan.files} files.` : `Secrets in the game's files: ${c.scan.hits.map(h => `${h.file}: ${h.kind}`).join('; ')}`);
+      // a server (Railway) has no tables of the game's: only the secrets line
+      if (kind === 'server') { box.replaceChildren(secrets); return; }
       box.replaceChildren(
-        line(c.scan.ok ? 'ok' : 'bad', c.scan.ok ? `No secrets in the game's ${c.scan.files} files.` : `Secrets in the game's files: ${c.scan.hits.map(h => `${h.file}: ${h.kind}`).join('; ')}`),
+        secrets,
         line(c.rls.ok ? 'ok' : 'bad', c.rls.migrations.length || c.rls.used.length ? `Row-level security: ${c.rls.ok ? 'on every table' : 'refused'} (${c.rls.migrations.length} migration${c.rls.migrations.length === 1 ? '' : 's'}; the game reads ${c.rls.used.join(', ') || 'no table'}).` : 'No tables yet. Ask your session for one, for example "a high-score table" or "save each player\'s progress".'),
         ...c.rls.refused.map(r => line('bad', r)), ...c.rls.warned.map(w => line('warn', w)));
       // a table is the session's work: ask it in the conversation's one box, with this backend as the chip
@@ -74,7 +77,7 @@ export default {
           el('div', { className: 'check-line ok' }, el('b', {}, `${prov?.label ?? set.provider}: `), `${set.project?.name ? `${set.project.name} · ` : ''}${set.url}`,
             el('div', { className: 'muted small' }, `${set.keyKind ? `${set.keyKind === 'publishable' ? 'publishable' : 'anon'} key in backend.json · ` : ''}client at ${s.game.client ?? 'gf/backend/ (missing: connect again)'}`)),
           el('h3', {}, 'Checks'), checkBox, panel, el('div', { className: 'toolbar end' }, remove));
-        await checks(checkBox);
+        await checks(checkBox, prov?.kind);
         if (prov) await mountPanel(panel, prov, s);
         return;
       }

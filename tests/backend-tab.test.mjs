@@ -60,19 +60,22 @@ describe('studio Backend tab in Chrome', { skip: !chromium && 'playwright-core i
     await shot('1-none');
   });
 
-  it('choosing Supabase shows its panel; with no session it gives the steps', async t => {
+  it('choosing Supabase shows its panel: the one button (tests/backend-one-button-chrome.test.mjs), and the agent\'s way under "Other ways"', async t => {
     if (!browser) return t.skip('no browser');
     await page.getByRole('button', { name: 'Add a backend (optional)' }).click();
     await shot('2-choose');
     await page.getByRole('button', { name: 'Use Supabase' }).click();
-    await page.getByRole('button', { name: 'Connect Supabase' }).click();
-    await page.getByText('No session is connected to this page').waitFor();
-    assert.match(await panel().innerText(), /claude mcp add --scope local --transport http supabase/);
+    // the one button is there; it is not pressed here (this test has no stand-in for games.fun or Supabase)
+    await page.getByRole('button', { name: 'Connect Supabase' }).waitFor();
+    // not pressed either: with no session it adds Supabase's MCP server to this machine's real agents
+    await page.getByText('Other ways to connect').click();
+    await page.getByRole('button', { name: 'Connect through your agent' }).waitFor();
     await shot('3-supabase');
   });
 
   it('a secret key is refused; the URL and publishable key connect; removing goes back to none', async t => {
     if (!browser) return t.skip('no browser');
+    if (!(await page.getByText('Paste the URL and publishable key yourself').isVisible())) await page.getByText('Other ways to connect').click();
     await page.getByText('Paste the URL and publishable key yourself').click();
     await page.getByLabel('Project URL').fill(URL_);
     await page.getByLabel('Publishable key').fill(SERVICE_ROLE);

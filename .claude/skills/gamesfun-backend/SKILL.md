@@ -25,6 +25,16 @@ not repeat it, store it or pass it to any command.
 
 ## 1. Connect (the person signs in; you never handle a token)
 
+**The one button first.** The studio's Backend tab has "Connect Supabase", and `npx gamesfun backend connect supabase
+games/<name>` runs the same steps in a terminal the person can see: their browser signs in to Supabase (through
+games.fun's app), the kit picks or makes the project, applies `supabase/migrations/` (or the high-score and saved-progress
+examples the spec's `backend.needs` names), writes `backend.json`, checks row-level security and adds Supabase's MCP
+server, scoped to the project, to their agents. With several projects and no prompt it prints what to pass
+(`--project <ref>` or `--create`): ask the person which. If it says one-button Supabase is not set up on this games.fun
+yet, use the agent's way below.
+
+**The agent's way** (no games.fun in between):
+
 1. `npx gamesfun backend connect supabase --add-mcp` adds Supabase's hosted MCP server to Claude Code or Codex with
    their own commands. Tell the person the sign-in step it prints:
    - Claude Code: `/mcp` → supabase → Authenticate.

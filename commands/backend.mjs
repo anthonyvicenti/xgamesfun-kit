@@ -31,12 +31,14 @@ ${providerUsage.join('\n')}
   disconnect [provider]               forget (and revoke) the kit's own sign-in; --forget-app also forgets your OAuth
                                       app; --from-game <game> removes backend.json and gf/backend/ from a game
   password <ref>                      a database password the kit generated (in your own terminal only)
+  agents [game]                       what "Add Supabase to my agents" added for this game (which files)
+      --remove                        undo exactly that (an entry someone changed since is left)
   --json                              machine-readable output`;
 
 const options = Object.assign({
   url: { type: 'string' }, key: { type: 'string' }, players: { type: 'string' },
   live: { type: 'boolean' }, rows: { type: 'string' }, 'live-sql': { type: 'boolean' },
-  'forget-app': { type: 'boolean' }, 'from-game': { type: 'string' },
+  'forget-app': { type: 'boolean' }, 'from-game': { type: 'string' }, remove: { type: 'boolean' },
 }, ...[...PROVIDERS.values()].map(p => p.cli?.options ?? {}));
 
 async function stdin() {
@@ -124,6 +126,21 @@ export default {
       if (r.note) console.log(r.note);
       if (game) console.log(`Removed backend.json and gf/backend/ from ${game}.`);
       if (p.id === 'supabase') console.log('An MCP connection is your agent\'s: remove it with "claude mcp remove --scope local supabase" or "codex mcp remove supabase".');
+      return 0;
+    }
+    if (sub === 'agents') {
+      const gameDir = await resolveGame(a1);
+      if (values.remove) {
+        const r = await B.mcp.removeFromAgents(gameDir);
+        if (values.json) return printJson({ game: shown(gameDir), removed: r });
+        if (!r.length) console.log(`The kit added nothing to your agents for ${shown(gameDir)}.`);
+        for (const x of r) console.log(`${x.name}: ${x.status} (${x.file})${x.output ? `. ${x.output}` : ''}`);
+        return r.some(x => x.status === 'failed') ? 1 : 0;
+      }
+      const list = await B.mcp.added(gameDir);
+      if (values.json) return printJson({ game: shown(gameDir), added: list });
+      if (!list.length) console.log(`The kit added nothing to your agents for ${shown(gameDir)}.`);
+      for (const x of list) console.log(`${x.name}: Supabase's MCP server (${x.url}) in ${x.file}, ${x.scope} scope`);
       return 0;
     }
     if (sub === 'password') {

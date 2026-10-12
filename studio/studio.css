@@ -485,3 +485,34 @@ details.concept-more[open] summary { margin-bottom: 4px; }
   :root[data-wide=thumbnail] .preview-cover { display: block; position: absolute; inset: 0; z-index: 3; background: transparent; border: 0; min-height: 0; padding: 0; border-radius: 0; cursor: zoom-in; }
   :root[data-wide=thumbnail] .preview-cover:hover { background: rgba(169, 156, 255, .12); }
 }
+
+/* Backend: a one-button flow (studio/tabs/backend/flow-ui.js): each step with its mark, words and clock, the question it
+   waits on, then Connected or the error */
+ol.flow-steps { list-style: none; margin: 0 0 var(--s3); padding: 0; }
+ol.flow-steps li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; column-gap: var(--s2); align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-md); }
+ol.flow-steps .mark { text-align: center; font-weight: 700; color: var(--faint); }
+ol.flow-steps .label { overflow-wrap: anywhere; }
+ol.flow-steps .clock { font: var(--fs-sm) var(--mono); color: var(--ink-2); }
+ol.flow-steps .detail { grid-column: 2 / 4; color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+ol.flow-steps li[data-state=todo] .label { color: var(--muted); }
+ol.flow-steps li[data-state=doing] .mark { color: var(--lav); }
+ol.flow-steps li[data-state=doing] .label { font-weight: 700; }
+ol.flow-steps li[data-state=done] .mark { color: var(--good); }
+ol.flow-steps li[data-state=skipped] .mark, ol.flow-steps li[data-state=skipped] .label { color: var(--muted); }
+ol.flow-steps li[data-state=warn] .mark { color: var(--warn); }
+ol.flow-steps li[data-state=failed] .mark { color: var(--bad); }
+.flow-question { border: 1px solid var(--lav-line); background: var(--surface-2); border-radius: var(--r-lg); padding: var(--s3); margin-bottom: var(--s3); }
+.flow-question .flow-q-title { font-weight: 700; margin: 0 0 var(--s2); }
+.flow-question .toolbar { margin-bottom: 0; margin-top: var(--s2); }
+.flow-question .row { margin-bottom: var(--s2); }
+details.other-ways { margin-top: var(--s5); }
+details.other-ways > summary, details.other-ways details > summary { cursor: pointer; font-weight: 600; }
+details.other-ways details { margin-top: var(--s3); }
+details.flow-fold > summary { cursor: pointer; font-size: var(--fs-sm); color: var(--muted); margin-bottom: var(--s2); }
+details.flow-fold > summary:hover { color: var(--ink); }
+.flow-question .row small { display: block; }
+/* the Backend tab's notices carry their tone on the left edge (the family's .ok .bad .warn) */
+#panel-backend .check-line { margin-bottom: var(--s2); }
+#panel-backend .check-line.ok { border-left-color: var(--good); }
+#panel-backend .check-line.bad { border-left-color: var(--bad); }
+#panel-backend .check-line.warn { border-left-color: var(--warn); }

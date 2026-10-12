@@ -9,6 +9,8 @@ export default {
   label: 'Publish',
   group: 'Launch',
   order: 30,
+  // the flow's last step: also a primary button beside the preview's bar (studio.js), which opens this tool
+  action: { label: 'Publish' },
   async mount(root, ctx) {
     const account = el('div', { className: 'conn', dataset: { state: 'idle' } });
     const signIn = el('button', { type: 'button' }, 'Sign in to games.fun');
