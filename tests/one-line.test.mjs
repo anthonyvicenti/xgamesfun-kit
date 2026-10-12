@@ -101,6 +101,7 @@ function fakeAgents({ registered = {}, addFails = false, pluginFails = null } = 
     if (argv[0] === 'plugin') {   // the agent's plugin commands: a marketplace, an install, a list, an uninstall
       const sc = argv.includes('--scope') ? argv[argv.indexOf('--scope') + 1] : 'user';
       if (verb === 'list') return { code: 0, stdout: JSON.stringify(state.plugin ? [{ id: state.plugin.id, scope: state.plugin.scope, enabled: true }] : []), stderr: '' };
+      if (verb === 'marketplace' && argv[2] === 'list') return { code: 0, stdout: JSON.stringify(state.marketplace ? [{ name: 'gamesfun-kit', source: 'directory', path: state.marketplace }] : []), stderr: '' };
       if (verb === 'marketplace') { if (pluginFails === 'marketplace') return { code: 1, stdout: '', stderr: 'no marketplace there' }; state.marketplace = argv[2] === 'add' ? argv[3] : undefined; return { code: 0, stdout: 'ok', stderr: '' }; }
       if (verb === 'install') { if (pluginFails === 'install') return { code: 1, stdout: '', stderr: 'not found in marketplace' }; state.plugin = { id: argv[2], scope: sc }; return { code: 0, stdout: 'ok', stderr: '' }; }
       if (verb === 'uninstall') { delete state.plugin; return { code: 0, stdout: 'ok', stderr: '' }; }
@@ -123,7 +124,7 @@ test('connect registers with each found agent through its own command, then chec
   assert.deepEqual(r.results.map(x => x.status), ['registered', 'registered']);
   assert.equal(f.calls.filter(c => c.startsWith('claude mcp add --transport stdio --scope user gamesfun -- ')).length, 1);
   assert.equal(f.calls.filter(c => c.startsWith('codex mcp add gamesfun -- ')).length, 1);
-  assert.ok(f.calls.every(c => /^(claude|codex) mcp (get|add)|^claude plugin (list|marketplace add|install)/.test(c)), 'only the agents\' own commands');
+  assert.ok(f.calls.every(c => /^(claude|codex) mcp (get|add)|^claude plugin (list|marketplace (add|list)|install)/.test(c)), 'only the agents\' own commands');
   assert.ok(r.results[0].steps.filter(s => s.command.includes(' mcp ')).at(-1).command.includes('mcp get'));
   assert.ok(r.results[0].steps.at(-1).command.includes('plugin list'), 'the plugin is checked last, in the agent\'s own list');
 });
@@ -169,7 +170,7 @@ test('a refused plugin is reported and the tools stay registered; the scope and 
   const d = fakeAgents();
   const dry = await connect({ agent: 'claude', dryRun: true, runner: d.runner, detected: d.detected, data });
   assert.equal(dry.results[0].plugin.status, 'would install');
-  assert.ok(!d.calls.some(c => /plugin (install|marketplace)/.test(c)), 'a dry run installs nothing');
+  assert.ok(!d.calls.some(c => /plugin (install|marketplace (add|remove))/.test(c)), 'a dry run installs nothing');
 });
 
 test('the checkout is a plugin marketplace of one plugin, the one in plugin/', async () => {

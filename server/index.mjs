@@ -19,7 +19,7 @@
 //                          the page that hosts the game signs with the kit's code, never with code from the game's folder
 //   /__gamesfun/events     live reload (Server-Sent Events): `game` when the game's files change, `studio` for the studio's
 import { createServer } from 'node:http';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -47,13 +47,25 @@ function listen(server, port) {
 }
 
 /**
+ * The build loop's first build of this folder is under way: its state (.gf-loop/state.json) is a `build` run that is
+ * building or waiting on a question. A `change` run is a change to a game that was already delivered, so it is not.
+ */
+export function buildRunning(dir) {
+  let s = null;
+  try { s = JSON.parse(readFileSync(path.join(dir, '.gf-loop', 'state.json'), 'utf8')); } catch { return false; }
+  return (s?.kind ?? 'build') === 'build' && ['building', 'waiting-on-question'].includes(s?.status);
+}
+
+/**
  * Is the open folder a game to show (its page served, its tools offered), or one the build loop is still making?
- * A game create made is one; so is any folder the person opened that the loop is not making (no .gf-loop in it: a game
- * made by hand or by an older kit). A folder that does not exist yet, or holds only the loop's talk, is being made.
+ * A game create made is one once its build is over (the creator, 2026-10-12: nothing is shown before the person's first
+ * prompt, and while the loop makes the game the preview says so: the files create wrote are not the game yet); so is
+ * any folder the person opened that the loop is not making (no .gf-loop in it: a game made by hand, by an example or by
+ * an older kit). A folder that does not exist yet, or holds only the loop's talk, is being made.
  */
 export function gameReady(dir) {
   if (!dir) return false;
-  if (isGame(dir)) return true;
+  if (isGame(dir)) return !buildRunning(dir);
   return existsSync(dir) && !existsSync(path.join(dir, '.gf-loop'));
 }
 

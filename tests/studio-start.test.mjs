@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { startDevServer } from '../server/index.mjs';
+import { buildRunning, gameReady, startDevServer } from '../server/index.mjs';
 import { freeName, slugOf } from '../server/routes/studio.mjs';
 import { createGame } from '../lib/create.mjs';
 import { tempDir } from './helpers.mjs';
@@ -123,4 +123,20 @@ test('connect leaves a record the studio reads (the one step left), and --remove
   await recordConnected(ok, { dir, remove: true });
   assert.equal(existsSync(path.join(dir, 'connected.json')), false);
   await rm(dir, { recursive: true, force: true });
+});
+
+test('a game the build loop is still making on its first build is not shown; a change to a delivered game is', async () => {
+  const t = await tempDir();
+  try {
+    const dir = path.join(t.dir, 'g');
+    await createGame(dir, { from: 'soak-squad' });
+    assert.equal(gameReady(dir), true, 'a game with no loop (an example the person picked, a game made by hand) is shown');
+    await mkdir(path.join(dir, '.gf-loop'), { recursive: true });
+    const state = (kind, status) => writeFile(path.join(dir, '.gf-loop', 'state.json'), JSON.stringify({ schema: 'gf-loop/1', kind, status, step: 'verify' }));
+    for (const [kind, status, shown] of [['build', 'building', false], ['build', 'waiting-on-question', false], ['build', 'delivered', true], ['build', 'failed', true], ['change', 'building', true], ['pitch', 'waiting-on-question', true]]) {
+      await state(kind, status);
+      assert.equal(gameReady(dir), shown, `${kind} ${status}`);
+      assert.equal(buildRunning(dir), !shown, `${kind} ${status}`);
+    }
+  } finally { await t.cleanup(); }
 });

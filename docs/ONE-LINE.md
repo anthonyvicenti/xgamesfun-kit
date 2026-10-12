@@ -79,8 +79,12 @@ file.
 If it fails:
 - **"our MCP server did not start"**: nothing was registered. Read the message under it, run `doctor`, run `npm ci`
   again, and repeat `connect`.
-- **"already registered"** or **plugin "already installed"**: it was left as it is. Run
-  `node bin/gamesfun.mjs connect --replace` only if the person wants it to point at this checkout.
+- **"already registered"** or **plugin "already installed"**: it is this checkout's already, and was left as it is.
+- **A `moved:` line**: connect re-points by itself. The MCP server, the plugin marketplace or the plugin (or Codex's
+  server) had been added from another folder, an older or a deleted clone, so it was taken out and added again from
+  this checkout; the line names the old folder and the new one. Nothing to fix. If the old folder is still a kit, the
+  line says so: running `connect` in that folder switches back. (`--replace` registers again even when it is this
+  checkout's already.)
 - **An agent "refused"**: the message is the agent's own. Show it to the person. The tools are optional: the kit works
   without them, because the agent can run `node bin/gamesfun.mjs …` in a terminal.
 - **plugin "failed"**: the tools are registered and the first game works; the studio page will say "no session" until
@@ -105,9 +109,11 @@ the person's session yourself.
 
 `dev` with no game folder serves the studio's start page on 127.0.0.1, opens it in the person's browser, and keeps
 running, so start it in the background and read its address from the first lines it prints
-(`studio http://127.0.0.1:5180/studio/`). Nothing is played on the start page: the person describes their first game
-there (the idea goes to their session, which starts the build loop), opens one of theirs from `games/`, or starts from
-an example. Do not make a game for them.
+(`studio http://127.0.0.1:5180/studio/`). Nothing is played or shown on the start page: no game, no example and no
+preview until the person's first prompt. They describe their first game there (the idea goes to their session, which
+starts the build loop, and the preview says "Making your game" until the first build is delivered), open one of theirs
+from `games/` (listed, never opened for them), or pick an example. Do not make a game for them, and do not start `dev`
+with a game folder.
 
 If it fails:
 - **The port is busy**: `dev` takes the next free port from 5180 to 5189 by itself; `--port <n>` picks one.

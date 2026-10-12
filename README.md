@@ -41,21 +41,22 @@ Playwright's Chromium the first time it needs a browser). Clone this repository,
 
 ```powershell
 npm ci
-npx gamesfun create games/my-game --from soak-squad
-npx gamesfun dev games/my-game
+npx gamesfun dev
 ```
 
 **macOS and Linux**
 
 ```bash
 npm ci
-npx gamesfun create games/my-game --from soak-squad
-npx gamesfun dev games/my-game
+npx gamesfun dev
 ```
 
-`dev` opens the studio in your browser: the game on the left (play it with bots), its slots, verify runs, and a
-**Play with friends** lobby. Open the lobby in two tabs, Host in one and Join with the invite link in the other, and you
-are two players in one game.
+`dev` opens the studio's start page in your browser. Nothing plays there until you say what you want: describe a game
+(your agent session pitches a few takes and builds the one you pick; the preview says "Making your game" until it is
+done), open one of yours from `games/`, or pick an example (`npx gamesfun examples` lists them; **Start from this**
+copies one into `games/`). With a game open you get the conversation with your agent, the game (play it with bots), its
+tools, verify runs and a **Play with friends** lobby. Open the lobby in two tabs, Host in one and Join with the invite
+link in the other, and you are two players in one game.
 
 **Then open this folder in your agent and say what you want**: "make a game where we defend a lighthouse from crabs",
 "make the water red and the rounds shorter", "swap the bucket for this model". The agent reads `AGENTS.md` (the

@@ -116,16 +116,16 @@ export const tools = [
   },
   {
     name: 'gamesfun_dev_start',
-    description: 'Start the dev server for a game in the background (127.0.0.1 only): the studio, the game with live reload, and local multiplayer signaling so two tabs play together. Returns its URLs. Reuses a server already running for that game.',
-    inputSchema: { type: 'object', properties: { dir: gameProp, port: { type: 'integer' } } },
+    description: 'Start the dev server in the background (127.0.0.1 only): the studio, the game with live reload, and local multiplayer signaling so two tabs play together. Returns its URLs. With dir, it opens that game; without dir, the studio\'s start page, where the person describes a game or opens one of theirs (it never opens a game they did not pick, and you never make an example game to have something to show). Reuses a server already running for that game, or for the start page.',
+    inputSchema: { type: 'object', properties: { dir: { type: 'string', description: 'The game folder, relative to the kit root (e.g. games/my-game). Without it: the start page.' }, port: { type: 'integer' } } },
     async handler({ dir, port }) {
-      const d = await game(dir);
-      const running = (await listDevServers()).find(s => path.resolve(s.gameDir) === d);
+      const d = dir ? await game(dir) : null;
+      const running = (await listDevServers()).find(s => (s.gameDir ? path.resolve(s.gameDir) : null) === d);
       if (running && await reachable(running.url)) return { ...running, reused: true, studio: `${running.url}studio/`, play: `${running.url}game/`, friends: `${running.url}game/gf/mp/` };
       await mkdir(STATE, { recursive: true });
       const logFile = path.join(STATE, `dev-${Date.now()}.log`);
       const fd = openSync(logFile, 'a');
-      const args = [BIN, 'dev', d, '--no-open', ...(port ? ['--port', String(port)] : [])];
+      const args = [BIN, 'dev', ...(d ? [d] : []), '--no-open', ...(port ? ['--port', String(port)] : [])];
       const child = spawn(process.execPath, args, { cwd: KIT_ROOT, detached: true, stdio: ['ignore', fd, fd], windowsHide: true });
       child.unref();
       closeSync(fd);
