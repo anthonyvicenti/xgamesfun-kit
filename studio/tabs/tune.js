@@ -61,12 +61,13 @@ export default {
         const groups = new Map(r.groups.map(g => [g.id, g.label]));
         const list = tunables(slots);
         body.replaceChildren();
-        if (!list.length) body.append(el('p', { className: 'muted' }, 'This game exposes no numbers to tune. Ask your session to add some, or use the Slots tab for pictures, models and sounds.'));
+        if (!list.length) body.append(el('p', { className: 'muted empty' }, 'This game exposes no numbers to tune. Ask your session to add some, or use the Slots tab for pictures, models and sounds.'));
         let cur;
         for (const s of list) {
           if (s.group !== cur) { cur = s.group; body.append(el('h3', {}, groups.get(cur) ?? cur ?? 'Other')); }
           body.append(el('div', { className: 'row tune' },
-            el('div', { className: 'name' }, s.label, el('small', {}, `${s.id} · ${APPLIES[s.applies]}`)),
+            // a reload is every value's default (the intro says so): only a value the game takes live says it on its row
+            el('div', { className: 'name', title: APPLIES[s.applies] }, s.label, el('small', {}, s.applies === 'live' ? `${s.id} · ${APPLIES.live}` : s.id)),
             el('div', { className: 'edit' }, ...control(s))));
         }
         refreshButtons();

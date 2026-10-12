@@ -1,6 +1,7 @@
 // The studio shell: the game preview, the wallet, live reload, and the tabs seam.
-// A tab is studio/tabs/<id>.js exporting `default { id, label, order, mount(el, ctx) }` (docs/ARCHITECTURE.md). mount
-// may return a function, called when the studio page goes away. ctx holds:
+// A tab is studio/tabs/<id>.js exporting `default { id, label, order, group?, mount(el, ctx) }` (docs/ARCHITECTURE.md).
+// `group` names the rail's heading it sits under (Make, Edit, Test, Launch; the built-in tabs have theirs in GROUPS
+// below, a new tab without one goes under More). mount may return a function, called when the studio page goes away. ctx holds:
 //   game                 /api/game/info: title, hook, mechanics, controls, network, gamesfun (gamesfun.json), latestVerify
 //   api(path, body?, method?)  the dev server's API: GET without a body, POST with one (JSON, or raw for a Blob/ArrayBuffer);
 //                        a third argument sets the method (PATCH with a JSON body, DELETE with none);
@@ -48,6 +49,25 @@ const store = {
   get(k) { try { return localStorage.getItem(`gamesfun.${k}`); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(`gamesfun.${k}`, v); } catch {} },
 };
+
+// ---- the theme: dark (XGames.fun's) by default, light by the header's switch; ?theme= wins for this visit ----
+const themeBtn = $('#theme-btn');
+const ICON = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const SUN = ICON('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>');
+const MOON = ICON('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/>');
+function paintTheme() {
+  const light = document.documentElement.dataset.theme === 'light';
+  const words = light ? 'Switch to the dark theme' : 'Switch to the light theme';
+  themeBtn.innerHTML = light ? MOON : SUN;
+  themeBtn.title = words; themeBtn.setAttribute('aria-label', words);
+}
+themeBtn.addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  store.set('theme', next);
+  paintTheme();
+});
+paintTheme();
 
 // ---- the preview ----
 const frame = $('#preview');
@@ -144,6 +164,23 @@ const WEB3_TABS = new Set(['economy']);
 let networkShown = false;
 const paintNetwork = id => { $('#network').hidden = !(networkShown || WEB3_TABS.has(id)); };
 
+// The rail's groups, in order. A tab may name its own (`group: 'Edit'`); one that names none goes under More.
+const GROUPS = { session: 'Make', build: 'Make', map: 'Edit', skins: 'Edit', items: 'Edit', assets: 'Edit', tune: 'Edit', verify: 'Test', friends: 'Test', economy: 'Launch' };
+const GROUP_ORDER = ['Make', 'Edit', 'Test', 'Launch'];
+const TAB_ICONS = {
+  session: '<path d="M4 5h16v11H9l-5 4z"/>',
+  build: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/>',
+  map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
+  skins: '<circle cx="12" cy="7" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>',
+  items: '<path d="M14.5 3.5l6 6-9 9-4 1 1-4z"/><path d="M4 20l3-3"/>',
+  assets: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  tune: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  verify: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+  friends: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/><path d="M16 5.5a3 3 0 0 1 0 5M18 14a5.5 5.5 0 0 1 3 5v1"/>',
+  economy: '<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/>',
+};
+const tabIcon = id => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'ico'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = TAB_ICONS[id] ?? '<rect x="5" y="5" width="14" height="14" rx="3"/>'; return s; };
+
 async function loadTabs(ctx) {
   const list = await api('studio/tabs');
   const tabs = [];
@@ -152,18 +189,19 @@ async function loadTabs(ctx) {
       const mod = await import(`${t.url}?v=${Date.now()}`);
       const d = mod.default;
       if (!d || typeof d.id !== 'string' || typeof d.label !== 'string' || typeof d.mount !== 'function') throw new Error('must export default { id, label, order, mount(el, ctx) }');
-      tabs.push({ ...d, order: Number.isFinite(d.order) ? d.order : 100, file: t.file });
+      tabs.push({ ...d, order: Number.isFinite(d.order) ? d.order : 100, group: typeof d.group === 'string' && d.group ? d.group : GROUPS[d.id] ?? 'More', file: t.file });
     } catch (e) {
-      tabs.push({ id: `broken-${t.file}`, label: `${t.file} ⚠`, order: 999, file: t.file, mount: el => { el.innerHTML = '<p class="error-box"></p>'; el.firstChild.textContent = `studio/tabs/${t.file} did not load: ${e.message}`; } });
+      tabs.push({ id: `broken-${t.file}`, label: `${t.file} ⚠`, order: 999, group: 'More', file: t.file, mount: el => { el.innerHTML = '<p class="error-box"></p>'; el.firstChild.textContent = `studio/tabs/${t.file} did not load: ${e.message}`; } });
     }
   }
-  tabs.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+  const groupRank = g => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? GROUP_ORDER.length : i; };
+  tabs.sort((a, b) => groupRank(a.group) - groupRank(b.group) || a.order - b.order || a.label.localeCompare(b.label));
   const bar = $('#tabs'), panels = $('#panels');
   const mounted = new Map(), cleanups = [];
   async function select(id) {
     store.set('tab', id);
     paintNetwork(id);
-    for (const b of bar.children) b.setAttribute('aria-selected', String(b.dataset.id === id));
+    for (const b of bar.querySelectorAll('[role=tab]')) { const on = b.dataset.id === id; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; }
     for (const p of panels.children) p.hidden = p.dataset.id !== id;
     if (!mounted.has(id)) {
       const tab = tabs.find(t => t.id === id), el = panels.querySelector(`[data-id="${CSS.escape(id)}"]`);
@@ -172,15 +210,34 @@ async function loadTabs(ctx) {
       catch (e) { el.innerHTML = '<p class="error-box"></p>'; el.firstChild.textContent = `${tab.label}: ${e.message}`; console.error(e); }
     }
   }
+  let lastGroup = null;
   for (const t of tabs) {
+    if (t.group !== lastGroup) {
+      lastGroup = t.group;
+      const g = document.createElement('div');
+      g.className = 'tab-group'; g.setAttribute('aria-hidden', 'true'); g.textContent = t.group;
+      bar.append(g);
+    }
     const b = document.createElement('button');
-    b.type = 'button'; b.role = 'tab'; b.dataset.id = t.id; b.textContent = t.label;
+    b.type = 'button'; b.role = 'tab'; b.dataset.id = t.id; b.dataset.group = t.group; b.id = `tab-${t.id}`; b.tabIndex = -1;
+    b.append(tabIcon(t.id), Object.assign(document.createElement('span'), { textContent: t.label }));
+    b.setAttribute('aria-controls', `panel-${t.id}`);
     b.addEventListener('click', () => select(t.id));
     bar.append(b);
     const p = document.createElement('div');
-    p.className = 'panel'; p.dataset.id = t.id; p.hidden = true; p.role = 'tabpanel';
+    p.className = 'panel'; p.dataset.id = t.id; p.hidden = true; p.role = 'tabpanel'; p.id = `panel-${t.id}`; p.setAttribute('aria-labelledby', `tab-${t.id}`);
     panels.append(p);
   }
+  // the arrow keys move between tabs, Home and End go to the first and the last (the tablist pattern)
+  bar.addEventListener('keydown', e => {
+    const list = [...bar.querySelectorAll('[role=tab]')], i = list.indexOf(document.activeElement);
+    if (i < 0) return;
+    const j = { ArrowDown: i + 1, ArrowRight: i + 1, ArrowUp: i - 1, ArrowLeft: i - 1, Home: 0, End: list.length - 1 }[e.key];
+    if (j === undefined) return;
+    e.preventDefault();
+    const next = list[(j + list.length) % list.length];
+    next.focus(); select(next.dataset.id);
+  });
   window.addEventListener('pagehide', () => { for (const off of cleanups) { try { off(); } catch {} } });
   // a link to a tab (#economy, or #economy?flow=economy from an agent's tool) wins over the remembered tab
   const linked = () => decodeURIComponent(location.hash.slice(1).split('?')[0]);
@@ -194,7 +251,7 @@ async function main() {
   window.__gamesfunStudio = true;
   let game;
   try { game = await api('game/info'); } catch (e) { $('#game-title').textContent = `Could not reach the dev server: ${e.message}`; return; }
-  document.title = `${game.title} · gamesfun studio`;
+  document.title = `${game.title} · XGames.fun Studio`;
   $('#game-title').textContent = game.title;
   $('#game-title').title = game.hook || '';
   $('#network').textContent = game.network || 'devnet';

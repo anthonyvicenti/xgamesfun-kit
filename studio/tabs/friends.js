@@ -30,11 +30,13 @@ export default {
     lobby.addEventListener('click', () => ctx.preview.show('/game/gf/mp/'));
     second.addEventListener('click', e => { if (second.getAttribute('aria-disabled') === 'true') { e.preventDefault(); ctx.toast('Host a room first (step 1)', 'error'); } });
     root.append(
-      el('p', {}, `Multiplayer: ${ctx.game.multiplayer ?? 'unknown'}. Friends play in one game, in sync, and each sees the others as a character.`),
+      el('p', { className: 'intro' }, ctx.game.multiplayer && ctx.game.multiplayer !== 'live' ? `Multiplayer: ${ctx.game.multiplayer}.` : 'Friends play in one game, in sync, and each sees the others as a character.'),
       el('div', { className: 'toolbar' }, lobby, second), code, status,
       el('p', { className: 'muted small' }, 'This works on this machine only: both tabs talk to the local dev server and play peer to peer. The host\'s tab runs the game, so keep it open.'),
       el('h3', {}, 'Controls'),
-      el('p', {}, Object.entries(ctx.game.controls ?? {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'Move with WASD, look with the mouse.'));
+      Object.keys(ctx.game.controls ?? {}).length
+        ? el('dl', { className: 'controls' }, ...Object.entries(ctx.game.controls).flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]))
+        : el('p', {}, 'Move with WASD, look with the mouse.'));
 
     function paint() {
       const r = readRoom(ctx.preview.frame);

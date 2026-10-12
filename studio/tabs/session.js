@@ -66,7 +66,7 @@ export default {
     function paintQueue() {
       const list = readQueue(queueRaw, removed).requests;
       queue.replaceChildren();
-      if (!list.length) { queue.append(el('p', { className: 'muted' }, 'Nothing asked yet.')); return; }
+      if (!list.length) { queue.append(el('p', { className: 'muted empty' }, 'Nothing asked yet.')); return; }
       for (const r of list) {
         const text = el('div', { className: 'req-text' }, r.text);
         const head = el('div', { className: 'req-state' }, el('span', { className: `dot ${r.words.tone}` }), r.words.label);
@@ -136,7 +136,7 @@ export default {
     function paintLine() {
       line.replaceChildren(...events.map(e => [e, describeEvent(e)]).filter(([, w]) => w).slice(-40).reverse()
         .map(([e, w]) => el('li', { 'data-type': e.kind }, el('span', { className: 'time mono' }, clock(e.at)), ' ', w)));
-      if (!line.children.length) line.append(el('li', { className: 'muted' }, 'Nothing yet.'));
+      if (!line.children.length) line.append(el('li', { className: 'muted empty' }, 'Nothing yet.'));
     }
     const paintAll = () => { paintBanner(); paintPerms(); paintLine(); };
 

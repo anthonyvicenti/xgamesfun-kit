@@ -1,28 +1,37 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>gamesfun studio</title>
-<link rel="icon" href="data:,">
+<meta name="color-scheme" content="dark light">
+<title>XGames.fun Studio</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script>
+  // The theme before the first paint: ?theme=light|dark wins, then the person's choice (the header's switch), else dark.
+  try { const q = new URLSearchParams(location.search).get('theme'), s = localStorage.getItem('gamesfun.theme'), t = q || s; if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
+</script>
 <link rel="stylesheet" href="studio.css">
 <script type="module" src="studio.js"></script>
 </head>
 <body>
 <header class="bar">
-  <div class="brand"><strong>gamesfun</strong> studio</div>
+  <div class="brand">
+    <span class="xg-mark" aria-label="XGames.fun">XGames<span>.fun</span></span>
+    <span class="brand-label">Studio</span>
+  </div>
   <div class="game-title" id="game-title">Loading…</div>
-  <nav class="links">
-    <a id="open-game" href="/game/" target="_blank" rel="noopener">Open game in its own tab ↗</a>
-    <a id="open-friends" href="/game/gf/mp/" target="_blank" rel="noopener">Play with friends ↗</a>
+  <nav class="links" aria-label="Game">
     <span class="badge" id="network" title="Solana network for this game (gamesfun.json)" hidden></span>
+    <a id="open-game" class="btn ghost" href="/game/" target="_blank" rel="noopener">Open game<span class="ext" aria-hidden="true">↗</span></a>
+    <a id="open-friends" class="btn ghost" href="/game/gf/mp/" target="_blank" rel="noopener">Play with friends<span class="ext" aria-hidden="true">↗</span></a>
     <button type="button" id="wallet-btn" class="ghost" hidden>Connect wallet</button>
+    <button type="button" id="theme-btn" class="ghost icon" title="Switch to the light theme" aria-label="Switch to the light theme"><span aria-hidden="true">◐</span></button>
   </nav>
 </header>
 <main class="layout">
-  <section class="preview">
+  <section class="preview" aria-label="Game preview">
     <div class="preview-bar">
-      <label>Preview
+      <label class="preview-pick"><span class="preview-label">Preview</span>
         <select id="preview-mode">
           <option value="/game/">The game (alone, with bots)</option>
           <option value="/game/gf/mp/">Friends lobby (host here)</option>
@@ -34,7 +43,7 @@
     <div class="frame-wrap"><iframe id="preview" title="Game preview" src="about:blank" allow="autoplay; fullscreen; gamepad; clipboard-write"></iframe></div>
   </section>
   <section class="side">
-    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="tabs" role="tablist" id="tabs" aria-label="Studio tools"></div>
     <div class="panels" id="panels"></div>
   </section>
 </main>

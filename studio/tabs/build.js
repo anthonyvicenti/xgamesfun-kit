@@ -29,7 +29,7 @@ export default {
       body.replaceChildren();
       if (data.elsewhere) body.append(el('p', { className: 'error-box' }, `Your session is working on another game: ${data.elsewhere.name}${data.elsewhere.loop ? ` (${data.elsewhere.loop.status}, step ${data.elsewhere.loop.step})` : ''}. This studio shows ${ctx.game?.title ?? 'this game'}. To follow that build here, start the studio on it: node bin/gamesfun.mjs dev ${data.elsewhere.name}`));
       if (!v.present) {
-        body.append(el('p', { className: 'muted' }, 'No build is running. When your session builds or changes this game with the gamesfun tools, its steps appear here.'));
+        body.append(el('p', { className: 'muted empty' }, 'No build is running. When your session builds or changes this game with the gamesfun tools, its steps appear here.'));
       } else {
         const tone = v.status === 'failed' ? 'bad' : v.status === 'delivered' ? (v.issues || v.staleProof ? 'warn' : 'ok') : v.status === 'waiting-on-question' || v.status === 'cancelled' ? 'warn' : 'go';
         body.append(
@@ -63,7 +63,7 @@ export default {
       }
 
       body.append(el('h3', {}, 'Roll back'));
-      if (!data.checkpoints.length) body.append(el('p', { className: 'muted' }, data.rollback ? 'No saved rounds yet. One is saved before each round of your session\'s work.' : 'Rolling back is not available in this kit yet.'));
+      if (!data.checkpoints.length) body.append(el('p', { className: 'muted empty' }, data.rollback ? 'No saved rounds yet. One is saved before each round of your session\'s work.' : 'Rolling back is not available in this kit yet.'));
       for (const c of data.checkpoints) {
         const b = el('button', { type: 'button', className: 'ghost' }, 'Roll back to this');
         b.addEventListener('click', () => rollback(c));

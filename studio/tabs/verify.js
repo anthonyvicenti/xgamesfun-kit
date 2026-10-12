@@ -25,7 +25,7 @@ export default {
 
     function renderRuns(list) {
       runs.replaceChildren();
-      if (!list.length) { runs.append(el('p', { className: 'muted' }, 'No verify runs yet.')); return; }
+      if (!list.length) { runs.append(el('p', { className: 'muted empty' }, 'No verify runs yet. Run quick verify to check the game the way your agent does.')); return; }
       list.forEach((r, i) => {
         const head = el('h3', {}, `${r.run}: ${r.pass ? 'PASS' : 'FAIL'} ${r.passed}/${r.ran}${r.skipped.length ? ` (skipped ${r.skipped.join(', ')})` : ''}${r.quick ? ' · quick' : ''}${r.seconds ? ` · ${r.seconds} s` : ''}`);
         runs.append(head);

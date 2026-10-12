@@ -14,6 +14,9 @@ export default {
     if (mapSlot) return (await import('../lib/editors/map-flat.js')).mountPainter(root, ctx, r);
     const layout = r.slots.find(s => /^world\.[a-z0-9-]+\.layout$/.test(s.id) && s.type === 'json');
     if (layout) return (await import('../lib/editors/map-layout.js')).mountLayout(root, ctx, r, layout);
-    root.textContent = 'This game has no map the studio can edit yet (no world.map or world.<template>.layout slot). Ask your session to change the world.';
+    const empty = document.createElement('p');
+    empty.className = 'muted empty';
+    empty.textContent = 'This game has no map the studio can edit yet (no world.map or world.<template>.layout slot). Ask your session to change the world.';
+    root.replaceChildren(empty);
   },
 };
