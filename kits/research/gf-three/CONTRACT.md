@@ -96,6 +96,17 @@ Main tier: at most about 40 slots. The rest are `"tier": "advanced"`.
 
 `assets.coverage(scene)` walks visible meshes (`visible`, in the frustum or not, `material.visible`). Exempt only when `userData.gfExempt` holds a reason, for things like debug helpers or a ray-cast proxy. `verify` fails when `untagged` isn't empty.
 
+### 2.4 Items as data (open builder wave 10, track I)
+
+A mechanic's things are described by the mechanic, in its manifest's `items` (`kit/assets/items.js` has the language and the checks; `tools/catalog.mjs` MANIFEST the shape). No tool, page or check keeps a list of mechanics or fields.
+
+- **A table** (melee's `weapons`, loot's `upgrades`): one entry's JSON Schema (each field's `title`, `type`, `minimum`, `maximum`, `unit`, `default`), `min` and `max` entries, the fields a card shows first (`front`), and its `picture` (field, file, slot, library default). The table is one json value slot, `mechanic.<id>.<key>`, whose `constraints.item` is the declaration. Adding, removing, renaming or re-numbering an entry is a write of that slot. A write is checked first and refused in words ("Foam sword, swing 1: damage is 500: more than 100, the most it can be"). A new entry's picture may be `"library:<id>"`. `slots --write` copies it to the entry's own file with its grip and licence, and a file two entries share is split. `create` writes the engine's default table (`defaults.party`, `defaults.scenic`) into a game whose spec names none.
+- **A single item** (pickup, projectile, carry, loot's coin, potion and chest): `{single, noun, fields, front, picture}` over the mechanic's own params and the slots that already point at them.
+- `assets.json → items` indexes them: `[{mechanic, as, noun, table}]` or `[{mechanic, as, noun, single, picture, fields, front}]`, all as slot ids.
+- **The routes**: `tools/slots.mjs <game> --set <id> <value | @file>` (`tools/lib/items-lib.mjs writeSlot`) and `tools/items.mjs <game> list | add | remove`. verify check 1 fails a table whose entries do not fit.
+- **Live, dev only** (`kit/core/live-slots.js`): the page hosting the game sends `{type: 'gf:slot', id, value}` and gets back `{type: 'gf:slot-applied', id, ok, live, problems}`. It is heard only from localhost or with `?gf-dev=1`, and never in a live round. `assets.setValue` puts the value in memory after the same check. A part's `slotChanged(id)` says `'live'` (melee: a weapon's numbers, for the next swing) or `'reload'`. Otherwise the answer is `'on-use'`: whatever reads the slot through `assets.value()` when it uses it sees the new value.
+- A preview subject (`?gf-show=character.<role>`) wears each `gf:loadout` the page sends after boot, in place (`snapshot().look.restyled`).
+
 ## 3. The game agent's surface: `rules.js`
 
 ```js
@@ -809,3 +820,4 @@ A 2D game is `"engine": "flat"` in the spec with `"plane": "top" | "side"`. It i
 | 2026-10-10 | §5 stepped time and a game's own tests (open builder track M2-D): `?gf-step=1` and `window.__game.step(ms)` (`kit/core/step.js`); checks 10, 13 and 16 wait in the game's time; check 35 runs `<game>/tests/*.test.json`; the play script gains `step` and `expect`; a viewer's `follow` and `top` camera stands where the rig stands (check 34 on scenic games); the WebGPU Chrome's check pages use an emulated pointer lock (`tools/lib/lock.mjs`) |
 | 2026-10-11 | §6j panels (open builder M4-D): `kit/ui/panels` (choice, shop, inventory bar and grid, dialogue, input), the `panels` part (`kit/mechanics/panels`), `ctx.ui.panels`, `window.__game.panels()`; loot's cards and build's hotbar and sign editor now call it |
 | 2026-10-11 | §10 flat (open builder track F): `"engine": "flat"` with a `plane`; `kit/flat` (look, tile-map world, picture bodies, flat rig, the judge); the tile map `gf-tilemap-1` as the slot `world.map`; the picture standard `gf-flat-1` in pixel and drawn styles; `tools/flat-art.mjs`, `flat-judge.mjs`, `flat-map.mjs`, `flat-reach.mjs`; seams in `core/boot.js`, `net/players.js`, `controller/capsule.mjs` (`setQuery`), `mechanics/pickup` (`touchHeight`) |
+| 2026-10-11 | §2.4 items as data (open builder wave 10, track I): `manifest.items` (melee weapons, loot upgrade cards as tables; pickup, projectile, carry, loot drops as single items), one json slot per table with `constraints.item`, `assets.json → items`, `slots.mjs --set`, `tools/items.mjs`, pictures from the library, verify check 1 on tables, the dev-only `gf:slot` message and `slotChanged`, a preview subject following `gf:loadout` |

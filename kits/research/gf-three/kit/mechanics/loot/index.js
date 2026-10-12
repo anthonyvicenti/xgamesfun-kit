@@ -14,6 +14,7 @@ import { KIND, KIND_NAME, rollDrops, chestDrops, pickUpgrades, scatter, canTake 
 import { UPGRADES, modsOf, NO_MODS } from '../melee/logic.js';
 import { arenaPoint } from '../waves/types.js';
 import { physicsOf, WORLD_GROUPS } from '../../core/util.js';
+import { forSlot } from '../../assets/items.js';
 
 export const id = 'loot';
 export const examples = ['coins and potions from every kill', 'chests to open between fights', 'weapon drops in rarity colours', 'pick an upgrade between levels'];
@@ -70,10 +71,20 @@ export const slots = [
   ...['soundCoin', 'soundPotion', 'soundChest', 'soundWeapon', 'soundUpgrade'].map(k => vs(k, `${k.slice(5)} sound id`, 'text', { constraints: { maxLength: 40 } })),
 ];
 
+/** The upgrade cards offered between levels, as an item (kit/assets/items.js): a list of the kit's card ids, each once;
+ *  a card's name and words are the kit's (melee/logic.js UPGRADES), so a page turns cards on and off. */
+export const UPGRADE_ITEM = {
+  key: 'upgrades', noun: 'upgrade card', nouns: 'upgrade cards', min: 1, max: Object.keys(UPGRADES).length, unique: true,
+  schema: { type: 'string', enum: Object.keys(UPGRADES), title: 'Upgrade card' },
+  words: Object.fromEntries(Object.entries(UPGRADES).map(([k, u]) => [k, { name: u.name, text: u.text }])),
+};
+
 /** The base slots, plus a model slot for each loot model the game has under assets/models/ (loot-chest.glb, loot-coin.glb,
- *  loot-potion.glb: e.g. KayKit's dungeon chest and coin from research/gf-scenic/library). */
+ *  loot-potion.glb: e.g. KayKit's dungeon chest and coin from research/gf-scenic/library), and the upgrade cards' list. */
 export function slotsFor(m = {}, cfg = {}) {
   const out = [...slots], files = new Set(cfg.files ?? []);
+  if (Object.prototype.hasOwnProperty.call(m.params ?? {}, 'upgrades')) out.push({ id: 'mechanic.loot.upgrades', label: 'Upgrade cards offered', group: 'mechanics', type: 'json', source: { pointer: '{base}/upgrades' }, tier: 'advanced', rank: 12, facet: 'gameplay',
+    description: `The cards a player may be offered between levels (${Object.entries(UPGRADES).map(([k, u]) => `${k}: ${u.name}, ${u.text}`).join('; ')})`, constraints: { item: forSlot(UPGRADE_ITEM) } });
   for (const [k, label] of [['chest', 'Chest model'], ['coin', 'Coin model'], ['potion', 'Potion model']]) if (files.has(`assets/models/loot-${k}.glb`))
     out.push({ id: `mechanic.loot.${k}`, label, group: 'mechanics', type: 'model', source: { file: `assets/models/loot-${k}.glb` }, tier: k === 'chest' ? 'main' : 'advanced', rank: 48, facet: 'look', constraints: { maxBytes: 4194304 }, generate: { prompt: { chest: 'a treasure chest whose lid opens', coin: 'a gold coin', potion: 'a small red heal potion' }[k], style: 'stylised low-poly game prop, clean silhouette' } });
   return out;
@@ -394,6 +405,14 @@ export const manifest = {
   // kills drop loot through waves and the boss; potions heal through health; weapon drops and upgrade cards change the
   // melee mechanic's weapon and moves; levels places chests and offers the cards between levels
   uses: ['waves', 'boss', 'health', 'melee', 'levels'],
+  // its things (kit/assets/items.js): the coin, the potion and the chest (each its own params), and the upgrade cards
+  // offered between levels (a list of the kit's cards: a page turns one on or off; a new kind of card is code)
+  items: [
+    { single: true, noun: 'coin', fields: ['coinColor', 'magnet', 'touch'], front: ['coinColor'], picture: (p, game, has) => (has?.('mechanic.loot.coin') ? 'mechanic.loot.coin' : 'mechanic.loot.coin-color') },
+    { single: true, noun: 'potion', fields: ['potionChance', 'potionHeal', 'potionColor'], front: ['potionHeal', 'potionChance'], picture: (p, game, has) => (has?.('mechanic.loot.potion') ? 'mechanic.loot.potion' : 'mechanic.loot.potion-color') },
+    { single: true, noun: 'chest', fields: ['chestWeapon', 'chestColor', 'chestTrim'], front: ['chestWeapon'], picture: (p, game, has) => (has?.('mechanic.loot.chest') ? 'mechanic.loot.chest' : 'mechanic.loot.chest-color') },
+    UPGRADE_ITEM,
+  ],
   owns: () => [{ res: 'input.interact', shared: true, why: 'interact (E) opens a chest or takes a weapon in reach', free: 'chests and weapon drops are always taken with interact' }],
   state: { key: 'loot', fields: { d: '[[id, kind, x, z, weapon, rarity]] drops on the ground', c: '{ playerId: coins }', u: '{ playerId: [upgrade ids] }', o: '[serial, [upgrade ids]] the offer', p: 'the last offer each player picked from', e: 'the last take, for its sound' } },
   events: [],

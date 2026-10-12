@@ -44,6 +44,7 @@ import { put, vendorLibraries, vendorKit, vendorGfAssets, kitFiles, forgeFiles }
 import { importKitModule } from './lib/kit-import.mjs';
 import { specToConfig, libraryPicture, specParams, enemyToughness, FORGE_GATE_QUERY } from './lib/spec-config.mjs';
 import { assembleManifest } from './lib/slots-lib.mjs';
+import { ensurePictures } from './lib/items-lib.mjs';
 import { withDefaults, check } from './lib/schema.mjs';
 import { loadWorldSubject, checkWorld } from './lib/world-check.mjs';
 import { decideModules, AUDIO_FILES, indexHtml, mainJs, attribution, forgeModules } from './create.mjs';
@@ -130,6 +131,16 @@ export async function upgrade(gameDir, { out = null, world = false, log = () => 
     m.params ??= {};
     d = { ...d, ...specParams(spec, m) };            // e.g. a pee stream from the hips
     changes.config.push(...fillMissing(m.params, d, { deep: false }).map(p => `config/game.json/mechanics/${i}/params${p}`));
+  }
+  // a mechanic's table of things (its manifest.items; open builder wave 10): a game made before tables were written out
+  // (null: the kit's own) gets its engine's default table, so a page can add to it; a table the game has is kept as is
+  const itemEngine = record.kit?.engine === 'scenic' ? 'scenic' : 'party';
+  for (const [i, m] of (game.mechanics ?? []).entries()) for (const it of mods.mechanics?.[m.id]?.manifest?.items ?? []) {
+    if (it.single || !it.key || !it.defaults || !m.params || (Array.isArray(m.params[it.key]) && m.params[it.key].length)) continue;
+    const rows = it.defaults[itemEngine] ?? it.defaults.party;
+    if (!Array.isArray(rows) || !rows.length) continue;
+    m.params[it.key] = JSON.parse(JSON.stringify(rows));
+    changes.config.push(`config/game.json/mechanics/${i}/params/${it.key} (the ${itemEngine} engine's own ${it.nouns ?? it.key}, written out)`);
   }
   // the hits rule create applies: a basic enemy takes 2–4 hits from the game's weapon (verify check 16), never one
   const tough = enemyToughness(game.mechanics ?? []);
@@ -248,6 +259,9 @@ export async function upgrade(gameDir, { out = null, world = false, log = () => 
   try { sounds = (await readJson('assets.json')).sounds ?? null; } catch {}
   // a kit sound a mechanic plays now that the game's list lacks (waves' enemy-down, CONTRACT §6f): added, the rest kept
   for (const id of ['enemy-down']) { const s = fresh?.sounds?.sounds?.[id]; if (s && sounds?.sounds && !sounds.sounds[id]) { sounds.sounds[id] = s; changes.notes.push(`sound ${id}: added (${s.label})`); } }
+  // every table entry's picture its own file: a default's "library:<id>" copied in (tools/lib/items-lib.mjs)
+  const pics = await ensurePictures(dir);
+  changes.notes.push(...pics.changed.map(c => `picture: ${c}`), ...pics.problems.map(p => `item picture: ${p}`));
   let A = await assembleManifest(dir, { sounds, modules });
   let filled = 0;
   for (const s of A.manifest.slots) {

@@ -148,6 +148,7 @@ import { shortRound, flowPulse } from './lib/flow-signs.mjs';
 import { holdsBody, whereIs } from './lib/part-signs.mjs';
 import { turnPlayer, turnLine } from './lib/turn-player.mjs';
 import { manifestDiff, manifestLine } from './lib/manifest-check.mjs';
+import { itemProblems } from './lib/items-lib.mjs';
 import { improvised, improvisedLine } from './lib/improvised-check.mjs';
 import { flatOf, walkOf } from './lib/flat-reads.mjs';
 import { decodePng, encodePng } from './lib/flat-png.mjs';
@@ -709,7 +710,10 @@ async function check1(dir, { rec, add, mpm = null }) {
   // asset files declare and the file lacks, or one in the file that nothing declares. verify writes nothing: the
   // loop's fix step (tools/fix.mjs, "manifest-slots") puts a missing slot back before this runs, and notes it.
   const md = v.ok ? await manifestDiff(dir) : null;
-  add(1, 'manifests', v.ok && mv.ok && live && (md?.ok ?? true), [v.ok ? `assets.json valid (${v.stats?.slots ?? '?'} slots, ${v.stats?.mainSlots ?? v.stats?.main ?? '?'} main)` : `assets.json: ${v.errors.slice(0, 4).join('; ')}`, ...(md ? [manifestLine(md, relPosix(REPO, dir))] : []), mv.ok ? `multiplayer.json valid, mode ${mpm.manifest?.mode}` : `multiplayer.json: ${mv.problems.join('; ')}`].join(' · '));
+  // a table of items (a json slot whose mechanic says what one entry is: kit/assets/items.js) holds entries that fit,
+  // as a number slot holds a number inside its range (open builder wave 10)
+  const ip = v.ok ? await itemProblems(dir).catch(e => [`the item tables could not be read: ${e.message}`]) : [];
+  add(1, 'manifests', v.ok && mv.ok && live && (md?.ok ?? true) && !ip.length, [v.ok ? `assets.json valid (${v.stats?.slots ?? '?'} slots, ${v.stats?.mainSlots ?? v.stats?.main ?? '?'} main)` : `assets.json: ${v.errors.slice(0, 4).join('; ')}`, ...(md ? [manifestLine(md, relPosix(REPO, dir))] : []), ...(ip.length ? [`item tables: ${ip.slice(0, 3).join('; ')}${ip.length > 3 ? ` and ${ip.length - 3} more` : ''}`] : []), mv.ok ? `multiplayer.json valid, mode ${mpm.manifest?.mode}` : `multiplayer.json: ${mv.problems.join('; ')}`].join(' · '));
   if (md && !md.error) rec.manifest = { ok: md.ok, slots: md.have, declared: md.want, missing: md.missing, extra: md.extra };
   if (md?.error) rec.notes.push(`check 1: ${manifestLine(md)}`);
   if (v.warnings?.length) rec.notes.push(`assets.json warnings: ${v.warnings.slice(0, 5).join('; ')}`);

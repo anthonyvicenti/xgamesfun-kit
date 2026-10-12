@@ -271,6 +271,9 @@ export const manifest = {
   // what a collect does by itself decides what else the game must have
   needs: p => ({ parts: p.effect === 'heal' ? [{ id: 'health', why: 'effect "heal" calls health.heal' }] : p.effect === 'carry' ? [{ id: 'carry', why: 'effect "carry" hands the player a carried item' }] : [], world: [] }),
   uses: ['carry', 'health'],
+  // its thing (kit/assets/items.js): one kind of pickup, the mechanic's own params; its picture is the prop it draws
+  items: [{ single: true, noun: 'pickup', fields: ['value', 'respawnSeconds', 'count', 'size', 'radius', 'reach', 'color'], front: ['value', 'respawnSeconds', 'count'],
+    picture: (p, game) => { const n = p.prop || (game?.props ?? [])[0]?.name; return n ? `prop.${n}` : 'mechanic.pickup.color'; } }],
   owns: p => (p.collect === 'touch' ? [] : [{ res: `input.${p.action}`, shared: true, why: `a press of ${p.action} within reach takes a spot (params.action, collect "${p.collect}")`, free: 'set pickup params.collect to "touch", or params.action to another input' }]),
   state: { key: 'pk', fields: { p: '[[x, y, z, state]] per spot: state 1 = out, 0 = taken and waiting to come back' } },
   events: [

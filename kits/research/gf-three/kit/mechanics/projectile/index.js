@@ -610,6 +610,9 @@ export const manifest = {
   engines: ['party', 'scenic'],
   needs: { parts: [], world: [] },
   uses: ['health', 'teams', 'paint', 'waves', 'boss', 'carry'],
+  // its thing (kit/assets/items.js): one kind of shot or stream, the mechanic's own params
+  items: [{ single: true, noun: 'shot', fields: ['damage', 'speed', 'cooldown', 'knockback', 'size', 'arc', 'splashRadius', 'streamDamage', 'streamReach', 'streamTank', 'color'], front: ['damage', 'speed', 'cooldown'],
+    picture: p => (p.prop ? `prop.${p.prop}` : 'mechanic.projectile.color') }],
   owns: () => [],
   state: { key: 'prj', fields: { l: '[[id, x, y, z, vx, vy, vz, seat]] shots in flight', st: 'bots that are streaming' } },
   events: [

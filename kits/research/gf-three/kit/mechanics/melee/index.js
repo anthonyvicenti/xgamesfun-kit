@@ -22,6 +22,7 @@ import {
 } from './logic.js';
 import { feelOf } from './feel.js';
 import { hold, gripOf } from './held.js';
+import { forSlot, onlyNumbers } from '../../assets/items.js';
 
 export const id = 'melee';
 export const examples = ['a sword you swing in combos', 'an axe with a heavy spin', 'a spear that thrusts', 'fists in a brawl'];
@@ -38,14 +39,69 @@ const D = {
 };
 const kebab = s => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 const num = (description, minimum, maximum, extra = {}) => ({ type: 'number', description, minimum, maximum, ...extra });
+// one move's fields: each with its plain-words title, its range, its unit and the kit's default (MOVE_DEFAULTS); the
+// weapon table's slots and its item declaration (WEAPON_ITEM) are read from here, so they cannot disagree
+const mv = (title, description, minimum, maximum, unit, key) => ({ ...num(description, minimum, maximum), title, ...(unit ? { unit } : {}), default: MOVE_DEFAULTS[key] });
 const MOVE_SCHEMA = {
   type: 'object', additionalProperties: true,
   properties: {
-    windup: num('Seconds the swing winds up (readable, before it can hit)', 0, 2), active: num('Seconds it can hit', 0.02, 1), recover: num('Seconds the player is committed after it', 0, 2),
-    arc: num('Arc it covers (degrees)', 5, 360), reach: num('Reach (m)', 0.5, 8), damage: num('Damage per target', 0, 100), knockback: num('Knockback (m/s)', 0, 30),
-    hitStop: num('Hit-stop on a hit (s, this player\'s own screen)', 0, 0.3), lunge: num('Step forward as it lands (m/s)', 0, 20), sweep: { type: 'integer', enum: [-1, 0, 1], description: '1 right to left, -1 left to right, 0 a thrust' },
-    tilt: num('Trail tilt (degrees)', -80, 80), clip: { type: 'string', description: 'gf-humanoid-1 clip (slash_1, slash_2, slash_3, heavy; falls back to punch)' },
-    finisher: { type: 'boolean' }, knockdown: { type: 'boolean', description: 'A hit knocks a player over (fair play decides) and staggers an enemy longer' }, guardBreak: { type: 'boolean', description: 'Goes through a shielded enemy\'s guard' },
+    damage: mv('Damage', 'Damage per target', 0, 100, '', 'damage'),
+    windup: mv('Wind-up', 'Seconds the swing winds up (readable, before it can hit)', 0, 2, 's', 'windup'),
+    active: mv('Active time', 'Seconds it can hit', 0.02, 1, 's', 'active'),
+    recover: mv('Recovery', 'Seconds the player is committed after it', 0, 2, 's', 'recover'),
+    arc: mv('Arc', 'Arc it covers (degrees)', 5, 360, '°', 'arc'),
+    reach: mv('Reach', 'Reach (m)', 0.5, 8, 'm', 'reach'),
+    knockback: mv('Knockback', 'Knockback (m/s)', 0, 30, 'm/s', 'knockback'),
+    hitStop: mv('Hit-stop', 'Hit-stop on a hit (s, this player\'s own screen)', 0, 0.3, 's', 'hitStop'),
+    lunge: mv('Lunge', 'Step forward as it lands (m/s)', 0, 20, 'm/s', 'lunge'),
+    sweep: { type: 'integer', enum: [-1, 0, 1], title: 'Sweep', description: '1 right to left, -1 left to right, 0 a thrust', default: MOVE_DEFAULTS.sweep },
+    tilt: mv('Trail tilt', 'Trail tilt (degrees)', -80, 80, '°', 'tilt'),
+    clip: { type: 'string', title: 'Animation', description: 'gf-humanoid-1 clip (slash_1, slash_2, slash_3, heavy; falls back to punch)', maxLength: 40 },
+    finisher: { type: 'boolean', title: 'Finisher', description: 'Ends the combo' },
+    knockdown: { type: 'boolean', title: 'Knocks down', description: 'A hit knocks a player over (fair play decides) and staggers an enemy longer' },
+    guardBreak: { type: 'boolean', title: 'Breaks a guard', description: 'Goes through a shielded enemy\'s guard' },
+  },
+};
+/** One weapon of the table (config/game.json → mechanics[melee].params.weapons[i]): the item a page adds or edits. */
+const WEAPON_SCHEMA = {
+  type: 'object', additionalProperties: true,
+  properties: {
+    id: { type: 'string', title: 'Id', description: 'A short name, unique in the table: lower case letters, digits and dashes', pattern: '^[a-z0-9][a-z0-9_-]{0,23}$' },
+    name: { type: 'string', title: 'Name', description: 'What the HUD and the drops call it', maxLength: 32 },
+    kind: { type: 'string', enum: ['sword', 'axe', 'spear', 'hammer', 'fists'], title: 'Kind', description: 'Its shape when the kit draws it, and the kit weapon whose moves fill in what this one leaves out', default: 'sword' },
+    rarity: { type: 'integer', minimum: 0, maximum: 3, title: 'Rarity', description: '0 common, 1 rare, 2 epic, 3 legendary: each step hits 25% harder', default: 0 },
+    color: { type: 'string', format: 'color', title: 'Colour', description: 'Its colour when the kit draws it (no model)' },
+    prop: { type: 'string', title: 'Prop', description: 'One of the game\'s props held as the weapon (prop.<name>), when it has no model of its own' },
+    model: { type: 'string', title: 'Model', description: 'A file in assets/models/ (slot mechanic.melee.<id>.model), or "library:<id>" for a library model that the next slots --write copies in' },
+    grip: { type: 'object', title: 'Grip', description: 'The model\'s place on the hand_r socket {position, quaternion}' },
+    license: { type: 'object', title: 'Licence', description: 'The model\'s licence {spdx, author, url}' },
+    combo: { type: 'array', minItems: 1, maxItems: 8, title: 'Swings', items: { ...MOVE_SCHEMA, title: 'Swing' } },
+    heavy: { ...MOVE_SCHEMA, title: 'Heavy attack' },
+    dashStrike: { ...MOVE_SCHEMA, title: 'Dash strike' },
+  },
+};
+// The greatsword's own moves (the scenic library's third default weapon): two slow, wide, heavy swings
+const GREATSWORD_COMBO = [
+  { windup: 0.16, active: 0.12, recover: 0.3, arc: 150, reach: 2.7, damage: 2, knockback: 6, hitStop: 0.08, lunge: 3, sweep: 1, tilt: 18, clip: 'slash_1' },
+  { windup: 0.22, active: 0.14, recover: 0.45, arc: 180, reach: 2.9, damage: 3, knockback: 10, hitStop: 0.12, lunge: 5, sweep: -1, tilt: -24, clip: 'heavy', finisher: true },
+];
+/**
+ * The weapon table as an item (kit/assets/items.js, open builder wave 10): what one weapon is, what its card shows
+ * first, where its picture goes, and the table a game gets when its spec names none (party: the kit's sword, axe and
+ * spear, drawn by the kit; scenic: the scenic library's KayKit sword, axe and greatsword, CC0).
+ */
+export const WEAPON_ITEM = {
+  key: 'weapons', noun: 'weapon', nouns: 'weapons', min: 1, max: 8, id: 'id', name: 'name',
+  schema: WEAPON_SCHEMA,
+  front: ['name', 'combo/0/damage', 'combo/0/reach', 'heavy/damage', 'rarity'],
+  picture: { field: 'model', alias: ['prop'], type: 'model', dir: 'assets/models', file: 'melee-<id>.glb', slot: 'mechanic.melee.<id>.model', library: 'kaykit-sword', extra: { grip: 'grip' } },
+  defaults: {
+    party: DEFAULT_WEAPONS,
+    scenic: [
+      { id: 'sword', name: 'Sword', kind: 'sword', model: 'library:kaykit-sword' },
+      { id: 'axe', name: 'Axe', kind: 'axe', model: 'library:kaykit-axe' },
+      { id: 'greatsword', name: 'Greatsword', kind: 'sword', model: 'library:kaykit-greatsword', combo: GREATSWORD_COMBO },
+    ],
   },
 };
 export const params = {
@@ -55,7 +111,7 @@ export const params = {
     heavyAction: { type: 'string', enum: ['', 'primary', 'secondary', 'interact', 'jump'], default: D.heavyAction, description: 'Input for the heavy attack ("": none)' },
     dashAction: { type: 'string', enum: ['', 'primary', 'secondary', 'interact', 'jump'], default: D.dashAction, description: 'Input that dashes ("": none). With "jump", Space dashes instead of jumping' },
     weapon: { type: 'string', default: D.weapon, description: 'Id of the weapon every player starts with (from weapons)' },
-    weapons: { type: ['array', 'null'], default: null, description: 'The weapon table: [{id, name, kind (sword|axe|spear|hammer|fists), rarity 0-3, color, prop, combo: [move...], heavy: move, dashStrike: move}]; null: the kit\'s sword, axe and spear', items: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, kind: { type: 'string' }, rarity: { type: 'integer', minimum: 0, maximum: 3 }, color: { type: 'string' }, prop: { type: 'string' }, model: { type: 'string', description: 'A file in assets/models/ (slot mechanic.melee.<id>.model)' }, grip: { type: 'object' }, combo: { type: 'array', maxItems: 8, items: MOVE_SCHEMA }, heavy: MOVE_SCHEMA, dashStrike: MOVE_SCHEMA } } },
+    weapons: { type: ['array', 'null'], default: null, maxItems: 8, description: 'The weapon table: [{id, name, kind (sword|axe|spear|hammer|fists), rarity 0-3, color, prop, model, combo: [move...], heavy: move, dashStrike: move}]; null: the kit\'s sword, axe and spear. create writes the engine\'s own table when the spec gives none, so a game holds one (the slot mechanic.melee.weapons)', items: WEAPON_SCHEMA },
     comboWindow: { ...num('Seconds after a swing in which a press continues the combo', 0, 2), default: D.comboWindow },
     buffer: { ...num('Seconds an early press is remembered', 0, 1), default: D.buffer },
     chainAt: { ...num('Share of the recovery after which a remembered press chains', 0, 1), default: D.chainAt },
@@ -86,7 +142,9 @@ export const params = {
 };
 
 const vs = (name, label, type, extra = {}) => ({ id: `mechanic.melee.${kebab(name)}`, label, group: 'mechanics', type, source: { pointer: `{base}/${name}` }, tier: 'advanced', facet: type === 'color' || type === 'colors' ? 'look' : 'gameplay', ...extra });
-const MOVE_FIELDS = [['damage', 'damage', 0, 100], ['windup', 'wind-up', 0, 2, 's'], ['active', 'active time', 0.02, 1, 's'], ['recover', 'recovery', 0, 2, 's'], ['arc', 'arc', 5, 360, '°'], ['reach', 'reach', 0.5, 8, 'm'], ['knockback', 'knockback', 0, 30, 'm/s'], ['hitStop', 'hit-stop', 0, 0.3, 's'], ['lunge', 'lunge', 0, 20, 'm/s']];
+// the numbers of a move that are slots of their own: [field, label, min, max, unit], from the move's schema
+const MOVE_FIELDS = ['damage', 'windup', 'active', 'recover', 'arc', 'reach', 'knockback', 'hitStop', 'lunge']
+  .map(f => { const s = MOVE_SCHEMA.properties[f]; return [f, s.title.toLowerCase(), s.minimum, s.maximum, s.unit]; });
 /**
  * Slots: the feel and dash values, the trail and spark colours, and the weapon table, one value slot per tuning number
  * (mechanic.melee.<weapon>.<move>.<field>, advanced) and its colour. A weapon model: mechanic.melee.weapon (the file
@@ -127,7 +185,16 @@ export function slotsFor(m = {}, cfg = {}) {
   out.push(vs('weaponColor', 'Stand-in weapon colour', 'color', { rank: 40 }));
   const files = new Set(cfg.files ?? []);
   if (files.has('assets/models/melee-weapon.glb')) out.push({ id: 'mechanic.melee.weapon', label: 'Weapon model', group: 'mechanics', type: 'model', source: { file: 'assets/models/melee-weapon.glb' }, tier: 'main', rank: 80, facet: 'look', constraints: { maxBytes: 4194304 }, description: 'Held in the right hand (hand_r socket), grip at its origin, blade toward +Y', generate: { prompt: 'a one-handed sword, the grip at the origin, the blade toward +Y', style: 'stylised low-poly game prop, clean silhouette' } });
-  W.forEach(w => { if (w.model && files.has(`assets/models/${w.model}`)) out.push({ id: `mechanic.melee.${w.id}.model`, label: `${w.name}: model`, group: 'mechanics', type: 'model', source: { file: `assets/models/${w.model}` }, tier: 'advanced', facet: 'look', constraints: { maxBytes: 4194304 }, generate: { prompt: `a ${w.kind} (${w.name}), the grip at the origin, the blade toward +Y`, style: 'stylised low-poly game prop, clean silhouette' } }); });
+  W.forEach((w, i) => { const lic = own ? P.weapons[i]?.license : null; if (w.model && files.has(`assets/models/${w.model}`)) out.push({ id: `mechanic.melee.${w.id}.model`, label: `${w.name}: model`, group: 'mechanics', type: 'model', source: { file: `assets/models/${w.model}` }, tier: 'advanced', facet: 'look', constraints: { maxBytes: 4194304 }, generate: { prompt: `a ${w.kind} (${w.name}), the grip at the origin, the blade toward +Y`, style: 'stylised low-poly game prop, clean silhouette' }, ...(lic && typeof lic === 'object' ? { license: lic } : {}) }); });
+  // the table itself (items as data, open builder wave 10): one json slot whose value is the whole list, with what one
+  // weapon is (WEAPON_ITEM) in its constraints, so a page adds, removes or renames a weapon with one slot write; and the
+  // weapon everyone starts with, one of the table's ids
+  const has = k => Object.prototype.hasOwnProperty.call(m.params ?? {}, k);
+  if (has('weapons')) out.push({ id: 'mechanic.melee.weapons', label: 'Weapons (the whole table)', group: 'mechanics', type: 'json', source: { pointer: '{base}/weapons' }, tier: 'advanced', rank: 10, facet: 'gameplay',
+    description: 'Every weapon in the game. Write the whole list to add, remove or rename one; each number must stay inside its range. A new weapon\'s model may be "library:<id>": the next slots --write copies it in',
+    constraints: { item: forSlot(WEAPON_ITEM) } });
+  if (has('weapon')) out.push({ id: 'mechanic.melee.start-weapon', label: 'Weapon everyone starts with', group: 'mechanics', type: 'text', source: { pointer: '{base}/weapon' }, tier: 'advanced', rank: 30, facet: 'gameplay',
+    constraints: { enum: W.map(w => w.id), maxLength: 24 }, description: `One of the weapons' ids (${W.map(w => `${w.id}: ${w.name}`).join(', ')})` });
   return out;
 }
 export const slots = slotsFor({ params: {} });
@@ -142,14 +209,31 @@ export function create(ctx, params = {}) {
   const P = { ...D, ...params };
   const V = (k, f = P[k]) => { const sid = `mechanic.melee.${kebab(k)}`; try { return ctx.assets?.has(sid) ? ctx.assets.value(sid, f) : f; } catch { return f; } };
   const L = { hit: [], swing: [] };
-  // the weapon table, with Studio's values for each number (mechanic.melee.<weapon>.<move>.<field>)
-  const own = Array.isArray(P.weapons) && P.weapons.length;
-  const WEAPONS = normalizeWeapons(P.weapons).map(w => {
+  // the weapon table (its slot mechanic.melee.weapons when the game has one), with Studio's values for each number
+  // (mechanic.melee.<weapon>.<move>.<field>)
+  const val = (sid, f) => { try { return ctx.assets?.has(sid) ? ctx.assets.value(sid, f) : f; } catch { return f; } };
+  const tableNow = () => val('mechanic.melee.weapons', P.weapons);
+  const copyOf = t => (t == null ? null : JSON.parse(JSON.stringify(t)));
+  const own = Array.isArray(tableNow()) && tableNow().length;
+  const build = table => normalizeWeapons(table).map(w => {
     if (!own) return w;
-    const val = (sid, f) => { try { return ctx.assets?.has(sid) ? ctx.assets.value(sid, f) : f; } catch { return f; } };
     const fix = (m, sid) => { const o = { ...m }; for (const [f] of MOVE_FIELDS) o[f] = Number(val(`mechanic.melee.${w.id}.${sid}.${kebab(f)}`, m[f])); return o; };
     return { ...w, color: val(`mechanic.melee.${w.id}.color`, w.color), combo: w.combo.map((m, j) => fix(m, `combo-${j + 1}`)), heavy: fix(w.heavy, 'heavy'), dashStrike: fix(w.dashStrike, 'dash-strike') };
   });
+  const WEAPONS = build(tableNow());
+  let tableSeen = copyOf(tableNow());
+  /** A slot changed while the game runs (kit/core/live-slots.js, dev only): a weapon's numbers are taken at once, the
+   *  next swing uses them; a new, removed or renamed weapon, another picture, a colour or the start weapon reloads. */
+  function slotChanged(id) {
+    if (id !== 'mechanic.melee.weapons' && !/^mechanic\.melee\.[a-z0-9_-]+\.(combo-\d+|heavy|dash-strike)\.[a-z-]+$/.test(id)) {
+      return /^mechanic\.melee\.([a-z0-9_-]+\.(color|model)|start-weapon|weapon)$/.test(id) ? 'reload' : undefined;
+    }
+    const now = tableNow();
+    if (!own || !onlyNumbers(WEAPON_ITEM, tableSeen, now)) return 'reload';
+    build(now).forEach((w, i) => { WEAPONS[i] = w; });
+    tableSeen = copyOf(now);
+    return 'live';
+  }
   const startIndex = Math.max(0, WEAPONS.findIndex(w => w.id === P.weapon));
   const swingOpts = () => ({ ...SWING_DEFAULTS, comboWindow: V('comboWindow'), buffer: V('buffer'), chainAt: V('chainAt'), holdRepeat: V('holdRepeat'), dashTime: V('dashTime'), dashIframes: V('dashIframes'), dashCooldown: V('dashCooldown'), dashStrikeWindow: V('dashStrikeWindow') });
   const feel = feelOf(ctx);
@@ -480,6 +564,7 @@ export function create(ctx, params = {}) {
     /** An aimed mechanic (CONTRACT §6d): the reticle shows in third and first person, and the body turns to the aim. */
     aimed: true,
     weapons: WEAPONS,
+    slotChanged,
     /** The weapon a player holds now (every copy, from the shared state): {id, name, kind, rarity, color, combo, heavy, dashStrike}. */
     weaponOf,
     /** Host: give a player a weapon (an id or an index into weapons), of a rarity (0-3; default the table's). → true when it changed. */
@@ -576,6 +661,8 @@ export const manifest = {
   engines: ['party', 'scenic'],
   needs: { parts: [], world: [] },
   uses: ['waves', 'boss', 'health', 'loot'],
+  // its things (kit/assets/items.js): the weapon table, one json slot a page adds to and edits
+  items: [WEAPON_ITEM],
   // the inputs it reads by itself, and the right hand (the weapon model). research/open-builder/findings/
   // x3-narrow-controller.md lists what it reaches for inside the player controller (the dash and the lunge).
   owns: p => [

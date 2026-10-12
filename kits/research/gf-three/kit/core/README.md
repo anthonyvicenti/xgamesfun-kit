@@ -14,11 +14,13 @@ something K1 needed beyond the contract; it is listed in K1's report for the par
 3. `look.createRenderer(canvas, lookConfig, tier)` and `look.applyLook(ctx, lookConfig)`.
 4. Rapier (`ctx.physics` is the `RAPIER.World`, `ctx.RAPIER` the module; the kit steps it at a fixed 60 Hz).
 5. `world.loadWorld(ctx, config/world.json)` → `ctx.world`.
-6. `?gf-show=<subject>` stops here and shows the subject (`core/show.js`).
+6. `?gf-show=<subject>` stops here and shows the subject (`core/show.js`); a `character.<role>` subject wears each
+   `gf:loadout` the page sends after this, in place.
 7. Audio (gf-audio 1.5.0), input, UI.
 8. Mechanics: `create(ctx, params)` for each `config/game.json → mechanics[]` whose module the kit carries.
 9. Players and bots (`net/session.js`), then each mechanic's optional `setup(ctx)` (players, `ctx.me` and
-   `ctx.shared` exist from here; **CONTRACT-REQUEST**), then `rules.setup(ctx)`.
+   `ctx.shared` exist from here; **CONTRACT-REQUEST**), then `rules.setup(ctx)`. Then, dev only, the page's
+   `gf:slot` messages are heard (`core/live-slots.js`, CONTRACT §2.4).
 10. Alone: the lobby card (Play). Live: `net.ready()`; the party page starts everyone together.
 11. The frame, through `net.loop` (never pauses, also in a background tab).
 

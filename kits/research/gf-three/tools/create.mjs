@@ -33,6 +33,7 @@ import { put, vendorLibraries, vendorKit, vendorGfAssets, kitModuleFiles, option
 import { importKitModule } from './lib/kit-import.mjs';
 import { specToConfig, libraryPicture } from './lib/spec-config.mjs';
 import { assembleManifest } from './lib/slots-lib.mjs';
+import { ensurePictures } from './lib/items-lib.mjs';
 import { mechanicIds, mechanicParts, composeProblems, worldParts, loopParts, loopProblems, loopOf, flowOf, flowParts } from './catalog.mjs';
 import { adopt } from '../../multiplayer/party/adopt.mjs';
 import { KIT_VERSION as MP_KIT_VERSION } from '../../multiplayer/party/manifest.mjs';
@@ -206,7 +207,9 @@ export async function create(specPath, outDir, { force = false, newRules = false
   const flowUse = flow && flow.id !== 'round' && spec.round?.mode !== 'world' ? { id: flow.id, params: withDefaults(flow.manifest.params ?? {}, spec.round?.params ?? {}), sounds: flow.module?.sounds ?? {} } : null;
   // a mechanic's own sounds (its module's `sounds`: id → [label, preset, bus]) are listed with the game's, like its slots
   const mechanicSounds = Object.fromEntries(Object.entries(mods.mechanics ?? {}).filter(([, m]) => m.sounds && typeof m.sounds === 'object').map(([id, m]) => [id, m.sounds]));
-  const C = await specToConfig(spec, { modules, lookPreset, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults, mechanicSounds, worldConfig, flow: flowUse, flat: flat ? { part: flatPart, plane: flat, style: flatPart.presets[spec.look?.preset]?.style ?? 'pixel', repoFile: flatFile } : null });
+  // a mechanic's own things (manifest.items, kit/assets/items.js): its default table goes into the game when the spec gives none
+  const mechanicItems = Object.fromEntries(Object.entries(mods.mechanics ?? {}).filter(([, m]) => Array.isArray(m.manifest?.items)).map(([id, m]) => [id, m.manifest.items]));
+  const C = await specToConfig(spec, { modules, lookPreset, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults, mechanicSounds, mechanicItems, worldConfig, flow: flowUse, flat: flat ? { part: flatPart, plane: flat, style: flatPart.presets[spec.look?.preset]?.style ?? 'pixel', repoFile: flatFile } : null });
   C.notes.push(...forgeNotes);
   // optional kit modules (a kit folder with a module.js; kit/vfx/module.js documents the contract): one the spec (or the
   // rules.js already there) needs gets its config block, its stand-in files and its folder in gf/three. A module added
@@ -262,6 +265,11 @@ export async function create(specPath, outDir, { force = false, newRules = false
   // forge: the page, once everything it names is in place (it asks for every module of the game at once)
   if (engine === 'forge') await gen('index.html', indexHtml(spec.title, engine, { preload: await forgeModules(dir) }));
 
+  // every table entry's picture its own file (open builder wave 10): a default's "library:<id>" copied in, with its grip
+  // and licence (tools/lib/items-lib.mjs)
+  const pics = await ensurePictures(dir);
+  C.notes.push(...pics.changed.map(c => `picture: ${c}`));
+  warnings.push(...pics.problems);
   // the build record, then assets.json from the declarations (keeping the sound list a game already has)
   const record = {
     kit: { name: 'gf-three', version: KIT_VERSION, engine, ...(engine === 'scenic' ? { scenic: SCENIC_VERSION } : {}), ...(engine === 'forge' ? { forge: FORGE_VERSION } : {}) }, game: slugOf(spec.title), spec: { file: 'spec.json', sha256: sha256(specBytes) },

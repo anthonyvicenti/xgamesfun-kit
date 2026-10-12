@@ -372,19 +372,61 @@ function yard(recipe, size, seed) {
     if (!ground[i] || !ground[j]) continue;
     if (Math.hypot(kept[i].at[0] - kept[j].at[0], kept[i].at[2] - kept[j].at[2]) <= 1.5) parent[find(i)] = find(j);
   }
-  const shiftOf = new Map();
+  // ---- the gates: where the edge opens (enemies and visitors come in there; `entries`) ----
+  const sidesOf = (w, d) => ({ back: { axis: 'x', c: -d / 2, n: [0, -1], L: w }, front: { axis: 'x', c: d / 2, n: [0, 1], L: w }, left: { axis: 'z', c: -w / 2, n: [-1, 0], L: d }, right: { axis: 'z', c: w / 2, n: [1, 0], L: d } });
+  const gatesOf = (list, sd) => (list ?? []).map(g => {
+    const s = sd[g.side], u = r2((g.at ?? 0) * s.L / 2), w = g.width ?? recipe.gateWidth ?? 3;
+    const at = s.axis === 'x' ? [u, 0, s.c] : [s.c, 0, u];
+    return { name: g.name, side: g.side, u, width: w, at, normal: s.n };
+  });
+  const sides = sidesOf(W, D);
+  const gates = gatesOf(recipe.gates?.[size] ?? recipe.gates?.small, sides);
+  // a gate's way in: its opening and 0.6 m either side, 3 m inward. A thing the hand layout put there (the small world's
+  // own gates) stays; one that growing brings into a gate's way in (a statue by the back wall of a small arena, which a
+  // large arena opens a gate behind) steps aside along the edge (the places spike, wave 10)
+  const laneOf = (box, list, sd) => list.find(g => {
+    const s = sd[g.side], along = s.axis === 'x' ? [box[0], box[2]] : [box[1], box[3]];
+    const inward = s.axis === 'x' ? (s.c < 0 ? [box[1] - s.c, box[3] - s.c] : [s.c - box[3], s.c - box[1]]) : (s.c < 0 ? [box[0] - s.c, box[2] - s.c] : [s.c - box[2], s.c - box[0]]);
+    return along[1] > g.u - g.width / 2 - 0.6 && along[0] < g.u + g.width / 2 + 0.6 && inward[1] > 0 && inward[0] < 3;
+  });
+  const handGates = gatesOf(recipe.gates?.small, sidesOf(W0, D0));
+  const fpAt = (p, sx = 0, sz = 0) => { const s = recipe.footprints?.[p.prop] ?? [1.2, 1.2]; return [p.at[0] + sx - s[0] / 2, p.at[2] + sz - s[1] / 2, p.at[0] + sx + s[0] / 2, p.at[2] + sz + s[1] / 2]; };
+  const boxOf = (list, sx = 0, sz = 0) => list.map(p => fpAt(p, sx, sz)).reduce((a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])]);
+  const shiftOf = new Map(), membersOf = new Map();
   for (let i = 0; i < kept.length; i++) {
     const r = find(i); if (shiftOf.has(r)) continue;
     const members = kept.filter((_, k) => find(k) === r);
     const cx = members.reduce((n, p) => n + p.at[0], 0) / members.length, cz = members.reduce((n, p) => n + p.at[2], 0) / members.length;
     const [mx, mz] = move(cx, cz);
     shiftOf.set(r, [mx - cx, mz - cz]);
+    if (ground[i]) membersOf.set(r, members);
+  }
+  // then the ones growing brought into a gate's way in step aside, to the nearer side first, on to where they touch
+  // nothing within 3 m; with no room either side they are left out (a gate stays a way in)
+  const overlaps = (a, b) => a[2] > b[0] && a[0] < b[2] && a[3] > b[1] && a[1] < b[3];
+  for (const [r, members] of membersOf) {
+    const [sx, sz] = shiftOf.get(r);
+    if (!sx && !sz) continue;
+    const g = laneOf(boxOf(members, sx, sz), gates, sides);
+    if (!g || laneOf(boxOf(members), handGates, sidesOf(W0, D0))) continue;
+    const b = boxOf(members, sx, sz), axisX = sides[g.side].axis === 'x';
+    const [lo, hi] = axisX ? [b[0], b[2]] : [b[1], b[3]], mid = (lo + hi) / 2, half = (hi - lo) / 2;
+    const others = [...membersOf].filter(([k]) => k !== r && shiftOf.get(k)).map(([k, m]) => boxOf(m, ...shiftOf.get(k)));
+    const first = mid >= g.u ? 1 : -1;
+    let best = null;
+    for (let step = 0; step <= 6 && !best; step++) for (const k of [first, -first]) {
+      const to = g.u + k * (g.width / 2 + 0.6 + half + 0.05 + step * 0.5);
+      const t = axisX ? [sx + to - mid, sz] : [sx, sz + to - mid], nb = boxOf(members, ...t);
+      if (!others.some(o => overlaps(nb, o)) && !laneOf(nb, gates, sides)) { best = t; break; }
+    }
+    shiftOf.set(r, best);
   }
   out.props = kept.map((p, i) => {
     if (!ground[i] || (!dx && !dz)) return { ...p };
-    const [sx, sz] = shiftOf.get(find(i));
-    return { ...p, at: [r2(p.at[0] + sx), p.at[1] ?? 0, r2(p.at[2] + sz)] };
-  });
+    const shift = shiftOf.get(find(i));
+    if (!shift) return null;                                   // no room beside the gate it would stand in
+    return { ...p, at: [r2(p.at[0] + shift[0]), p.at[1] ?? 0, r2(p.at[2] + shift[1])] };
+  }).filter(Boolean);
   out.scatter = (recipe.scatter ?? []).map(s => {
     if (!dx && !dz) return { ...s };
     const [a, b] = move(s.area[0], s.area[1]), [c, d] = move(s.area[2], s.area[3]);
@@ -401,13 +443,6 @@ function yard(recipe, size, seed) {
     return [n, { ...z, at: [r2(x), z.at[1], r2(zz)] }];
   }));
 
-  // ---- the gates: where the edge opens (enemies and visitors come in there; `entries`) ----
-  const sides = { back: { axis: 'x', c: -D / 2, n: [0, -1], L: W }, front: { axis: 'x', c: D / 2, n: [0, 1], L: W }, left: { axis: 'z', c: -W / 2, n: [-1, 0], L: D }, right: { axis: 'z', c: W / 2, n: [1, 0], L: D } };
-  const gates = (recipe.gates?.[size] ?? recipe.gates?.small ?? []).map(g => {
-    const s = sides[g.side], u = r2((g.at ?? 0) * s.L / 2), w = g.width ?? recipe.gateWidth ?? 3;
-    const at = s.axis === 'x' ? [u, 0, s.c] : [s.c, 0, u];
-    return { name: g.name, side: g.side, u, width: w, at, normal: s.n };
-  });
   const inGate = (side, u, half) => gates.some(g => g.side === side && Math.abs(g.u - u) < g.width / 2 + half - 1e-6);
   out.entries = gates.map(g => ({ name: g.name, at: g.at, normal: g.normal, width: g.width }));
 
@@ -444,11 +479,16 @@ function yard(recipe, size, seed) {
       let at = -s.L / 2 - over;
       const end = s.L / 2 + over;
       for (let guard = 0; guard < 40 && at < end - 3; guard++) {
-        const fits = rows.buildings.filter(id => at + (sizes[id]?.[0] ?? 8) <= end + 0.5);
-        if (!fits.length) break;
+        // the row runs up to the next gate on this side and fills the stretch before it with a house that fits there;
+        // when none does, it carries on past the gate (before wave 10 it skipped to the gate whenever the house it drew
+        // was too wide, leaving 3-8 m of the edge open: check 17 failed most plazas, the places spike found)
+        const g = gates.filter(q => q.side === name && q.u + q.width / 2 + 0.2 > at).sort((a, b) => a.u - b.u)[0];
+        const stop = g ? g.u - g.width / 2 - 0.2 : Infinity;
+        if (g && at >= stop) { at = g.u + g.width / 2 + 0.2; continue; }
+        const fits = rows.buildings.filter(id => at + (sizes[id]?.[0] ?? 8) <= Math.min(end + 0.5, stop));
+        if (!fits.length) { if (g && stop < end) { at = g.u + g.width / 2 + 0.2; continue; } break; }
         const id = pick(fits), [w, d] = sizes[id] ?? [8, 8];
         const u = at + w / 2;
-        if (inGate(name, u, w / 2)) { const g = gates.find(q => q.side === name && Math.abs(q.u - u) < q.width / 2 + w / 2); at = g.u + g.width / 2 + 0.2; continue; }
         const pos = s.axis === 'x' ? [u, 0, Math.sign(s.c) * (D / 2 + d / 2 + (rows.gap ?? 0.5))] : [Math.sign(s.c) * (W / 2 + d / 2 + (rows.gap ?? 0.5)), 0, u];
         // fronts to the square: +z faces the middle
         const rot = name === 'back' ? 0 : name === 'front' ? 180 : name === 'left' ? 90 : 270;

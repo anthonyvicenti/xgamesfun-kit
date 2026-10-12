@@ -8,6 +8,7 @@
 import * as gf from '../../gf-assets.js';
 import { getPointer } from '../../gf-assets.js';
 import { validateLoadout, loadoutKey, playerLookSlots, isEmpty } from './loadout.js';
+import { slotValueProblems, setAt } from './items.js';
 
 export const S = { manifest: null, slots: new Map(), files: new Map(), configs: new Map(), renderer: null, gltf: new Map(), tex: new Map(), ext: new Map(), extTex: new Map(), loader: null, ktx2: null, ready: false };
 // loadouts (CONTRACT §6e): the player-look slots, and per player {loadout, key, advertised, dropped, rejected}
@@ -110,5 +111,28 @@ export const assets = {
   },
   /** fn(playerId) whenever a player's loadout changes (or one of its files is dropped). → unsubscribe */
   onLoadout(fn) { L.fns.push(fn); return () => { const i = L.fns.indexOf(fn); if (i >= 0) L.fns.splice(i, 1); }; },
+
+  // ---- a value slot changed while the game runs (dev only: kit/core/live-slots.js; open builder wave 10) ----
+  /** Problems with a value for a value slot, in words (empty: it fits the slot's type and range). */
+  valueProblems(id, value) { const s = S.slots.get(id); return s ? slotValueProblems(s, value) : [`there is no slot "${id}"`]; },
+  /** Put a new value in a value slot in memory (the file on disk is the page's to write). Refused, in words, when it
+   *  does not fit the slot. Everything that reads the slot through value() sees it at once; a part that read it once at
+   *  the start hears it through onValue. → { ok, problems, before } */
+  setValue(id, value) {
+    const s = S.slots.get(id);
+    if (!s) return { ok: false, problems: [`there is no slot "${id}"`] };
+    if (s.source?.pointer === undefined) return { ok: false, problems: [`${id} is a file slot: it changes with a new file and a reload`] };
+    const problems = slotValueProblems(s, value);
+    if (problems.length) return { ok: false, problems };
+    const doc = S.files.get(s.source.file);
+    if (doc === undefined) return { ok: false, problems: [`${s.source.file} was not loaded`] };
+    const before = getPointer(doc, s.source.pointer);
+    try { setAt(doc, s.source.pointer, value); } catch (e) { return { ok: false, problems: [`${id}: ${e.message}`] }; }
+    for (const fn of V.fns.slice()) { try { fn(id, value, before); } catch (e) { console.error(e); } }
+    return { ok: true, problems: [], before };
+  },
+  /** fn(slotId, value, before) after setValue. → unsubscribe */
+  onValue(fn) { V.fns.push(fn); return () => { const i = V.fns.indexOf(fn); if (i >= 0) V.fns.splice(i, 1); }; },
 };
+const V = { fns: [] };
 export default assets;

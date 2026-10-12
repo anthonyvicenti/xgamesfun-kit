@@ -17,7 +17,7 @@
 //   continues   the view past the walls or edge shows nothing: too few directions from the middle meet a building
 //               (indoor) or a building, tree or hill (outdoor) within 120 m
 //   entries     enemies come in (waves) but the world names no real door or gate for them (entries), too few for the
-//               size, or an entry that is not at a door or gate
+//               size, an entry that is not at a door or gate, or a solid standing in an entry's way in
 //   rooms       a room no door reaches
 // and notes (warnings): filled ground (of the floor, how much has something within 3 m) and the three scales of things
 // per room (big, middle, small), after genex-desktop's liveness recipes (MIT; research bank).
@@ -44,7 +44,7 @@ export const RULES = {
   filled: 'little of the floor has anything near it (warning)',
   scales: 'a room lacks big, middle or small things (warning)',
 };
-export const T = { gap: 0.6, outdoorGap: 3.0, sample: 0.25, wallPad: 0.3, continuesMin: 0.75, rays: 16, reach: 120, filled: 0.6, filledRadius: 3, doorMin: 0.8, entryNear: 0.5, gateNear: 1.6 };
+export const T = { gap: 0.6, outdoorGap: 3.0, sample: 0.25, wallPad: 0.3, continuesMin: 0.75, rays: 16, reach: 120, filled: 0.6, filledRadius: 3, doorMin: 0.8, entryNear: 0.5, gateNear: 1.6, wayIn: 2.5, wayFree: 0.9, wayStep: 0.5 };
 const BACKDROP = new Set(['building', 'backdrop']);
 const STREET = new Set(['lamp', 'light', 'street', 'sky', 'cloud']);
 const EDGE = new Set(['wall', 'fence', 'hedge', 'gate', 'building', 'backdrop']);
@@ -119,7 +119,29 @@ export function scenicLevelArea(L, r) {
     const w = Math.max(0, b[2] - b[0] - 2), d = Math.max(0, b[3] - b[1] - 2);
     return { area: w * d, size: [+w.toFixed(1), +d.toFixed(1)], how: `${L.rooms.length} rooms in ${fmt(w)} x ${fmt(d)} m (${Math.round(w * d)} m²)` };
   }
+  // an island with its outline (every island gf/scenic/world lays out): the ground inside its rim. Before wave 10 every
+  // island was measured as the disc of its nominal radius, which under-counts the squarish outline by about a tenth:
+  // a radius-24 island walks 1951-2017 m² inside its rim and was called 1810, under "large"'s 1900 (the places spike)
+  const walk = islandWalkArea(L);
+  if (walk !== null) return { area: walk, size: [+(r * 2).toFixed(1), +(r * 2).toFixed(1)], how: `${fmt(r * 2)} m across (${Math.round(walk)} m² walkable inside its rim)` };
   return { area: Math.PI * r * r, size: [+(r * 2).toFixed(1), +(r * 2).toFixed(1)], how: `${fmt(r * 2)} m across (${Math.round(Math.PI * r * r)} m² walkable)` };
+}
+
+/** An island level's outline radius at angle a (radians): gf-scenic/kit/world/generate.js outlineRadius, a superellipse
+ *  with a seeded wobble, read from the level's own `shape` (tests/d-worlds.test.mjs holds the two equal). */
+export function islandOutline(shape, a) {
+  const n = shape.n ?? 5, R = shape.radius, c = Math.abs(Math.cos(a - (shape.rot ?? 0))), s = Math.abs(Math.sin(a - (shape.rot ?? 0)));
+  let w = 0;
+  for (const [k, amp, ph] of shape.wobble ?? []) w += amp * Math.sin(k * a + ph);
+  return R * Math.pow(Math.pow(c, n) + Math.pow(s, n), -1 / n) * (1 + w);
+}
+/** The ground inside an island level's rim (its outline less `rimInset`, gf/scenic/world's walkRadius), m²; null for a
+ *  level with no outline. Shallow water (0.45 m) is ground a player wades through, so it counts. */
+export function islandWalkArea(L, N = 720) {
+  if (!(Number(L?.shape?.radius) > 0)) return null;
+  let A = 0;
+  for (let i = 0; i < N; i++) { const r = Math.max(0, islandOutline(L.shape, (i / N) * Math.PI * 2) - (L.rimInset ?? 1.2)); A += r * r * Math.PI / N; }
+  return A;
 }
 
 /** Check 17 for a scenic world. Same report shape as checkWorld (stats.size is the first level's span). */
@@ -291,6 +313,27 @@ export function checkWorld(subject) {
   }
 
   // ---- entries: where enemies come in ----
+  // an entry nobody can come through: across the opening (less 0.2 m a side), from 0.5 m to T.wayIn inside, the widest
+  // free run at some depth is narrower than a body (T.wayFree). A solid lower than a step (T.wayStep) is walked over.
+  // → {q, f, d, free} (the first solid at that depth) | null
+  const wayInBlocker = e => {
+    const [nx, nz] = e.normal ?? [0, 0];
+    if (!nx && !nz) return null;
+    const half = Math.max(0, (e.width ?? 1.6) / 2 - 0.2);
+    const inBox = (f, x, z) => { if (f.shape === 'circle') return Math.hypot(x - f.cx, z - f.cz) <= f.r; const [lx, lz] = turn(x - f.cx, z - f.cz, -(f.yaw ?? 0)); return Math.abs(lx) <= f.hx && Math.abs(lz) <= f.hz; };
+    const solids = all.filter(q => !isGate(q) && ![...tagsOf(q)].some(x => EDGE.has(x))).map(q => ({ q, f: footprint(q.p, q.meta, 'collider') }))
+      .filter(s => s.f && s.f.y0 < 1 && s.f.y1 > T.wayStep);
+    for (let d = 0.5; d <= T.wayIn + 1e-6; d += T.sample) {
+      let run = 0, best = 0, hit = null;
+      for (let u = -half; u <= half + 1e-6; u += T.sample) {
+        const x = e.at[0] - nx * d - nz * u, z = e.at[2] - nz * d + nx * u;
+        const s = solids.find(({ f }) => (f.parts ?? [f]).some(pf => inBox(pf, x, z)));
+        if (s) { hit ??= s; run = 0; } else { run += T.sample; best = Math.max(best, run); }
+      }
+      if (hit && best < T.wayFree) return { ...hit, d, free: best };
+    }
+    return null;
+  };
   const enemies = (subject.game?.mechanics ?? []).some(m => m.id === 'waves');
   const entries = cfg.entries ?? [];
   if (enemies || (kind === 'indoor' && intent !== 'small')) {
@@ -302,6 +345,11 @@ export function checkWorld(subject) {
       let gapHere = false;
       if (kind !== 'indoor') { const saved = cfg.entries; cfg.entries = []; gapHere = coverAt(e.at[0], e.at[2], 0.2) !== 'wall'; cfg.entries = saved; }
       if (!near.length && !gapHere) add('entries', 'error', `entry "${e.name}" at (${fmt(e.at[0])}, ${fmt(e.at[2])}) is not at a door or gate: enemies would walk out of a wall`, 'move the entry to a doorway, or put a doorway there', { at: e.at });
+      // the way in: where the waves mechanic brings enemies in (kit/world/layout.js entryPoint: 1 m inside, across
+      // the opening) and their first steps from there. A solid standing in it is a gate nobody comes through: the
+      // places spike found a large arena's statue moved into its north gate (wave 10)
+      const blocker = wayInBlocker(e);
+      if (blocker) add('entries', 'error', `entry "${e.name}" at (${fmt(e.at[0])}, ${fmt(e.at[2])}) is blocked: ${blocker.q.p.prop} #${blocker.q.i} at (${fmt(blocker.q.p.at[0])}, ${fmt(blocker.q.p.at[2])}) stands in its way in, ${fmt(blocker.d)} m inside; enemies would come in inside it`, 're-lay the world (upgrade --world): the generator keeps every gate\'s way in clear; or move the prop aside in config/world.json', { prop: blocker.q.p.prop, at: blocker.q.p.at });
     }
   }
 
