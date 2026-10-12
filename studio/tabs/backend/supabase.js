@@ -7,6 +7,7 @@
 import { sessionApi } from '../../lib/session-client.js';
 import { connection } from '../../lib/session.js';
 import { mountFlow } from './flow-ui.js';
+import { PLANS } from './model.js';
 
 export default {
   id: 'supabase',
@@ -43,8 +44,8 @@ export default {
 
     if (!game.connected) {
       const agents = el('input', { type: 'checkbox', checked: true, 'aria-label': 'Add Supabase to my agents' });
-      parts.push(el('p', { className: 'muted small' }, prov.about),
-        el('p', { className: 'small flow-intro' }, 'Your browser opens Supabase: sign in and allow games.fun. The kit does the rest: the project, the game\'s tables with row-level security, backend.json, and a check. Only public values reach the game.'));
+      // the service's card and its words are the tab's (studio/tabs/backend.js); this panel is the connect flow
+      parts.push(el('p', { className: 'small flow-intro' }, 'Your browser opens Supabase: sign in and allow games.fun. The kit does the rest. Only public values reach the game.'));
       root.replaceChildren(...parts);
       const flowBox = el('div');
       root.append(flowBox);
@@ -52,7 +53,7 @@ export default {
         base: 'backend/supabase/one-button', button: 'Connect Supabase',
         body: () => ({ addToAgents: agents.checked }),
         extra: [el('label', { className: 'muted small' }, agents, ' Add Supabase to my agents (Claude Code, Codex)')],
-        agentWay, connected, onDone: () => ctx.refresh(), hideOldResult: true,
+        agentWay, connected, onDone: () => ctx.refresh(), hideOldResult: true, plan: PLANS.supabase,
       });
 
       // ---- other ways

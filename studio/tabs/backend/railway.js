@@ -4,6 +4,7 @@
 // into the game. The steps run in the dev server (lib/backend/railway-connect.mjs, the same code as `gamesfun backend
 // connect railway`); studio/tabs/backend/flow-ui.js draws them. Or deploy the template yourself and paste its URL.
 import { mountFlow } from './flow-ui.js';
+import { PLANS } from './model.js';
 
 export default {
   id: 'railway',
@@ -12,19 +13,20 @@ export default {
     const settings = game.settings?.provider === 'railway' ? game.settings : null;
     const signed = prov.status?.signedIn;
     const note = el('div', { 'aria-live': 'polite' });
-    const parts = [el('p', { className: 'muted small' }, prov.about)];
+    // the service's card and its words are the tab's (studio/tabs/backend.js); this panel is the connect flow
+    const parts = [];
     const connected = (r, box) => box.append(el('b', {}, 'Connected. '), `The game's server is up at ${r.url}. `,
       el('a', { href: r.dashboard, target: '_blank', rel: 'noopener' }, 'Open the project in Railway'),
       el('div', { className: 'muted small' }, `backend.json holds only that URL; the server's secret stays on Railway. ${r.volume ? 'Scores and saves are kept on a Railway volume.' : 'No volume: scores and saves reset at each deploy.'}`));
 
     if (settings) parts.push(el('p', {}, 'In rules.js: ', el('code', {}, "import { connectGameServer } from './gf/backend/server.js'"), ', then ', el('code', {}, "submitScore('main', score, name)"), ' at the end of a round and ', el('code', {}, "topScores('main')"), ' for the board.'));
-    else parts.push(el('p', { className: 'small flow-intro' }, 'Your browser opens Railway: sign in (or make an account) and pick the workspace the kit may use. The kit does the rest: a project, its game server (leaderboards, saves, a live score feed), and the server\'s URL in backend.json. Nothing to register.'));
+    else parts.push(el('p', { className: 'small flow-intro' }, 'Your browser opens Railway: sign in (or make an account). The kit does the rest. Nothing to register.'));
     root.replaceChildren(...parts);
     const flowBox = el('div');
     root.append(flowBox);
     const flow = mountFlow(flowBox, ctx, {
       base: 'backend/railway/one-button', button: settings ? 'Deploy the server again' : 'Connect Railway',
-      connected, onDone: () => ctx.refresh(), hideOldResult: !settings,
+      connected, onDone: () => ctx.refresh(), hideOldResult: !settings, plan: PLANS.railway,
     });
     if (settings) flowBox.querySelector('.flow-go')?.classList.add('ghost');
 
