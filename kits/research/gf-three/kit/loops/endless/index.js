@@ -31,7 +31,7 @@ export function create(ctx, P, S) {
 export const manifest = {
   id, params,
   describe: 'A session with no end clock: it goes on until the game says it is over, and the score only grows',
-  engines: ['party', 'scenic'],
+  engines: ['party', 'scenic', 'forge'],   // forge since gf-forge wave 6 (boot-forge.js loads flows; its waves go round: spec.forge.endless)
   seconds: 'cap',
   seats: { alone: 'fill', late: 'join', why: 'alone, bots fill every empty seat up to players.max; with friends the room decides who plays' },
   needs: { parts: [], world: [] },

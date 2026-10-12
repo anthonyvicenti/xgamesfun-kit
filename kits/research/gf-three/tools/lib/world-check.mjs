@@ -27,6 +27,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { KIT, LIBRARY } from './paths.mjs';
+import { flatOf } from './flat-reads.mjs';
 import { expandLayout, footprint, placementScale, colliderParts, roomGraph, turn } from '../../kit/world/layout.js';
 import { generateLayout, SIZE_CLASSES, sizeClassOf } from '../../kit/world/generate.js';
 
@@ -354,12 +355,22 @@ export function worldLines(report) {
   return report.problems.map(p => `${p.severity === 'error' ? 'ERROR' : 'warn '} ${p.rule.padEnd(10)} ${p.message}${p.fix ? ` → ${p.fix}` : ''}`);
 }
 
+/** The report for any subject: a flat game's own world judge (its gf/three/flat/index.js → worldReport, the same report
+ *  shape), else checkWorld. */
+export async function reportFor(subject) {
+  const flat = subject.kind === 'game' ? await flatOf(subject.dir) : null;
+  return flat ? flat.part.worldReport(subject) : checkWorld(subject);
+}
+
 /** verify's call: → { ok, detail, report } */
 export async function worldCheck(gameDir) {
-  const report = checkWorld(await loadWorldSubject(gameDir));
+  const report = await reportFor(await loadWorldSubject(gameDir));
   const ls = worldLines(report);
   const s = report.stats;
-  const detail = report.engine === 'scenic'
+  const marks = m => Object.entries(m ?? {}).map(([k, n]) => `${n} ${k}`).join(', ');
+  const detail = report.engine === 'flat'
+    ? (report.ok ? `complete: a flat ${report.template} seen from ${report.plane === 'side' ? 'the side' : 'above'}, ${s.cells.join(' x ')} cells of ${s.kinds} tile kinds, ${s.spawns} spawns${marks(s.marks) ? `, marks ${marks(s.marks)}` : ''}; ${report.warnings} notes` : `${report.errors} errors (node research/gf-three/tools/world.mjs <game>): ${report.problems.filter(p => p.severity === 'error').map(p => `${p.rule}: ${p.message}`).join(' | ')}`)
+    : report.engine === 'scenic'
     ? (report.ok ? `complete: a scenic ${report.template}, ${s.levels} level${s.levels === 1 ? '' : 's'} (${s.levelsAsked} played), each about ${s.size[0]} m across (${s.area} m², ${s.sizeClass}); ${report.warnings} notes` : `${report.errors} errors (node research/gf-three/tools/world.mjs <game>): ${report.problems.filter(p => p.severity === 'error').map(p => `${p.rule}: ${p.message}`).join(' | ')}`)
     : report.ok
     ? `complete: ${report.kind} ${s.size.join(' x ')} m (${s.area} m², ${s.sizeClass})${s.rooms ? `, ${s.rooms} rooms` : ''}${s.ceiling ? `, ceiling ${s.ceiling} m` : ''}, ${s.entries} entries, ${Math.round(s.filledGround * 100)}% of the floor filled; ${report.warnings} notes`

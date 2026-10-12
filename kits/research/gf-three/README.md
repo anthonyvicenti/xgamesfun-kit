@@ -53,7 +53,7 @@ Frozen releases go to `research/foundations/kits/gf-three/<semver>/` and are imm
    | three.js | 0.186 (`build/three.module.js`, WebGLRenderer) | `trials/fps-arena/source/vendor/three` |
    | Rapier | `@dimforge/rapier3d-compat` 0.19.2 | `trials/third-person-adventure/source/vendor/rapier` |
    | pmndrs `postprocessing` | as vendored | `trials/fps-arena/source/vendor/postprocessing` |
-   | N8AO | as vendored | `trials/fps-arena/source/vendor/n8ao` |
+   | N8AO (CC0-1.0) | as vendored | `trials/fps-arena/source/vendor/n8ao` |
 
    Keep each LICENSE beside its copy. A new dependency needs a permissive licence and a line in `kit/THIRD_PARTY.md`.
 3. **No build step.** Plain ES modules and an import map. A game is served as static files.

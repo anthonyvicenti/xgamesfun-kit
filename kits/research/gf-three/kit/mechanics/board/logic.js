@@ -210,29 +210,44 @@ export function pickMove(s, R, seat, input = 'place', rng = Math.random) {
   return best;
 }
 
-/** Where the seats stand round a board: seat k of n → { side: 's' | 'n' | 'e' | 'w', along: -1..1 }. Two face each other. */
-export function seatSide(k, n) {
-  const sides = n <= 2 ? ['s', 'n'] : ['s', 'n', 'e', 'w'];
-  return { side: sides[k % sides.length], along: 0 };
+/** How a legal cell is shown to the mover. A round cell is the shape of a disc, so a solid fill there reads as a piece
+ *  (a third player's, in a game of two: the parent's look at Four Flat, 2026-10-11): it gets a ring in the hint colour
+ *  and a faint tint of its cell, never a fill. A square tile is not a piece's shape and keeps its fill. → { tint, ring }:
+ *  tint is how far the cell's colour goes toward the hint colour (0..1); ring says a ring is drawn on the cell. */
+export const HINT_TINT_MAX_ROUND = 0.2;
+export function hintStyle(cellShape) {
+  return cellShape === 'round' ? { tint: 0.12, ring: true } : { tint: 0.55, ring: false };
 }
 
-/** Board geometry: cell centres and the cell under a point. origin {x, z} is the middle; row 0 is the -z end. */
-export function geometry({ cols, rows, cell, x = 0, z = 0 }) {
-  const w = cols * cell, d = rows * cell;
+/** Where the seats stand round a board: seat k of n → { side: 's' | 'n' | 'e' | 'w', along: -1..1 }. Two face each other.
+ *  `order` (letters of s, n, e, w; the board's seatSides) lists the sides in seat order; several seats on one side
+ *  spread along it (along -1..1). */
+export function seatSide(k, n, order = '') {
+  const sides = order ? [...order] : n <= 2 ? ['s', 'n'] : ['s', 'n', 'e', 'w'];
+  const per = Math.ceil(n / sides.length), i = Math.floor(k / sides.length);
+  return { side: sides[k % sides.length], along: per > 1 ? (i / (per - 1)) * 2 - 1 : 0 };
+}
+
+/** Board geometry: cell centres and the cell under a point. origin {x, z} is the middle; row 0 is the -z end ("back"),
+ *  or the +z end with rowZero "front" (from above: the bottom of the screen). */
+export function geometry({ cols, rows, cell, x = 0, z = 0, rowZero = 'back', seatSides = '' }) {
+  const w = cols * cell, d = rows * cell, front = rowZero === 'front';
+  const zRow = r => (front ? rows - 1 - r : r);                       // the row index counted from the -z end
   return {
-    cols, rows, cell, x, z, w, d,
-    centre: (c, r) => ({ x: x + (c - (cols - 1) / 2) * cell, z: z + (r - (rows - 1) / 2) * cell }),
+    cols, rows, cell, x, z, w, d, rowZero: front ? 'front' : 'back',
+    centre: (c, r) => ({ x: x + (c - (cols - 1) / 2) * cell, z: z + (zRow(r) - (rows - 1) / 2) * cell }),
     /** The cell under (px, pz); a point within `reach` metres outside the board gives the nearest edge cell; else null. */
     cellAt(px, pz, reach = 0) {
       const fx = (px - x) / cell + cols / 2, fz = (pz - z) / cell + rows / 2;
       const out = Math.max(-fx, fx - cols, -fz, fz - rows, 0) * cell;
       if (out > reach) return null;
-      return [Math.max(0, Math.min(cols - 1, Math.floor(fx))), Math.max(0, Math.min(rows - 1, Math.floor(fz)))];
+      return [Math.max(0, Math.min(cols - 1, Math.floor(fx))), zRow(Math.max(0, Math.min(rows - 1, Math.floor(fz))))];
     },
     /** Where seat k of n stands: `gap` metres off its side, facing the middle (yaw 0 looks along +z). */
     seat(k, n, gap = 1.4) {
-      const { side } = seatSide(k, n);
-      const p = side === 's' ? { x, z: z + d / 2 + gap } : side === 'n' ? { x, z: z - d / 2 - gap } : side === 'e' ? { x: x + w / 2 + gap, z } : { x: x - w / 2 - gap, z };
+      const { side, along } = seatSide(k, n, seatSides);
+      const ax = along * Math.min(w / 2, cell * 1.6), az = along * Math.min(d / 2, cell * 1.6);
+      const p = side === 's' ? { x: x + ax, z: z + d / 2 + gap } : side === 'n' ? { x: x + ax, z: z - d / 2 - gap } : side === 'e' ? { x: x + w / 2 + gap, z: z + az } : { x: x - w / 2 - gap, z: z + az };
       return { ...p, y: 0, yaw: Math.atan2(x - p.x, z - p.z) };
     },
     contains: (px, pz, margin = 0) => Math.abs(px - x) <= w / 2 + margin && Math.abs(pz - z) <= d / 2 + margin,

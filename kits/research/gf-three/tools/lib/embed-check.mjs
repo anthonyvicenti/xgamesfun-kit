@@ -19,6 +19,7 @@
 import { createServer } from 'node:http';
 import { findBuildSpot, faces, actOn } from './worlds-check.mjs';
 import { holdsBody, whereIs } from './part-signs.mjs';
+import { walkOf } from './flat-reads.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
@@ -35,7 +36,7 @@ export const POST_HTML = gameUrl => `<!doctype html><meta charset="utf-8"><title
 const LOCK_REFUSED = /pointer lock.*sandboxed|allow-pointer-lock/i;
 const GPU_NOISE = /GPU stall|ReadPixels|GL_CLOSE_PATH|WebGL: too many errors/i;
 
-export async function checkEmbed({ newPage, url, game = {}, log = () => {}, shot = null }) {
+export async function checkEmbed({ newPage, url, game = {}, flat = null, log = () => {}, shot = null }) {
   const gameUrl = `${url}${url.includes('?') ? '&' : '?'}seed=4&bots=1`;
   const html = POST_HTML(gameUrl);
   const server = createServer((req, res) => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); res.end(html); });
@@ -47,7 +48,10 @@ export async function checkEmbed({ newPage, url, game = {}, log = () => {}, shot
   // The follow camera (CONTRACT §8, scenic) never asks either: the cursor aims and nothing turns the camera
   // (kit/core/input.js: input.cursorMode true). Until 2026-10-10 it was held to "the frame refused the lock", which a
   // camera that never asks cannot show, so every game with the follow camera failed here on create's untouched output.
-  const camera = game.camera ?? 'third', orbit = camera === 'orbit', free = orbit || camera === 'follow', looks = camera === 'third' || camera === 'first' || orbit;
+  // A flat game (tools/lib/flat-reads.mjs) says so itself: its pointer never locks and never turns the camera.
+  const pointer = flat?.reads?.pointer ?? null, fwd = walkOf(flat).forward, key = fwd.replace(/^Key/, '');
+  const camera = game.camera ?? 'third', orbit = camera === 'orbit', free = orbit || camera === 'follow' || pointer?.locks === false;
+  const looks = (camera === 'third' || camera === 'first' || orbit) && pointer?.turnsCamera !== false;
   const record = { camera, steps };
   const step = (name, ok, detail = '') => { steps.push({ name, ok: !!ok, detail }); if (!ok) fail.push(`${name}${detail ? ` (${detail})` : ''}`); return !!ok; };
   const F = p.frameLocator('#card');
@@ -91,9 +95,9 @@ export async function checkEmbed({ newPage, url, game = {}, log = () => {}, shot
         // a part that holds the body (it owns player.control by its manifest: a board with a cursor) reports the
         // player's mark instead (players[].mark, tools/lib/part-signs.mjs): W must move that
         const held = holdsBody(game);
-        const a = whereIs(await me()); await p.keyboard.down('KeyW'); await sleep(1200); await p.keyboard.up('KeyW'); await sleep(200); const z = whereIs(await me());
+        const a = whereIs(await me()); await p.keyboard.down(fwd); await sleep(1200); await p.keyboard.up(fwd); await sleep(200); const z = whereIs(await me());
         const moved = a && z && a.mark === z.mark ? Math.hypot(z.x - a.x, z.z - a.z) : 0;
-        step(held && z?.mark ? `in full screen W moves the player's mark (the ${held.id} holds the body)` : 'in full screen W moves the player', moved > 1, `${Math.round(moved * 10) / 10} m${held && !z?.mark ? `; the ${held.id} owns player.control and reports no mark (presence(p))` : ''}`);
+        step(held && z?.mark ? `in full screen ${key} moves the player's mark (the ${held.id} holds the body)` : `in full screen ${key} moves the player`, moved > 1, `${Math.round(moved * 10) / 10} m${held && !z?.mark ? `; the ${held.id} owns player.control and reports no mark (presence(p))` : ''}`);
         if (game.round?.mode === 'world' && camera === 'first') {
           // the game's frame as a page: its own reading, the post's keyboard and mouse moved by the frame's offset
           const fr = frame(), box = async () => (await (await fr.frameElement()).boundingBox()) ?? { x: 0, y: 0 };
@@ -115,7 +119,7 @@ export async function checkEmbed({ newPage, url, game = {}, log = () => {}, shot
   } catch (e) { if (!fail.length) fail.push(e.message); }
   finally { await T.ctx.close().catch(() => {}); await new Promise(r => server.close(r)); }
   const ok = fail.length === 0 && steps.length > 0;
-  const detail = ok ? `in a ${CARD}×${CARD} post frame that refuses the lock: the camera stays ${camera}, the full-screen button works${looks ? ', a drag turns the camera' : ''}, W moves` : fail.join('; ');
+  const detail = ok ? `in a ${CARD}×${CARD} post frame that refuses the lock: the camera stays ${camera}, the full-screen button works${looks ? ', a drag turns the camera' : ''}, ${key} moves` : fail.join('; ');
   log(`embed: ${ok ? 'ok' : 'FAIL'} ${detail.slice(0, 200)}`);
   return { ok, detail, record, warnings };
 }

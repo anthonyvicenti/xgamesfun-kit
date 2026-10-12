@@ -39,6 +39,13 @@ export const slots = [
   { id: 'world.{template}.zones', label: 'Zones', group: 'world', type: 'json', facet: 'gameplay', tier: 'advanced', source: { file: 'config/world.json', pointer: '/zones' } },
 ];
 
+/** A licence that asks for credit (CC BY x.y): the title, the record's credit line, the licence's page and what was
+ *  changed, so the game's credits (ATTRIBUTION.md, How to play) can say it in full. Anything else: nothing. */
+const creditOf = lic => {
+  const v = /^CC-BY-(\d\.\d)$/.exec(lic?.spdx ?? '')?.[1];
+  return v ? { ...(lic.title ? { title: lic.title } : {}), ...(lic.credit ? { credit: lic.credit } : {}), licenseUrl: `https://creativecommons.org/licenses/by/${v}/`, ...(lic.modified ? { modified: lic.modified } : {}) } : {};
+};
+
 /** Concrete slots for a layout: the world slots plus one model slot per prop it uses. catalog = props.json. */
 export function slotsFor(cfg, catalog, licences = null) {
   const t = cfg.template;
@@ -83,7 +90,7 @@ export function slotsFor(cfg, catalog, licences = null) {
       constraints: { scale: 1, ...(p?.size ? { size: p.size } : {}) },
       description: `A ${t} prop. Metres, Y up, base at y=0, centred; a replacement is fitted to ${p?.size?.map(n => n.toFixed(1)).join(' x ') ?? 'the same'} m.`,
       generate: { prompt: p?.describe ?? id, style: 'soft stylised low-poly, chunky shapes, flat pastel colours, game-ready' },
-      ...(lic ? { license: { spdx: lic.spdx, author: lic.author, url: lic.page } } : {}),
+      ...(lic ? { license: { spdx: lic.spdx, author: lic.author, url: lic.page, ...creditOf(lic) } } : {}),
     });
   }
   return out;

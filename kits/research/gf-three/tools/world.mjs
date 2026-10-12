@@ -10,7 +10,7 @@ import { isMain } from './lib/main.mjs';
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadWorldSubject, checkWorld, worldLines } from './lib/world-check.mjs';
+import { loadWorldSubject, reportFor, worldLines } from './lib/world-check.mjs';
 
 if (isMain(import.meta)) {
   const a = process.argv.slice(2);
@@ -19,12 +19,13 @@ if (isMain(import.meta)) {
   if (!target) { console.error('usage: world.mjs <game | template[:size] | layout.json> [--json] [--layout out.json]'); process.exit(2); }
   const subject = await loadWorldSubject(target);
   if (opt('--layout')) await writeFile(opt('--layout'), JSON.stringify(subject.world, null, 1) + '\n');
-  const r = checkWorld(subject);
+  const r = await reportFor(subject);
   if (a.includes('--json')) process.stdout.write(JSON.stringify(r, null, 2) + '\n');
   else {
     for (const l of worldLines(r)) console.log(`  ${l}`);
     const s = r.stats;
-    console.log(`world ${r.template} (${subject.kind} ${target}): ${r.ok ? 'complete' : 'NOT COMPLETE'}, ${r.errors} errors, ${r.warnings} warnings · ${r.kind} ${s.size.join(' x ')} m = ${s.area} m² (asked ${s.sizeClass}, measures ${s.measuredClass}) · ${s.rooms} rooms · ${s.entries} entries · ceiling ${s.ceiling ?? 'none'} · floor filled ${Math.round(s.filledGround * 100)}%`);
+    if (r.engine === 'flat') console.log(`world ${r.template} (${subject.kind} ${target}): ${r.ok ? 'complete' : 'NOT COMPLETE'}, ${r.errors} errors, ${r.warnings} warnings · flat, seen from ${r.plane === 'side' ? 'the side' : 'above'} · ${s.cells.join(' x ')} cells = ${s.size.join(' x ')} m · ${s.kinds} tile kinds · ${s.spawns} spawns`);
+    else console.log(`world ${r.template} (${subject.kind} ${target}): ${r.ok ? 'complete' : 'NOT COMPLETE'}, ${r.errors} errors, ${r.warnings} warnings · ${r.kind} ${s.size.join(' x ')} m = ${s.area} m² (asked ${s.sizeClass}, measures ${s.measuredClass}) · ${s.rooms} rooms · ${s.entries} entries · ceiling ${s.ceiling ?? 'none'} · floor filled ${Math.round(s.filledGround * 100)}%`);
   }
   process.exitCode = r.ok ? 0 : 1;
 }

@@ -11,7 +11,7 @@
 // (its look and world); gf/three/ then leaves out this kit's own look/ and world/. A forge game (CONTRACT §8 forge) gets
 // research/gf-forge/kit as gf/forge/ (the core's release wasm, its host, look, world and players), no vendor/ at all (no
 // three.js, no Rapier), and of gf/three/ only what core/boot-forge.js imports (the shared system without three.js).
-import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
 import { VENDOR, KIT, SCENIC_KIT, FORGE_KIT, GF_ASSETS, KIT_VERSION, SCENIC_VERSION, FORGE_VERSION, walk, sha256 } from './paths.mjs';
@@ -52,7 +52,16 @@ export async function addonClosure(texts) {
 }
 
 // Files the loaders fetch at run time (never imported): the Draco and Basis decoders.
-const RUNTIME_ADDONS = ['libs/draco/gltf/draco_decoder.js', 'libs/draco/gltf/draco_decoder.wasm', 'libs/draco/gltf/draco_wasm_wrapper.js', 'libs/draco/README.md', 'libs/basis/basis_transcoder.js', 'libs/basis/basis_transcoder.wasm', 'libs/basis/README.md'];
+// Their licence texts travel with them (LICENSE in each folder), and a vendored lib file's own licence sits beside it as
+// LICENSE-<name> (libs/ktx-parse.module.js → libs/LICENSE-ktx-parse; zstddec also carries the Zstandard decoder's,
+// LICENSE-zstd): see licencesOf.
+const RUNTIME_ADDONS = ['libs/draco/gltf/draco_decoder.js', 'libs/draco/gltf/draco_decoder.wasm', 'libs/draco/gltf/draco_wasm_wrapper.js', 'libs/draco/README.md', 'libs/draco/LICENSE', 'libs/basis/basis_transcoder.js', 'libs/basis/basis_transcoder.wasm', 'libs/basis/README.md', 'libs/basis/LICENSE'];
+const EXTRA_LICENCES = { 'libs/zstddec.module.js': ['libs/LICENSE-zstd'] };
+/** The licence files beside the vendored addons that have one in the pinned copy. */
+export const licencesOf = addons => addons.flatMap(rel => {
+  const m = /^(libs\/(?:.*\/)?)([^/]+?)(?:\.module)?\.js$/.exec(rel);
+  return m ? [`${m[1]}LICENSE-${m[2]}`, ...(EXTRA_LICENCES[rel] ?? [])].filter(l => addonPath(l)) : [];
+});
 
 /** vendor/: three (build + resolved addons), Rapier, postprocessing, N8AO, each with its licence. → {files, wrote}
  *  engine 'scenic': three's WebGPU build (three.webgpu.js, three.tsl.js, three.core.js) and Rapier only. */
@@ -66,7 +75,8 @@ export async function vendorLibraries(gameDir, sourceTexts, { engine = 'party' }
   else for (const f of ['build/three.module.js', 'build/three.core.js', 'LICENSE']) await add(join(VENDOR.threeBuild, f), `vendor/three/${f}`);
   // the vendored libraries import addons too (N8AO: three/examples/jsm/postprocessing/Pass.js)
   const libTexts = scenic ? [] : await Promise.all([join(VENDOR.n8ao, 'N8AO.js'), join(VENDOR.postprocessing, 'postprocessing.module.js')].map(f => readFile(f, 'utf8')));
-  const addons = [...new Set([...(await addonClosure([...sourceTexts, ...libTexts])), ...RUNTIME_ADDONS])].sort();
+  const closure = await addonClosure([...sourceTexts, ...libTexts]);
+  const addons = [...new Set([...closure, ...RUNTIME_ADDONS, ...licencesOf(closure)])].sort();
   for (const rel of addons) await add(addonPath(rel), `vendor/three/examples/jsm/${rel}`);
   for (const f of ['rapier.mjs', 'LICENSE', 'package.json']) await add(join(VENDOR.rapier, f), `vendor/rapier/${f}`);
   if (!scenic) {
@@ -97,9 +107,15 @@ export async function forgeFiles() {
 }
 
 /** The shared kit files a forge game carries: what core/boot-forge.js imports inside the kit, followed through every
- *  relative import, plus the slot declarations tools/slots.mjs reads from the game's copy. Nothing that imports three. */
+ *  relative import, plus the slot declarations tools/slots.mjs reads from the game's copy, plus every flow whose
+ *  manifest runs on forge (kit/loops/<id>: boot-forge.js loads the one config names with a dynamic import, which the
+ *  walk cannot see; gf-forge wave 6, the endless run). Nothing that imports three. */
 export async function forgeKitClosure() {
   const need = new Set(), queue = ['core/boot-forge.js', 'ui/slots.js', 'core/slots.js', 'controller/slots.js'];
+  for (const id of existsSync(join(KIT, 'loops')) ? await readdir(join(KIT, 'loops')) : []) {
+    const rel = `loops/${id}/index.js`;
+    if (existsSync(join(KIT, rel)) && /engines:\s*\[[^\]]*'forge'/.test(await readFile(join(KIT, rel), 'utf8'))) queue.push(rel);
+  }
   while (queue.length) {
     const rel = queue.shift();
     if (need.has(rel) || !existsSync(join(KIT, rel))) continue;

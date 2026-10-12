@@ -68,7 +68,19 @@ async function libraryLicense(file, id) {
   const L = await readJsonMaybe(join(LIBRARY, 'LICENSES.json'));
   // { files: { "<library path>": {spdx, author, page} } } (track L's shape), or a list of records
   const hit = (L?.files && !Array.isArray(L.files) ? L.files[file] : null) ?? list(L).find(x => x.file === file || x.id === id);
-  return hit ? { spdx: hit.spdx ?? hit.license ?? 'CC0-1.0', author: hit.author ?? hit.by ?? '', url: hit.page ?? hit.url ?? hit.source ?? '' } : null;
+  if (!hit) return null;
+  const out = { spdx: hit.spdx ?? hit.license ?? 'CC0-1.0', author: hit.author ?? hit.by ?? '', url: hit.page ?? hit.url ?? hit.source ?? '' };
+  // a licence that asks for credit (CC BY) carries everything the credit needs into the game: the title, the record's
+  // own credit line, the licence's page and what was changed (kit LICENSING.md: "credit the author, the title and a
+  // link, and say you changed it")
+  const legal = licenceUrl(out.spdx);
+  if (legal) Object.assign(out, { ...(hit.title ? { title: hit.title } : {}), ...(hit.credit ? { credit: hit.credit } : {}), licenseUrl: legal, ...(hit.modified ? { modified: hit.modified } : {}) });
+  return out;
+}
+/** The licence page of a Creative Commons licence that asks for credit (CC-BY-3.0 → …/by/3.0/), else null. */
+export function licenceUrl(spdx) {
+  const m = /^CC-BY(-SA|-NC|-ND|-NC-SA|-NC-ND)?-(\d\.\d)$/.exec(String(spdx ?? ''));
+  return m ? `https://creativecommons.org/licenses/by${(m[1] ?? '').toLowerCase()}/${m[2]}/` : null;
 }
 /**
  * The library's gf-humanoid-1 body for a spec character (track C): the library id asked for, else a bean. For generate
@@ -217,7 +229,7 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
     if (lib) {
       // the body's own licence record (library/bodies.json), else library/LICENSES.json
       const rec = lib.license ?? lib.licence ?? null;
-      const license = rec ? { spdx: rec.spdx, author: rec.author, url: rec.url ?? rec.page ?? '' } : await libraryLicense(lib.file, lib.id);
+      const license = rec ? { spdx: rec.spdx, author: rec.author, url: rec.url ?? rec.page ?? '', ...(licenceUrl(rec.spdx) ? { title: rec.title ?? lib.label ?? lib.id, credit: rec.credit ?? `"${rec.title ?? lib.label ?? lib.id}" by ${rec.author}, ${rec.spdx.replace(/^CC-BY-/, 'CC BY ')}${rec.url ?? rec.page ? ` (${rec.url ?? rec.page})` : ''}`, licenseUrl: licenceUrl(rec.spdx), ...(rec.modified ? { modified: rec.modified } : {}) } : {}) } : await libraryLicense(lib.file, lib.id);
       if (!license) notes.push(`character "${c.role}": body ${lib.id} has no licence record in library/bodies.json`);
       assets.push({ to, from: lib.path ?? join(LIBRARY, lib.file), license }); bodies[c.role] = { file: to, from: `library:${lib.id}`, ...(license ? { license } : {}) };
       if (c.body?.from === 'generate' || c.body?.from === 'reference') notes.push(`character "${c.role}": ${lib.id} stands in until the Studio worker places the generated body (verify check 14 fails while it stays unrecorded)`);

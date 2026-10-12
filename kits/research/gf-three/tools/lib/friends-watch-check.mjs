@@ -12,13 +12,16 @@
 //   stream ended, with Play and no stray words; W presses Play solo: the game's own page, nobody else in it. K, J on
 //   another day (a new browser), opens the streamer link J copied from the share sheet, hosts a room and goes live from
 //   the waiting room: the same link as before, the secret gone from the address bar and kept out of localStorage, and
-//   Y, opening the old link, sees K live. No console errors.
+//   Y, opening the old link, sees K live. K locks the room, starts a round alone and is live in it: Y's Join reads Room
+//   locked and can't be pressed, and Z, opening K's invite link, is refused (the room is locked). No console errors.
 // Play-test 1 (research/watch/evidence/playtest-1/report.md) found the defects the later steps hold: the secret in
 // localStorage, the badge over the clock, no clock or scores for viewers, misplaced name tags, "null" in the bar, a
 // reload that ended the stream. The creator, 2026-10-10: "add an option to start own lobby or play solo" (gf-multiplayer
 // 1.6.3; research/watch/evidence/own-room-or-solo-request-2026-10-10.json). The creator, 2026-10-11: "If I close my game
 // but want to stream live from the same link as before, how can I do that?" (gf-multiplayer 1.6.5, the streamer link;
-// research/watch/evidence/same-link-and-phone-card-report-2026-10-11.json).
+// research/watch/evidence/same-link-and-phone-card-report-2026-10-11.json). The creator, 2026-10-11: "We cant lock it
+// so others cant join. We also cant play solo", then chose "Lock room, stream solo" (gf-multiplayer 1.6.6;
+// research/watch/evidence/lock-room-and-solo-stream-request-2026-10-11.json).
 //
 //   const r = await checkFriendsWatch({ dir, outDir, shots, log });   → { ok, detail, record, warnings }
 import { readFile } from 'node:fs/promises';
@@ -219,7 +222,7 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
     const solo = await until(() => Wv.page.evaluate(() => window.__game?.ready === true && document.querySelector('#gf-play') ? { url: location.href, net: window.__game.snapshot().net ?? null } : null), 60000, 'the game alone on W').catch(() => null);
     ok = step('Play solo: the game on its own page, with nobody else', !!solo && solo.net === null && !/\/gf\/mp\//.test(new URL(solo.url).pathname) && !new URL(solo.url).searchParams.has('watch'), solo ? `${solo.url}; its home menu, no room` : `still at ${Wv.page.url()}`) && ok;
     // ---- another day: J's streamer link in a new browser, the same public link (kit 1.6.5) ----
-    let again = null, kUrl = '', kNote = false, kLeak = -1, yLive = null;
+    let again = null, kUrl = '', kNote = false, kLeak = -1, yLive = null, kLocked = false, kSolo = null, yShut = null, zRefused = null, kAlone = -1, yRound = null;
     if (keep) {
       const K = await open('streamer, another day');
       await K.page.goto(keep, { waitUntil: 'load' });
@@ -236,12 +239,33 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
         const Y = await open('viewer 4');
         await Y.page.goto(live.link, { waitUntil: 'load' });
         yLive = await until(async () => { const w = (await party(Y))?.watch; return w?.live && !w.ended ? w : null; }, 30000, 'Y sees K live').catch(() => null);
+        // ---- K locks the room and plays alone, live (kit 1.6.6) ----
+        const kInvite = await K.page.inputValue('#mp-invite').catch(() => null);   // the waiting room's link, before the round hides it
+        await K.page.click('#mp-lock').catch(() => {});
+        kLocked = await until(async () => (await party(K))?.locked === true && K.page.evaluate(() => { const b = document.querySelector('#mp-start'); return !!b && !b.disabled; }), 8000, 'K locked, Start enabled').catch(() => false);
+        await K.page.click('#mp-start').catch(() => {});
+        kSolo = await until(async () => (await game(K))?.net?.started ? await game(K) : null, 120000, 'K\'s round alone').catch(() => null);
+        yShut = await until(() => Y.page.evaluate(() => { const b = document.querySelector('#mp-watch-join'); return b && b.disabled && /locked/i.test(b.textContent) ? b.textContent : null; }), 15000, 'Y\'s Join locked').catch(() => null);
+        // Y watches K's round alone (its game page loaded and caught up) before anything closes
+        yRound = await until(async () => { const w = (await party(Y))?.watch; return w?.keyed && (await game(Y)) ? w : null; }, 60000, 'Y watching K\'s round').catch(() => null);
+        const yOwn = await Y.page.evaluate(() => !!document.querySelector('#mp-watch-own:not([disabled])') && !!document.querySelector('#mp-watch-solo:not([disabled])')).catch(() => false);
+        if (!yOwn) yShut = null;
+        const Z = await open('locked out');
+        if (kInvite) await Z.page.goto(kInvite, { waitUntil: 'load' }).catch(() => {});
+        await until(async () => (await snap(Z.page))?.phase === 'home', 30000, "Z's Host / Join screen").catch(() => {});
+        await Z.page.click('#gfp-join').catch(() => {});
+        // the host-join kit draws its lobby in a shadow root: a text locator reads what the player sees
+        zRefused = await Z.page.locator('text=/room is locked/i').first().textContent({ timeout: 20000 }).catch(() => null);
+        kAlone = (await snap(K.page))?.racers?.length ?? -1;
+        await Z.ctx.close().catch(() => {});
         await Y.ctx.close().catch(() => {});
       }
       await K.ctx.close().catch(() => {});
     }
     ok = step('another day, the streamer link goes live on the same link, and the old link shows it', !!again && again.id === live.id && again.link === live.link && !!yLive && !/gf-stream/.test(kUrl) && kNote && kLeak === 0,
       again ? `live on ${again.id} (was ${live.id}); the old link ${yLive ? 'shows it live' : 'does not show it live'}; the address bar ${/gf-stream/.test(kUrl) ? 'still holds the secret' : 'is clean'}; the note ${kNote ? 'shown' : 'not shown'}; localStorage ${kLeak} gf-watch entries` : `K is ${keep ? 'not live' : 'never opened: no streamer link'}`) && ok;
+    ok = step('a streamer locks their room and plays alone, live: viewers can\'t join, an invite is refused', !!kLocked && !!kSolo && !!yRound && !!yShut && !!zRefused && kAlone === 1,
+      `lock ${kLocked ? 'on, Start enabled' : 'not taken'}; round alone ${kSolo ? 'started' : 'not started'}, ${yRound ? 'watched' : 'not watched'}; the viewer's Join ${yShut ? `"${yShut}", disabled, beside Start a room and Play solo` : 'still open'}; the invite ${zRefused ? `refused: "${zRefused.trim().slice(0, 80)}"` : 'not refused'}; ${kAlone} in the room`) && ok;
     ok = step('no console errors', errors.length === 0, errors.slice(0, 4).join(' | ') || 'none') && ok;
   } catch (e) {
     ok = step('the flow ran to the end', false, e.message.split('\n')[0]) && ok;
@@ -250,5 +274,5 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
     await srv.close().catch(() => {});
   }
   const failed = record.steps.filter(s => !s.ok);
-  return { ok: ok && !failed.length, detail: failed.length ? failed.map(s => `${s.name}: ${s.detail}`).slice(0, 3).join(' · ') : `${record.steps.length} steps: Go live in a round, watch the streamer (clock, scores, names), read-only, a reload, a room of one's own, Join, Stop, the game alone, the same link another day`, record, warnings };
+  return { ok: ok && !failed.length, detail: failed.length ? failed.map(s => `${s.name}: ${s.detail}`).slice(0, 3).join(' · ') : `${record.steps.length} steps: Go live in a round, watch the streamer (clock, scores, names), read-only, a reload, a room of one's own, Join, Stop, the game alone, the same link another day, a locked room played alone`, record, warnings };
 }

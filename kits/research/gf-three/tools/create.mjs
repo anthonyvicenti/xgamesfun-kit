@@ -283,6 +283,9 @@ export async function create(specPath, outDir, { force = false, newRules = false
   warnings.push(...A.warnings);
   await gen('assets.json', json(A.manifest));
   await gen('ATTRIBUTION.md', attribution(spec, record));
+  // the kit's own licence (MIT) beside its code: gf/three/LICENSE comes with the kit copy; gf/LICENSE says it covers
+  // all of games.fun's code in the game (a forge game's gf/three/ is a closure without it)
+  await gen('gf/LICENSE', kitLicence(await readFile(join(KIT, 'LICENSE'), 'utf8')));
   return { ok: true, code: 0, dir, ms: Math.round(performance.now() - t0), wrote, kept, warnings, notes: C.notes, modules, why, slots: A.slotCount, main: A.mainCount };
 }
 
@@ -531,22 +534,46 @@ ${flowHooks}};
 `;
 }
 
+/** gf/LICENSE: which of the game's folders are the kit's (MIT), then the kit's licence text as it is. */
+export function kitLicence(text) {
+  return `The games.fun kit code in this game is under the MIT licence below: gf/three/, gf/scenic/ and gf/forge/ (a scenic
+or forge game), gf/mp/, gf/gf-assets.js and audio/. Third-party files inside them and in vendor/ keep their own licence,
+which sits beside each copy; ATTRIBUTION.md lists them and the art. The game's own files (rules.js, config/, its art and
+sounds) are the maker's.
+
+${text.trim()}
+`;
+}
+
+/** The files a game uses whose licence asks for credit (CC BY): one full credit each, by file. */
+export function creditsOf(record) {
+  const out = [];
+  const add = (file, what, l) => { if (l?.licenseUrl && !out.some(c => c.file === file)) out.push({ file, what, spdx: l.spdx, title: l.title ?? what, author: l.author ?? '', source: l.url ?? '', licenseUrl: l.licenseUrl, credit: l.credit ?? null, modified: l.modified ?? null }); };
+  for (const [name, p] of Object.entries(record.props ?? {})) add(p.file, `prop "${name}"`, p.license);
+  for (const [role, b] of Object.entries(record.bodies ?? {})) add(b.file, `body of "${role}"`, b.license);
+  return out;
+}
+/** One credit line: title, author, source link, licence and its link, and what was changed. */
+export const creditLine = c => `"${c.title}" by ${c.author}${c.source ? ` (${c.source})` : ''}, licensed under ${c.spdx.replace(/^CC-BY-/, 'CC BY ')} (${c.licenseUrl})${c.modified ? `; changed: ${c.modified}` : ''}`;
+
 export function attribution(spec, record) {
-  const art = [];
-  for (const [name, p] of Object.entries(record.props ?? {})) art.push(`| ${p.file} | prop "${name}" (${p.from}) | ${p.license?.spdx ?? 'see library/LICENSES.json'}${p.license?.author ? `, ${p.license.author}` : ''} |`);
-  for (const [role, b] of Object.entries(record.bodies ?? {})) art.push(`| ${b.file} | body of "${role}" (${b.from}) | ${b.license?.spdx ?? 'see library/LICENSES.json'}${b.license?.author ? `, ${b.license.author}` : ''} |`);
+  const art = [], credits = creditsOf(record);
+  const lic = (file, l) => { const c = credits.find(x => x.file === file); return c ? creditLine(c) : `${l?.spdx ?? 'see library/LICENSES.json'}${l?.author ? `, ${l.author}` : ''}`; };
+  for (const [name, p] of Object.entries(record.props ?? {})) art.push(`| ${p.file} | prop "${name}" (${p.from}) | ${lic(p.file, p.license)} |`);
+  for (const [role, b] of Object.entries(record.bodies ?? {})) art.push(`| ${b.file} | body of "${role}" (${b.from}) | ${lic(b.file, b.license)} |`);
   const scenic = record.kit?.engine === 'scenic', forge = record.kit?.engine === 'forge';
-  if (forge) return forgeAttribution(spec, record, art);
+  const creditText = credits.length ? `\n## Credits\n\nThese files are used under a licence that asks for credit. Keep these lines with the game while it uses them (the game's How to play shows them to players); a file you replace with your own needs no line.\n\n${credits.map(c => `- ${c.file}: ${creditLine(c)}`).join('\n')}\n` : '';
+  if (forge) return forgeAttribution(spec, record, art) + creditText;
   if (!scenic) art.push('| assets/textures/ground.ktx2 | ground (stand-in: Poly Haven leafy_grass, converted to KTX2) | CC0-1.0, Poly Haven |');
   for (const a of record.worldArt ?? []) art.push(`| ${a.file} | ${a.what} | ${a.license} |`);
   const libs = scenic
     ? ['| three.js 0.186.0 (WebGPU build, WebGL2 fallback) | vendor/three/ (three.webgpu.js, three.tsl.js, three.core.js and the addons the game imports, byte-identical to the npm tarball) | MIT |']
     : ['| three.js 0.186.0 | vendor/three/ (build and the addons the game imports, byte-identical to the npm tarball) | MIT |'];
-  libs.push('| Draco decoder, Basis Universal transcoder (from three.js) | vendor/three/examples/jsm/libs/{draco,basis}/ | Apache-2.0 |', '| @dimforge/rapier3d-compat 0.19.2 | vendor/rapier/ | Apache-2.0 |');
-  if (!scenic) libs.push('| pmndrs postprocessing 6.39.5 | vendor/postprocessing/ | Zlib |', '| N8AO | vendor/n8ao/ | MIT |');
+  libs.push('| Draco decoder 1.5.6, Basis Universal transcoder 1.50 (from three.js) | vendor/three/examples/jsm/libs/{draco,basis}/ (LICENSE in each) | Apache-2.0 |', '| ktx-parse 1.1.0 and zstddec 0.0.2 by Don McCurdy, the second with the Zstandard decoder inside (from three.js) | vendor/three/examples/jsm/libs/ (LICENSE-ktx-parse, LICENSE-zstddec, LICENSE-zstd) | MIT; Zstandard BSD-3-Clause |', '| @dimforge/rapier3d-compat 0.19.2 | vendor/rapier/ | Apache-2.0 |');
+  if (!scenic) libs.push('| pmndrs postprocessing 6.39.5 | vendor/postprocessing/ | Zlib |', '| N8AO | vendor/n8ao/ (LICENSE) | CC0-1.0 |');
   libs.push('| pmndrs/ecctrl (floating-capsule logic, ported) | gf/three/controller/capsule.mjs; LICENSE-ecctrl and NOTICE-ecctrl beside it | MIT |');
   if (scenic) libs.push('| folio-2025 by Bruno Simon (rendering, materials, lighting, terrain and vegetation, ported; brunosimon/folio-2025@41046b5) | gf/scenic/ (LICENSE-folio-2025 beside it) | MIT |');
-  libs.push(`| gf-three${scenic ? `, gf-scenic ${record.kit.scenic}` : ''}, gf-multiplayer ${MP_KIT_VERSION}, gf-assets 1.3.0, gf-audio 1.5.0 (ZzFX, MIT) | gf/three/,${scenic ? ' gf/scenic/,' : ''} gf/mp/, gf/gf-assets.js, audio/ | games.fun |`);
+  libs.push(`| gf-three${scenic ? `, gf-scenic ${record.kit.scenic}` : ''}, gf-multiplayer ${MP_KIT_VERSION}, gf-assets 1.3.0, gf-audio 1.5.0 (ZzFX, MIT) | gf/three/,${scenic ? ' gf/scenic/,' : ''} gf/mp/, gf/gf-assets.js, audio/ | MIT, Copyright (c) 2026 games.fun (gf/LICENSE) |`);
   return `# ${spec.title}: credits
 
 Made with gf-three ${KIT_VERSION}${scenic ? ` and the scenic engine gf-scenic ${record.kit.scenic} (research/gf-scenic)` : ''} (research/gf-three) by create.mjs from spec.json. Licences travel with the code: each library's licence sits beside its copy.
@@ -564,7 +591,7 @@ ${libs.join('\n')}
 ${art.join('\n')}
 
 Sounds are gf-audio presets (synthesised, no files).
-`;
+${creditText}`;
 }
 
 /** A forge game's credits (CONTRACT §8 forge): the Rust core's crates (their licences in gf/forge/wasm/LICENSES.md),
@@ -582,7 +609,7 @@ Made with gf-three ${KIT_VERSION} and the forge engine gf-forge ${record.kit.for
 |---|---|---|
 | the gf-forge core (Rust, compiled to gf/forge/wasm/forge_web_bg.wasm): wgpu, hecs, glam, gltf, bytemuck, wasm-bindgen and the crates they use | gf/forge/wasm/ (every crate, its version and licence, and the licence texts: gf/forge/wasm/LICENSES.md) | MIT, Apache-2.0, BSD, zlib |
 | meshoptimizer's decoder (the copy three.js 0.186.0 ships) | gf/forge/vendor/meshopt_decoder.module.js (LICENSE-meshoptimizer beside it) | MIT |
-| gf-three (the shared system, without three.js), gf-forge ${record.kit.forge}, gf-multiplayer ${MP_KIT_VERSION}, gf-assets 1.3.0, gf-audio 1.5.0 (ZzFX, MIT) | gf/three/, gf/forge/, gf/mp/, gf/gf-assets.js, audio/ | games.fun |
+| gf-three (the shared system, without three.js), gf-forge ${record.kit.forge}, gf-multiplayer ${MP_KIT_VERSION}, gf-assets 1.3.0, gf-audio 1.5.0 (ZzFX, MIT) | gf/three/, gf/forge/, gf/mp/, gf/gf-assets.js, audio/ | MIT, Copyright (c) 2026 games.fun (gf/LICENSE) |
 
 ## Art
 

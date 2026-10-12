@@ -265,6 +265,11 @@ export async function boot({ rules = {} } = {}) {
     // forge bots are core players driven by forge-ai (gf/forge/ai.js sets ctx.makeBot; track A). A friends round has
     // no bots (the session's rule)
     const botParam = params.get('bots'), maxPlayers = Math.max(1, game.players?.max ?? 4);
+    // the flow (kit/loops/<id>, as boot.js loads it): config/game.json → round.flow names how the round is played; a
+    // forge game naming none runs the timed round (the session's default). gf-forge wave 6: an endless run (no clock;
+    // the rules end it when everyone has fallen)
+    const flowId = game.round?.flow;
+    const flowMod = typeof flowId === 'string' && flowId !== 'round' ? await import(`../loops/${flowId}/index.js`) : null;
     const botCount = backdrop ? 0 : botParam !== null ? Math.max(0, Math.min(7, Number(botParam) || 0)) : game.players?.bots === false ? 0 : maxPlayers - 1;
     // (a viewer: the players are told whom the stream follows; the HUD's wave rides the stream's key frames, so a
     // viewer who tunes in mid-wave knows which it is)
@@ -274,7 +279,7 @@ export async function boot({ rules = {} } = {}) {
     const session = createSession(ctx, { rules, spawnCharacter: null, characterFor: () => ({}), rng, botCount, onPhase: ph => onPhase(ph),
       createPlayers: c => (players.api = createForgePlayers(c, { host: forge, live: net.active, epoch, watching: viewer, follow: () => watchState.session?.watch?.follow?.id ?? null })),
       engineWorld: net.active && !viewer ? engineWorld : null,
-      engineWatch: { key: () => ctx.forgeHud?.watchKey?.() ?? null, take: d => ctx.forgeHud?.watchStart?.(d) } });
+      engineWatch: { key: () => ctx.forgeHud?.watchKey?.() ?? null, take: d => ctx.forgeHud?.watchStart?.(d) }, flow: flowMod });
     watchState.session = session;
     // QA only (the live gate: multiplayer.json check.query, which create writes for a forge game): with ?gf-gate=1 the
     // rules end no round, so the gate's later steps find it running; the clock and the host's End round still end it
@@ -500,7 +505,7 @@ export async function boot({ rules = {} } = {}) {
       if (menu.paused && !session.live && ['playing', 'countdown'].includes(session.round.phase)) {
         input.enabled = false; input.update();
         hud.update(0, { phase: session.round.phase, covered: true });
-        ui.update(0, { left: session.round.phase === 'playing' ? ctx.time.left : null, players: ctx.players.list(), plates: [] });
+        ui.update(0, { left: session.round.phase === 'playing' && Number.isFinite(ctx.time.left) ? ctx.time.left : null, players: ctx.players.list(), plates: [] });
         forge.setLights(lightsAt(ctx.time.now)); forge.render(ctx.time.now);
         return;
       }
@@ -519,7 +524,8 @@ export async function boot({ rules = {} } = {}) {
         if (w?.latest && w.latest !== lastLatest) { lastLatest = w.latest; if (typeof w.latest.f === 'string') { try { forge.applyB64(w.latest.f); } catch (e) { console.warn(`gf-forge: a snapshot could not be applied (${e?.message ?? e})`); } } }
       }
       const R = game.round ?? {};
-      ctx.time.round = session.round.clock; ctx.time.left = Math.max(0, (R.seconds ?? 120) - session.round.clock);
+      // the clock the HUD shows is the flow's when it has its own (endless: Infinity, none), else the round's
+      ctx.time.round = session.round.clock; ctx.time.left = session.flow?.hudLeft ? session.flow.hudLeft() : Math.max(0, (R.seconds ?? 120) - session.round.clock);
       // the local player's input → the core (looking in radians; the menu's sensitivity is the input's lookScale)
       const n = players.api.nid(me.id), k = cam.sensitivity ?? 0.0024;
       const { held, pressed } = forgeButtons(input), tb = ctx.feel?.touch?.() ?? { held: 0, pressed: 0 };   // track U: the touch buttons' bits (gf/forge/hud.js)
@@ -540,7 +546,7 @@ export async function boot({ rules = {} } = {}) {
       try { rules.update?.(ctx, dt); } catch (e) { console.error(e); }
       for (const fn of ctx.onFrame) fn(dt);
       session.send();
-      ui.update(dt, { left: phase === 'playing' ? ctx.time.left : null, players: ctx.players.list(), plates: players.api.plates(ui.covered) });
+      ui.update(dt, { left: phase === 'playing' && Number.isFinite(ctx.time.left) ? ctx.time.left : null, players: ctx.players.list(), plates: players.api.plates(ui.covered) });
       hud.update(dt, { phase, covered: ui.covered });
       forge.setLights(lightsAt(ctx.time.now));
       forge.render(ctx.time.now);

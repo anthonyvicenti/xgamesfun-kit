@@ -94,6 +94,9 @@
         sendFrameText(JSON.stringify({ k: 'name', name: v }));
         return true;
       },
+      /** The host locks the room (on) or opens it again: while locked nobody new can join (gf-multiplayer 1.6.6). */
+      lock: function (on) { if (S.role !== 'host' || !S.code) return false; hostCmd({ k: 'lock', on: on === true }); return true; },
+      get locked() { return !!(S.lobby && S.lobby.locked); },
       /** Leave the room: a joiner gives up its seat; the host closes the room for everyone. */
       leave: function () { if (S.role === 'host') closeGame(); else leave(); },
       get name() { return S.name || null; },
@@ -289,6 +292,7 @@
       case 'refused':
         gotClosedFrame = true;
         if (f.code === 'full') finish('refused', T('This room is full.'), '', 'full');
+        else if (f.code === 'locked') finish('refused', T('This room is locked: the host is playing on their own.'), '', 'locked');
         else if (f.code === 'ended') finish('refused', T('That match has already ended.'), '', 'ended');
         else finish('refused', T('Could not join: ') + f.reason + '.', '', 'refused');
         break;

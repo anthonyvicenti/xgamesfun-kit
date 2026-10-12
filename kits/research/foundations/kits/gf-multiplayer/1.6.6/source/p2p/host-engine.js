@@ -99,6 +99,7 @@ export class HostRoom {
     this.ended = null;            // non-rematch rooms: {results, at}
     this.matches = 0;
     this.closed = null;
+    this.locked = false;          // the host locked the room: nobody new joins (gf-multiplayer 1.6.6; a seat's own resume still does)
     this.stats = { hookCalls: 0, tickCalls: 0, errors: 0, botActs: 0, botIntents: 0, msgsIn: 0, msgsOut: 0, rejected: 0, rateDropped: 0, lastError: null };
   }
 
@@ -221,6 +222,16 @@ export class HostRoom {
     return true;
   }
 
+  /** The host locks or unlocks the room (gf-multiplayer 1.6.6; the creator, 2026-10-11: "We cant lock it so others cant
+   *  join"): while locked, a new hello is refused 'locked'; players already in, and a seat coming back, are not affected.
+   *  A world is one shared room per game and is never locked. */
+  lock(on) {
+    if (this.world || this.closed) return false;
+    this.locked = !!on;
+    this.#lobby();
+    return true;
+  }
+
   /** The host leaves: the room ends for everyone (v1 has no host migration). */
   close(reason = 'the host closed the game') {
     if (this.closed) return;
@@ -278,7 +289,7 @@ export class HostRoom {
       code: this.code, started: this.started, ended: !!this.ended, closed: this.closed, startMode: this.startMode,
       meta: { name: this.meta.name, minPlayers: this.meta.minPlayers, maxPlayers: this.meta.maxPlayers, tickHz: this.meta.tickHz, rematch: this.meta.rematch },
       seats: this.players.map(p => ({ id: p.id, name: p.name, connected: p.connected, ...(p.bot ? { bot: true } : {}), ...(p.host ? { host: true } : {}), ...(p.cid ? { cid: p.cid } : {}) })),
-      matches: this.matches,
+      matches: this.matches, locked: this.locked,
       ...(this.world ? { world: true, maxSeats: this.maxSeats } : {}),
     };
   }
@@ -331,6 +342,7 @@ export class HostRoom {
       return;
     }
     if (this.ended) return this.#refuse(connId, 'this match has already ended', 'ended');
+    if (this.locked) return this.#refuse(connId, 'the host has locked this room', 'locked');
     if (this.players.length >= this.meta.maxPlayers) return this.#refuse(connId, 'this room is full', 'full');
     const p = { id: `p${this.nextSeat++}`, name, conn: connId, connected: true, joined: false, resume: this.token() };
     this.players.push(p);

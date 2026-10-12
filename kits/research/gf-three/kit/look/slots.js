@@ -104,7 +104,8 @@ export function slotsFor(look) {
       const opts = ENUMS[dotted] ?? ENUMS[p[p.length - 1]] ?? [];
       slot.constraints = { options: opts.map(o => ({ value: o, label: o })) };
     }
-    if (type === 'number') slot.constraints = { min: /elevation|azimuth/.test(dotted) ? -180 : 0 };
+    // warmth (post.grade.temperature) runs both ways: below 0 is cooler (the presets' night looks are -0.12 to -0.05)
+    if (type === 'number') slot.constraints = { min: /elevation|azimuth/.test(dotted) ? -180 : /(^|\.)temperature$/.test(dotted) ? -1 : 0 };
     if (quality) slot.description = 'Quality tier setting (high = desktop, low = phones and slow machines).';
     if (p[0] === 'times') slot.description = `Used at the "${p[1]}" time of day, over the base value.`;
     return slot;

@@ -3,6 +3,7 @@
   "title": "Recess Rumble",
   "hook": "Playground dodgeball where getting bonked sends you ragdolling across the sandbox.",
   "prompt": "dodgeball / tag with friends in a playground",
+  "loop": "round",
   "players": { "min": 1, "max": 4, "bots": true, "teams": 0, "mode": "versus" },
   "round": { "seconds": 120, "winBy": "most bonks when the bell rings", "replay": true },
   "camera": "third",

@@ -49,6 +49,7 @@
 import { prepareStepped, stepUrl, clockFor, mouseTaken } from './stepped.mjs';
 import { flowSigns, flowIdOf } from './flow-signs.mjs';
 import { holdsBody } from './part-signs.mjs';
+import { walkOf, WALK_3D } from './flat-reads.mjs';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 /** Stepped time: the game time between two frames taken while a button is held. */
 export const FRAME_MS = 60;
@@ -131,7 +132,7 @@ async function analyse(browser, released, held, L, view) {
  * Check 13. newPage(label, {overrides}) → {ctx, page, errors} (verify's own); url: the served game; game: config/game.json;
  * browser: for the pixel analysis; shot(page, name): an evidence screenshot. → {ok, detail, record, warnings}
  */
-export async function checkControls({ newPage, browser, url, game, shot = async () => null, log = () => {}, stepped = true }) {
+export async function checkControls({ newPage, browser, url, game, flat = null, shot = async () => null, log = () => {}, stepped = true }) {
   const L = CONTROL_LIMITS, t0 = Date.now();
   const listed = Object.keys(game.controls ?? {}).filter(k => ACTIONS.includes(k)).sort((a, b) => ACTIONS.indexOf(a) - ACTIONS.indexOf(b));
   const others = Object.keys(game.controls ?? {}).filter(k => !ACTIONS.includes(k));
@@ -177,7 +178,7 @@ export async function checkControls({ newPage, browser, url, game, shot = async 
         await clock.wait(500);
         continue;
       }
-      if (action === 'interact') { results.push(await interact({ p, obs, game, words, shot, L, t0, clock })); continue; }
+      if (action === 'interact') { results.push(await interact({ p, obs, game, words, shot, L, t0, clock, walk: walkOf(flat) })); continue; }
       // primary / secondary in a game whose part holds the body and lists what to point at (a board with a cursor):
       // the real mouse goes to a point the part lists, clicks, and the game must take it (point-and-click, below)
       const pc = await pointAndClick({ p, obs, action, words, game, shot, clock });
@@ -202,7 +203,7 @@ export async function checkControls({ newPage, browser, url, game, shot = async 
 }
 
 /** Walk to the nearest interactable (real keys), press its action, see it change. */
-async function interact({ p, obs, game, words, shot, L, clock }) {
+async function interact({ p, obs, game, words, shot, L, clock, walk = WALK_3D }) {
   const o0 = await obs();
   let list = interactablesOf(o0, game).filter(t => (t.action ?? 'interact') === 'interact');
   const key = { interact: 'KeyE' };
@@ -222,10 +223,18 @@ async function interact({ p, obs, game, words, shot, L, clock }) {
     const changed = JSON.stringify([o1.shared, o1.rules, o1.scores, o1.controls?.me]) !== before;
     return { action: 'interact', words, ok: changed, why: changed ? 'E changed the game state (no mechanic exposes interactables; the rules handle it)' : 'E changed nothing, and no mechanic exposes anything to interact with (pickup spots that take a press, a free station, a carry item): bind interact in a mechanic (pickup collect "both", station action "interact", carry grabAction "interact") or in rules.js, or remove controls.interact' };
   }
-  // calibrate: which way W and D move the player (the camera does not turn: the mouse stays still)
+  // calibrate: which way the walk keys move the player (the camera does not turn: the mouse stays still). The keys are
+  // the game's own: W and D in 3D and from above; side-on (a flat game's reads.walk) D alone, along X, with a jump.
+  const K = walk.keys ?? WALK_3D.keys, side = !(walk.axes ?? ['x', 'z']).includes('z');
   const step = async k => { const a = (await obs()).me; await p.keyboard.down(k); await clock.wait(200); await p.keyboard.up(k); await clock.wait(260); const b = (await obs()).me; const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz); return l > 0.05 ? [dx / l, dz / l] : null; };
-  const f = await step('KeyW'), rt = await step('KeyD');
-  if (!f || !rt) return { action: 'interact', words, ok: false, why: 'the player did not move on W or D, so the check could not walk to anything to interact with (is the controller held?)' };
+  // side-on the calibration steps back first, so it ends where it began (a step right from a spawn beside a coin would
+  // take the coin by touch before the press is ever tried)
+  if (side && K.left) await step(K.left);
+  const f = K.up ? await step(K.up) : [0, 0], rt = await step(K.right);
+  const named = [K.up, K.right].filter(Boolean).map(k => k.replace(/^Key/, '')).join(' or ');
+  if (!f || !rt) return { action: 'interact', words, ok: false, why: `the player did not move on ${named}, so the check could not walk to anything to interact with (is the controller held?)` };
+  // side-on, the nearest thing at the player's own height first (one up on a ledge needs a jump)
+  if (side) { const y0 = o0.me.y ?? 0, high = t => Math.abs((t.y ?? 0) - y0) > 1.2; list = [...list].sort((a, b) => high(a) - high(b) || Math.abs(a.x - o0.me.x) - Math.abs(b.x - o0.me.x)); }
   const tried = [];
   const deadline = clock.now() + L.WALK_SECONDS * 1000;
   for (const first of list.slice(0, 3)) {
@@ -235,12 +244,16 @@ async function interact({ p, obs, game, words, shot, L, clock }) {
       const o = await obs(), me = o.me;
       t = interactablesOf(o, game).find(x => x.id === first.id);
       if (!t) break;                                                  // taken by touch on the way, or gone
-      const dx = t.x - me.x, dz = t.z - me.z, d = Math.hypot(dx, dz);
-      if (d <= want + 0.2 && d >= (t.touch || 0) + 0.15) { arrived = true; break; }
-      if (d < best - 0.15) { best = d; stall = 0; } else if (++stall > 6) break;
-      const go = d > want ? 1 : -1, ux = dx / d * go, uz = dz / d * go;
+      // side-on a press and a touch are measured along X (the axis the body runs on; the height is its own limit), so
+      // the distance is along X and a thing up on a ledge counts as reached only from its own height
+      const dx = t.x - me.x, dz = side ? 0 : t.z - me.z, dy = side ? (t.y ?? 0) - (me.y ?? 0) : 0, d = side ? Math.abs(dx) : Math.hypot(dx, dz);
+      if (d <= want + 0.2 && d >= (t.touch || 0) + 0.15 && (!side || Math.abs(dy) <= 1.2)) { arrived = true; break; }
+      const prog = side ? Math.hypot(dx, dy) : d, up = side && dy > 1;   // up on a ledge: run under it and jump
+      if (prog < best - 0.15) { best = prog; stall = 0; } else if (++stall > 6) break;
+      const go = up ? (Math.abs(dx) > 0.3 ? 1 : 0) : d > want ? 1 : -1, flatD = Math.hypot(dx, dz) || 1, ux = dx / flatD * go, uz = dz / flatD * go;
       const pf = ux * f[0] + uz * f[1], pr = ux * rt[0] + uz * rt[1];
-      const keys = []; if (pf > 0.38) keys.push('KeyW'); if (pf < -0.38) keys.push('KeyS'); if (pr > 0.38) keys.push('KeyD'); if (pr < -0.38) keys.push('KeyA');
+      const keys = []; if (K.up && pf > 0.38) keys.push(K.up); if (K.down && pf < -0.38) keys.push(K.down); if (pr > 0.38) keys.push(K.right); if (pr < -0.38) keys.push(K.left);
+      if (up && walk.jump && Math.abs(dx) < 3) keys.push(walk.jump);
       for (const k of keys) await p.keyboard.down(k);
       await clock.wait(Math.max(45, Math.min(220, Math.abs(d - want) * 85)));
       for (const k of keys) await p.keyboard.up(k);

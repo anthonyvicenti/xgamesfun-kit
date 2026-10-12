@@ -19,6 +19,8 @@ import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { judgeBody, judgeSummary, PARTS, PART_LABEL, DEV_RIG, DEFAULT_CLIPS } from './body-judge.mjs';
+import { flatOf } from './flat-reads.mjs';
+import { decodePng } from './flat-png.mjs';
 
 /**
  * The clip names the game's own code plays: in its top-level .js files (rules.js and its siblings; never gf/, vendor/
@@ -50,11 +52,19 @@ export async function checkBodies(dir) {
   const clipsFile = fileOf(slots.find(s => s.id === 'character.clips'));
   const clips = clipsFile && existsSync(join(dir, clipsFile)) ? join(dir, clipsFile) : DEFAULT_CLIPS;
   if (!bodies.length) return { ok: true, detail: 'no character bodies (nothing to judge)', bodies: [], notes };
+  // a flat game's body is a picture sheet: its own judge (gf/three/flat/index.js → bodyReport), never the model judge
+  const flat = await flatOf(dir);
   const seen = new Map(), out = [];
   const named = await namedInCode(dir);
   for (const s of bodies) {
     const role = s.id.split('.').slice(2).join('.'), rel = fileOf(s);
     if (!existsSync(join(dir, rel))) { out.push({ role, file: rel, ok: false, errors: [`${rel} is missing`], parts: {} }); continue; }
+    if (flat && s.type === 'image') {
+      const r = flat.part.bodyReport(decodePng(await readFile(join(dir, rel))), { style: s.constraints?.sheet?.style ?? 'pixel', plane: flat.plane });
+      out.push({ role, file: rel, ok: r.ok, picture: true, summary: r.summary, errors: r.errors, parts: {}, worst: {}, warnings: r.warnings.length, stats: r.stats });
+      if (r.warnings.length) notes.push(`${role} (${rel}): ${r.warnings.slice(0, 3).join(' | ')}`);
+      continue;
+    }
     const as = role === 'player' ? 'player' : 'enemy', key = `${rel}|${as}`;
     if (!seen.has(key)) seen.set(key, await judgeBody(join(dir, rel), { rig, clips, role: as, extraClips: named }));
     const r = seen.get(key);
@@ -66,6 +76,6 @@ export async function checkBodies(dir) {
     if (warns.length) notes.push(`${role} (${rel}): ${warns.slice(0, 3).join(' | ')}${warns.length > 3 ? ` (+${warns.length - 3} more)` : ''}`);
   }
   const ok = out.every(b => b.ok);
-  const detail = out.map(b => `${b.role} (${b.file}): ${b.ok ? `face, body, arms, hands, legs and feet hold their shape in the ${b.stats?.clips ?? '?'} clips it plays` : `FAIL ${b.summary || b.errors.join('; ')}`}`).join(' · ');
-  return { ok, detail: ok ? detail : `${detail} (node research/gf-three/tools/model-judge.mjs <file> --rig gf/three/character/rig.js shows every part; a body from the library: pick one that passes, or the kit's retarget is wrong for it)`, bodies: out, notes };
+  const detail = out.map(b => `${b.role} (${b.file}): ${b.ok && b.picture ? `a picture sheet of ${b.stats.frames} frames in ${b.stats.rows} row${b.stats.rows === 1 ? '' : 's'} (cells of ${[].concat(b.stats.cell).join(' x ')} px) that holds the gf-flat-1 standard` : b.ok ? `face, body, arms, hands, legs and feet hold their shape in the ${b.stats?.clips ?? '?'} clips it plays` : `FAIL ${b.summary || b.errors.join('; ')}`}`).join(' · ');
+  return { ok, detail: ok ? detail : `${detail} (${out.some(b => b.picture && !b.ok) ? 'node research/gf-three/tools/flat-judge.mjs <file.png> --kind body shows a picture body\'s rules; ' : ''}node research/gf-three/tools/model-judge.mjs <file> --rig gf/three/character/rig.js shows every part; a body from the library: pick one that passes, or the kit's retarget is wrong for it)`, bodies: out, notes };
 }

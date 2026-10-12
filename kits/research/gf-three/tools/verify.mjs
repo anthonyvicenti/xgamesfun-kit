@@ -149,6 +149,8 @@ import { holdsBody, whereIs } from './lib/part-signs.mjs';
 import { turnPlayer, turnLine } from './lib/turn-player.mjs';
 import { manifestDiff, manifestLine } from './lib/manifest-check.mjs';
 import { improvised, improvisedLine } from './lib/improvised-check.mjs';
+import { flatOf, walkOf } from './lib/flat-reads.mjs';
+import { decodePng, encodePng } from './lib/flat-png.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) { const t0 = Date.now(); for (;;) { const v = await fn().catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`); await sleep(150); } }
@@ -340,6 +342,8 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   };
   const game = JSON.parse(await readFile(join(dir, 'config/game.json'), 'utf8'));
   const world = JSON.parse(await readFile(join(dir, 'config/world.json'), 'utf8').catch(() => '{}'));
+  // a flat game says what its keys, pointer, pictures and shots are (gf/three/flat/index.js → manifest.reads); null else
+  const flat = await flatOf(dir), walkKeys = walkOf(flat);
   let look = null;
   const snap = page => page.evaluate(() => window.__game?.snapshot?.() ?? null);
   const roundSeconds = 25;
@@ -371,9 +375,9 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     const walk = async () => {
       const start = whereIs((await snap(p)).players.find(x => x.local));
       const far = async () => { const m = whereIs((await snap(p))?.players.find(x => x.local)); if (m && held && m.mark) onMark = true; if (m && m.mark === start.mark) moved = Math.max(moved, Math.hypot(m.x - start.x, m.z - start.z)); };
-      await p.keyboard.down('KeyW');
+      await p.keyboard.down(walkKeys.forward);                       // W, or a flat game's own (side-on: D)
       for (let i = 0; i < 7; i++) { await sleep(200); await far(); }
-      await p.mouse.move(700, 380, { steps: 6 }); await p.keyboard.up('KeyW');
+      await p.mouse.move(700, 380, { steps: 6 }); await p.keyboard.up(walkKeys.forward);
       await p.keyboard.press('Space'); await sleep(400);
       await p.keyboard.down('KeyD'); for (let i = 0; i < 4; i++) { await sleep(180); await far(); } await p.keyboard.up('KeyD');
       walkTries++;
@@ -442,11 +446,20 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     const bodySlot = assets.slots.find(s => made.includes(s.id) && s.id.startsWith('character.body.')) ?? assets.slots.find(s => s.id.startsWith('character.body.'));
     const named = Object.values(record.named ?? {});
     const rank = id => (made.includes(id) ? 2 : named.includes(id) ? 1 : 0);
-    const propSlot = [...assets.slots].sort((a, b) => rank(b.id) - rank(a.id)).find(s => s.id.startsWith('prop.') && s.type === 'model' && (assets.showcase ?? []).some(x => x.query === `?gf-show=${s.id}`));
+    // a flat game's bodies and props are pictures (reads.swap: an image slot, proved by its drawn pixels, the quad it is
+    // drawn on stays as it was): the prop is another stand-in picture of the game's style, the body its own sheet with
+    // the colours turned round (same size, same frames)
+    const swapType = flat?.reads?.swap?.slotType ?? 'model', pictures = swapType === 'image';
+    let propSlot = [...assets.slots].sort((a, b) => rank(b.id) - rank(a.id)).find(s => s.id.startsWith('prop.') && s.type === swapType && (assets.showcase ?? []).some(x => x.query === `?gf-show=${s.id}`));
     const pick = async (cur, list) => { const curBytes = await readFile(join(dir, cur)); for (const f of list) if (existsSync(f) && !(await readFile(f)).equals(curBytes)) return f; return null; };
-    const bodyFile = bodySlot && await pick(bodySlot.source.file, record.modules?.character ? ['ual-mannequin', 'quaternius-astronaut', 'bean-chunky', 'bean-classic'].map(n => join(LIBRARY, `bodies/${n}.glb`)) : [join(STANDIN_ASSETS, 'crate.glb')]);
-    const propFile = propSlot && await pick(propSlot.source.file, [join(STANDIN_ASSETS, 'crate.glb'), join(STANDIN_ASSETS, 'bench.glb')]);
-    const swaps = await pool([[bodySlot, bodyFile, bodySlot && `character.${bodySlot.id.split('.')[2]}`], [propSlot, propFile, propSlot?.id]], 2, async ([slot, file, subject]) => {
+    const flatArt = pictures ? join(STANDIN_ASSETS, 'flat', world.style === 'pixel' ? 'pixel' : 'drawn') : null;
+    const turned = async rel => { const im = decodePng(await readFile(join(dir, rel))); if (im.error) return null; const d = new Uint8Array(im.data); for (let i = 0; i < d.length; i += 4) { d[i] = 255 - d[i]; d[i + 1] = 255 - d[i + 1]; d[i + 2] = 255 - d[i + 2]; } const f = join(outDir, 'swap-body.png'); await writeFile(f, encodePng({ width: im.width, height: im.height, data: d })); return f; };
+    const bodyFile = bodySlot && (pictures ? await turned(bodySlot.source.file) : await pick(bodySlot.source.file, record.modules?.character ? ['ual-mannequin', 'quaternius-astronaut', 'bean-chunky', 'bean-classic'].map(n => join(LIBRARY, `bodies/${n}.glb`)) : [join(STANDIN_ASSETS, 'crate.glb')]));
+    let propFile = propSlot && await pick(propSlot.source.file, pictures ? ['star.png', 'gem.png', 'crate.png'].map(n => join(flatArt, n)) : [join(STANDIN_ASSETS, 'crate.glb'), join(STANDIN_ASSETS, 'bench.glb')]);
+    // a flat game with no prop picture (a board game): a tile kind is the other picture, seen in the world's preview
+    let propSubject = propSlot?.id;
+    if (pictures && !propSlot) { propSlot = assets.slots.find(s => /^world\.tiles\./.test(s.id) && s.type === 'image') ?? null; propSubject = 'world'; propFile = propSlot && await pick(propSlot.source.file, ['tile-water.png', 'tile-path.png', 'tile-brick.png', 'tile-grass.png'].map(n => join(flatArt, n))); }
+    const swaps = await pool([[bodySlot, bodyFile, bodySlot && `character.${bodySlot.id.split('.')[2]}`], [propSlot, propFile, propSubject]], 2, async ([slot, file, subject]) => {
       if (!slot || !file) return { slot: slot?.id ?? null, ok: false, why: 'no slot or no replacement file' };
       const look = async overrides => {
         const T = await newPage(`swap ${slot.id}`, { overrides });
@@ -457,16 +470,16 @@ export async function verify(gameDir, { quick = false, out = null, log = console
         const img = await T.page.screenshot({ type: 'png' });
         return { T, st, img };
       };
-      const dataUrl = `data:model/gltf-binary;base64,${(await readFile(file)).toString('base64')}`;
+      const dataUrl = `data:${pictures ? 'image/png' : 'model/gltf-binary'};base64,${(await readFile(file)).toString('base64')}`;
       const [before, after] = await Promise.all([look(null), look({ files: { [slot.source.file]: dataUrl } })]);
       const diff = await pixelDiff(browser, before.img, after.img);
       const f1 = await shot(before.T.page, `swap-${slot.id}-before`), f2 = await shot(after.T.page, `swap-${slot.id}-after`);
-      const ok = !!(before.st && after.st && after.st.onScreen && after.st.triangles !== before.st.triangles && diff > 0.01) && after.T.errors.length === 0;
+      const ok = !!(before.st && after.st && after.st.onScreen && (pictures || after.st.triangles !== before.st.triangles) && diff > 0.01) && after.T.errors.length === 0;
       await before.T.ctx.close(); await after.T.ctx.close();
-      return { slot: slot.id, file: relPosix(REPO, file), ok, before: before.st, after: after.st, pixelsChanged: +diff.toFixed(3), errors: after.T.errors.slice(0, 3), shots: [f1, f2] };
+      return { slot: slot.id, file: file.startsWith(REPO) ? relPosix(REPO, file) : relPosix(dir, file), ok, picture: pictures, before: before.st, after: after.st, pixelsChanged: +diff.toFixed(3), errors: after.T.errors.slice(0, 3), shots: [f1, f2] };
     });
     rec.swaps = swaps;
-    add(8, 'swap proof', swaps.length === 2 && swaps.every(s => s.ok), swaps.map(s => s.ok ? `${s.slot}: ${s.before.triangles} → ${s.after.triangles} triangles, on screen, ${(s.pixelsChanged * 100).toFixed(1)}% of pixels changed` : `${s.slot}: ${s.why ?? `not shown (${JSON.stringify(s.after)}${s.errors?.length ? `; ${s.errors[0]}` : ''})`}`).join(' · '));
+    add(8, 'swap proof', swaps.length === 2 && swaps.every(s => s.ok), swaps.map(s => s.ok ? `${s.slot}: ${s.picture ? `a picture swapped (what it is drawn on stays ${s.after.triangles} triangles)` : `${s.before.triangles} → ${s.after.triangles} triangles`}, on screen, ${(s.pixelsChanged * 100).toFixed(1)}% of pixels changed` : `${s.slot}: ${s.why ?? `not shown (${JSON.stringify(s.after)}${s.errors?.length ? `; ${s.errors[0]}` : ''})`}`).join(' · '));
     lap('swaps', tStep); tStep = Date.now();
     }
 
@@ -474,7 +487,7 @@ export async function verify(gameDir, { quick = false, out = null, log = console
     if (S) await S.ctx.close();
     if (want(13)) {
       begin(13);
-      const cc = await checkControls({ newPage, browser, url: srv.url, game, log: say, shot: controlsShot(shot, outDir, rec) });
+      const cc = await checkControls({ newPage, browser, url: srv.url, game, flat, log: say, shot: controlsShot(shot, outDir, rec) });
       rec.controls = cc.record;
       if (cc.warnings.length) rec.notes.push(...cc.warnings);
       add(13, 'controls work', cc.ok, cc.detail);
@@ -515,7 +528,7 @@ export async function verify(gameDir, { quick = false, out = null, log = console
       // 24. plays inside a post (CONTRACT §6d; creator 2026-10-08, a post on X: "It doesn't stay in the iframe, you can
       // easily move your mouse out")
       begin(24);
-      const em = await checkEmbed({ newPage, url: srv.url, game, log: say, shot });
+      const em = await checkEmbed({ newPage, url: srv.url, game, flat, log: say, shot });
       rec.embed = em.record; if (em.warnings.length) rec.notes.push(...em.warnings);
       add(24, 'plays inside a post', em.ok, em.detail);
     }
@@ -627,9 +640,17 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   }
 
   // ---- 9. contact sheet and perf (track L's capture tool) ----
-  const capture = join(GF3, 'lookdev/capture.mjs');
+  const capture = join(GF3, 'lookdev/capture.mjs'), flat9 = want(9) && !quick ? await flatOf(dir) : null;
   if (!want(9)) {}
   else if (quick) add(9, 'contact sheet and perf', null, '--quick');
+  else if (flat9?.reads?.shots) {
+    // a flat game's shots are straight on (its part's reads.shots): the slot preview of each subject, not a turntable
+    const t9 = Date.now(); begin(9);
+    const { flatSheet } = await import('./lib/flat-sheet.mjs');
+    const r = await flatSheet({ dir, outDir, flat: flat9, startParty, launch: () => launchForGame(launchChrome, dir), log: say }).catch(e => ({ ok: false, detail: `the flat sheet could not run: ${e.message}`, record: null }));
+    add(9, 'contact sheet and perf', r.ok, r.ok ? `${r.detail}; sheet in ${relative(dir, join(outDir, 'sheet'))}` : r.detail);
+    lap('contact sheet', t9);
+  }
   else if (!existsSync(capture)) {
     // a checkout without the lookdev folder (a packaged copy of the tools): say so in the check and in the notes, so a
     // reader of the verdict never takes a full verify for one that measured the frame rate
@@ -824,7 +845,8 @@ async function likenessOnly(dir, { rec, outDir, add, log, t0, refs }) {
       await page.mouse.click(play.x + play.width / 2, play.y + play.height / 2);
       await until(async () => (await snapOf())?.phase === 'playing', 15000, 'the round to start');
       await sleep(1500); await shot('first-look');
-      await page.keyboard.down('KeyW'); await sleep(1500); await page.keyboard.up('KeyW');
+      const fwd = walkOf(await flatOf(dir)).forward;
+      await page.keyboard.down(fwd); await sleep(1500); await page.keyboard.up(fwd);
       await sleep(3000); await shot('mid-round');
       await ctx.close();
     } catch (e) { rec.notes.push(`check 23's page stopped: ${e.message}`); log(`  likeness page: ${e.message}`); }
@@ -870,7 +892,7 @@ async function controlsOnly(dir, { rec, outDir, add, log, t0 }) {
   const shot = async (page, name) => { const f = `${String(rec.shots.length + 1).padStart(2, '0')}-${name}.jpg`; rec.shots.push(f); await page.screenshot({ path: join(outDir, f), type: 'jpeg', quality: 75 }).catch(() => {}); return f; };
   try {
     const game = JSON.parse(await readFile(join(dir, 'config/game.json'), 'utf8'));
-    const cc = await checkControls({ newPage, browser, url: srv.url, game, log, shot: controlsShot(shot, outDir, rec) });
+    const cc = await checkControls({ newPage, browser, url: srv.url, game, flat: await flatOf(dir), log, shot: controlsShot(shot, outDir, rec) });
     rec.controls = cc.record; if (cc.warnings.length) rec.notes.push(...cc.warnings);
     add(13, 'controls work', cc.ok, cc.detail);
   } catch (e) { add(13, 'controls work', false, `not reached: ${e.message}`); }
@@ -988,7 +1010,7 @@ async function menuOnly(dir, n, { rec, outDir, add, log, t0 }) {
   const name = { 20: 'the menu works', 21: 'the HUD shows your state', 22: 'the wallet in the menu', 24: 'plays inside a post', 31: 'sharp on every screen' }[n];
   try {
     const game = JSON.parse(await readFile(join(dir, 'config/game.json'), 'utf8'));
-    const r = n === 20 ? await checkMenu({ newPage, url: srv.url, game, log, shot }) : n === 21 ? await checkHud({ newPage, url: srv.url, game, log, shot }) : n === 24 ? await checkEmbed({ newPage, url: srv.url, game, log, shot }) : n === 31 ? await checkScreens({ browser, url: srv.url, log }) : await checkWallet({ newPage, url: srv.url, log, shot });
+    const r = n === 20 ? await checkMenu({ newPage, url: srv.url, game, log, shot }) : n === 21 ? await checkHud({ newPage, url: srv.url, game, log, shot }) : n === 24 ? await checkEmbed({ newPage, url: srv.url, game, flat: await flatOf(dir), log, shot }) : n === 31 ? await checkScreens({ browser, url: srv.url, log }) : await checkWallet({ newPage, url: srv.url, log, shot });
     rec[{ 20: 'menu', 21: 'hud', 22: 'wallet', 24: 'embed', 31: 'screens' }[n]] = r.record; if (r.warnings.length) rec.notes.push(...r.warnings);
     add(n, name, r.ok, r.detail);
   } catch (e) { add(n, name, false, `not reached: ${e.message}`); }

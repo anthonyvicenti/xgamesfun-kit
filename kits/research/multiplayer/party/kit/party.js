@@ -56,7 +56,7 @@
   var M = null, R = null, LIVE = false, WORLD = false;       // multiplayer.json, its "race", "live" or "world" block, and which
   var COLORS = ['#4f7cff', '#ff5ea8', '#3ddc84', '#ffd166', '#b388ff', '#ff8a50', '#4dd0e1', '#e57373'];   // one per seat
   var S = { phase: 'boot', you: null, code: null, names: {}, away: {}, standing: null, go: null, goAt: 0, revealed: false,
-    results: null, dismissed: 0, sentConfig: false, note: '', fatal: '', colors: null, lobbyOpen: false, nameDraft: null, renamed: 0 };
+    results: null, dismissed: 0, sentConfig: false, note: '', fatal: '', colors: null, lobbyOpen: false, nameDraft: null, renamed: 0, locked: false };
   var MIN = 2, OWN_HUD = false, BACKDROP = null;     // kit 1.4.0: the start minimum, live.hud "game", live.backdrop
   var A = freshAdapter();
   var pollTimer = null, countTimer = null, cardKey = null, railKey = null;
@@ -197,7 +197,7 @@
     watchConfig();                                  // kit 1.6.1: whether streams are on here (Go live)
     showBackdrop();
     room.on('welcome', function (w) {
-      S.you = w.you; S.code = w.code; S.phase = 'room'; root.dataset.phase = 'room';
+      S.you = w.you; S.code = w.code; S.phase = 'room'; root.dataset.phase = 'room'; S.locked = false;
       (w.players || []).forEach(function (p) { S.names[p.id] = p.name; S.away[p.id] = !p.connected; });
       render();
       liveResume();                                 // kit 1.6.2: back in after a reload within a minute: the stream carries on
@@ -431,8 +431,19 @@
   }
   function leaveRoom() { try { if (window.gf.room.leave) window.gf.room.leave(); } catch (e) { console.error(e); } }
   function startRoundNow() {
-    if (humans() < MIN) { S.note = ''; cardKey = null; render(); return; }
+    if (humans() < minNow()) { S.note = ''; cardKey = null; render(); return; }
     S.note = ''; window.gf.room.send({ k: 'start' });
+  }
+  // Kit 1.6.6 (the creator, 2026-10-11: "We cant lock it so others cant join. We also cant play solo"; they chose "Lock
+  // room, stream solo"): the host locks the waiting room. The room then refuses anyone new (an invite link, a viewer's
+  // Join), and a round starts with whoever is in, the host alone included, so a player can go live on their own. A
+  // world is one shared room per game and has no lock.
+  function minNow() { return S.locked ? 1 : MIN; }
+  function lockRoom(on) {
+    if (WORLD || !isHost() || !window.gf.room.lock || !window.gf.room.lock(on)) return;
+    S.locked = !!on;
+    window.gf.room.send({ k: 'config', minPlayers: on ? 1 : MIN });
+    S.note = ''; cardKey = null; render(); liveChanged();
   }
   // Your name, until the round starts (creator 2026-10-08: "change name in a room before the game"). The room keeps
   // it clean and unique and tells everyone; it shows at once here.
@@ -543,7 +554,7 @@
   function lobbyView(st, ph, host) {
     var racers = st ? st.racers.filter(function (r) { return !S.away[r.id] || r.id === S.you; }) : [];
     var max = Math.max(MIN, Math.min(8, M.players && Number.isInteger(M.players.max) ? M.players.max : 8));
-    var n = humans(), enough = n >= MIN;
+    var n = humans(), enough = n >= minNow(), locked = S.locked || !!(window.gf.room && window.gf.room.locked);
     var link = el('input', { id: 'mp-invite', readonly: true, value: inviteLink(), 'aria-label': 'Invite link', onfocus: function () { link.select(); } });
     var cp = el('button', { id: 'mp-copy', type: 'button', text: 'Copy invite link', onclick: function () { copyText(link.value, cp, 'Copy invite link'); } });
     var list = el('ul', { class: 'players', id: 'mp-players' }, racers.map(function (r) {
@@ -558,10 +569,11 @@
       } else kids.push(el('span', { class: 'name', text: name(r.id) }));
       kids.push(el('span', { class: 'tag', text: tags(r.id) }));
       return el('li', { class: mineRow ? 'me' : '', 'data-id': r.id }, kids);
-    }).concat(n < Math.min(max, 4) ? [el('li', { class: 'empty' }, [el('i', { class: 'dot' }), el('span', { class: 'name', text: n < MIN ? 'Waiting for a friend to join…' : 'Room for ' + (max - n) + ' more' })])] : []));
+    }).concat(locked ? [el('li', { class: 'empty locked', id: 'mp-locked' }, [el('i', { class: 'dot' }), el('span', { class: 'name', text: 'Locked: nobody new can join' })])]
+      : n < Math.min(max, 4) ? [el('li', { class: 'empty' }, [el('i', { class: 'dot' }), el('span', { class: 'name', text: n < MIN ? 'Waiting for a friend to join…' : 'Room for ' + (max - n) + ' more' })])] : []));
     var again = ph === 'results';
     var startBtn = host ? el('button', { id: 'mp-start', class: 'primary big', type: 'button', disabled: !enough,
-      text: enough ? (again ? 'Play again' : 'Start the game') : 'Waiting for a friend…', onclick: startRoundNow }) : null;
+      text: enough ? (again ? 'Play again' : n === 1 ? 'Start on my own' : 'Start the game') : 'Waiting for a friend…', onclick: startRoundNow }) : null;
     var kids = [
       el('div', { class: 'eyebrow', text: again ? 'Round ' + st.round + ' is over · waiting room' : 'Waiting room' }),
       el('h2', { class: 'title', text: $('rail-title').textContent }),
@@ -569,7 +581,8 @@
         el('div', { class: 'codebox' }, [el('span', { class: 'label', text: 'Room code' }), el('b', { class: 'code', id: 'mp-code', text: S.code || '' })]),
         el('div', { class: 'link' }, [link, cp]),
       ]),
-      el('p', { class: 'hint', text: host ? 'Send friends the link, or have them choose Play with friends and type the code. The game runs on your computer: keep this tab open.' : 'Invite more friends with the link or the code.' }),
+      el('p', { class: 'hint', text: locked ? (host ? 'The room is locked: you play with whoever is here, and people watching your stream can\u2019t join. Unlock it to let friends in.' : 'The host has locked the room: nobody new can join.')
+        : host ? 'Send friends the link, or have them choose Play with friends and type the code. The game runs on your computer: keep this tab open. Or lock the room to play on your own.' : 'Invite more friends with the link or the code.' }),
       el('div', { class: 'listhead' }, [el('span', { text: 'Players' }), el('span', { class: 'count-pill', id: 'mp-count', text: n + ' / ' + max })]),
       list,
       el('p', { class: 'tip', text: 'Click your name to change it' + (again ? '.' : ' before the game starts.') }),
@@ -579,6 +592,8 @@
     var foot = [];
     if (host && !enough && !again) foot.push(el('a', { id: 'mp-alone', class: 'quiet', href: new URL(R.entry || 'index.html', gameRoot).href, text: 'Play alone instead' }));
     if (again) foot.push(el('button', { id: 'mp-to-results', class: 'quiet', type: 'button', text: 'See the results', onclick: function () { S.lobbyOpen = false; S.dismissed = 0; cardKey = null; render(); } }));
+    if (host && !WORLD) foot.push(el('button', { id: 'mp-lock', class: 'quiet', type: 'button', 'aria-pressed': locked ? 'true' : 'false', text: locked ? 'Unlock room' : 'Lock room',
+      title: locked ? 'Let friends join again' : 'Nobody new can join; you can start on your own', onclick: function () { lockRoom(!locked); } }));
     var golive = liveButton(); if (golive) foot.push(golive);
     foot.push(el('button', { id: 'mp-leave', class: 'quiet', type: 'button', text: host ? 'Close room' : 'Leave room', onclick: leaveRoom }));
     kids.push(el('div', { class: 'row foot' }, foot));
@@ -605,7 +620,7 @@
     var kids = [el('div', { class: 'eyebrow', text: 'Round ' + st.round + ' · results' }), el('h2', { id: 'mp-results', class: 'title', text: title }), list];
     if (team && rows.length > 1) kids.push(el('p', { class: 'muted', text: '★ most points this round' }));
     kids.push(el('div', { class: 'row' }, [
-      host ? el('button', { id: 'mp-again', class: 'primary big', text: 'Play again', onclick: function () { if (!settled()) return; if (humans() < MIN) { S.lobbyOpen = true; cardKey = null; render(); return; } window.gf.room.send({ k: 'start' }); } })
+      host ? el('button', { id: 'mp-again', class: 'primary big', text: 'Play again', onclick: function () { if (!settled()) return; if (humans() < minNow()) { S.lobbyOpen = true; cardKey = null; render(); return; } window.gf.room.send({ k: 'start' }); } })
         : el('p', { class: 'waiting', id: 'mp-waiting' }, [el('i', { class: 'pulse' }), document.createTextNode('Waiting for ' + hostName() + ' to start the next round…')]),
     ]), el('div', { class: 'row foot' }, [
       el('button', { id: 'mp-lobby', class: 'quiet', type: 'button', text: 'Waiting room', onclick: function () { if (!settled()) return; S.lobbyOpen = true; cardKey = null; render(); } }),
@@ -1213,7 +1228,7 @@
   function liveMeta() {
     var list = liveRoster(), mine = list.filter(function (p) { return p.id === S.you; })[0];
     return { v: 1, game: gameId(), title: $('rail-title').textContent || '', mode: WORLD ? 'world' : 'live', name: mine ? mine.name : (WORLD ? WS.name : name(S.you)),
-      color: mine ? mine.color : null, room: { code: S.code || null, n: list.length, max: WORLD ? WS.max : 8,
+      color: mine ? mine.color : null, room: { code: S.code || null, n: list.length, max: WORLD ? WS.max : 8, locked: !WORLD && S.locked,
         phase: WORLD ? 'world' : (S.standing ? S.standing.phase : 'lobby'), round: WORLD ? 1 : (S.standing ? S.standing.round : 0),
         result: !WORLD && S.standing && S.standing.phase === 'results' ? resultLine(S.standing) : null } };
   }
@@ -1419,7 +1434,7 @@
     var r = m.room && typeof m.room === 'object' ? m.room : {};
     return { game: text(m.game, 120), title: text(m.title, 60), mode: m.mode === 'live' ? 'live' : 'world', name: text(m.name, 24) || 'Someone', color: hexColor(m.color),
       room: { n: Math.max(0, Math.min(99, r.n | 0)), max: Math.max(1, Math.min(99, r.max | 0 || 8)), code: typeof r.code === 'string' && /^[A-Za-z0-9-]{3,32}$/.test(r.code) ? r.code : null,
-        phase: ['lobby', 'loading', 'countdown', 'racing', 'results', 'world'].indexOf(r.phase) >= 0 ? r.phase : null, round: Math.max(0, r.round | 0), result: text(r.result, 60) || null } };
+        phase: ['lobby', 'loading', 'countdown', 'racing', 'results', 'world'].indexOf(r.phase) >= 0 ? r.phase : null, round: Math.max(0, r.round | 0), result: text(r.result, 60) || null, locked: r.locked === true } };
   }
   function cleanRoster(list) {
     return (Array.isArray(list) ? list : []).slice(0, 16).filter(function (p) { return p && typeof p.id === 'string' && /^[a-z0-9]{1,8}$/i.test(p.id); }).map(function (p) {
@@ -1555,13 +1570,14 @@
       : live && W.paused ? who + '’s stream is paused'
       : live ? (W.keyed || !WORLD ? who + roundWord(W) + ' · ' + W.viewers + ' watching' : 'Tuning in to ' + who + '…') : W.ended ? who + '’s stream has ended' : W.meta ? who + ' isn’t live right now'
       : W.gotState ? 'Nobody is live on this link yet' : 'Looking for the stream…';
-    var key = JSON.stringify([line, live, !!W.paused, WS.status, W.joinOpen]);
+    var shut = live && !WORLD && !!(W.meta && W.meta.room.locked);     // kit 1.6.6: the streamer locked their room
+    var key = JSON.stringify([line, live, !!W.paused, WS.status, W.joinOpen, shut]);
     bar.hidden = false;
     if (key === watchKeyStr) return;
     watchKeyStr = key;
     var busy = WS.status !== 'watch' || W.joinOpen ? true : null;
     // the way in with others: the streamer's game while it is live; after it, the game's own friends page (a world: its card)
-    var acts = [el('button', { id: 'mp-watch-join', class: 'primary', type: 'button', text: live ? 'Join' : WORLD ? 'Enter the world' : 'Play with friends', onclick: watchJoin, disabled: busy })];
+    var acts = [el('button', { id: 'mp-watch-join', class: 'primary', type: 'button', text: shut ? 'Room locked' : live ? 'Join' : WORLD ? 'Enter the world' : 'Play with friends', title: shut ? who + ' is playing on their own: start a room or play solo' : null, onclick: watchJoin, disabled: busy || (shut ? true : null) })];
     if (live && !WORLD) acts.push(el('button', { id: 'mp-watch-own', type: 'button', text: 'Start a room', title: 'Your own room, for you and your friends', onclick: watchOwn, disabled: busy }));
     acts.push(el('button', { id: 'mp-watch-solo', type: 'button', text: 'Play solo', title: WORLD ? 'A practice copy: nothing you build is saved' : 'On your own, right now', onclick: watchSolo, disabled: busy }));
     var kids = [el('span', { class: 'watch-line', id: 'mp-watch-line', text: line }), el('span', { class: 'watch-acts' }, acts)];
@@ -1581,7 +1597,7 @@
         world: WORLD ? { key: WS.key, status: WS.status, code: WS.status === 'in' ? S.code : null, n: WS.n, max: WS.max, host: WS.status === 'in' && isWorldHost(), handoffs: WS.handoffs,
           lastHandoffMs: WS.lastHandoffMs, lastWhy: WS.lastWhy, cid: WS.cid, name: WS.name, players: worldPlayers(), started: WS.started, frame: WS.frameUrl, session: !!S.session } : null,
         // kit 1.6.0: streaming (this copy's own stream) and watching (a viewer)
-        live: { available: liveAvailable(), state: LV.state, id: LV.id, saved: LV.saved, link: LV.link, viewers: LV.viewers, error: LV.error, sent: LV.sent, relay: LV.relay, badges: Object.keys(BADGES) },
+        locked: S.locked, live: { available: liveAvailable(), state: LV.state, id: LV.id, saved: LV.saved, link: LV.link, viewers: LV.viewers, error: LV.error, sent: LV.sent, relay: LV.relay, badges: Object.keys(BADGES) },
         watch: WS.watch ? { id: WS.watch.id, state: WS.watch.state, live: WS.watch.live, ended: WS.watch.ended, keyed: WS.watch.keyed, mismatch: WS.watch.mismatch, full: WS.watch.full,
           viewers: WS.watch.viewers, follow: watchInfo(WS.watch).follow, roster: WS.watch.roster.length, queued: WS.watch.queue.length, got: WS.watch.got, joinOpen: WS.watch.joinOpen } : null,
         results: S.results, card: card.hidden ? null : (card.firstElementChild && card.firstElementChild.dataset.view) || 'fatal',

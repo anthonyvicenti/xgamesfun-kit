@@ -35,7 +35,10 @@ const PLANE = {
 const RUNS = {
   top: {
     pickup: { params: { spin: false }, how: 'spots lie on the ground; world.marks(name) gives the map\'s marked cells for pickup.spawnAt' },
-    board: { params: { presence: 'cursor', clear: 0 }, how: 'a grid on the ground with a cursor each (presence "cursor"): the bodies stand at their sides, each player moves a mark; with the turns loop' },
+    // seen from above the screen is the board, one picture for everyone: row 0 (where a dropped piece gathers) is its
+    // bottom edge, as a four-in-a-row board stands, and the seats are its left and right, clear of the HUD's top and
+    // bottom middle (the clock and the goal, the prompt)
+    board: { params: { presence: 'cursor', clear: 0, rowZero: 'front', seatSides: 'ew' }, how: 'a grid on the ground with a cursor each (presence "cursor"): the bodies stand at its left and right, each player moves a mark; row 0 is the bottom edge of the screen (a dropped piece falls down the screen); with the turns loop' },
   },
   side: {
     pickup: { params: { spin: false, touchHeight: 0.4, radius: 0.8 }, how: 'by itself pickup puts its spots along y = 0; for spots on the ledges give it count 0 and place them at the map\'s marks: for (const m of ctx.world.marks(name)) pickup.spawnAt(m). A spot is taken by a body within reach along X and within 1.4 m in height' },

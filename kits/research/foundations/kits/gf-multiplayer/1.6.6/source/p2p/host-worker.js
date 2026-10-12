@@ -66,6 +66,7 @@ async function handle(d) {
     else if (d.k === 'start') host.start({ fill: !!d.fill, bots: d.bots | 0 });
     else if (d.k === 'rematch') host.rematch();
     else if (d.k === 'kick') host.kick(String(d.playerId));
+    else if (d.k === 'lock') host.lock(d.on === true);
     else if (d.k === 'close') host.close(d.reason || 'the host closed the game');
     else if (d.k === 'stats') post({ k: 'stats', stats: { ...host.stats, matches: host.matches, seats: host.players.length } });
     syncTick();

@@ -30,6 +30,7 @@ const CSS = `
 #gf-menu h2{margin:0 0 2px;font-size:24px;font-weight:850}
 #gf-menu .gf-hook{margin:0 0 10px;font-size:17px;font-weight:550;opacity:.92;line-height:1.35;text-shadow:0 2px 6px #000a}
 #gf-menu .gf-note{margin:0;font-size:14px;opacity:.85;font-weight:500;line-height:1.4}
+#gf-menu .gf-credits{font-size:12.5px;opacity:.7}#gf-menu .gf-credits a{color:inherit}
 #gf-menu button{font:700 17px/1.1 system-ui,-apple-system,"Segoe UI",sans-serif;color:inherit;cursor:pointer;border:0}
 #gf-menu .gf-btn{display:flex;align-items:center;gap:12px;width:100%;padding:13px 18px;border-radius:14px;background:#ffffff1c;box-shadow:inset 0 0 0 1.5px #ffffff22;text-align:left;transition:background .12s,transform .12s}
 #gf-menu .gf-btn:hover,#gf-menu .gf-btn:focus-visible{background:#ffffff33;transform:translateX(3px);outline:none}
@@ -111,6 +112,17 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 const svg = name => { const s = el('span'); s.innerHTML = ICON[name] ?? ''; return s.firstChild; };
 
 /** The control rows for How to play: [keys, what] from config/game.json → controls (CONTRACT §6d). */
+/** The credits a game's art asks for: each slot whose licence names its licence page (CC BY), once per file. */
+export function creditsOf(manifest) {
+  const out = [], seen = new Set();
+  for (const s of manifest?.slots ?? []) {
+    const l = s.license, file = s.source?.file ?? s.id;
+    if (!l?.licenseUrl || seen.has(file)) continue;
+    seen.add(file); out.push({ title: l.title ?? s.label ?? s.id, author: l.author ?? '', source: l.url ?? '', spdx: l.spdx ?? '', licenseUrl: l.licenseUrl, modified: !!l.modified });
+  }
+  return out;
+}
+
 export function controlRows(controls = {}, { touch = false, camera = 'third', world = false, free = false } = {}) {
   // the orbit camera (worlds, CONTRACT §9): the mouse is free; a drag turns the camera, a click is the action where
   // it points. controls.more: [[keys, what, touch?], ...] for a game's own keys (a hotbar, a tool); `touch` names the
@@ -303,6 +315,21 @@ export function createMenu(ctx, ui, { game = {}, live = false, world = false, ga
     p.append(dl); col.append(p);
     const summary = game.rules?.summary;
     if (summary && summary !== goal) col.append(el('p', 'gf-note', summary));
+    // credits a licence asks for (CC BY art the game uses: assets.json → a slot's license with its licenseUrl), so a
+    // player can find them (kit docs/LICENSING.md)
+    const credits = creditsOf(ctx.assets?.manifest);
+    if (credits.length) {
+      const c = el('p', 'gf-note gf-credits'); c.id = 'gf-how-credits'; c.append('Art credits: ');
+      credits.forEach((l, i) => {
+        if (i) c.append('; ');
+        c.append(`“${l.title}” by ${l.author}${l.source ? ' (' : ''}`);
+        if (l.source) { const a = el('a', null, 'source'); a.href = l.source; a.target = '_blank'; a.rel = 'noopener'; c.append(a, ')'); }
+        c.append(', ');
+        const b = el('a', null, l.spdx.replace(/^CC-BY-/, 'CC BY ')); b.href = l.licenseUrl; b.target = '_blank'; b.rel = 'noopener'; c.append(b);
+        if (l.modified) c.append(', changed');
+      });
+      col.append(c);
+    }
   }
   function drawSettings() {
     col.append(head(T.settings ?? 'Settings'));

@@ -9,7 +9,7 @@
 //     winner: s => { const l = s.last && s.line(...s.last, 4); return l ? { seat: s.owner(...s.last), cells: l } : s.full() ? { draw: true } : null; },
 //   });
 import * as THREE from 'three';
-import { createState, moveProblem, playMove, pickMove, candidates, resultOf, geometry, cleanMove, MAX_SEATS } from './logic.js';
+import { createState, moveProblem, playMove, pickMove, candidates, resultOf, geometry, cleanMove, MAX_SEATS, hintStyle } from './logic.js';
 import { areaOf } from '../../core/util.js';
 
 export const id = 'board';
@@ -17,7 +17,7 @@ export const examples = ['a giant four in a row on the floor', 'take turns placi
 
 const D = {
   cols: 7, rows: 6, cell: 1.5, at: 'centre', input: 'place', presence: 'walk', action: 'interact', piece: 'disc', pieceSize: 0.76, cellShape: 'square', checker: true,
-  turnSeconds: 30, botThink: 1.1, endDelay: 2.2, score: 'win', endsRound: true, clear: 2.4, seats: true, edgeReach: 1.8, hints: true,
+  turnSeconds: 30, botThink: 1.1, endDelay: 2.2, score: 'win', endsRound: true, clear: 2.4, seats: true, edgeReach: 1.8, hints: true, rowZero: 'back', seatSides: '',
   boardColor: '#2f4a7a', cellColor: '#e9edf5', cellColorB: '#c9d3e6', hintColor: '#58d68d', refuseColor: '#ff5a5a', winColor: '#ffd23f',
   soundPlace: 'board-place', soundRefuse: 'board-refuse', soundWin: 'board-win', soundSelect: 'board-select',
   textYourTurn: 'Your turn', textTheirTurn: '{name}\'s turn', textNotYourTurn: 'Not your turn', textDraw: 'Draw',
@@ -29,7 +29,9 @@ export const params = {
   type: 'object', additionalProperties: true,
   properties: {
     cols: { type: 'integer', minimum: 2, maximum: 12, default: D.cols, description: 'Cells across' },
-    rows: { type: 'integer', minimum: 2, maximum: 12, default: D.rows, description: 'Cells deep (row 0 is the far, -z end)' },
+    rows: { type: 'integer', minimum: 2, maximum: 12, default: D.rows, description: 'Cells deep (row 0 is at the end rowZero names)' },
+    rowZero: { type: 'string', enum: ['back', 'front'], default: D.rowZero, description: 'Which end of the board row 0 is, where dropped pieces gather. back: the -z end (in a 3D game the far side from the first seat; seen from above, the top of the screen). front: the +z end (seen from above, the bottom of the screen, as a four-in-a-row board stands)' },
+    seatSides: { type: 'string', pattern: '^[snew]{0,4}$', default: D.seatSides, description: 'The sides of the board the seats stand on, in seat order (letters s, n, e, w; s is +z, the bottom of the screen from above); several seats on one side spread along it. Empty: s and n for two, then e and w' },
     cell: { ...num('Cell size in metres (it shrinks so the board and its seats fit the play area)', 0.6, 4), default: D.cell },
     at: { default: D.at, description: 'Where the middle of the board is: "centre", a world zone name, or [x, z]' },
     input: { type: 'string', enum: ['place', 'drop', 'move'], default: D.input, description: 'What acting on a cell means. place: put a piece on that cell. drop: put a piece in that column, it slides to the free cell nearest row 0. move: pick one of your pieces, then where it goes' },
@@ -109,7 +111,7 @@ export function create(ctx, params = {}) {
     // the board, its seats and a walking strip fit the play area
     const room = P.presence === 'walk' ? 3.2 : 2.4;
     const cell = Math.max(0.6, Math.min(P.cell, (A.hx * 2 - room * 2) / cols, (A.hz * 2 - room * 2) / rows));
-    G = geometry({ cols, rows, cell, x, z });
+    G = geometry({ cols, rows, cell, x, z, rowZero: P.rowZero, seatSides: P.seatSides });
   }
   const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0, ...extra });
   const tag = (o, k) => { try { ctx.assets?.tag?.(o, `mechanic.board.${kebab(k)}`); } catch { /* a bench without assets */ } return o; };
@@ -123,6 +125,14 @@ export function create(ctx, params = {}) {
     const m4 = new THREE.Matrix4();
     for (let i = 0; i < cols * rows; i++) { const p = G.centre(i % cols, Math.floor(i / cols)); m4.makeTranslation(p.x - G.x, 0.064, p.z - G.z); cells.setMatrixAt(i, m4); cells.setColorAt(i, new THREE.Color('#fff')); }
     cells.receiveShadow = true; cells.frustumCulled = false; root.add(cells);
+    // a legal cell on a round board is shown by a ring (logic.js hintStyle): one ring per cell, hidden (scale 0) until it is legal
+    let rings = null;
+    if (hintStyle(P.cellShape).ring) {
+      rings = tag(new THREE.InstancedMesh(new THREE.RingGeometry(c * 0.34, c * 0.43, 32).rotateX(-Math.PI / 2), mat(V('hintColor'), { roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), cols * rows), 'hintColor');
+      const z0 = new THREE.Matrix4().makeScale(0, 0, 0);
+      for (let i = 0; i < cols * rows; i++) rings.setMatrixAt(i, z0);
+      rings.frustumCulled = false; root.add(rings);
+    }
     // the rim takes the mover's colour: whose turn it is reads from the board itself, on every screen
     const rimMat = mat('#ffffff', { emissive: new THREE.Color('#000000'), emissiveIntensity: 0.55 });
     const rimMesh = tag(new THREE.Group(), 'boardColor');
@@ -131,7 +141,7 @@ export function create(ctx, params = {}) {
     }
     tag(rimMesh, 'boardColor'); root.add(rimMesh);
     ctx.scene.add(root);
-    view = { root, slab, cells, rimMat, pieces: new Array(cols * rows).fill(null), shown: '', anims: new Map(), marks: new Map(), mats: new Map(), geos: new Map(), color: new THREE.Color(), cellKey: '' };
+    view = { root, slab, cells, rings, rimMat, pieces: new Array(cols * rows).fill(null), shown: '', anims: new Map(), marks: new Map(), mats: new Map(), geos: new Map(), color: new THREE.Color(), cellKey: '' };
   }
   function pieceGeo(kind) {
     const k = `${P.piece}:${kind > 0 ? 1 : 0}`; if (view.geos.has(k)) return view.geos.get(k);
@@ -328,8 +338,10 @@ export function create(ctx, params = {}) {
         stepAcc = 0;
         const f = new THREE.Vector3(); ctx.camera.getWorldDirection(f);
         const fwd = Math.abs(f.x) > Math.abs(f.z) * 1.15 ? [Math.sign(f.x), 0] : [0, Math.sign(f.z) || -1], right = [-fwd[1], fwd[0]];
-        const dc = Math.abs(mx) > Math.abs(my) ? right[0] * Math.sign(mx) : fwd[0] * Math.sign(my), dr = Math.abs(mx) > Math.abs(my) ? right[1] * Math.sign(mx) : fwd[1] * Math.sign(my);
-        mine = { c: Math.max(0, Math.min(cols - 1, mine.c + dc)), r: Math.max(0, Math.min(rows - 1, mine.r + dr)), on: true };
+        // a step in the world, one cell long, then the cell there (the geometry knows which end row 0 is)
+        const wx = Math.abs(mx) > Math.abs(my) ? right[0] * Math.sign(mx) : fwd[0] * Math.sign(my), wz = Math.abs(mx) > Math.abs(my) ? right[1] * Math.sign(mx) : fwd[1] * Math.sign(my);
+        const at = G.centre(mine.c, mine.r), to = G.cellAt(at.x + wx * G.cell, at.z + wz * G.cell, G.cell);
+        if (to) mine = { c: to[0], r: to[1], on: true };
       }
     }
     if (acts.primary?.pressed || acts.interact?.pressed) actOn(me, [mine.c, mine.r]);
@@ -422,17 +434,19 @@ export function create(ctx, params = {}) {
     if (ck !== view.cellKey) {
       view.cellKey = ck;
       const A = new THREE.Color(V('cellColor')), B = new THREE.Color(V('cellColorB')), H = new THREE.Color(V('hintColor')), X = new THREE.Color(V('refuseColor')), W = new THREE.Color(V('winColor'));
-      const last = S.l?.[1] ?? -1;
+      const last = S.l?.[1] ?? -1, hs = hintStyle(P.cellShape), m4 = new THREE.Matrix4();
       for (let i = 0; i < cols * rows; i++) {
         const c = i % cols, r = Math.floor(i / cols), col = view.color.copy(V('checker') && (c + r) % 2 ? B : A);
         if (i === last) col.lerp(W, 0.3);
-        if (hintCells.has(i)) col.lerp(H, 0.55);
+        if (hintCells.has(i)) col.lerp(H, hs.tint);
+        if (view.rings) { if (hintCells.has(i) && !win?.has(i)) { const p = G.centre(c, r); m4.makeTranslation(p.x - G.x, 0.068, p.z - G.z); } else m4.makeScale(0, 0, 0); view.rings.setMatrixAt(i, m4); }
         if (sel && sel[1] * cols + sel[0] === i) col.lerp(W, 0.7);
         if (win?.has(i)) col.lerp(W, 0.85);
         if (i === fl) col.copy(X);
         view.cells.setColorAt(i, col);
       }
       view.cells.instanceColor.needsUpdate = true;
+      if (view.rings) { view.rings.instanceMatrix.needsUpdate = true; view.rings.material.color.set(V('hintColor')); }
     }
     view.slab.material.color.set(V('boardColor'));
     view.rimMat.color.set(V('boardColor')); view.rimMat.emissive.set(cur && playing() && !over() ? cur.color : '#000000');

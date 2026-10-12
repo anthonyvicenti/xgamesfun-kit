@@ -47,6 +47,7 @@ import { assembleManifest } from './lib/slots-lib.mjs';
 import { withDefaults, check } from './lib/schema.mjs';
 import { loadWorldSubject, checkWorld } from './lib/world-check.mjs';
 import { decideModules, AUDIO_FILES, indexHtml, mainJs, attribution, forgeModules } from './create.mjs';
+import { loopOf, flowOf, flowParts } from './catalog.mjs';
 import { adopt } from '../../multiplayer/party/adopt.mjs';
 import { checkKitReleased } from '../../multiplayer/party/manifest.mjs';
 
@@ -75,6 +76,13 @@ export function fillMissing(cur, def, { path = '', skip = new Set(), deep = true
     if (deep && isObj(cur[k]) && isObj(v)) fillMissing(cur[k], v, { path: p, skip, deep, added });
   }
   return added;
+}
+
+// the flow create gives the spec's loop (kit/loops/<id>), as create decides it: without it a flow with no round clock
+// (endless, turns) would be given create's 120 s round.seconds
+async function flowUseOf(spec) {
+  const id = flowOf(loopOf(spec)), flow = id ? (await flowParts()).find(f => f.id === id && f.manifest) ?? null : null;
+  return flow && flow.id !== 'round' && spec.round?.mode !== 'world' ? { id: flow.id, params: withDefaults(flow.manifest.params ?? {}, spec.round?.params ?? {}), sounds: flow.module?.sounds ?? {} } : null;
 }
 
 // game.json blocks that belong to the game (the agent's or the creator's words and rules): never filled from defaults
@@ -113,7 +121,7 @@ export async function upgrade(gameDir, { out = null, world = false, log = () => 
     const standinLook = await importKitModule(join(KIT, 'core/standins/look.js'));
     const lookPreset = lookMod ? (id, time) => { const v = lookMod.presetValues?.(id, time) ?? lookMod.presets?.[id]; return v ? clone(v) : null; } : null;
     const lookConfig = lookMod?.lookConfig ? (id, time) => { const c = clone(lookMod.lookConfig(id, { time })); delete c.id; return c; } : null;
-    fresh = await specToConfig(spec, { modules, lookPreset, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults });
+    fresh = await specToConfig(spec, { modules, lookPreset, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults, flow: await flowUseOf(spec) });
   }
   const game = await readJson('config/game.json');
   if (fresh) changes.config.push(...fillMissing(game, fresh.game, { skip: GAME_SKIP }).map(p => `config/game.json${p}`));
@@ -309,7 +317,7 @@ async function upgradeForge(dir, { src, out, record, t0 }) {
       const forgeLib = await (await importPart(join(FORGE, 'tools/library.mjs'), 'the forge engine (research/gf-forge)')).forgeLibrary();
       const lookConfig = mods.look?.lookConfig ? (id, time) => { const c = clone(mods.look.lookConfig(id, { time })); delete c.id; return c; } : null;
       const standinLook = await importKitModule(join(KIT, 'core/standins/look.js'));
-      fresh = await specToConfig(spec, { modules, lookPreset: null, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults: {}, worldConfig: (s, o) => mods.world.worldConfig(s, { ...o, library: forgeLib }) });
+      fresh = await specToConfig(spec, { modules, lookPreset: null, lookConfig, standinPresetValues: standinLook.presetValues, mechanicDefaults: {}, worldConfig: (s, o) => mods.world.worldConfig(s, { ...o, library: forgeLib }), flow: await flowUseOf(spec) });
     }
   }
   if (fresh) {
