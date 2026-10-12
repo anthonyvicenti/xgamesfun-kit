@@ -110,7 +110,7 @@ setTimeout(paintWallet, 500);
 
 // ---- tabs ----
 // The network badge belongs to the web3 side: hidden until the game has web3 settings or the person opens a web3 tab.
-const WEB3_TABS = new Set(['token', 'shop']);
+const WEB3_TABS = new Set(['economy']);
 let networkShown = false;
 const paintNetwork = id => { $('#network').hidden = !(networkShown || WEB3_TABS.has(id)); };
 
@@ -152,8 +152,11 @@ async function loadTabs(ctx) {
     panels.append(p);
   }
   window.addEventListener('pagehide', () => { for (const off of cleanups) { try { off(); } catch {} } });
-  const want = store.get('tab');
+  // a link to a tab (#economy, or #economy?flow=economy from an agent's tool) wins over the remembered tab
+  const linked = () => decodeURIComponent(location.hash.slice(1).split('?')[0]);
+  const want = tabs.some(t => t.id === linked()) ? linked() : store.get('tab');
   if (tabs.length) await select(tabs.some(t => t.id === want) ? want : tabs[0].id);
+  window.addEventListener('hashchange', () => { if (tabs.some(t => t.id === linked())) select(linked()); });
   return tabs;
 }
 
