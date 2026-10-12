@@ -139,10 +139,10 @@ on a fresh `create --from` with the current kits; record the result in `example.
 
 `tests/try-it-shots.mjs <out dir> [port]` takes the screenshots `docs/TRY-IT.md` shows (`docs/try-it/01` to `10`) from real runs of the examples; run it again when the studio page or an example changes.
 
-## The studio's web3 tabs
+## The studio's web3 tab
 
-The Token and Shop tabs are off. `GET /api/studio/tabs` (`server/routes/studio.mjs`) leaves `token.js` and `shop.js` out of the
-list the page builds its tab row from, so they are neither in the page nor reachable by keyboard, unless the dev server
+The Economy tab (`studio/tabs/economy.js`; it replaced the Token and Shop tabs) is off. `GET /api/studio/tabs`
+(`server/routes/studio.mjs`) leaves `economy.js` out of the list the page builds its tab row from, so they are neither in the page nor reachable by keyboard, unless the dev server
 was started with `GAMESFUN_WEB3=1` (the variable that also lists the MCP server's `web3_*` tools) or the game has a
 `gamesfun.json`. `tests/web3-switch.test.mjs` holds both ways.
 

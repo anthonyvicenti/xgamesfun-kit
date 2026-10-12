@@ -1,6 +1,6 @@
 // Requests an agent (the CLI or an MCP tool) leaves for the creator: "launch this token", "put the economy live".
 // Agents prepare; humans approve. A request is a small file of public inputs in the git-ignored
-// `<kit>/.gamesfun/web3/requests/`, which the studio's Token and Shop tabs show with Review and Dismiss. Nothing in a
+// `<kit>/.gamesfun/web3/requests/`, which the studio's Economy tab shows with Review and Dismiss. Nothing in a
 // request can sign or spend: approving runs the normal flow, where the creator sees every step in their wallet.
 import { randomBytes } from 'node:crypto';
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises';

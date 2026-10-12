@@ -1,4 +1,4 @@
-// Small DOM pieces the Token and Shop tabs share: an element helper, the tabs' styles (scoped under .gfw3, themed
+// Small DOM pieces the Economy tab uses: an element helper, the tabs' styles (scoped under .gfw3, themed
 // through the studio's --studio-* variables when it sets them), the wallet chip, the request banner, the picture
 // picker and the approval panel that walks a flow in the creator's wallet.
 import { apiOf, cancelled, pictureUrl, runFlow, short, walletOf } from './client.js';
@@ -114,12 +114,13 @@ export function walletChip(t, onChange) {
   );
 }
 
-/** Requests an agent left for this tab ("launch", "publish"): Review starts the approval, Dismiss drops it. */
+const ASKED = { launch: (r) => `Your agent asked to launch $${r.input?.symbol ?? 'a token'}`, publish: () => 'Your agent asked to put the shop on sale', economy: () => 'Your agent asked to put the economy live' };
+/** Requests an agent left for this tab ("launch", "publish", "economy"): Review starts the approval, Dismiss drops it. */
 export function requestBanner(t, state, kind, { onReview, onDone }) {
   const list = state.requests.filter((r) => r.kind === kind);
   return list.map((r) =>
     h('div', { class: 'card', 'data-testid': 'agent-request' },
-      h('strong', {}, kind === 'launch' ? `Your agent asked to launch $${r.input?.symbol ?? 'a token'}` : 'Your agent asked to put the shop on sale'),
+      h('strong', {}, (ASKED[kind] ?? ASKED.publish)(r)),
       r.summary ? h('p', { class: 'dim' }, r.summary) : null,
       h('p', { class: 'dim' }, `From ${r.from}, ${new Date(r.createdAt).toLocaleString()}. Nothing happens until you approve each step in your wallet.`),
       h('div', { class: 'w3-row' },

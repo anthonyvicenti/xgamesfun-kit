@@ -1,4 +1,4 @@
-// What the Token and Shop tabs share: calls to the dev server's /api/web3 routes, the wallet, and the approval runner
+// What the Economy tab uses: calls to the dev server's /api/web3 routes, the wallet, and the approval runner
 // that walks a flow step by step (prepare on the server → the wallet signs here → complete on the server).
 import { studioWallet } from './wallet.js';
 
@@ -14,7 +14,7 @@ export function apiOf(ctx) {
   };
 }
 
-/** One wallet per studio page, shared by both tabs. */
+/** One wallet per studio page, shared by every web3 tab. */
 let shared = null;
 export function walletOf(ctx, pick) {
   shared ??= studioWallet(ctx?.wallet, 'solana:devnet', pick);

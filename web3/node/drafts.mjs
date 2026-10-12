@@ -91,7 +91,7 @@ export async function setCurrency({ gameDir, rpc, network }, { currency }) {
   return updateConfig(gameDir, async (config) => {
     if (isLive(config)) fail(`The shop is live and priced in ${config.shop.currency?.symbol}. A live shop keeps its currency.`);
     if (next === null) {
-      if (!config.token) fail('This game has no token yet. Launch or link one in the Token tab.');
+      if (!config.token) fail('This game has no token yet. Launch or link one in the Economy tab.');
       next = defaultCurrency(config);
     }
     const shop = await ensureShop(gameDir, config);

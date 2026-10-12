@@ -1,10 +1,11 @@
-// The dev server's web3 API (mounted by server/routes/web3.mjs under /api/web3): the studio's Token and Shop tabs read
+// The dev server's web3 API (mounted by server/routes/web3.mjs under /api/web3): the studio's Economy tab reads
 // the game's setup here, edit drafts, and run approvals. The server builds every transaction with the creator's own
 // RPC; the creator's wallet signs in the studio page; the server checks what comes back and sends it. It never holds
 // the creator's key.
 import path from 'node:path';
 import { LIMIT, RARITIES, RARITY_WEIGHTS, RuleError } from '../gf-web3/rules.js';
 import { chainStatus, mintInfo } from './chain.mjs';
+import { economyRoutes } from './economy-routes.mjs';
 import { linkToken, removeBox, removeItem, saveBox, saveItem, setCurrency, setShop, unlinkToken } from './drafts.mjs';
 import { createFlowEngine, FlowError } from './flow-engine.mjs';
 import { economyStatus } from './economy.mjs';
@@ -111,6 +112,7 @@ export function createWeb3Api(ctx) {
   }
 
   const routes = [
+    ...economyRoutes({ gameDir, log: ctx.log }),
     { method: 'get', path: '/state', handler: handle(state, ctx.log) },
     {
       method: 'get',
