@@ -90,8 +90,13 @@ what wearing it changes.
   needs its mint address and decimals from the creator (ask; never guess an address).
 - **Decisions and contests need the authority** while the game runs (`W-AUTHORITY`): by default that is the
   creator's own wallet, signing from the studio page.
-- **A claim from the game is not proof.** The game runs in the player's browser: anyone there can post "I cleared
-  it". A payout the keeper signs (`"signedBy": "keeper"`) must have `caps` (`each`, `perPlayerPerDay`, `perDay`;
+- **Rewards for beating the game: confirming the win is the creator's job, on their own end.** The game runs in
+  the player's browser, so anyone there can post "I cleared it", and nothing in the kit or the program can tell a
+  real win from a typed one. Whoever pays out for completing the game must confirm, with their own server or
+  backend, that the player really beat it (a replay of the run, their own server's view of the match, whatever
+  fits their game) before a payout is asked for. Say this to the creator in plain words whenever an economy pays
+  for a result only the game knows, and do not promise that the kit checks it.
+- **What the kit's keeper does check is not proof of a win.** A payout the keeper signs (`"signedBy": "keeper"`) must have `caps` (`each`, `perPlayerPerDay`, `perDay`;
   `E-KEEPER-CAPS`) and should have `proof` (`{ "payment": "<the attempt they pay for>", "after": "<the least time a
   clear takes>" }`, else `W-KEEPER-PROOF`): the keeper then pays only an attempt the receiver paid on chain, once.
   Keep the prize at or under what the caps allow, and tell the creator what a cheater can still get (the caps).

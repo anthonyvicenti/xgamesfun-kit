@@ -12,7 +12,9 @@ lines in this order. Use the tools' numbers; round them sensibly; name currencie
 4. **What setting it up costs.** "Going live costs about 5.02 SOL on devnet, in one wallet approval: 5 SOL is the
    seed, the rest is rent and fees." A token launched on the curve is its own approval first.
 5. **What they decide while it runs.** If anything needs the authority (a payout, a contest's winner, a held item),
-   say what and how often: "Each week you sign the top three's payouts from the studio page."
+   say what and how often: "Each week you sign the top three's payouts from the studio page." If a payout rewards
+   beating the game (a clear, a win, a score), add: "Checking that a player really beat the game is up to you, on
+   your own server or backend: the kit can't tell a real win from a faked one."
 6. **Chance that pays money, flagged.** If the checker raised `W-CHANCE-PRIZE`: "Players pay for a chance at money.
    That is gambling in many places once it is real money; this runs on devnet only."
 7. **Anything else the checker warned about**, in a sentence each (a mint that can freeze accounts, a fee that is

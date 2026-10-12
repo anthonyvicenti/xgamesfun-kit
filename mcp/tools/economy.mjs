@@ -286,6 +286,8 @@ export function explainEconomy(economy, { now = Math.floor(Date.now() / 1000) } 
   section('What runs by itself', [...sim.schedules.map((s) => `“${m.schedules.find((x) => x.key === s.key)?.name ?? s.key}” ${s.says}; anyone can run it when it is due.`), ...sim.lotteries.map((l) => `“${l.name}” is drawn every ${num(l.roundDays)} days by MagicBlock’s oracle; anyone can ask for the draw (${num(sim.fees.oracleSol)} SOL to the oracle) and pay the places.`)]);
   const authority = play.filter((s) => s.signer === 'authority');
   section(`What only the authority signs while it runs (${m.authority === 'owner' ? 'your wallet, from the studio page' : `the key ${m.authority}`})`, authority.map((s) => `${s.says} (${s.part}, ${s.ix}).`));
+  // The creator, 2026-10-12: confirming someone beat the game is the game owner's to do, on their own end.
+  if (authority.length) lines.push('- Checking that a player really beat the game, before any of these pays them, is up to you, on your own server or backend: the game runs in the player’s browser and the kit can’t tell a real win from a faked one.');
 
   const s = c.setup;
   lines.push('', 'What setting it up costs');
