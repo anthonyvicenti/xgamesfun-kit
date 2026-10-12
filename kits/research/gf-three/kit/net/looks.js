@@ -47,6 +47,8 @@ export function listenForLoadout(win = globalThis) {
 }
 /** The page's latest loadout for this player: { loadout (undefined when none was given), from: 'window'|'url'|'message' }. */
 export const pageLoadout = () => ({ loadout: latest, from });
+/** fn(loadout, from, replyTo) each time the page hands a loadout after this call (a preview subject's try-on). → stop() */
+export function onPageLoadout(fn) { subs.push(fn); return () => { const i = subs.indexOf(fn); if (i >= 0) subs.splice(i, 1); }; }
 
 /**
  * The session's side: this player's loadout and everyone else's. live: a live round (net.active).

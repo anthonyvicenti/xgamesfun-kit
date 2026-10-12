@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
@@ -9,6 +10,8 @@ const usage = `Usage:
   gamesfun slots get <id> [--game <dir>] [--json]
   gamesfun slots set <id> <value> [--game <dir>]              a colour, number, text, … (checked against the slot)
   gamesfun slots set <id> --file <path> [--game <dir>]        a model, picture or sound: same kind, same path
+  gamesfun slots set <id> @<table.json> [--game <dir>]        a table of items (mechanic.melee.weapons): the whole list,
+                                                               each entry checked; a new one gets its own picture and slots
   gamesfun slots write [dir]                                   rebuild assets.json from the declarations
   gamesfun slots check [dir]                                   exit 1 when assets.json is out of date
 
@@ -81,8 +84,12 @@ export default {
     }
     const raw = negative ?? positionals.slice(1).join(' ');
     if (!raw) throw new UsageError(`slots set ${id} needs a value or --file <path>\n\n${usage}`);
-    const r = await setValue(dir, id, raw);
+    // @<file>: a json slot's value from a file (a whole table is long for a command line)
+    const value = raw.startsWith('@') && (await findSlot(dir, id)).type === 'json' ? await readFile(path.resolve(raw.slice(1)), 'utf8') : raw;
+    const r = await setValue(dir, id, value);
     if (values.json) return printJson(r);
-    console.log(`slots: ${id} ${fmt(r.before)} → ${fmt(r.after)} (${r.file} ${r.pointer})`);
+    const long = v => (JSON.stringify(v) ?? '').length > 80;
+    console.log(`slots: ${id} ${long(r.before) || long(r.after) ? 'written' : `${fmt(r.before)} → ${fmt(r.after)}`} (${r.file} ${r.pointer})`);
+    for (const p of r.pictures ?? []) console.log(`  picture: ${p}`);
   }),
 };

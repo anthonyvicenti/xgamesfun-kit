@@ -75,6 +75,8 @@ async function provider(gameDir, rel, { scenic = false, forge = false } = {}) {
   if (mod.error) throw new Error(`${rel}: could not be imported in Node (${mod.error.message}); a module must not touch the DOM at import`);
   return mod;
 }
+/** A kit module as this game carries it (its gf/three copy, else the kit source): a mechanic's manifest, for one. */
+export const kitModule = (gameDir, rel) => provider(gameDir, rel);
 // A module's declarations: slotsFor(<its own config>, ...extra) when it has one (look: config/look.json; world:
 // config/world.json, the prop catalog and the library's licences; character: config/characters.json), else `slots`.
 function fromModule(mod, own, ...extra) {
@@ -124,10 +126,12 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null,
 
   // mechanics with their own module declare their own slots; the rest get param slots from core
   cfg.mechanicSlots = new Set();
-  const mechSlots = [];
+  const mechSlots = [], itemDecls = [];
   for (const [i, m] of (cfg.game.mechanics ?? []).entries()) {
     if (!mods.mechanics?.includes(m.id)) continue;
     const mod = await provider(gameDir, `mechanics/${m.id}/index.js`);
+    // its things (kit/assets/items.js; manifest.items): indexed below, once every slot is known
+    for (const it of Array.isArray(mod.manifest?.items) ? mod.manifest.items : []) itemDecls.push({ it, m, i });
     const templates = typeof mod.slotsFor === 'function' ? mod.slotsFor({ ...m, index: i, base: `/mechanics/${i}/params` }, cfg) : (mod.slots ?? []);
     if (!templates.length) continue;
     cfg.mechanicSlots.add(m.id);
@@ -251,6 +255,24 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null,
     { id: 'look', label: 'Look and light', query: '?gf-show=look', groups: ['look'] },
   ];
 
+  // the game's items (open builder wave 10): each mechanic's things, from its own manifest, as slot ids, so a page lists
+  // and edits them with no list of mechanics of its own. A table is its json slot (its constraints.item says what one
+  // entry is); a single item is the mechanic's own params, each field the slot that points at it.
+  const byPointer = new Map(finalSlots.filter(s => s.source?.file === 'config/game.json' && s.source.pointer).map(s => [s.source.pointer, s.id]));
+  const items = [];
+  for (const { it, m, i } of itemDecls) {
+    const base = { mechanic: m.id, ...(m.as ? { as: m.as } : {}), noun: it.noun, ...(it.nouns ? { nouns: it.nouns } : {}) };
+    if (it.single) {
+      const sid = k => byPointer.get(`/mechanics/${i}/params/${k}`);
+      let picture = null;
+      try { picture = typeof it.picture === 'function' ? it.picture(m.params ?? {}, cfg.game, has) : it.picture ?? null; } catch {}
+      items.push({ ...base, single: true, picture: picture && has(picture) ? picture : null, fields: (it.fields ?? []).map(sid).filter(Boolean), front: (it.front ?? []).map(sid).filter(Boolean) });
+    } else {
+      const slot = byPointer.get(`/mechanics/${i}/params/${it.key}`);
+      if (slot) items.push({ ...base, table: slot });
+    }
+  }
+
   const manifest = {
     schema: 'gf-assets/1',
     game: rec.game ?? 'gf-three-game',
@@ -259,6 +281,7 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null,
     groups: GROUPS.filter(([id]) => used.has(id)).map(([id, label]) => ({ id, label })),
     showcase,
     slots: finalSlots,
+    ...(items.length ? { items } : {}),
     sounds: sounds ?? { version: 1, sounds: {} },
     ...(cfg.catalog ? { embed: [{ path: 'config/props.json', reason: 'the prop catalog entries the world module reads (sizes, colliders, materials)' }] } : {}),
     // a forge game draws only with WebGPU (CONTRACT §8 forge): capture, the gates and the worker's play-tests need an adapter

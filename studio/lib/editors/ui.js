@@ -67,8 +67,10 @@ export function askBox(ctx, { label, placeholder, compose, selection = () => nul
   return el('div', { className: 'ask-box' }, el('label', { className: 'ask-label' }, label), box, el('div', { className: 'ask-row' }, send, state));
 }
 
-/** A number as a slider with a plain label, its unit and its range (the slot's own min and max: never past them). */
-export function slider(slot, value, onChange, { compare = null } = {}) {
+/** A number as a slider with a plain label, its unit and its range (the slot's own min and max: never past them).
+ *  typed: 'raw' sends a number typed in the box as it is, so the kit can refuse one outside the range in its own words
+ *  (the slider itself still stops at the ends); the default holds it inside the range. */
+export function slider(slot, value, onChange, { compare = null, typed = 'clamp' } = {}) {
   const r = fieldRange(slot), unit = slot.constraints?.unit ?? '';
   const num = el('input', { type: 'number', value: value ?? '', step: r?.step ?? (slot.type === 'integer' ? 1 : 'any'), 'aria-label': `${slot.label} value` });
   const kids = [];
@@ -80,7 +82,11 @@ export function slider(slot, value, onChange, { compare = null } = {}) {
     range.addEventListener('change', () => onChange(clampField(slot, range.value), true));
     kids.push(range);
   }
-  num.addEventListener('change', () => { const v = clampField(slot, num.value); num.value = v; if (range) range.value = v; onChange(v, true); });
+  num.addEventListener('change', () => {
+    const n = Number(num.value);
+    if (typed === 'raw' && Number.isFinite(n) && num.value.trim() !== '') { onChange(slot.type === 'integer' ? Math.round(n) : n, true); return; }
+    const v = clampField(slot, num.value); num.value = v; if (range) range.value = v; onChange(v, true);
+  });
   const ends = r ? el('span', { className: 'ends muted small' }, `${r.min}–${r.max}${unit ? ` ${unit}` : ''}`) : unit ? el('span', { className: 'muted small' }, unit) : null;
   const bar = compare?.length ? el('span', { className: 'peers muted small' }, 'Others: ', compare.map(p => `${p.name} ${p.value}${unit ? ` ${unit}` : ''}`).join(' · ')) : null;
   return el('div', { className: 'field' }, el('label', { className: 'field-label' }, slot.label), el('div', { className: 'field-edit' }, ...kids, num, ends), bar);

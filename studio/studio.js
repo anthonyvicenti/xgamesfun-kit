@@ -5,11 +5,15 @@
 //   api(path, body?, method?)  the dev server's API: GET without a body, POST with one (JSON, or raw for a Blob/ArrayBuffer);
 //                        a third argument sets the method (PATCH with a JSON body, DELETE with none);
 //                        path "game/slots" or "/api/game/slots"; resolves to the parsed JSON, rejects with the error text
+//                        (an Error whose `problems` holds the kit's words, one a line, when a slot write was refused)
 //   wallet               the Wallet Standard connection the studio owns (studio/wallet.js): list(), connect(name?),
 //                        disconnect(), account, address, feature(name), onChange(fn)
 //   toast(msg, kind?)    a short message; kind 'ok' | 'error'
-//   preview              { reload(), show(path), overlay(node|null), frame } the game frame on the left ("/game/?gf-show=prop.ball");
-//                        overlay lays an editor's own view over the game (one at a time)
+//   preview              { reload(), show(path), overlay(node|null), frame, send(msg, {reply, timeout}), hold(files, ms) } the game
+//                        frame on the left ("/game/?gf-show=prop.ball"); overlay lays an editor's own view over the game (one
+//                        at a time); send posts a message to the game and resolves to its answer of type `reply` (null when
+//                        none comes in time: gf:slot → gf:slot-applied, gf:loadout → gf:loadout-applied); hold keeps the
+//                        next live reload away when only these files change (a value the game already took live)
 //   selection            { get(), set(sel|null), onChange(fn) } what the person picked (a slot or object, {id, label}); it travels
 //                        with their next change request. A game frame may post { gf: 'select', id, label } to pick one.
 //   on(event, fn)        dev-server events: 'game' (the game's files changed: { files }), 'verify' (a run finished)
@@ -28,7 +32,7 @@ async function api(path, body, method) {
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  if (!res.ok) throw new Error((data && data.error) || `${res.status} ${res.statusText}`);
+  if (!res.ok) { const e = new Error((data && data.error) || `${res.status} ${res.statusText}`); if (Array.isArray(data?.problems)) e.problems = data.problems; throw e; }
   return data;
 }
 
@@ -54,7 +58,23 @@ const preview = {
   reload() { try { frame.contentWindow.location.reload(); } catch { frame.src = this.path; } },
   // an editor's own view laid over the game (the map painter, the layout's top view); null takes it away
   overlay(node) { const wrap = frame.parentElement; wrap.querySelector(':scope > .preview-overlay')?.remove(); if (node) { node.classList.add('preview-overlay'); wrap.append(node); } },
+  // a message to the game (same origin), and its answer of type `reply` from that frame, or null after `timeout` ms
+  send(msg, { reply = null, timeout = 1500 } = {}) {
+    const win = frame.contentWindow;
+    if (!win) return Promise.resolve(null);
+    return new Promise(resolve => {
+      let done = false;
+      const finish = v => { if (done) return; done = true; window.removeEventListener('message', on); clearTimeout(t); resolve(v); };
+      const on = e => { if (e.source === win && e.origin === location.origin && e.data?.type === reply && (msg.id === undefined || e.data.id === msg.id)) finish(e.data); };
+      if (reply) window.addEventListener('message', on);
+      const t = setTimeout(() => finish(null), reply ? timeout : 0);
+      try { win.postMessage(msg, location.origin); } catch { finish(null); }
+    });
+  },
+  // the next file change that touches only `files` (within ms) does not reload the game: it already took the value live
+  hold(files, ms = 4000) { held = { files: new Set(files), until: Date.now() + ms }; },
 };
+let held = null;
 $('#preview-mode').addEventListener('change', e => { store.set('preview', e.target.value); preview.show(e.target.value); });
 $('#preview-reload').addEventListener('click', () => preview.reload());
 
@@ -87,7 +107,10 @@ let reloadTimer = null;
 es.addEventListener('game', e => {
   const data = JSON.parse(e.data || '{}');
   clearTimeout(reloadTimer);
-  reloadTimer = setTimeout(() => { bridge.forget(); preview.reload(); fire('game', data); showTitle(); }, 120);
+  const files = Array.isArray(data.files) ? data.files : [];
+  const live = held && Date.now() < held.until && files.length && files.every(f => held.files.has(f));
+  if (live) held = null;
+  reloadTimer = setTimeout(() => { if (!live) { bridge.forget(); preview.reload(); } fire('game', { ...data, live: !!live }); showTitle(); }, 120);
 });
 // The title in the bar follows the game's files: a change by the session or a roll-back may rename the game.
 function showTitle() {

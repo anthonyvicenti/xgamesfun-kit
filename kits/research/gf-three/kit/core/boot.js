@@ -27,7 +27,8 @@ import { createMenu, loadSettings } from '../ui/menu.js';
 import { listenForHost, host } from '../net/host.js';
 import { createSession, seatPalette } from '../net/session.js';
 import { createPlayers } from '../net/players.js';
-import { listenForLoadout, pageLoadout } from '../net/looks.js';
+import { listenForLoadout, pageLoadout, onPageLoadout } from '../net/looks.js';
+import { listenForSlots } from './live-slots.js';
 import { createBrain, createBots, defaultBot } from '../bots/bots.js';
 import { createFair } from './fair.js';
 import { rayCylinder, BODY_RADIUS } from './aim.js';
@@ -236,6 +237,8 @@ export async function boot({ rules = {} } = {}) {
     ctx.fair.setup();
     for (const m of list) { try { await m.setup?.(ctx); } catch (e) { console.error(e); } }
     try { await rules.setup?.(ctx); } catch (e) { console.error(e); throw e; }
+    // the studio page changes a value slot while the game runs (dev only: kit/core/live-slots.js)
+    if (!backdrop) listenForSlots(ctx, { win: window, net });
 
     function onPhase(ph) {
       for (const p of ctx.players.owned()) if (p.controller) p.controller.enabled = ph === 'playing';
@@ -651,10 +654,13 @@ function coverageReport(scene) {
 
 async function showMode(ctx, subject, mods, characterFor, look) {
   const state = await runShow(ctx, subject, { spawnCharacter: mods.character.spawnCharacter, characterFor, mechanics: new Map() });
+  // a try-on: the page hands a new loadout while the subject shows (the Skins tab's colour or body), and the subject
+  // wears it in place, with no reload (the editors' request 7)
+  onPageLoadout(raw => { const r = assets.setLoadout('show', raw ?? null); if (r.changed) state.restyle?.(); });
   window.__game = Object.freeze({
     kit: 'gf-three', engine: ENGINE, version: VERSION, phase: 'show', subject,
     get ready() { return state.ready; },
-    snapshot: () => ({ kit: 'gf-three', version: VERSION, phase: 'show', subject, ready: state.ready }),
+    snapshot: () => ({ kit: 'gf-three', version: VERSION, phase: 'show', subject, ready: state.ready, look: { key: assets.loadout('show')?.key ?? '', restyled: state.restyled ?? 0 } }),
     coverage: () => coverageReport(ctx.scene),
     slots: () => assets.stats(ctx.scene, ctx.camera),
   });

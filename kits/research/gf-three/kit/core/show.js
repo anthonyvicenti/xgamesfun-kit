@@ -20,10 +20,26 @@ export async function runShow(ctx, subject, { spawnCharacter, characterFor, mech
   if (subject.startsWith('character.')) {
     const role = subject.slice('character.'.length) || 'player';
     const { bodySlot, height } = characterFor(role);
-    const c = await spawnCharacter(ctx, { player: { id: 'show', name: '', color: palette[0] }, bodySlot, tint: palette[0], height });
+    const who = { id: 'show', name: '', color: palette[0] };
+    let c = await spawnCharacter(ctx, { player: who, bodySlot, tint: palette[0], height });
     scene.add(c.object3d); c.locomotion?.(0, true); ctx.onFrame.push(dt => c.update?.(dt));
     hideLayout();
     state.radius = Math.max(2.2, c.height * 1.6); state.height = c.height * 0.55; state.spin = 0.5; state.pitch = 0.12;
+    // a new loadout from the page (boot's onPageLoadout): the subject is made again in it, turned where the old one was,
+    // and takes its place once loaded; a newer try-on that lands first wins
+    let serial = 0;
+    state.restyle = async () => {
+      const mine = ++serial;
+      try {
+        const own = ctx.assets.own?.(`character.tint.${role}`, who) ?? palette[0];
+        const n = await spawnCharacter(ctx, { player: who, bodySlot, tint: own, height });
+        if (mine !== serial) { n.dispose?.(); return; }
+        n.object3d.rotation.copy(c.object3d.rotation); n.object3d.position.copy(c.object3d.position);
+        scene.add(n.object3d); n.locomotion?.(0, true);
+        const old = c; c = n; old.dispose?.(); old.object3d.removeFromParent();
+        state.restyled = (state.restyled ?? 0) + 1;
+      } catch (e) { console.warn(`gf-three show: the new look did not load (${e.message}); the last one stays`); }
+    };
   } else if (subject.startsWith('prop.')) {
     const slot = subject;
     hideLayout();

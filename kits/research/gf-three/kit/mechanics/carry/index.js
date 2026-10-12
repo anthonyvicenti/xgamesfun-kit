@@ -340,6 +340,9 @@ export const manifest = {
   engines: ['party', 'scenic'],
   needs: { parts: [], world: [] },
   uses: ['pickup', 'projectile'],
+  // its thing (kit/assets/items.js): the one kind of thing players carry and throw, the mechanic's own params
+  items: [{ single: true, noun: 'thing to carry', fields: ['throwSpeed', 'reach', 'maxHeld', 'count', 'size', 'throwArc', 'bounciness', 'color'], front: ['throwSpeed', 'count', 'maxHeld'],
+    picture: (p, game) => { const n = p.prop || (game?.props ?? [])[0]?.name; return n ? `prop.${n}` : 'mechanic.carry.color'; } }],
   owns: p => [
     { res: `player.socket.${p.socket}`, why: `the held item sits on the ${p.socket} socket (params.socket)`, free: 'set carry params.socket to another socket (hand_l, head, back)' },
     ...(p.grabAction ? [{ res: `input.${p.grabAction}`, shared: true, why: `${p.grabAction} grabs an item in reach (params.grabAction)`, free: 'set carry params.grabAction to "" and call carry.grab(p) from rules.js' }] : []),

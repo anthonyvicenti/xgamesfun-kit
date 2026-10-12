@@ -55,7 +55,7 @@ export function createRouter({ log = () => {} } = {}) {
         if (out !== undefined && !res.headersSent && !res.writableEnded) sendJson(res, 200, out);
         else if (!res.headersSent && !res.writableEnded) sendJson(res, 204, null);
       } catch (e) {
-        if (e instanceof HttpError) sendJson(res, e.status, { error: e.message });
+        if (e instanceof HttpError) sendJson(res, e.status, { ...(e.extra ?? {}), error: e.message });
         else { log(`api ${r.area}: ${req.method} ${url.pathname}: ${e.stack ?? e.message}`); sendJson(res, 500, { error: e.message }); }
       }
       return true;

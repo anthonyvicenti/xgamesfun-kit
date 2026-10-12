@@ -2,7 +2,8 @@
 import { BASE_HEADERS } from './security.mjs';
 
 export class HttpError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
+  /** extra: more fields for the JSON body beside `error` (a refused slot write sends its `problems`, in words) */
+  constructor(status, message, extra = null) { super(message); this.status = status; this.extra = extra; }
 }
 
 export function sendJson(res, status, body) {

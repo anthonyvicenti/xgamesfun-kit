@@ -133,6 +133,7 @@ Choose the smallest edit that does what the person asked:
 |---|---|
 | a colour, size, speed, count, time, strength | a value slot: `npx gamesfun slots set <id> <value>`. No code |
 | their own model, picture or sound in place of one | a file slot: `npx gamesfun slots set <id> --file <path>` (same kind of file) |
+| one more item like one the game has (a weapon), a rename, one taken out | its table slot (`assets.json → items` names it, e.g. `mechanic.melee.weapons`): write the whole list with `npx gamesfun slots set <id> @table.json`. The kit checks every entry and gives a new one its own picture and slots. No code |
 | a new rule, win or lose condition, behaviour | `rules.js` and the config it reads |
 | something the kit can't do (not in the catalog) | the closest thing, and say plainly what you left out |
 

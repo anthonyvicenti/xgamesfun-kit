@@ -12,15 +12,26 @@
 //   { type: 'gf:friends' }                              Play with friends (the page opens its friends lobby)
 //   { type: 'gf:open', url }                            a loot box link from the items view (the page opens it if it is
 //                                                        one of its own)
+//   { type: 'gf:econ-action', id }                      the player clicked one of the economy's buttons (the page signs,
+//                                                        or not, and answers with gf:economy)
 // The page, to the game:
-//   { type: 'gf:host', v: 1, wallet: true|false, friends: true|false, shop: true|false }
+//   { type: 'gf:host', v: 1, wallet: true|false, friends: true|false, shop: true|false,
+//     economy?: { actions: [{ id, kind, label, price?: { amount, currency }, says?, where }] } }
+//       kind: buy|openBox|craft|buyTickets|stake|unstake|hold|enter|claim; where: menu|pause|results|hud
+//       (no economy, or no actions: nothing of the economy is drawn anywhere)
 //   { type: 'gf:wallet', status: 'none'|'connecting'|'connected'|'error', wallets: [{name, icon}], address, short, name,
 //     icon, error, items: [{itemId, name, rarity, rarityName, image, wearable, worn, count, what}] | null,
 //     boxes: [{name, price, symbol, url}] }
+//   { type: 'gf:economy', v: 1, balances: [entry], tickets: [entry], stakes: [entry], claimable: [entry],
+//     pending: [actionId], error }, on every change; entry = { id, label?, amount?, symbol?, text? }. A HUD line
+//     (where 'hud') shows the entry whose id is its action's id; pending buttons wait (disabled) for the page.
+// The game draws what the page offers and reports clicks: it never signs, never prices and never decides anything of
+// the economy, and rules.js never sees any of it (CONTRACT §6g W2).
 // Only the window that said gf:host is answered and listened to, and only an ancestor (or the game itself, for QA)
 // may say it. Without a host (the game opened on its own, or a Studio preview) the menu says where wallets connect.
 
 let installed = false, hostWin = null, offers = null, wallet = null, sent = [];
+let economy = null, econState = null, econSent = [];
 const subs = [];
 
 function ancestors(win) {
@@ -45,6 +56,34 @@ function cleanWallet(d) {
     items, boxes: Array.isArray(d.boxes) ? d.boxes.slice(0, 12).map(b => ({ name: str(b?.name, 60), price: str(String(b?.price ?? ''), 24), symbol: str(b?.symbol, 12), url: str(b?.url, 400) })).filter(b => /^https?:/.test(b.url)) : [],
   };
 }
+// the economy (CONTRACT §6g W2): the page's buttons and its state, kept to the shapes the menu and the HUD draw
+export const ECON_KINDS = ['buy', 'openBox', 'craft', 'buyTickets', 'stake', 'unstake', 'hold', 'enter', 'claim'];
+export const ECON_WHERE = ['menu', 'pause', 'results', 'hud'];
+const econId = v => (typeof v === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(v) ? v : null);
+// an amount as the page wrote it: a number, or a decimal string (a token amount too big or too exact for a number)
+const amount = v => (Number.isFinite(v) ? v : typeof v === 'string' && v.length <= 40 && /^-?\d+(\.\d+)?$/.test(v.trim()) ? v.trim() : null);
+export function cleanEconomy(e) {
+  const seen = new Set(), actions = [];
+  for (const a of Array.isArray(e?.actions) ? e.actions.slice(0, 32) : []) {
+    const id = econId(a?.id), label = str(a?.label, 60).trim();
+    if (!id || seen.has(id) || !label || !ECON_KINDS.includes(a.kind) || !ECON_WHERE.includes(a.where)) continue;
+    const pa = a.price && typeof a.price === 'object' ? amount(a.price.amount) : null;
+    seen.add(id);
+    actions.push({ id, kind: a.kind, label, price: pa === null ? null : { amount: pa, currency: str(a.price.currency, 16) }, says: str(a.says, 140), where: a.where });
+  }
+  return { actions };
+}
+export function cleanEconState(d) {
+  const list = v => (Array.isArray(v) ? v.slice(0, 32).map(x => ({ id: econId(x?.id), label: str(x?.label, 40), amount: amount(x?.amount), symbol: str(x?.symbol, 16), text: str(x?.text, 60) }))
+    .filter(x => x.id && (x.amount !== null || x.text)) : []);
+  return { balances: list(d?.balances), tickets: list(d?.tickets), stakes: list(d?.stakes), claimable: list(d?.claimable),
+    pending: Array.isArray(d?.pending) ? d.pending.map(econId).filter(Boolean).slice(0, 32) : [], error: str(d?.error, 200) };
+}
+/** What a state entry says: the page's own text, else the amount and its symbol. */
+export const econText = x => (x ? x.text || `${x.amount}${x.symbol ? ` ${x.symbol}` : ''}` : '');
+/** A price as a button says it. */
+export const priceText = p => (p ? `${p.amount}${p.currency ? ` ${p.currency}` : ''}` : '');
+
 function emit() { for (const fn of subs.slice()) { try { fn(); } catch (e) { console.error(e); } } }
 
 /** Listen for the hosting page (boot calls this first, so an early answer is not missed) and say hello. */
@@ -53,11 +92,13 @@ export function listenForHost(win = globalThis) {
   const ok = src => src === win || ancestors(win).includes(src);
   win.addEventListener('message', e => {
     const d = e.data;
-    if (!d || typeof d !== 'object' || (d.type !== 'gf:host' && d.type !== 'gf:wallet')) return;
+    if (!d || typeof d !== 'object' || (d.type !== 'gf:host' && d.type !== 'gf:wallet' && d.type !== 'gf:economy')) return;
     if (!ok(e.source)) return;
-    if (d.type === 'gf:host') { hostWin = e.source; offers = { wallet: !!d.wallet, friends: !!d.friends, shop: !!d.shop }; emit(); return; }
+    if (d.type === 'gf:host') { hostWin = e.source; offers = { wallet: !!d.wallet, friends: !!d.friends, shop: !!d.shop }; economy = cleanEconomy(d.economy); emit(); return; }
     if (e.source !== hostWin) return;
-    wallet = cleanWallet(d); emit();
+    if (d.type === 'gf:economy') econState = cleanEconState(d);
+    else wallet = cleanWallet(d);
+    emit();
   });
   // say it again every second until a page answers (for 40 s): a page that loads its own script after the game started
   // (React hydrating the /play page) would miss a single hello, and with it the wallet and the player's loadout
@@ -87,6 +128,22 @@ export const host = {
   wear: (item, on) => post({ type: 'gf:wear', item, on: !!on }),
   friends: () => post({ type: 'gf:friends' }),
   open: url => post({ type: 'gf:open', url: String(url ?? '') }),
+  /** The economy's buttons and lines the page offers (CONTRACT §6g W2); none without a page. */
+  get economy() { return hostWin && economy ? economy : { actions: [] }; },
+  /** The page's last gf:economy state, or null. */
+  get econState() { return hostWin ? econState : null; },
+  /** The offers drawn at one place: 'menu', 'pause', 'results' or 'hud'. */
+  econAt: where => host.economy.actions.filter(a => a.where === where),
+  /** The state entry a HUD line shows: the one whose id is the action's (balances, then tickets, stakes, claimable). */
+  econValue(id) { const s = host.econState; if (!s) return null; for (const k of ['balances', 'tickets', 'stakes', 'claimable']) { const x = s[k].find(e => e.id === id); if (x) return x; } return null; },
+  /** A click on an economy button: only an offered button, never a HUD line. */
+  econAction(id) {
+    if (!host.economy.actions.some(a => a.id === id && a.where !== 'hud')) return false;
+    econSent.push(id); if (econSent.length > 40) econSent.shift();
+    return post({ type: 'gf:econ-action', id });
+  },
+  /** For the observation (verify check 22): what the page offers, its last state, and the clicks sent. */
+  observeEconomy() { return { offers: host.economy.actions, state: host.econState, sent: econSent.slice(-12) }; },
   /** For the observation (verify check 22): no addresses beyond the short one, no pictures. */
   observe() {
     const w = host.wallet;

@@ -150,7 +150,7 @@ export function enemyToughness(mechanics) {
   return `waves: hp ${hp} → ${to}, so an enemy takes 3 hits from the ${stream ? 'stream' : 'shot'} (damage ${dmg}) and each one shows (a health bar, a flash); set waves oneHitKills only when the creator asks for one-hit kills`;
 }
 
-export async function specToConfig(spec, { modules, lookPreset = null, lookConfig = null, standinPresetValues, mechanicDefaults = {}, mechanicSounds = {}, worldConfig = null, flow = null, flat = null }) {
+export async function specToConfig(spec, { modules, lookPreset = null, lookConfig = null, standinPresetValues, mechanicDefaults = {}, mechanicSounds = {}, mechanicItems = {}, worldConfig = null, flow = null, flat = null }) {
   const notes = [];
   const rng = createRng(hashString(`${spec.title}|layout`));
   const P = spec.players ?? { min: 1, max: 4 };
@@ -260,6 +260,17 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
   const mechanics = (spec.mechanics ?? []).map(m => ({ id: m.id, ...(m.as ? { as: m.as } : {}), params: { ...(mechanicDefaults[m.id] ?? {}), ...specParams(spec, m), ...(m.params ?? {}) } }));
   const tough = enemyToughness(mechanics);
   if (tough) notes.push(tough);
+  // a mechanic's own table of things (its manifest.items, kit/assets/items.js; open builder wave 10): the engine's
+  // default table when the spec gives none, written into the game so a page can add to it and every number is a slot.
+  // A default's picture may be "library:<id>": create's ensurePictures (tools/lib/items-lib.mjs) copies it in.
+  const itemEngine = spec.engine === 'scenic' ? 'scenic' : 'party';
+  for (const m of mechanics) for (const it of mechanicItems[m.id] ?? []) {
+    if (it.single || !it.key || !it.defaults || (Array.isArray(m.params[it.key]) && m.params[it.key].length)) continue;
+    const rows = it.defaults[itemEngine] ?? it.defaults.party;
+    if (!Array.isArray(rows) || !rows.length) continue;
+    m.params[it.key] = JSON.parse(JSON.stringify(rows));
+    notes.push(`${m.id}: the ${itemEngine} engine's own ${it.nouns ?? it.key} (${rows.map(r => r.name ?? r.id ?? r).join(', ')}), written into config/game.json → ${it.key}`);
+  }
   await scenicMechanicArt(spec, mechanics, assets, notes);
   const game = {
     schemaVersion: 0,
@@ -476,19 +487,14 @@ async function scenicProps() {
   scenicPropsCache = new Map((doc?.props ?? []).map(e => [e.id, e]));
   return scenicPropsCache;
 }
-// The greatsword's own moves (track M's proof game): two slow, wide, heavy swings
-const GREATSWORD_COMBO = [
-  { windup: 0.16, active: 0.12, recover: 0.3, arc: 150, reach: 2.7, damage: 2, knockback: 6, hitStop: 0.08, lunge: 3, sweep: 1, tilt: 18, clip: 'slash_1' },
-  { windup: 0.22, active: 0.14, recover: 0.45, arc: 180, reach: 2.9, damage: 3, knockback: 10, hitStop: 0.12, lunge: 5, sweep: -1, tilt: -24, clip: 'heavy', finisher: true },
-];
-
 /**
  * A scenic game's melee weapons, enemy and boss weapons and loot (chest, coin, potion) are the scenic library's KayKit
  * models (research/gf-scenic/library/props.json, CC0), copied into the mechanics' own model files. A spec (or the
  * pitch) names a library prop by its id wherever a mechanic takes a model file: a waves type's or the boss's `weapon`,
  * a melee weapon's `model` (e.g. "kaykit-skeleton-axe"); create copies it to assets/models/<id>.glb and fills the
- * grip from the library. Unnamed: the player gets a sword, an axe and a greatsword, the boss a staff, loot the
- * dungeon chest, coin and bottle. A party game keeps the mechanics' kit-drawn stand-ins.
+ * grip from the library. Unnamed: the boss a staff, loot the dungeon chest, coin and bottle; the player's weapons are
+ * melee's own default table (its manifest.items: a sword, an axe and a greatsword). A party game keeps the mechanics'
+ * kit-drawn stand-ins.
  */
 async function scenicMechanicArt(spec, mechanics, assets, notes) {
   if (spec.engine !== 'scenic') return;
@@ -504,20 +510,10 @@ async function scenicMechanicArt(spec, mechanics, assets, notes) {
   /** A library id where a model file goes: → {file, grip} (the file name in assets/models/), else null. */
   const named = v => { if (typeof v !== 'string' || !v) return null; const id = v.replace(/\.glb$/, ''); const e = lib.has(id) ? add(id) : null; return e ? { file: e.to, grip: grip(e) } : null; };
   const used = new Set();
+  // a melee weapon the spec names by a library id (its `model` or `prop`); the default table is melee's own
+  // (kit/mechanics/melee WEAPON_ITEM.defaults.scenic: "library:<id>" pictures that create's ensurePictures copies in)
   const melee = mechanics.find(m => m.id === 'melee');
-  if (melee) {
-    if (Array.isArray(melee.params.weapons) && melee.params.weapons.length) {
-      for (const w of melee.params.weapons) { const r = named(w.model) ?? named(w.prop); if (r) { w.model = r.file; delete w.prop; w.grip ??= r.grip; used.add(r.file); } }
-    } else {
-      const table = [['sword', 'Sword', 'sword', 'kaykit-sword'], ['axe', 'Axe', 'axe', 'kaykit-axe'], ['greatsword', 'Greatsword', 'sword', 'kaykit-greatsword']];
-      const weapons = [];
-      for (const [id, name, kind, src] of table) {
-        const e = add(src, `melee-${id}.glb`);
-        if (e) weapons.push({ id, name, kind, model: `melee-${id}.glb`, ...(grip(e) ? { grip: grip(e) } : {}), ...(id === 'greatsword' ? { combo: GREATSWORD_COMBO } : {}) });
-      }
-      if (weapons.length) { melee.params.weapons = weapons; notes.push(`melee: the scenic library's ${weapons.map(w => w.name.toLowerCase()).join(', ')} (KayKit, CC0) in the hand`); }
-    }
-  }
+  for (const w of Array.isArray(melee?.params?.weapons) ? melee.params.weapons : []) { const r = named(w.model) ?? named(w.prop); if (r) { w.model = r.file; delete w.prop; w.grip ??= r.grip; used.add(r.file); } }
   const waves = mechanics.find(m => m.id === 'waves');
   for (const t of waves?.params?.types ?? []) { const r = named(t.weapon); if (r) { t.weapon = r.file; t.weaponGrip ??= r.grip; used.add(r.file); } }
   const boss = mechanics.find(m => m.id === 'boss');

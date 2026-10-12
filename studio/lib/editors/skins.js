@@ -22,15 +22,22 @@ export function loadoutParam({ values = {}, files = {} } = {}) {
   return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-/** The preview address that shows a role turning, wearing a look that is not saved yet. A `colors` slot takes one
- *  colour in a loadout: the player's own (§6e). */
-export function tryOnPath(role, { colour = null, extra = {} } = {}) {
+/** A look that is not saved yet, as the kit's loadout ({ values, files }). A `colors` slot takes one colour in a
+ *  loadout: the player's own (§6e). */
+export function tryOnLoadout({ colour = null, extra = {} } = {}) {
   const values = { ...extra };
   if (colour && isColour(colour)) values['character.tint.player'] = colour.toLowerCase();
+  return { values, files: {} };
+}
+/** The preview address that shows a role turning, wearing a look that is not saved yet. */
+export function tryOnPath(role, { colour = null, extra = {} } = {}) {
+  const { values } = tryOnLoadout({ colour, extra });
   const q = new URLSearchParams({ 'gf-show': `character.${role}` });
   if (Object.keys(values).length) q.set('gf-loadout', loadoutParam({ values }));
   return `/game/?${q}`;
 }
+/** Is the preview showing this role turning already (so a new look can be handed to it without a reload)? */
+export const showingRole = (search, role) => new URLSearchParams(String(search ?? '')).get('gf-show') === `character.${role}`;
 
 /** The seat colours with one changed. → a new list (lower case) */
 export function setSeat(list, i, colour) {

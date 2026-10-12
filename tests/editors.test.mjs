@@ -1,5 +1,6 @@
-// The editors (Map, Skins, Items; track G): their pure parts, and the one route that writes (POST /api/editors/map) on a
-// real created flat game. The pages themselves are driven in tests/editors-shots.mjs (real Chrome, real dev server).
+// The editors (Map, Skins, Items; track G, items as data track K): their pure parts, the map route (POST /api/editors/map)
+// on a real created flat game, and the slot route as the Items tab uses it on a real created melee game. The pages
+// themselves are driven in tests/editors-shots.mjs and tests/items-shots.mjs (real Chrome, real dev server).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -12,8 +13,9 @@ import { tempDir } from './helpers.mjs';
 import { createHistory } from '../studio/lib/editors/history.js';
 import { charFor, checkMap, entryAt, fillCells, gridOf, jumpShade, lineCells, paintCells, paletteOf, rectCells, resizeGrid, withGrid } from '../studio/lib/editors/paint.js';
 import { addProp, clampTo, duplicateProp, fitView, hitProp, moveProp, propsView, removeProp, rotateProp, scaleProp, snap } from '../studio/lib/editors/layout.js';
-import { addRequest, balanceRequest, clampField, fieldRange, firstWords, itemsOf, peersOf } from '../studio/lib/editors/items.js';
-import { bodyChoices, drawRequest, loadoutParam, lookAlike, modelRequest, setSeat, sheetFrames, tryOnPath } from '../studio/lib/editors/skins.js';
+import { addEntry, balanceRequest, clampField, fieldRange, firstWords, itemsOf, liveWords, lookRequest, peersOf, removeEntry, renameEntry, setEntryField, switchOption, takesLive } from '../studio/lib/editors/items.js';
+import { listSlots } from '../lib/slots.mjs';
+import { bodyChoices, drawRequest, loadoutParam, lookAlike, modelRequest, setSeat, sheetFrames, showingRole, tryOnLoadout, tryOnPath } from '../studio/lib/editors/skins.js';
 
 const kitFlat = async () => ({
   ...(await import(pathToFileURL(path.join(GF3, 'kit/flat/index.js')).href)),
@@ -139,53 +141,136 @@ test('layout: snap, move inside the ground, turn, size, copy, remove, pick the s
   assert.equal(f.k, 10); assert.deepEqual(f.toPx(0, 0), [220, 120]); assert.deepEqual(f.toWorld(...f.toPx(3, -4)), [3, -4]);
 });
 
-// slot rows in the shape GET /api/game/slots gives (lib/slots listSlots), from a melee and pickup party game
-const s = (id, type, value, extra = {}) => ({ id, label: extra.label ?? id, type, kind: ['model', 'image'].includes(type) ? 'file' : 'value', value, tier: extra.tier ?? 'advanced', constraints: extra.constraints ?? {}, file: extra.file });
-const SLOTS = [
-  s('prop.crate', 'model', undefined, { tier: 'main', label: 'Crate', file: 'assets/models/crate.glb' }),
-  s('prop.crate.count', 'integer', 6, { tier: 'main', label: 'How many crates', constraints: { min: 1, max: 60 } }),
-  s('prop.crate.size', 'number', 0.6, { label: 'Crate size', constraints: { min: 0.05, max: 5, unit: 'm' } }),
-  s('mechanic.pickup.prop', 'text', 'crate', { constraints: { maxLength: 40 } }),
-  s('mechanic.pickup.respawn-seconds', 'number', 10, { tier: 'main', label: 'Respawn time', constraints: { min: 0, max: 120, unit: 's' } }),
-  s('mechanic.pickup.count', 'integer', -1, { label: 'Spots at the start', constraints: { min: -1, max: 40 } }),
-  s('mechanic.pickup.value', 'number', 20, { label: 'Value of a pickup', constraints: { min: 0, max: 100 } }),
-  s('mechanic.melee.pillow.color', 'color', '#f4f1ea', { tier: 'main', label: 'Pillow: colour' }),
-  s('mechanic.melee.pillow.combo-1.damage', 'number', 1, { label: 'Pillow, swing 1: damage', constraints: { min: 0, max: 100 } }),
-  s('mechanic.melee.pillow.combo-1.reach', 'number', 2.2, { label: 'Pillow, swing 1: reach', constraints: { min: 0.5, max: 8, unit: 'm' } }),
-  s('mechanic.melee.big-pillow.color', 'color', '#ffc94d', { label: 'Big pillow: colour' }),
-  s('mechanic.melee.big-pillow.combo-1.damage', 'number', 2, { label: 'Big pillow, swing 1: damage', constraints: { min: 0, max: 100 } }),
-  s('mechanic.melee.trail-color', 'color', '#ffffff', { tier: 'main', label: 'Slash trail colour' }),
-  s('mechanic.projectile.speed', 'number', 18, { tier: 'main', label: 'Throw speed', constraints: { min: 2, max: 45, unit: 'm/s' } }),
-  s('mechanic.projectile.prop', 'text', '', {}),
-];
+// the melee and pickup party game the items proof uses (games.fun research/open-builder/findings/items/pillow-brawl.spec.json)
+const PILLOW = { specVersion: 0, title: 'Pillow Brawl', hook: 'A backyard pillow fight: bop your friends, grab feathers, most bops wins.', prompt: 'a silly pillow fight with friends in a backyard, with a few different pillows to swing',
+  players: { min: 1, max: 4, bots: true, teams: 0, mode: 'versus' }, round: { seconds: 90, winBy: 'most bops when time is up', replay: true }, camera: 'third',
+  controls: { primary: 'swing your pillow', secondary: 'big swing', interact: 'grab a feather', jump: 'dash' },
+  world: { template: 'backyard', size: 'small', props: [{ name: 'crate', describe: 'a wooden crate of feathers', count: 6, from: 'library', role: 'a pickup that heals you' }, { name: 'bench', describe: 'a wooden bench', count: 2, from: 'library', role: 'scenery' }] },
+  mechanics: [
+    { id: 'melee', as: 'your pillow: swing it to bop friends', params: { weapon: 'pillow', weapons: [
+      { id: 'pillow', name: 'Pillow', kind: 'sword', color: '#f4f1ea', combo: [{ damage: 1, reach: 2.2, windup: 0.1, knockback: 3.5 }], heavy: { damage: 3, reach: 2.8 } },
+      { id: 'big-pillow', name: 'Big pillow', kind: 'axe', color: '#ffc94d', combo: [{ damage: 2, reach: 2.4, windup: 0.17, knockback: 6 }], heavy: { damage: 4, reach: 2.6 } }] } },
+    { id: 'pickup', as: 'feather crates that patch you up', params: { prop: 'crate', respawnSeconds: 10, effect: 'heal', value: 20 } },
+    { id: 'health', as: 'bopped: knocked over, back up soon', params: { hp: 100 } }],
+  rules: { summary: 'Swing to bop. Crates heal. Most bops wins.', scoring: '+1 per knock-over', params: { bopPoints: 1 } },
+  characters: [{ role: 'player', describe: 'a round jelly-bean kid in pyjamas', body: { from: 'bean' } }], look: { preset: 'jelly-pastel', time: 'day' },
+  sounds: [{ id: 'bop', describe: 'a soft pillow thump' }], content: { rating: 'E' }, accept: ['friends see each other'] };
+async function pillowGame(t) {
+  const tmp = await tempDir();
+  t.after(() => tmp.cleanup());
+  const specFile = path.join(tmp.dir, 'spec.json');
+  await writeFile(specFile, JSON.stringify(PILLOW));
+  const dir = path.join(tmp.dir, 'game');
+  await createGame(dir, { spec: specFile });
+  return dir;
+}
+const kitItems = () => import(pathToFileURL(path.join(GF3, 'kit/assets/items.js')).href);
 
-test('items: cards from slots (a pickup with its mechanic\'s numbers, a card per weapon, an aimed mechanic), one meaning per field', () => {
-  const cards = itemsOf(SLOTS, { mechanics: [{ id: 'pickup', as: 'feather crates that patch you up' }, { id: 'projectile', as: 'your water soaker, limited by its tank' }] });
-  assert.deepEqual(cards.map(c => c.id), ['prop:crate', 'weapon:pillow', 'weapon:big-pillow', 'mechanic:projectile']);
-  const crate = cards[0];
-  assert.equal(crate.what, 'feather crates that patch you up');
-  assert.deepEqual(crate.main.map(f => f.id), ['prop.crate.count', 'mechanic.pickup.respawn-seconds', 'mechanic.pickup.value'], 'main fields first; the mechanic\'s "count" is a second count and goes to More');
-  assert.ok(crate.more.some(f => f.id === 'mechanic.pickup.count'));
-  const pillow = cards[1];
-  assert.equal(pillow.name, 'Pillow');
-  assert.equal(pillow.main[0].label, 'Swing 1: damage', 'a field drops its weapon\'s name inside its own card');
-  assert.deepEqual(peersOf(cards, pillow, 'mechanic.melee.pillow.combo-1.damage'), [{ name: 'Big pillow', value: 2 }]);
-  assert.deepEqual(peersOf(cards, pillow, 'mechanic.melee.pillow.combo-1.reach'), []);
-  assert.equal(cards[3].name, 'Water soaker');
+test('items: cards come from the game\'s own items index and each table\'s declaration (no list of mechanics in the page)', async t => {
+  const dir = await pillowGame(t);
+  const L = await listSlots(dir, { all: true });
+  assert.ok(Array.isArray(L.items), 'GET /api/game/slots carries assets.json → items');
+  const { cards, tables } = itemsOf(L.slots, L.items);
+  assert.deepEqual(cards.map(c => c.id), ['mechanic.melee.weapons:pillow', 'mechanic.melee.weapons:big-pillow', 'pickup:single']);
+  assert.equal(tables.length, 1);
+  assert.equal(tables[0].start?.id, 'mechanic.melee.start-weapon', 'the start slot is found by its choices');
+  const pillow = cards[0];
+  assert.equal(pillow.starts, true);
+  assert.deepEqual(pillow.main.map(f => f.label), ['Swing 1: damage', 'Swing 1: reach', 'Heavy attack: damage', 'Rarity'], 'the front the mechanic declares, the weapon\'s name taken off each label');
+  const rarity = pillow.main[3];
+  assert.deepEqual([rarity.via, rarity.constraints.min, rarity.constraints.max, takesLive(rarity)], [{ table: 'mechanic.melee.weapons', index: 0, field: 'rarity' }, 0, 3, false], 'a front field with no slot is written with the table, and reloads');
+  assert.equal(takesLive(pillow.main[0]), true, 'a number with its own slot is sent to the running game');
+  assert.equal(takesLive(pillow.more.find(f => f.type === 'color')), false, 'a colour reloads');
+  assert.deepEqual(peersOf(cards, pillow, 'combo/0/damage'), [{ name: 'Big pillow', value: 2 }]);
+  const crate = cards[2];
+  assert.equal(crate.name, 'Crate'); assert.equal(crate.show, 'prop.crate'); assert.equal(crate.what, 'feather crates that patch you up');
+  assert.deepEqual(crate.main.map(f => f.id), ['mechanic.pickup.value', 'mechanic.pickup.respawn-seconds', 'mechanic.pickup.count']);
+  assert.ok(crate.more.some(f => f.id === 'prop.crate.size'), 'the picture\'s own slots sit behind More');
+  assert.deepEqual(itemsOf(L.slots, null).cards, [], 'a game made before items were data has no cards');
   assert.equal(firstWords('a shiny gold coin (collected)'), 'Shiny gold coin');
 });
 
-test('items: a slider never leaves its slot\'s range; requests carry the numbers and their ranges', () => {
-  const dmg = SLOTS.find(x => x.id === 'mechanic.melee.pillow.combo-1.damage'), count = SLOTS[1];
+test('items: add like, remove, rename and switch are the kit\'s own table changes; each refusal is in words', async () => {
+  const kit = await kitItems();
+  const item = { key: 'weapons', noun: 'weapon', nouns: 'weapons', min: 1, max: 3, id: 'id', name: 'name', schema: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string', maxLength: 32 }, combo: { type: 'array', items: { type: 'object', properties: { damage: { type: 'number', minimum: 0, maximum: 100 } } } } } },
+    picture: { field: 'model', alias: ['prop'], file: 'melee-<id>.glb', slot: 'mechanic.melee.<id>.model', library: 'kaykit-sword' } };
+  const table = [{ id: 'pillow', name: 'Pillow', combo: [{ damage: 1 }] }, { id: 'big-pillow', name: 'Big pillow', combo: [{ damage: 2 }] }];
+  const a = addEntry(kit, item, table, { like: 'pillow', name: 'Foam sword' });
+  assert.equal(a.entry.id, 'foam-sword'); assert.equal(a.entry.model, 'library:kaykit-sword'); assert.deepEqual(a.entry.combo, [{ damage: 1 }]);
+  assert.equal(a.table.length, 3); assert.equal(table.length, 2, 'the old table is untouched');
+  assert.match(addEntry(kit, item, a.table, { like: 'pillow', name: 'Fourth' }).problem, /at most 3 weapons/);
+  assert.match(addEntry(kit, item, table, { like: 'pillow', name: '  ' }).problem, /name/);
+  assert.match(addEntry(kit, item, table, { like: 'laser', name: 'X' }).problem, /no weapon "laser"/);
+  assert.deepEqual(removeEntry(kit, item, a.table, 'big-pillow').table.map(e => e.id), ['pillow', 'foam-sword']);
+  assert.match(removeEntry(kit, item, [table[0]], 'pillow').problem, /at least 1 weapon/);
+  const r = renameEntry(item, table, 'big-pillow', 'Huge pillow');
+  assert.deepEqual(r.table.map(e => [e.id, e.name]), [['pillow', 'Pillow'], ['big-pillow', 'Huge pillow']], 'the id stays, so its slots and picture stay');
+  assert.match(renameEntry(item, table, 'big-pillow', '').problem, /letter/);
+  assert.equal(setEntryField(table, 1, 'combo/0/damage', 7).table[1].combo[0].damage, 7);
+  assert.deepEqual(switchOption(['b'], ['a', 'b', 'c'], 'a', true).table, ['a', 'b']);
+  assert.deepEqual(switchOption(['a', 'b'], ['a', 'b', 'c'], 'a', false).table, ['b']);
+  assert.match(liveWords('taken', 'Pillow: reach'), /playing now, no reload/);
+  assert.match(liveWords(null, 'Pillow: reach'), /reloaded/);
+  assert.match(liveWords('saved', 'Colour'), /reloads to show it/);
+});
+
+test('items: a slider never leaves its slot\'s range; requests name the slots and what the session should use', () => {
+  const dmg = { id: 'mechanic.melee.pillow.combo-1.damage', type: 'number', value: 1, constraints: { min: 0, max: 100 } }, count = { id: 'x', type: 'integer', value: 6, constraints: { min: 1, max: 60 } };
   assert.deepEqual(fieldRange(dmg), { min: 0, max: 100, step: 0.5 });
   assert.equal(clampField(dmg, 140), 100); assert.equal(clampField(dmg, -3), 0); assert.equal(clampField(dmg, 'x'), 1);
   assert.equal(clampField(count, 7.6), 8);
-  const cards = itemsOf(SLOTS);
-  const b = balanceRequest(cards[1], 'pillows should feel even');
+  const card = { kind: 'entry', name: 'Foam sword', what: 'one of 3 weapons', noun: 'weapon', table: 'mechanic.melee.weapons', entryId: 'foam-sword', picture: null, main: [{ ...dmg, label: 'Swing 1: damage' }], more: [] };
+  const b = balanceRequest(card, 'pillows should feel even');
   assert.match(b, /Swing 1: damage \(mechanic\.melee\.pillow\.combo-1\.damage\) = 1 \[0\.\.100\]/);
-  assert.match(b, /pillows should feel even/);
-  assert.match(addRequest(cards[1], { name: 'Feather duster', idea: 'quick and weak' }), /new melee weapon .* copied from "Pillow", named "Feather duster"\. What it should be like: quick and weak/);
-  assert.match(addRequest(cards[0], { name: 'Golden Crate!' }), /new prop "golden-crate"/);
+  const table = { item: { picture: { field: 'model', dir: 'assets/models', file: 'melee-<id>.glb' } } };
+  assert.match(lookRequest(card, 'soft blue foam', table), /assets\/models\/melee-foam-sword\.glb.*"model" field.*mechanic\.melee\.weapons/);
+  assert.match(lookRequest({ ...card, picture: { slot: 'prop.crate', type: 'model' } }, 'a gold crate'), /slots set prop\.crate --file/);
+});
+
+test('POST /api/game/slots/value on a created melee game: refuses in the kit\'s words and writes nothing; a table write adds a weapon with its own picture and slots', async t => {
+  const dir = await pillowGame(t);
+  const srv = await startDevServer({ gameDir: dir, port: 0, log: () => {}, watch: false });
+  t.after(() => srv.close());
+  const post = async body => { const r = await fetch(`http://127.0.0.1:${srv.port}/api/game/slots/value`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
+  const gameFile = path.join(dir, 'config/game.json'), before = await readFile(gameFile, 'utf8');
+  // a number out of its range
+  const big = await post({ id: 'mechanic.melee.pillow.combo-1.damage', value: 500 });
+  assert.equal(big.status, 400);
+  assert.deepEqual(big.body.problems, ['Pillow, swing 1: damage is 500: more than 100, the most it can be']);
+  // a table with an entry out of range, and a start weapon the table does not hold
+  const L = await (await fetch(`http://127.0.0.1:${srv.port}/api/game/slots?all=1`)).json();
+  assert.equal(L.items.find(i => i.table)?.table, 'mechanic.melee.weapons');
+  const t0 = L.slots.find(s => s.id === 'mechanic.melee.weapons');
+  const kit = await kitItems();
+  const made = addEntry(kit, t0.constraints.item, t0.value, { like: 'pillow', name: 'Foam sword' });
+  const bad = JSON.parse(JSON.stringify(made.table)); bad[2].combo[0].damage = 500;
+  const refused = await post({ id: 'mechanic.melee.weapons', value: bad });
+  assert.equal(refused.status, 400);
+  assert.deepEqual(refused.body.problems, ['Foam sword, swing 1: damage is 500: more than 100, the most it can be']);
+  const laser = await post({ id: 'mechanic.melee.start-weapon', value: 'laser' });
+  assert.equal(laser.status, 400); assert.match(laser.body.problems[0], /must be one of pillow, big-pillow/);
+  assert.equal(await readFile(gameFile, 'utf8'), before, 'nothing was written');
+  // the good table: written, the new weapon's picture copied in from the library with its licence, its slots made
+  const ok = await post({ id: 'mechanic.melee.weapons', value: made.table });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.equal(ok.body.before.length, 2); assert.equal(ok.body.after.length, 3);
+  assert.ok(ok.body.pictures.some(p => /Foam sword: model library:kaykit-sword → assets\/models\/melee-foam-sword\.glb \(CC0-1\.0/.test(p)), ok.body.pictures.join('; '));
+  const game = JSON.parse(await readFile(gameFile, 'utf8')), w = game.mechanics.find(m => m.id === 'melee').params.weapons;
+  assert.deepEqual(w.map(x => x.id), ['pillow', 'big-pillow', 'foam-sword']);
+  assert.equal(w[2].model, 'melee-foam-sword.glb'); assert.equal(w[2].license.spdx, 'CC0-1.0');
+  assert.equal((await readFile(path.join(dir, 'assets/models/melee-foam-sword.glb'))).subarray(0, 4).toString('latin1'), 'glTF');
+  const after = await (await fetch(`http://127.0.0.1:${srv.port}/api/game/slots?all=1`)).json();
+  for (const id of ['mechanic.melee.foam-sword.combo-1.damage', 'mechanic.melee.foam-sword.model']) assert.ok(after.slots.some(s => s.id === id), id);
+  assert.deepEqual(after.slots.find(s => s.id === 'mechanic.melee.start-weapon').constraints.enum, ['pillow', 'big-pillow', 'foam-sword']);
+  // now the start weapon may be it, and a number of it is an ordinary write
+  assert.equal((await post({ id: 'mechanic.melee.start-weapon', value: 'foam-sword' })).status, 200);
+  const n = await post({ id: 'mechanic.melee.foam-sword.combo-1.reach', value: 3.6 });
+  assert.deepEqual([n.status, n.body.before, n.body.after], [200, 2.2, 3.6]);
+  // the remove: the kit refuses a table below its least
+  const one = await post({ id: 'mechanic.melee.weapons', value: [] });
+  assert.equal(one.status, 400); assert.match(one.body.problems[0], /at least 1 weapon/);
+  // the tab's own files are served
+  for (const f of ['studio/tabs/items.js', 'studio/lib/editors/items.js', 'game/gf/three/assets/items.js']) assert.equal((await fetch(`http://127.0.0.1:${srv.port}/${f}`)).status, 200, f);
 });
 
 test('skins: the try-on address carries a loadout the kit reads; seats, look-alikes, sheet frames, bodies, requests', () => {
@@ -196,6 +281,10 @@ test('skins: the try-on address carries a loadout the kit reads; seats, look-ali
   assert.equal(url.searchParams.get('gf-show'), 'character.player');
   assert.equal(JSON.parse(Buffer.from(url.searchParams.get('gf-loadout'), 'base64url')).values['character.tint.player'], '#abcdef');
   assert.equal(new URL(tryOnPath('player'), 'http://x').searchParams.has('gf-loadout'), false);
+  // once the turning player shows, a new look is a message (the kit's gf:loadout) and the subject restyles in place
+  assert.deepEqual(tryOnLoadout({ colour: '#ABCDEF' }), { values: { 'character.tint.player': '#abcdef' }, files: {} });
+  assert.equal(showingRole('?gf-show=character.player&gf-loadout=x', 'player'), true);
+  assert.equal(showingRole('?seed=1', 'player'), false);
   assert.deepEqual(setSeat(['#111111'], 2, '#FF0000'), ['#111111', '#111111', '#ff0000']);
   assert.throws(() => setSeat([], 0, 'red'));
   assert.deepEqual(lookAlike(['#ff0000', '#fe0101', '#0000ff']), [[0, 1]]);

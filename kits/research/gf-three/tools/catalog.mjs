@@ -72,6 +72,7 @@ export const MANIFEST = {
   stub: '{as, worked, traps}: its variable in rules.js, one worked line, its own traps; create writes rules.js from these and `events`',
   asks: '(optional) [{about: "body" | "together", why}]: what a pitch must ask the creator when their words do not settle it and a card uses this part (a board with no player body asks how each player is shown); held by the pitch step (loop/pitch-rules.mjs), never by a build',
   signs: '{sample: (shared, stats) => {key: compact} | null, judge: view => void, reportOnly?}: verify check 15\'s sign of life. sample runs in the page 4 times a second (an arrow function that uses nothing outside itself); judge reads the samples in Node and adds its items',
+  items: '(optional) [declaration]: its things as data (kit/assets/items.js; open builder wave 10). A table: {key (the param holding the list), noun, nouns, min, max, id, name, schema (JSON Schema of ONE entry: each field\'s title, type, minimum, maximum, unit, default), front (the fields a card shows first), picture: {field, file, slot, library}, defaults: {party, scenic}}; its slot mechanic.<id>.<key> is a json slot carrying the declaration. A single item: {single: true, noun, fields: [param keys], front, picture: params => slot id}',
 };
 /** The kit an engine id runs on: a flat (2D) game is the party kit on a plane (kit/flat), so a mechanic or a flow that
  *  runs on party runs there as far as the kit is concerned; which mechanics have been RUN on a plane is the flat part's
@@ -103,6 +104,14 @@ export function manifestProblems(id, m) {
   if (!/^[a-z][A-Za-z0-9]*$/.test(m.stub?.as ?? '') || typeof m.stub?.worked !== 'string' || /\n/.test(m.stub.worked) || !lines(m.stub?.traps) || !m.stub.traps.length) bad.push('stub: {as, worked (one line), traps}');
   if (!isFn(m.signs?.sample) || !isFn(m.signs?.judge)) bad.push('signs: {sample, judge}');
   else { try { new Function(`return (${m.signs.sample.toString()});`); } catch { bad.push('signs.sample: an arrow function that stands alone (it is sent to the page as text)'); } }
+  if (m.items !== undefined) for (const [k, it] of (Array.isArray(m.items) ? m.items : [null]).entries()) {
+    const at = `items[${k}]`;
+    if (!it || typeof it !== 'object' || typeof it.noun !== 'string') { bad.push(`${at}: {noun, ...}`); continue; }
+    if (it.single) { if (!Array.isArray(it.fields) || it.fields.some(f => !(f in (m.params?.properties ?? {})))) bad.push(`${at}.fields: param keys of this mechanic`); continue; }
+    if (typeof it.key !== 'string' || !m.params?.properties?.[it.key]) bad.push(`${at}.key: the param that holds the table`);
+    if (!it.schema || typeof it.schema !== 'object') bad.push(`${at}.schema: the JSON Schema of one entry`);
+    if (it.front !== undefined && !Array.isArray(it.front)) bad.push(`${at}.front: a list of fields`);
+  }
   if (isFn(m.owns) && m.params) { try { for (const o of m.owns(withDefaults(m.params, {})) ?? []) if (!RESOURCE_RE.test(o?.res ?? '') || !o.why || !o.free) bad.push(`owns: "${o?.res}" needs a known resource name, why and free`); } catch (e) { bad.push(`owns throws: ${e.message}`); } }
   return bad.map(b => `mechanic ${id}: manifest ${b}`);
 }

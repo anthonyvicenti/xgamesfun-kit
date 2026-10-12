@@ -86,7 +86,7 @@ test('slots: values are checked against the slot and written to its config', asy
   const r = await setValue(g.dir, 'world.backyard.ground.color', '#3A7A3A');
   assert.equal(r.after, '#3a7a3a');
   assert.equal(JSON.parse(await readFile(path.join(g.dir, 'config', 'world.json'), 'utf8')).ground.color, '#3a7a3a');
-  await assert.rejects(setValue(g.dir, 'round.seconds', '5'), /minimum/);
+  await assert.rejects(setValue(g.dir, 'round.seconds', '5'), /less than 30 s, the least it can be/);   // the kit's own words
   await assert.rejects(setValue(g.dir, 'world.backyard.ground.color', 'green'), /colour/);
   await assert.rejects(setValue(g.dir, 'no.such.slot', '1'), /no slot/);
   await assert.rejects(setValue(g.dir, 'prop.bucket', '1'), /file/);

@@ -4,7 +4,6 @@
 // Run through the graphics-card gate (the preview is the game, which needs WebGL):
 //   gpu-run.sh node tests/editors-shots.mjs <out dir> [first port]
 // Writes <out>/*.png, <out>/frames/<seq>-NN.png (the recordings, one frame a step) and <out>/shots.json.
-import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -141,8 +140,8 @@ try {
     await shot(p, 'skins-3d-1-open', 'Skins tab on a party game: seat colours, the small palette, the library bodies with pictures; the preview shows the player turning (?gf-show=character.player)');
     await frame(p, 'b-skin', 'Skins: the player turning in the preview');
     await p.click('.swatch[title="#6d8bff"]');
-    await sleep(4500);
-    await shot(p, 'skins-3d-2-tryon', 'Player 1 set to blue: tried on in the preview through the kit\'s loadout input, nothing saved yet ("Trying it on")');
+    await sleep(2500);
+    await shot(p, 'skins-3d-2-tryon', 'Player 1 set to blue: handed to the turning player as a message (gf:loadout), which wears it in place with no reload; nothing saved yet ("Trying it on")');
     await frame(p, 'b-skin', 'pick blue: tried on before saving');
     await p.click('button:has-text("Save the look")');
     await sleep(800);
@@ -181,50 +180,37 @@ try {
     s.closeAll();
     await p.context().close();
   }
-  // ================= E. items, with a stand-in session adding one =================
+  // ================= E. items: a number, then one added like another from the page itself =================
   {
     const p = await page('pillow');
-    const s = await sessionDriver(`http://127.0.0.1:${servers.pillow.port}`, { id: 'shots-pillow', cwd: games.pillow });
-    await s.start();
     await tab(p, 'items');
-    await shot(p, 'items-1-open', 'Items tab on a melee party game: a card per item (the crate pickup with its mechanic\'s numbers, each pillow), plain words, the slot\'s own limits, the other pillow\'s value under each number');
+    await shot(p, 'items-1-open', 'Items tab on a melee party game: a card per weapon from the game\'s own table and the crate pickup, plain words, the slot\'s own limits, the other pillow\'s value under each number, live or reload beside each');
     await frame(p, 'c-item', 'Items: a card per item');
-    // drag the pillow's knockback from 3.5 to about 8 (0 to 30 m/s) and let go
-    const r = p.locator('.card:has(h4:text-is("Pillow")) .field:has-text("knockback") input[type=range]').first();
+    // drag the pillow's reach from 2.2 to about 3.4 (0.5 to 8 m) and let go
+    const r = p.locator('.card:has(h4:text-is("Pillow")) .field:has-text("Swing 1: reach") input[type=range]').first();
     await r.scrollIntoViewIfNeeded();
-    const bb = await r.boundingBox();
-    await p.mouse.move(bb.x + 8 + (bb.width - 16) * (3.5 / 30), bb.y + bb.height / 2); await p.mouse.down();
-    await p.mouse.move(bb.x + 8 + (bb.width - 16) * (8 / 30), bb.y + bb.height / 2, { steps: 6 }); await p.mouse.up();
-    await sleep(1500);
-    const kb = JSON.parse(await readFile(path.join(games.pillow, 'config/game.json'), 'utf8')).mechanics[0].params.weapons[0].combo[0].knockback;
-    if (!(kb > 6 && kb < 10)) problems.push(`items: the pillow's knockback is ${kb} after the drag`);
-    await frame(p, 'c-item', `drag the pillow's knockback and let go: saved through its slot (now ${kb} m/s)`);
-    await p.selectOption('.ask-box:has-text("Add an item like") select', 'weapon:pillow');
-    await p.fill('.ask-box:has-text("Add an item like") input[type=text]', 'Feather duster');
-    await p.fill('.ask-box:has-text("Add an item like") textarea', 'quick and long, but weak');
-    await p.click('button:has-text("Ask my session to add it")');
-    await sleep(800);
-    await p.locator('.ask-box:has-text("Add an item like")').scrollIntoViewIfNeeded();
-    await shot(p, 'items-2-asked', 'Add an item like Pillow, named Feather duster: the words go to the person\'s own session as a request (the page cannot add a table entry through a slot)');
-    await frame(p, 'c-item', 'add one like Pillow: asked of the session');
-    // the stand-in session does what the request says: a new entry in the melee table, then `gamesfun slots write`
-    const got = await s.collect();
-    const gf = path.join(games.pillow, 'config/game.json'), game = JSON.parse(await readFile(gf, 'utf8'));
-    const melee = game.mechanics.find(m => m.id === 'melee');
-    melee.params.weapons.push({ id: 'feather-duster', name: 'Feather duster', kind: 'spear', color: '#b79bff', combo: [{ damage: 0.5, reach: 3.2, windup: 0.06, knockback: 2 }], heavy: { damage: 1.5, reach: 3.4 } });
-    await writeFile(gf, `${JSON.stringify(game, null, 1)}\n`);
-    const w = spawnSync(process.execPath, [BIN, 'slots', 'write', games.pillow], { encoding: 'utf8' });
-    if (w.status !== 0) problems.push(`slots write: ${w.stderr || w.stdout}`);
-    const rid = got.body?.requests?.at(-1)?.id; if (rid) await s.done(rid, 'added Feather duster');
+    const bb = await r.boundingBox(), x = v => bb.x + 8 + (bb.width - 16) * ((v - 0.5) / 7.5);
+    await p.mouse.move(x(2.2), bb.y + bb.height / 2); await p.mouse.down();
+    await p.mouse.move(x(3.4), bb.y + bb.height / 2, { steps: 6 }); await p.mouse.up();
+    await sleep(2000);
+    const reach = JSON.parse(await readFile(path.join(games.pillow, 'config/game.json'), 'utf8')).mechanics[0].params.weapons[0].combo[0].reach;
+    if (!(reach > 3 && reach < 3.8)) problems.push(`items: the pillow's reach is ${reach} after the drag`);
+    await frame(p, 'c-item', `drag the pillow's reach and let go: saved through its slot and sent to the running game (now ${reach} m)`);
+    await p.locator('.add-box').scrollIntoViewIfNeeded();
+    await p.selectOption('.add-box select[aria-label="Like which one"]', 'pillow');
+    await p.fill('.add-box input[type=text]', 'Feather duster');
+    await shot(p, 'items-2-add', 'Add an item: a weapon like Pillow, named Feather duster');
+    await frame(p, 'c-item', 'add one like Pillow');
+    await p.click('.add-box button:has-text("Add it")');
+    await p.locator('.card:has(h4:text-is("Feather duster"))').waitFor({ timeout: 30000 }).catch(() => problems.push('items: no Feather duster card'));
     await sleep(2500);
-    await p.locator('.card:has(h4:text-is("Feather duster"))').scrollIntoViewIfNeeded().catch(() => problems.push('items: no Feather duster card'));
-    await shot(p, 'items-3-added', 'The stand-in session added the weapon (config/game.json, then `gamesfun slots write`): its card appears by itself, with the other pillows\' values beside each number');
-    await frame(p, 'c-item', 'the session added it: its card appears');
+    await p.locator('.card:has(h4:text-is("Feather duster"))').scrollIntoViewIfNeeded().catch(() => {});
+    await shot(p, 'items-3-added', 'Add it: the table slot written with the kit\'s own addLike; Feather duster has its own card, numbers, slots and model file, and the game reloads');
+    await frame(p, 'c-item', 'added: its card appears');
     await p.locator('.card:has(h4:text-is("Crate")) button:has-text("See it")').click();
     await sleep(5000);
     await shot(p, 'items-4-see', '"See it" on the crate: the preview shows the prop (?gf-show=prop.crate)');
     errorsOf(p, 'items');
-    s.closeAll();
     await p.context().close();
   }
   // ================= phone width =================

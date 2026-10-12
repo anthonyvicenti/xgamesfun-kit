@@ -14,9 +14,12 @@
 //             link (#gf-invite), End round for everyone (#gf-end-round, the host) and Leave (#gf-leave-room); where
 //             streams are on (gf-multiplayer 1.6.0, research/watch/PLAN.md), Go live (#gf-live): a link that lets anyone
 //             watch you play, then join; while live it says so and opens the share sheet
+//   economy   what the hosting page's economy offers (gf:host → economy, kit/net/host.js; CONTRACT §6g W2): its 'menu'
+//             buttons in the items view, its 'pause' buttons in the pause menu, its 'results' buttons on the results
+//             card (alone). A click only tells the page (gf:econ-action); the page signs and answers. No offer, nothing
 //
 // Words come from config/game.json → text (ui.* slots: ui/slots.js); colours from --gf-accent, --gf-panel, --gf-text.
-import { host as pageHost } from '../net/host.js';
+import { host as pageHost, priceText } from '../net/host.js';
 
 const CSS = `
 #gf-menu{position:absolute;inset:0;pointer-events:auto;display:none;color:var(--gf-text,#fff)}
@@ -92,6 +95,13 @@ const CSS = `
 #gf-menu .gf-room li i{width:10px;height:10px;border-radius:50%;flex:none}
 #gf-menu .gf-room li.me{box-shadow:inset 0 0 0 1.5px #ffffff66}
 #gf-menu .gf-row{display:flex;gap:8px;flex-wrap:wrap}#gf-menu .gf-row .gf-btn{flex:1 1 140px;padding:10px 14px;font-size:15px}
+#gf-menu .gf-econ{display:flex;flex-direction:column;gap:8px}
+#gf-menu .gf-econ .gf-btn{background:#ffffff14;box-shadow:inset 0 0 0 1.5px var(--gf-accent,#ff7a59)}
+#gf-menu .gf-econ .gf-btn:disabled{opacity:.6;cursor:wait;transform:none}
+#gf-ui .gf-card .gf-econ{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:6px}
+#gf-ui .gf-card .gf-econ button{background:#ffffff1f;box-shadow:inset 0 0 0 2px var(--gf-accent,#ff7a59);padding:8px 20px;font-size:16px}
+#gf-ui .gf-card .gf-econ button:disabled{opacity:.6;cursor:wait}
+#gf-ui .gf-card .gf-econ p{flex-basis:100%;margin:2px 0 0;font-size:13px}
 #gf-ui:has(#gf-menu.on) .gf-help,#gf-ui:has(#gf-menu.home.on) .gf-scores,#gf-ui:has(#gf-menu.home.on) .gf-plates,#gf-ui:has(#gf-menu.on) .gf-cross,#gf-ui:has(#gf-menu.on) .gf-prompt{display:none!important}
 @media (max-height:660px){#gf-menu .gf-col{gap:7px;max-height:calc(100vh - 20px)}#gf-menu h1{font-size:clamp(26px,4vw,40px)}#gf-menu .gf-hook{font-size:14px;margin:0 0 4px}#gf-menu .gf-btn{padding:8px 14px;font-size:15px}#gf-menu .gf-btn small{display:none}#gf-menu .gf-btn.primary{font-size:18px;padding:10px 16px}#gf-menu .gf-btn.wallet{margin-top:4px}#gf-menu.pause .gf-col{padding:14px 16px 12px}#gf-menu.pause h1{font-size:22px}#gf-menu .gf-panel{padding:10px 12px}}
 @media (max-height:420px){#gf-menu .gf-hook{display:none}#gf-menu h1{font-size:clamp(22px,3.4vw,32px)}#gf-menu .gf-btn{padding:6px 12px}#gf-menu .gf-btn.primary{padding:8px 14px}}
@@ -218,6 +228,35 @@ export function createMenu(ctx, ui, { game = {}, live = false, world = false, ga
     return { label: T.wallet ?? 'Connect wallet', sub: 'Wear the items you own' };
   }
 
+  // the economy's buttons at one place (CONTRACT §6g W2): what the page offers there, or nothing at all
+  function econStrip(where, inCard = false) {
+    const acts = host.econAt?.(where) ?? [];
+    if (!acts.length) return null;
+    const st = host.econState ?? null, pending = new Set(st?.pending ?? []);
+    const s = el('div', 'gf-econ'); s.id = `gf-econ-${where}`; s.dataset.where = where;
+    for (const a of acts) {
+      const sub = [priceText(a.price), a.says].filter(Boolean).join(' · ');
+      const wait = pending.has(a.id), label = wait ? `${a.label}…` : a.label;
+      let b;
+      if (inCard) { b = el('button', 'gf-econ-btn', a.price ? `${label} · ${priceText(a.price)}` : label); b.type = 'button'; if (a.says) b.title = a.says; b.addEventListener('click', click(() => host.econAction(a.id))); }
+      else { b = button(`gf-econ-${where}-${a.id}`, null, label, sub || null, () => host.econAction(a.id), 'gf-econ-btn'); b.removeAttribute('id'); shown.delete(`gf-econ-${where}-${a.id}`); }
+      b.dataset.econ = a.id; b.dataset.kind = a.kind; b.disabled = wait;
+      s.append(b);
+    }
+    if (st?.error) s.append(el('p', 'gf-note gf-error', st.error));
+    return s;
+  }
+  // the results card is ui.js's: the economy's 'results' buttons go on it (alone; with friends the party page's card is the result)
+  ui.resultsExtra = () => econStrip('results', true);
+  function redrawResults() {
+    const card = ui.parts?.card; if (!card || ui.view !== 'results') return;
+    const old = card.querySelector('.gf-econ'), fresh = econStrip('results', true);
+    if (old) { if (fresh) old.replaceWith(fresh); else old.remove(); return; }
+    if (!fresh) return;
+    const row = [...card.children].find(c => c.querySelector?.('#gf-again, #gf-to-menu'));
+    if (row) card.insertBefore(fresh, row); else card.append(fresh);
+  }
+
   function draw() {
     shown.clear();
     col.replaceChildren();
@@ -264,6 +303,7 @@ export function createMenu(ctx, ui, { game = {}, live = false, world = false, ga
     col.append(button('gf-how', 'how', T.how ?? 'How to play', null, () => go('how', 'pause')));
     col.append(button('gf-settings', 'settings', T.settings ?? 'Settings', null, () => go('settings', 'pause')));
     col.append(walletButton('pause'));
+    const econ = econStrip('pause'); if (econ) col.append(econ);
     if (!live) col.append(button('gf-leave', 'leave', T.leave ?? 'Quit to menu', world ? 'Everything stays as it is' : 'The round ends', () => onLeave?.()));
     if (live && room) drawRoom();
   }
@@ -409,8 +449,9 @@ export function createMenu(ctx, ui, { game = {}, live = false, world = false, ga
       }
     }
     col.append(p);
+    const econ = econStrip('menu'); if (econ) col.append(econ);
   }
-  host.onChange(() => { if (view === 'items' || view === 'home' || view === 'pause') draw(); });
+  host.onChange(() => { if (view === 'items' || view === 'home' || view === 'pause') draw(); redrawResults(); });
 
   addEventListener('keydown', e => {
     if (e.code !== 'Escape' || !view) return;
@@ -440,6 +481,7 @@ export function createMenu(ctx, ui, { game = {}, live = false, world = false, ga
         settings: { ...settings, volume: ctx.audio?.raw ? Math.round((ctx.audio.raw.volume ?? 1) * 100) : null, muted: ctx.audio?.raw?.muted ?? null, lookScale: ctx.input?.lookScale ?? null, invertY: ctx.input?.invertY ?? null },
         items: { state: col.querySelector('#gf-items-panel')?.dataset.state ?? null, picks: [...col.querySelectorAll('.gf-wallet-pick')].map(b => b.dataset.wallet), list: items },
         wallet: host.observe(),
+        economy: host.observeEconomy?.() ?? { offers: [], state: null, sent: [] },
       };
     },
   };
