@@ -19,7 +19,7 @@
 //             card (alone). A click only tells the page (gf:econ-action); the page signs and answers. No offer, nothing
 //
 // Words come from config/game.json → text (ui.* slots: ui/slots.js); colours from --gf-accent, --gf-panel, --gf-text.
-import { host as pageHost, priceText } from '../net/host.js';
+import { host as pageHost, econLabel } from '../net/host.js';
 
 const CSS = `
 #gf-menu{position:absolute;inset:0;pointer-events:auto;display:none;color:var(--gf-text,#fff)}
@@ -37,6 +37,7 @@ const CSS = `
 #gf-menu button{font:700 17px/1.1 system-ui,-apple-system,"Segoe UI",sans-serif;color:inherit;cursor:pointer;border:0}
 #gf-menu .gf-btn{display:flex;align-items:center;gap:12px;width:100%;padding:13px 18px;border-radius:14px;background:#ffffff1c;box-shadow:inset 0 0 0 1.5px #ffffff22;text-align:left;transition:background .12s,transform .12s}
 #gf-menu .gf-btn:hover,#gf-menu .gf-btn:focus-visible{background:#ffffff33;transform:translateX(3px);outline:none}
+#gf-menu .gf-col{padding-right:5px}      /* room for the hovered button's 3px slide: the column scrolls, so it clipped the right border */
 #gf-menu .gf-btn svg{width:20px;height:20px;flex:none;opacity:.9}
 #gf-menu .gf-btn small{display:block;font-size:12.5px;font-weight:550;opacity:.75;margin-top:3px}
 #gf-menu .gf-btn.live svg{color:#ff4d5e;opacity:1}
@@ -235,10 +236,10 @@ export function createMenu(ctx, ui, { game = {}, live = false, world = false, ga
     const st = host.econState ?? null, pending = new Set(st?.pending ?? []);
     const s = el('div', 'gf-econ'); s.id = `gf-econ-${where}`; s.dataset.where = where;
     for (const a of acts) {
-      const sub = [priceText(a.price), a.says].filter(Boolean).join(' · ');
-      const wait = pending.has(a.id), label = wait ? `${a.label}…` : a.label;
+      // the price is part of the label, never only the small line under it (that line hides in a short window)
+      const wait = pending.has(a.id), label = econLabel(a, wait), sub = a.says || '';
       let b;
-      if (inCard) { b = el('button', 'gf-econ-btn', a.price ? `${label} · ${priceText(a.price)}` : label); b.type = 'button'; if (a.says) b.title = a.says; b.addEventListener('click', click(() => host.econAction(a.id))); }
+      if (inCard) { b = el('button', 'gf-econ-btn', label); b.type = 'button'; if (a.says) b.title = a.says; b.addEventListener('click', click(() => host.econAction(a.id))); }
       else { b = button(`gf-econ-${where}-${a.id}`, null, label, sub || null, () => host.econAction(a.id), 'gf-econ-btn'); b.removeAttribute('id'); shown.delete(`gf-econ-${where}-${a.id}`); }
       b.dataset.econ = a.id; b.dataset.kind = a.kind; b.disabled = wait;
       s.append(b);

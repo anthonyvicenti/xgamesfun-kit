@@ -55,6 +55,7 @@ const CSS = `
 #gf-ui .gf-line span u{display:block;height:100%;background:var(--c,var(--gf-accent,#ff7a59));transition:width .2s}
 #gf-ui .gf-line b{font-variant-numeric:tabular-nums}
 #gf-ui .gf-line.chip b{padding:2px 9px;border-radius:999px;background:var(--c,#ffffff26);color:#fff;text-shadow:0 1px 0 #0006}
+#gf-ui .gf-econ .gf-line em{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#gf-ui .gf-econ .gf-line b{flex:0 1 auto;max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
 #gf-ui .gf-me .gf-meters{position:static;gap:5px}
 #gf-ui .gf-me .gf-meter{display:flex;align-items:center;gap:8px;background:transparent;padding:0;min-width:0;border-radius:0}
 #gf-ui .gf-me .gf-meter b{display:inline;font-size:13px;font-weight:600;opacity:.8;min-width:64px}

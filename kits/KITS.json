@@ -3,8 +3,8 @@
  "about": "A sparse mirror of the games.fun repository at one commit: the kits games are built on and the tools that create and verify them. Written by scripts/sync-kits.mjs; never edited by hand (fix the kit in games.fun and sync again). tests/kits.test.mjs checks kits/ against this file.",
  "source": {
   "repo": "games.fun",
-  "commit": "877af8067a0b03320312c5771fb007de4b277913",
-  "date": "2026-10-11T20:54:57-07:00"
+  "commit": "3c1b61c51fa3571b70d8c1032cd333b413fd9e14",
+  "date": "2026-10-11T23:15:57-07:00"
  },
  "kits": {
   "gf-three": {
@@ -74,8 +74,8 @@
   "secrets": "no .env files; text files are scanned for key-shaped strings and the sync fails on any hit"
  },
  "totals": {
-  "files": 1183,
-  "bytes": 36964645,
+  "files": 1184,
+  "bytes": 36999487,
   "excluded": 152,
   "excludedBy": {
    "Meshy-generated (licence tier unconfirmed)": 3,
@@ -198,8 +198,8 @@
   "research/multiplayer/p2p/vendor"
  ],
  "closure": {
-  "files": 136,
-  "bytes": 2257567,
+  "files": 137,
+  "bytes": 2286781,
   "modules": [
    "creator-studio/lib/asset-kinds.mjs",
    "creator-studio/lib/code-literals.mjs",
@@ -226,6 +226,7 @@
    "research/gf-three/loop/brief.mjs",
    "research/gf-three/loop/build-loop.mjs",
    "research/gf-three/loop/delivery.mjs",
+   "research/gf-three/loop/economy.mjs",
    "research/gf-three/loop/index.mjs",
    "research/gf-three/loop/lock.mjs",
    "research/gf-three/loop/messages.mjs",
@@ -350,13 +351,13 @@
    "path": "research/gf-three/CONTRACT.md",
    "why": "gf-three API: what rules.js and config are written against",
    "files": 1,
-   "bytes": 178785
+   "bytes": 180444
   },
   {
    "path": "research/gf-three/kit",
    "why": "gf-three kit, vendored into each game as gf/three/",
    "files": 225,
-   "bytes": 2096046
+   "bytes": 2097444
   },
   {
    "path": "research/gf-three/library",
@@ -506,7 +507,7 @@
    "path": "research/studio-v2/game-spec.schema.json",
    "why": "the game spec schema create validates",
    "files": 1,
-   "bytes": 15262
+   "bytes": 16045
   },
   {
    "path": "research/studio-v2/prompts",
@@ -518,7 +519,7 @@
    "path": "research/studio-v2/pitch.schema.json",
    "why": "the pitch schema (playbook)",
    "files": 1,
-   "bytes": 15343
+   "bytes": 17131
   },
   {
    "path": "research/studio-v2/specs/dev-dodgeball.spec.json",
@@ -838,7 +839,7 @@
   "research/gf-scenic/tools/lib/vendor/three/examples/jsm/tsl/utils/SoftParticles.js": "e79cc1a2ac697217c8ed9fbb4983fed012fb63848f96fb5fca0869676ee65eb3",
   "research/gf-scenic/tools/lib/vendor/three/examples/jsm/tsl/utils/SpecularHelpers.js": "cce8b1cffde0b7f7966a062d0d05b97318ce180f411c76fe3e25ebbef49e4220",
   "research/gf-scenic/tools/lib/vendor/three/examples/jsm/tsl/utils/TAAUtils.js": "eb744737027b4e1bc1ddb3168733051d93e12c7ab85c1b365e1726c345fc134d",
-  "research/gf-three/CONTRACT.md": "eeb1f248f07216d00004b3d5428f9d6894e59038d217645b16db066aab8f68c4",
+  "research/gf-three/CONTRACT.md": "d56b29cff1f7e33f97e99edc4bfe59dc811187d242b8cc9c924341d8c77b34aa",
   "research/gf-three/README.md": "3f9600c27fb5347d795d0bacbba08f5bcd188bfd925b14abed7910b9782c3567",
   "research/gf-three/character-bench/assets.json": "98d33abdba9511a5f2dc42a213777b1ff907723e41abdb40ec4f2bb83c0e48cd",
   "research/gf-three/character-bench/bench.js": "31a851777b0beb1237ed7031069a8b1b5c8f447b4dceb791a58a64a0172c360d",
@@ -849,7 +850,7 @@
   "research/gf-three/character-bench/sync.mjs": "777f32e814355d3033a807ad97404b2e8c42c5c3b8375656b24230acd4f6f521",
   "research/gf-three/kit/LICENSE": "71193b297092c9e9bdd33b9e2d23ff86c16e4ff1eab7ca48b6b78f6f136a48d6",
   "research/gf-three/kit/THIRD_PARTY.md": "5a942ac47b04608f0ce0d3e545668abf835dc0be94b631df0740430ce5b717ad",
-  "research/gf-three/kit/assets/assets.js": "44e1291f0bff935462ce7d5166b6ed4e9d689ca1fd792f516f0e608500fcd78d",
+  "research/gf-three/kit/assets/assets.js": "58c58e0c9dbd58413a9febfbf209cc19bdcca86c414c2938626716f44d2560f6",
   "research/gf-three/kit/assets/core.js": "35e6bcdc6ee51516ceba5cb090f492ddc670b22d5fb25184f6ad88f34fc623af",
   "research/gf-three/kit/assets/items.js": "15fb02078b35d4c5745ce5e317ccdb2c86d9bff170f3619663c7c340b112c035",
   "research/gf-three/kit/assets/loadout.js": "b28db9c13cf97c2b118da5788d9529ded65976ef66edc8f0cdf35e100e9268ed",
@@ -1019,16 +1020,16 @@
   "research/gf-three/kit/mechanics/waves/index.js": "9c11c3e2bf6b2c423c91de17410608fc539ca9b42f00fa690e2d35d8550b3483",
   "research/gf-three/kit/mechanics/waves/logic.js": "b32c824b13ac5bd5d123ba393fb0aca3aebe2d47b82221c52a4848d3e8f1a4b7",
   "research/gf-three/kit/mechanics/waves/types.js": "07e4eb768caeaa51efcb11e2b646890f6d93b192ffe80d0ee774a0631f9109c3",
-  "research/gf-three/kit/net/host.js": "1daea62447cb5ba7e73f93a5567b832d7b4c97ce18102785be04445382dfe691",
+  "research/gf-three/kit/net/host.js": "bae6ccc73f26771369c0c364cc716ee1d80a768c6895cef96e77bc6505ff51b1",
   "research/gf-three/kit/net/looks.js": "41993a7fdfdd85d12c22fd712ffd63cc0068b014315b2041493cdd0e1b92e17b",
   "research/gf-three/kit/net/persist.js": "e60930e3fb0162e5624cb957d83e1ad4cfb267c8fe75ccd95ac646ad43476480",
   "research/gf-three/kit/net/players.js": "068115eaba6f74b06f1b42fabe153ea93b9e3851543a92961ece5b4c2991f419",
   "research/gf-three/kit/net/session.js": "bad81c0fd1618ffede6f5fd75ff7d6309e2f5ed7ada489aef59d54bd92eccfc1",
   "research/gf-three/kit/net/shared.js": "ff7600c0276b9b6a7daa9ed6a867ee4d62832aae6d113a3775310d0838eaefc0",
   "research/gf-three/kit/net/world-text.js": "c00251421e9efeb4a889283d187b95ed4a5d1047f4b7298bb928458b38d190b4",
-  "research/gf-three/kit/ui/hud.js": "d3bf48efdf64bc2e7c71115a56f02bf0b4ef05e6a691a0e118ca0e1d8716d697",
+  "research/gf-three/kit/ui/hud.js": "ae2e1cb0746262892530067425c7c3645ed15869e4cea3a90f2605b80a5ffd8e",
   "research/gf-three/kit/ui/loading.js": "2114aca9cd51483455b82ae9d7ec6586647e3461756885aec02044746ea92d10",
-  "research/gf-three/kit/ui/menu.js": "05813f12df70427615be706f5364e90633cc2ef9d77a835b30df51169352e337",
+  "research/gf-three/kit/ui/menu.js": "b62a52a28adef6a24d7fe233c546cc172670e91e2c98abea18f4205aa1d689fd",
   "research/gf-three/kit/ui/panels/README.md": "7030398fb2283eee20750e3ad5f8bb0adbe0e3053f3856af18e7c6d0fc45817e",
   "research/gf-three/kit/ui/panels/css.js": "e1572758fee7a59657d4b949e88cc30d6147aa26e40a33a5ad1fc4b81b0710e2",
   "research/gf-three/kit/ui/panels/logic.js": "c2dbbec9059bf9a6c42213f204fd7234739ff80520ab957f0e1cd95835b9ae5a",
@@ -1312,17 +1313,18 @@
   "research/gf-three/library/textures/voxel/tuft-c.png": "71abb7dff7e1e6a3aa7f500cccac046eef615724f6637a695aa89d66c842c700",
   "research/gf-three/library/textures/voxel/tuft-d.png": "227f80c81b83a667e29f3752e334f3bf8b15193d9250f0fb0acd327143f39ab0",
   "research/gf-three/loop/brief.mjs": "ce1a23cccb1aabb3695c6c0371289353e8441a2327e4770dd60c3785a3a654ad",
-  "research/gf-three/loop/build-loop.mjs": "727b50fda66f7b44dfc1709dab3ee1e8151f15d4fc2f1f8b9706c4adc0457941",
+  "research/gf-three/loop/build-loop.mjs": "f703660b718a50363a3903eaac6b234555e805677cbd3a767909817824970c67",
   "research/gf-three/loop/delivery.mjs": "0098aa8f28b9578ab8f4cf145af90d36713819a6d9d888d4b970aa0e62589756",
-  "research/gf-three/loop/index.mjs": "b9f4e4d18cef98a05531b6309893d32a72f02828a5d8b22056238b3488e3a34b",
-  "research/gf-three/loop/lock.mjs": "a9dd8176fe84c1b5f5c3d979afc5afdb7d216b52ba9a4f3c90f28ac3740c0a59",
-  "research/gf-three/loop/messages.mjs": "8c76decfdec03f6ea1bef7eeebd3bd75f5f06512554c7d8ff3f709bf6122984c",
-  "research/gf-three/loop/pitch-rules.mjs": "3c84e024ab8930ed0ddd5cd042c9d0e8cd9e3b089254c2238614037ad48cf1c2",
+  "research/gf-three/loop/economy.mjs": "11e6d9ee4f46dc1cf146f320653aecb8ec5785719bf2e6556b77eade4c2b511e",
+  "research/gf-three/loop/index.mjs": "204932244f1992f76be68a0d17226285b73fe79e6c7962da9417aa95a69f8f7c",
+  "research/gf-three/loop/lock.mjs": "338b56eb2df40fcb12cadc6d9c2eea81011d27ad0311b1356bdf6cf0ceb34ad9",
+  "research/gf-three/loop/messages.mjs": "31b0011ecd64a5f2ed284c4791cb279bd208429916439391ce2f7d900bd497aa",
+  "research/gf-three/loop/pitch-rules.mjs": "09cf86d48c0be90ef5edbcf7aeb062cd84bde255faeffe45569d57eb06027287",
   "research/gf-three/loop/playtest.mjs": "0f45dcd558cb1324de651a24dbf36b791ff8847477610f5a4a59b2b9402a34b6",
   "research/gf-three/loop/repair-ledger.mjs": "3c7889d5342d1e4713a7df95ce01be8b59348315d63debb37bd4e7a63480cbad",
   "research/gf-three/loop/second-reader.mjs": "b7c28a9b3480d8d99147699d36acf8c28cea08530c21037d63561a602e75252c",
   "research/gf-three/loop/state.mjs": "fedc5b2cd8516dc1e86db0cf9c0660242fc6ea97da8c634b50ec0cff23fb6f1d",
-  "research/gf-three/loop/talk-loop.mjs": "ef14339c2226fe924677843aa57c9f42f072c8ef55fa765470a8620589bce83c",
+  "research/gf-three/loop/talk-loop.mjs": "b7bcdba8d2e8eab108326b7dc183f553d578a1590e3d76fa9aee1dae191ed1e3",
   "research/gf-three/loop/tools.mjs": "73782e54ad6f78881c5b87a12ea45efd24c525a1e09fd16306e73199399f54e3",
   "research/gf-three/loop/verdict.mjs": "d8e003ab12c2dceab3eaa123d13059fbf62382e20fd4e85476d65b93429a5488",
   "research/gf-three/tools/catalog.mjs": "2a7f56cd14d8d79f8f481f9153c42db305394dfba4070512ac13a22b8aabf35a",
@@ -1367,7 +1369,7 @@
   "research/gf-three/tools/lib/forge-webgl-check.mjs": "161893663297c2eba662f0bf0f6dcc76f472aa46f0edf541ebcc722d7e4c3a17",
   "research/gf-three/tools/lib/forge-world-check.mjs": "d214f6afafe53e28514a2a7e19477622b25022a8b474447769a5f752a3715fdd",
   "research/gf-three/tools/lib/friends-check.mjs": "0b4f16540ca951824b6035a7b1c6cb87d7177efe33a62cf72c0d2b23f9dd509a",
-  "research/gf-three/tools/lib/friends-watch-check.mjs": "165f76ee5dbaa32de6b6be1b8ad08bcc143b7631ee7cf3b7aef4f69cd66cc57b",
+  "research/gf-three/tools/lib/friends-watch-check.mjs": "906957154b10ab72879e5ab4da1696be60d8f861ab13eb8c1a8f662964fb4596",
   "research/gf-three/tools/lib/game-tests.mjs": "6f2e955a03130fb46ba8eb5540f9d7dec8759640ad7fc2eaa2bebe16b384a576",
   "research/gf-three/tools/lib/hits-check.mjs": "8dd41c657878426f5ebbdf8678af9d46507f191e484af242abd9917b0383442b",
   "research/gf-three/tools/lib/homes.json": "67b4d2a7609b37d7161fd3e9262130f1331d034f1b4b9224eea7d60f0dc76776",
@@ -1382,7 +1384,7 @@
   "research/gf-three/tools/lib/looks-check.mjs": "271f505326b26d3f3a53607cada7d5d24a06bb319edfb1bb5929ba5860d62b8e",
   "research/gf-three/tools/lib/main.mjs": "ffa7e7bbad9eef04e65e286012dc3c60dc1efff4832097cc50b9d4c84ac31607",
   "research/gf-three/tools/lib/manifest-check.mjs": "bb3844f9924bb68861ec09f89ddbbc78b312451d245f7cfbf42302798a82d209",
-  "research/gf-three/tools/lib/menu-check.mjs": "e9d1269b3bb6997bb22b5ce48dd8a53d87fc0006637b6680bea411581b65df44",
+  "research/gf-three/tools/lib/menu-check.mjs": "4a110aca6b817288bdd35930c896de338bbd2afef3cc1fa8d686d65badc9f041",
   "research/gf-three/tools/lib/own-verify.mjs": "d09cc69646ac74f7bda8f789bf2e63f60eea34fbc6b10049543e8e5fc7955dc4",
   "research/gf-three/tools/lib/part-signs.mjs": "03ba375c0baae845e32dfb42363dba0562bdce2254e667a87917dfb8197e9d75",
   "research/gf-three/tools/lib/paths.mjs": "4f334b0aacff018e72915b58baa05984b772b6bc731f16c0e02120b5771d3128",
@@ -1670,7 +1672,7 @@
   "research/gf-three/tools/serve.mjs": "8577a928e21527f0dcddedf556cfd4831b73269d26265cb3e115eb995b7b2504",
   "research/gf-three/tools/slots.mjs": "7575771212de63489ea10a7a2980ff0869fff7328a7d6642420da130f1925aff",
   "research/gf-three/tools/upgrade.mjs": "77bf98385eb7f0649d800691872e4fe4503c6739b04d6cd5dd46a7172a318678",
-  "research/gf-three/tools/verify-forge.mjs": "8597611241ca620d54b6806449c38b6900ac9acd65820153132496f026f2fb2b",
+  "research/gf-three/tools/verify-forge.mjs": "c009174c16979e262789622eb428d475ac8acda8eac68661b1788669e219f78b",
   "research/gf-three/tools/verify-world.mjs": "a1c7cee62ab534acaae6f5ae588ece1b76ce341c3e2f039cf6ed424e3b47d6d9",
   "research/gf-three/tools/verify.mjs": "4fbd528a14bccba8b5ce206762903626b4753a04b14766e49d317ca4ed61f725",
   "research/gf-three/tools/world.mjs": "b60f2f262ef033c122fc65e6023a6988b11578e0be3abc6b9eaff82d03837791",
@@ -1712,8 +1714,8 @@
   "research/multiplayer/party/kit/room.js": "32a3f4fcecc63dfe2cabf50abb737dd22df1b9f94e55540d4c7ffef5f86aef01",
   "research/multiplayer/party/lib.mjs": "66085ea704d5b7fd0859ee11672d03be530f30fdcf4b976e9e88e2da4f912bda",
   "research/multiplayer/party/manifest.mjs": "cec7216a2ab40c73a06f3f5eeb8f9b661b006bb3c63cb9d73d3dd0a6e5edef8b",
-  "research/studio-v2/game-spec.schema.json": "8e10f5dd497bbde22efabd3d784a6a6b7f0bdf6306592bebd3e9437d3c190a05",
-  "research/studio-v2/pitch.schema.json": "1d5ff4677d175ab4bb462223804d64a0aaf694dfb538f0b36967c9852b952603",
+  "research/studio-v2/game-spec.schema.json": "ff9245514e203bdb99dad4f31d3ddd4c724e84e2f9e0a31adb5b6a36f89dbc1b",
+  "research/studio-v2/pitch.schema.json": "69494302c4d72e35a5babf692c22f7899d6a027c272fef7bc873ce8f11dcf4a7",
   "research/studio-v2/prompts/build-forge.md": "470fcfcea5f2f1c9c0733695428d0b97473cc7e308022455fff99f46e3cd5ca2",
   "research/studio-v2/prompts/build.md": "7d95fc234fca2168404caa7202171f9cd98bcd8baec8321b667c5f707ac97557",
   "research/studio-v2/prompts/look-rubric-forge.md": "249fc291c8b3cd99e5bd51b89fc65c004406472c8e0be6763ba7634a7a24e6c3",

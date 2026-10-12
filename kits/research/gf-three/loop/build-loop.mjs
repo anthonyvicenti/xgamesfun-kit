@@ -18,6 +18,7 @@ import {usableDelivery,ensureDelivery,outcomeOf,issuesOf,settlePromises,proofLea
 import * as words from './messages.mjs';
 import {kitTools} from './tools.mjs';
 import {PROMPTS_DIR} from './brief.mjs';
+import {specEconomy,economyLock,economyAtDelivery} from './economy.mjs';
 
 export const STEPS=['create','agent','fix','verify','playtest','repair','deliver','done'];
 const SAY={verify:'repairing',play:'playRepairing',rescue:'rescuing'};
@@ -58,6 +59,11 @@ const same=s=>s;
  *   serveGame(), gameRef what the play-tester is given: a served URL ({url, close}), else gameRef (default: the folder)
  *   ledgerLine(line)     each finished repair round as one JSON line
  *   resume               false: never pick up an earlier run's state
+ *   economy              only in a session with web3 on, for a spec that references an economy (economy.mjs, K3):
+ *                        {publish() → the kit's economy_publish answer ({approve: {link, step}, cost} | {ok: false,
+ *                        refusals}), status() → the kit's economy_status answer ({live, parts})}. The lock then holds
+ *                        the economy as agreed, and delivery hands over the approval link without waiting for it
+ *                        (outcome.economy, state.economy). Either function may be missing; nothing here signs
  *   hooks                what only the host can do, each optional:
  *     prepare(loop)        make the game folder (the create step). → {end: outcome} to stop there
  *     settle(loop)         after the first agent round and its fix (or straight after create when resumed), before the
@@ -139,6 +145,9 @@ export async function openBuildLoop(host){
     const l=await takeLock(lockAt(),{when,at:stamp()});
     S.lock={...l,spec:held??l.spec,promises:null};
     S.lock.promises=(await T().promises?.(D.job,folders())??null)?.promises??null;
+    // the economy the locked spec references, as agreed (K3): only for a spec that has one
+    const ref=specEconomy(S.lock.spec?.text);
+    if(ref){const e=await economyLock(D.game,ref);if(e)S.lock.economy=e;}
     return S.lock;
   };
   // Every step starts here: a locked spec file that was edited is put back, and the edit is refused.
@@ -401,7 +410,11 @@ export async function openBuildLoop(host){
       const lib=await T().promisesLib?.().catch(()=>null)??null,list=M.pt?.list??await promisesNow();
       const {issues,ownUntested}=issuesOf(M.pt,settlePromises(lib,list,M.verdict,M.pt));
       const notYet=truthFirst(proofLead({ownUntested}));   // own promises nothing checked: the session says so first (question 15)
-      return end({outcome:outcomeOf({verdictOk:M.verdict.ok,fallback:M.fallback,issues,stale:p.stale}),...(notYet?{notYet}:{})},'verify ran on the files as they are, and no proof on record is stale');
+      const outcome={outcome:outcomeOf({verdictOk:M.verdict.ok,fallback:M.fallback,issues,stale:p.stale}),...(notYet?{notYet}:{})};
+      // going live (K3): the approval link, shown; delivery does not wait for the creator's wallet
+      const ref=S.lock?.economy?{in:S.lock.economy.file}:specEconomy(host.spec);
+      if(ref){outcome.economy=await economyAtDelivery({game:D.game,adapter:host.economy??null,ref});S.economy=outcome.economy;}
+      return end(outcome,'verify ran on the files as they are, and no proof on record is stale');
     },
   };
 
@@ -436,7 +449,7 @@ export async function openBuildLoop(host){
       // call (the caller is told why; the next call runs it on the spec as locked).
       const edited=await guard();
       if(edited.length){
-        const why=`the locked spec was changed after it was locked (${edited.map(p=>p.role==='game'?'the copy in the game':'the spec file').join(' and ')}) and was put back: call step() again`;
+        const why=`the locked spec was changed after it was locked (${edited.map(p=>p.role==='game'?'the copy in the game':p.role==='economy'?'the economy it references':'the spec file').join(' and ')}) and was put back: call step() again`;
         S.history=[...S.history,{step:ran,next:ran,why,at:stamp(),refused:REFUSALS.SPEC_CHANGED}].slice(-60);
         const fresh=S.refusals.filter(x=>!x.told),message=words.refusalNote(fresh,msgOpts());
         // A host that got the message from step() has it, so the agent is not told twice. run() never shows it to

@@ -12,9 +12,15 @@
 //
 // What a library can and cannot do is in README.md ("The locked spec"): when the state file is inside the game's
 // folder the builder can write it too, so the host must hand back the lock it holds in memory (`host.locked`).
+//
+// The economy (K3, economy.mjs): when the locked spec references one (`"economy": {"in": "gamesfun.json"}`), the lock
+// also holds the economy as it was agreed (`lock.economy`: {file, sha, text}). It is role 'economy' below: an edit is
+// put back and refused like an edit to the spec; what going live writes into gamesfun.json is neither compared nor put
+// back. A lock with no `economy` (every spec without one) is checked exactly as before.
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {dirname,resolve} from 'node:path';
+import {economyProblem,restoreEconomy} from './economy.mjs';
 
 const sha=text=>createHash('sha256').update(text).digest('hex');
 const read=async file=>{try{return await readFile(file,'utf8');}catch{return null;}};
@@ -32,8 +38,8 @@ export async function takeLock(files,{when='create',at=null,promises=null}={}){
 }
 
 /**
- * The locked files against the disk. → [{role: 'spec' | 'game', file, how: 'edited' | 'missing'}] ([] when they hold).
- * Reads only: a stop guard can call it with the lock from the state file.
+ * The locked files against the disk. → [{role: 'spec' | 'game' | 'economy', file, how: 'edited' | 'missing'}] ([] when
+ * they hold). Reads only: a stop guard can call it with the lock from the state file.
  */
 export async function lockProblems(lock,files){
   const out=[];
@@ -44,12 +50,18 @@ export async function lockProblems(lock,files){
     if(text==null)out.push({role,file,how:'missing'});
     else if(sha(text)!==want.sha)out.push({role,file,how:'edited'});
   }
+  // the economy the spec references, in the game's folder (beside the game's copy of the spec)
+  if(lock?.economy&&files.game){
+    const game=dirname(files.game),how=await economyProblem(game,lock.economy);
+    if(how)out.push({role:'economy',file:resolve(game,lock.economy.file),how});
+  }
   return out;
 }
 
 /** Put the locked files back as they were locked. → the problems it could not undo ([] when the disk holds again). */
 export async function restoreLock(lock,files,problems){
   for(const p of problems){
+    if(p.role==='economy'){await restoreEconomy(dirname(p.file),lock.economy);continue;}
     const text=lock[p.role]?.text;
     if(typeof text!=='string')continue;
     await mkdir(dirname(p.file),{recursive:true});
@@ -61,7 +73,7 @@ export async function restoreLock(lock,files,problems){
 /** Do two locks name the same spec and the same promises? (The state's against the one the host held in memory.) */
 export function sameLock(a,b){
   const ids=l=>(l?.promises??[]).map(p=>p.id).join('\n');
-  return (a?.spec?.sha??null)===(b?.spec?.sha??null)&&(!a?.game||!b?.game||a.game.sha===b.game.sha)&&(!a?.promises||!b?.promises||ids(a)===ids(b));
+  return (a?.spec?.sha??null)===(b?.spec?.sha??null)&&(!a?.game||!b?.game||a.game.sha===b.game.sha)&&(!a?.promises||!b?.promises||ids(a)===ids(b))&&(!a?.economy||!b?.economy||a.economy.sha===b.economy.sha);
 }
 
 /**

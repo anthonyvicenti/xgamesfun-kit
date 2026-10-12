@@ -18,8 +18,14 @@
 // One source for both hosts: the Studio worker (studio-worker/tools/check-v2.mjs) and a person's own session (the kit's
 // gamesfun_step_spec) call checkPlay; the pitch prompt's words for this step are PITCH_PLAY_STEP (the worker's
 // prompts/pitch.md carries them verbatim: loop/tests/pitch-rules.test.mjs fails when it drifts).
-// Pure: checkPlay(pitch, {request, catalog, kind}) → ['$.play.loop.wants: …'].
+//   economy   (K3, only when the host says the session runs with web3 on: `web3: true`) the pitch names an economy
+//             only when the creator's words ask for one (copied into play.economy.from) or it is offered and asked
+//             (about: economy), never both; it carries what it is and its price, and says when it pays for clears.
+//             With web3 off nothing here changes, and a pitch that names an economy anyway is refused.
+//
+// Pure: checkPlay(pitch, {request, catalog, kind, web3, economy}) → ['$.play.loop.wants: …'].
 import { loopProblems } from '../tools/catalog.mjs';
+import { ECONOMY_ABOUT, paysForClears } from './economy.mjs';
 
 export const MAX_QUESTIONS = 3;
 export const ABOUT = ['together', 'body'];
@@ -36,6 +42,29 @@ export const PITCH_PLAY_STEP = [
   '- **What a player is** (`play.body.what`): in the creator\'s idea, not in your card. Four in a row is a `board`, a racing game a `vehicle`, a clicker or a point-and-click story a `cursor`, a card game `cards`, even when card 1 gives each player a character to walk because the kit has nothing else. A `character` that walks about needs no question: do not ask one. A game with no such body asks how each player is shown on screen, as one of your questions (`"about": "body"`, with a default), unless the creator\'s words say it (`play.body.from`). A card that uses a part whose catalog entry has `asks` owes that question the same way.',
   '- Do not ask what is obvious: a tag game or a shooter already says who plays whom and what you are.',
 ];
+
+/**
+ * The pitch prompt's words for the economy, for a host whose session runs with web3 on (the kit with GAMESFUN_WEB3=1).
+ * A host with web3 off never shows them, so its pitch prompt is what it was.
+ */
+export const PITCH_ECONOMY_STEP = [
+  '**The economy** (this session runs with web3 on: the `economy_*` tools and the `gamesfun-economy` skill are yours). An economy is real money on devnet: what players pay, what they can win and where the money goes, kept in the game\'s `gamesfun.json`. Name one in `play.economy` only when the creator\'s words ask for one, or offer it as a question (checked):',
+  '- **Their words ask for it** (SOL, a wallet, staking, a house edge, real money, an economy): copy those words exactly into `play.economy.from` and ask nothing about it.',
+  '- **Their words do not settle it** (a shop, a prize pot, tickets or rewards can be only the game\'s own points), or you offer an economy they did not mention: leave `from` out and ask it as one of your questions (`"about": "economy"`), with one option that keeps the economy and one that leaves it out, the cards\' choice as the default. Words that only hint at money and no economy offered: ask all the same.',
+  '- `play.economy.what`: one plain sentence, what players pay and what they can win. `price`: what putting it live costs, from `economy_cost` (e.g. "about 0.05 SOL"). `clears`: true when the economy pays a player for a result the game reports (clearing a level, winning a run) after they paid for the attempt. The creator reads one sentence built from these fields, with the price, how to drop it and, when it pays for clears, the one thing a cheater can still do.',
+  '- Draft it with `economy_examples`, `economy_check` and `economy_cost` (pass the draft as `spec`); nothing is signed in the pitch.',
+  '- **The locked spec, when the creator kept it:** save the economy with `economy_save` (only a spec its checker passes is saved), then put `"economy": {"in": "gamesfun.json"}` in the spec: the spec holds that reference, never a copy. When they dropped it, the spec has no `economy`.',
+];
+
+// What the creator's words say about an economy. SAID: words that can only mean real money on a chain. HINT: words
+// that may mean money or only the game's own points (ask). CLEARS: paying per attempt for a result the game reports.
+export const SAID_ECONOMY = /\b(\d+(\.\d+)?\s*(sol|usdc)|sol|usdc|lamports?|devnet|wallets?|on[\s-]?chain|crypto|nfts?|stak(e|es|ed|ing)|house\s+edge|real\s+money|(an?|the|its|my|our)\s+economy|token[\s-]?2022|pump\.?fun|(our|my|the\s+game'?s)\s+(game\s+)?(token|coin))\b/i;
+export const HINT_ECONOMY = /\b(shop|store|buy(s|ing)?|sell(s|ing)?|prices?|pay(s|ing)?|paid|bets?|betting|wager(s|ing)?|prize\s+(pool|pot)|pot|jackpot|lotter(y|ies)|raffles?|tickets?|loot\s*box(es)?|mystery\s+box(es)?|gacha|earn(s|ing)?|trad(e|es|ing)|market(place)?|rewards?|cash|money)\b/i;
+const CLEARS_DONE = /\b(clear(s|ed|ing)?|beat(s|en|ing)?|finish(es|ed|ing)?|complet(e|es|ed|ing)|reach(es|ed|ing)?)\b/i;
+const CLEARS_TRY = /\b(attempts?|tr(y|ies)|entr(y|ies)|runs?|levels?)\b/i;
+const CLEARS_PAY = /\b(pay(s|ing)?|paid|costs?|fee|sol|usdc|stake)\b/i;
+const DROP_OPTION = /\b(no|not|without|none|skip|leave|drop|just|only|free)\b/i;
+export const PRICE_SOL = /\d+(\.\d+)?\s*SOL\b/i;
 
 // ── words ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 const STOPW = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'with', 'you', 'your', 'it', 'its', 'is', 'are', 'by', 'for', 'from', 'each', 'every', 'that', 'as', 'at', 'no', 'not', 'yet']);
@@ -87,7 +116,7 @@ export function partAsks(cards, catalog) {
  * and the questions asked when it was first pitched.
  * → errors with JSON paths from the pitch root ($.play.loop.wants: …)
  */
-export function checkPlay(pitch, { request = {}, catalog = null, kind = request.kind ?? 'pitch' } = {}) {
+export function checkPlay(pitch, { request = {}, catalog = null, kind = request.kind ?? 'pitch', web3 = false, economy = null } = {}) {
   const loops = Array.isArray(catalog?.loops) ? catalog.loops : [];
   if (!loops.length || !pitch || typeof pitch !== 'object') return [];
   const errors = [], cards = Array.isArray(pitch.cards) ? pitch.cards : [];
@@ -107,6 +136,8 @@ export function checkPlay(pitch, { request = {}, catalog = null, kind = request.
       }
     }
   }
+  // an economy in a session with web3 off: no game here can carry one (a refine too)
+  if (!web3) errors.push(...economyOff(pitch, cards));
   if (!fresh) return errors;
 
   const play = pitch.play;
@@ -182,5 +213,46 @@ export function checkPlay(pitch, { request = {}, catalog = null, kind = request.
   if (!noBody && !bodyPart && qB) errors.push(`$.questions: each player is a character that walks about (play.body.what), which needs no question: drop "${qB.id}" (what the characters look like is another question, with no "about")`);
   if ((noBody || bodyPart) && qB && bodySaid) errors.push(`$.questions: the creator already said how each player is shown ("${B.from}"): do not ask it again (drop the question "${qB.id}")`);
   if ((noBody || bodyPart) && !qB && !bodySaid && B.from == null && left > 0) errors.push(`$.questions: ${noBody ? `a player in this idea is not a character that walks about (play.body.what: "${B.what}")` : `"${bodyPart.part}" has no player body of its own (${bodyPart.why})`}, and the creator's words do not say how each player is shown: ask it as one of the questions ("about": "body"; e.g. a character walking beside it, or a marker in each player's colour), with the cards' choice as the default`);
+  // the economy, in a session with web3 on: named only when asked for, or offered and asked; with its price
+  if (web3) errors.push(...economyRules(play, { words, questions, left, economy }));
   return errors;
+}
+
+/** With web3 off a pitch names no economy, asks nothing about one, and no card's spec references one. */
+function economyOff(pitch, cards) {
+  const out = [];
+  if (pitch.play?.economy != null) out.push('$.play.economy: this session runs with web3 off, so no game here carries an economy: leave play.economy out (when the creator\'s words ask for real money, it is a play.needs row marked missing)');
+  for (const q of Array.isArray(pitch.questions) ? pitch.questions : []) if (q?.about === ECONOMY_ABOUT) out.push(`$.questions: this session runs with web3 off, so there is no economy to ask about: drop the question "${q.id}"`);
+  for (const [i, c] of cards.entries()) if (c?.spec?.economy != null) out.push(`$.cards[${i}].spec.economy: this session runs with web3 off, so no game here carries an economy: take "economy" out of the spec`);
+  return out;
+}
+
+/**
+ * The economy step (K3): ask, don't assume. `economy`: the draft the host read from the game's gamesfun.json, when
+ * there is one (its decisions say whether it pays for clears). → errors
+ */
+function economyRules(play, { words, questions, left, economy }) {
+  const out = [], E = play.economy ?? null, qE = questions.find(q => q?.about === ECONOMY_ABOUT) ?? null;
+  const said = words.match(SAID_ECONOMY)?.[0] ?? null, hint = words.match(HINT_ECONOMY)?.[0] ?? null;
+  if (!E) {
+    if (qE) out.push(`$.questions: the question "${qE.id}" asks about an economy the pitch does not name: say what it would be in play.economy (what, price, clears; no from), or drop the question`);
+    else if (said) out.push(`$.play.economy: the creator's words ask for an economy ("${said}"): name it in play.economy ({what, price, clears}) with those words copied exactly into from, and ask nothing about it`);
+    else if (hint && left > 0) out.push(`$.questions: the creator's words mention "${hint}", which can be real money on devnet or only the game's own points: offer an economy in play.economy (what, price, clears; no from) and ask it as one of the questions ("about": "economy"), with an option that keeps it and one that leaves it out`);
+    return out;
+  }
+  const fromOk = E.from != null && quoted(E.from, words);
+  if (E.from != null && !fromOk) out.push(`$.play.economy.from: "${E.from}" is not in the creator's words: copy the words that ask for an economy exactly as they wrote them, or leave "from" out and ask (a question with "about": "economy")`);
+  else if (fromOk && !SAID_ECONOMY.test(E.from)) out.push(`$.play.economy.from: "${E.from}" does not settle it (it can be only the game's own points): leave "from" out and ask (a question with "about": "economy")`);
+  if (E.from != null && qE) out.push(`$.questions: the creator already asked for an economy ("${E.from}"): do not ask it again (drop the question "${qE.id}")`);
+  if (E.from == null && !qE) out.push(left > 0 ? '$.questions: the creator\'s words do not ask for an economy, so the pitch offers it as a question ("about": "economy"), with an option that keeps it and one that leaves it out, the cards\' choice as the default' : '$.play.economy: the creator\'s words do not ask for an economy and no question is left to offer one: leave play.economy out');
+  if (qE) {
+    const opts = Array.isArray(qE.options) ? qE.options : [];
+    if (opts.length < 2 || !opts.some(o => DROP_OPTION.test(`${o?.label ?? ''} ${o?.id ?? ''}`))) out.push(`$.questions: the question "${qE.id}" lets the creator drop the economy: one option keeps it, one leaves it out (e.g. "No economy, just the game")`);
+  }
+  if (!PRICE_SOL.test(String(E.price ?? ''))) out.push(`$.play.economy.price: "${E.price ?? ''}" is not a price: say what putting it live costs in SOL, from economy_cost (e.g. "about 0.05 SOL")`);
+  const clears = economy ? paysForClears(economy) : null;
+  if (clears === true && !E.clears) out.push('$.play.economy.clears: the economy pays a player for a clear the game reports after they paid for the attempt (a decision in gamesfun.json): set clears to true, so the creator reads what a cheater can still do');
+  else if (clears === false && E.clears) out.push('$.play.economy.clears: no decision in gamesfun.json pays for a clear after a paid attempt: set clears to false');
+  else if (clears == null && !E.clears && CLEARS_DONE.test(words) && CLEARS_TRY.test(words) && CLEARS_PAY.test(words)) out.push(`$.play.economy.clears: the creator's words pay for a clear after a paid attempt ("${words.match(CLEARS_DONE)[0]}"): set clears to true, so the creator reads what a cheater can still do`);
+  return out;
 }

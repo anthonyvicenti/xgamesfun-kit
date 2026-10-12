@@ -27,9 +27,11 @@ import path from 'node:path';
 import {
   openBuildLoop, openTalkLoop, kitTools, heldStore, specLock, stateFileOf, filesHash, proofOf, composeBrief, loadParts, partsWords,
   readPlaytestReport, checkPlay, PITCH_PLAY_STEP, secondRead, rulesClaims, secondReadPrompt,
+  PITCH_ECONOMY_STEP, economyWords, economyNow, ECONOMY_ABOUT,
 } from '../../kits/research/gf-three/loop/index.mjs';
 import { check as schemaProblems } from '../../kits/research/gf-three/tools/lib/schema.mjs';
 import { clearCancel, readCancel } from '../../lib/cancel.mjs';
+import { web3On as web3Switch } from '../../lib/web3-switch.mjs';
 import { catalog as kitCatalog } from '../../lib/catalog.mjs';
 import { CHAR_DEPS, npmCli } from '../../lib/char-deps.mjs';
 import { checkpointStore, gameFiles, treeHash } from '../../lib/checkpoint.mjs';
@@ -45,6 +47,12 @@ export const PLAYTESTER = 'playtester';
 /** Tests only: `seams.tools` replaces kit scripts by name (a verify with no browser). Never set in the product. */
 export const seams = { tools: null, catalog: null };
 const TALK = ['pitch', 'refine'];
+// The economy (K3): only with web3 on (lib/web3-switch.mjs, the one switch for the economy_* tools and the Economy tab:
+// on unless GAMESFUN_WEB3 is 0, off, false or no). Off, nothing below changes: no prompt line, no pitch rule, no host
+// function, nothing in an answer.
+const web3On = () => web3Switch(process.env);
+const economyTools = async () => Object.fromEntries((await import('./economy.mjs')).tools.map(t => [t.name, t]));
+const economyAsked = pitch => (Array.isArray(pitch?.questions) ? pitch.questions : []).some(q => q?.about === ECONOMY_ABOUT);
 const ROUND_STEPS = ['agent', 'repair'];
 
 // ---------------------------------------------------------------- places and small helpers
@@ -190,6 +198,7 @@ const pitchMessage = (G, { kind, idea }) => [
   '',
   // the pitch step's own words, from the loop library (the same lines Studio's pitch prompt carries): never a copy here
   ...(kind === 'refine' ? [] : [...PITCH_PLAY_STEP, '']),
+  ...(web3On() ? [...PITCH_ECONOMY_STEP, ''] : []),
   'Then give one of two answers:',
   '',
   `- **Concepts**, when the person has not chosen yet: 2–3 takes that differ in how they play, written to \`${p(G.pitch)}\` (schema: \`${STUDIO_V2}/pitch.schema.json\`; every card carries a complete game spec). The person picks before anything is built.`,
@@ -235,7 +244,8 @@ async function readAnswer(G, { kind = 'pitch', idea = null, reads = undefined } 
   }
   if (!errors.length) {
     const cat = seams.catalog ? await seams.catalog() : await kitCatalog().catch(() => null);
-    errors.push(...checkPlay(pitch, { request: { kind, prompt: idea ?? '' }, catalog: cat, kind }).map(e => `pitch ${e}`));
+    const econ = web3On() ? { web3: true, economy: (await readJson(path.join(G.game, 'gamesfun.json')))?.economy ?? null } : {};
+    errors.push(...checkPlay(pitch, { request: { kind, prompt: idea ?? '' }, catalog: cat, kind, ...econ }).map(e => `pitch ${e}`));
     // the second reader, on a fresh pitch that passed every other rule (no question is asked about a pitch refused anyway)
     if (!errors.length && kind === 'pitch' && rulesClaims(pitch).length) {
       const second = await secondReading(G, pitch, { catalog: cat, idea, reads });
@@ -302,6 +312,7 @@ function talkHost(G, { kind, idea = null, resume, answer = null }) {
     firstMessage: pitchMessage(G, { kind, idea }),
     // `answer`: the answer as gamesfun_step_spec has just read it (one reading per call, second reader and all)
     check: () => answer ?? readAnswer(G, { kind, idea }),
+    ...(web3On() ? { economy: { game: G.game, check: async e => (await import('../../web3/economy/check.mjs')).check(e).refusals } } : {}),
     repairMessage: errors => `Your answer is not valid yet:\n${errors.slice(0, 20).map(e => `- ${e}`).join('\n')}\n\nFix the answer (use only catalog values: \`gamesfun_catalog\`), then call \`gamesfun_step_spec\` {"game": "${p(G.game)}"} again (with the corrected \`spec\` or \`pitch\` when you passed it to the tool). This is the one repair round.`,
   };
 }
@@ -336,6 +347,8 @@ async function buildHost(G, { kind = 'build', resume = true, request = null, log
     firstMessage: await roundBrief(G, spec, { kind, request }),
     spec, get promises() { try { return JSON.parse(readFileSync(G.promises, 'utf8')); } catch { return null; } },
     tools, versions, prompts: PROMPTS, gameRef: p(G.game),
+    // going live at delivery: the approval link (economy_publish) and the state on chain (economy_status); nothing signs
+    ...(web3On() ? { economy: { publish: async () => (await economyTools()).economy_publish.handler({ game: G.game }, {}), status: async () => (await economyTools()).economy_status.handler({ game: G.game }, {}) } } : {}),
     hooks: {
       // the create step: the kit's own create (it also writes the game's guide), then the starting game is kept
       async prepare() {
@@ -568,6 +581,8 @@ const TOOLS = [
       if (w.phase === 'build') {
         Object.assign(out, { kind: s.kind, rounds: { agent: s.round, repairs: s.repairs, rescues: s.rescues, verifies: s.verifies, playtests: s.playtests }, outcome: s.outcome ?? null });
         if (isGame(G.game)) out.proof = proofOf(s, await filesHash(G.game));
+        // the economy waits for the person's wallet until economy_status says it is live
+        if (s.economy) { let st = null; if (web3On() && s.economy.state === 'waiting-for-approval') { try { st = await (await economyTools()).economy_status.handler({ game: G.game }, {}); } catch { st = null; } } out.economy = economyNow(s.economy, st); }
         out.checkpoints = (await checkpointStore(G.game).list()).map(c => ({ name: c.name, at: c.at, ...(c.meta?.step ? { before: `${c.meta.step}${c.meta.kind ? ` (${c.meta.kind})` : ''}` } : {}) }));
       }
       return out;
@@ -636,6 +651,9 @@ const TOOLS = [
       if (answer.errors) out.problems = answer.errors.slice(0, 30);
       else if (answer.file === 'spec.json') out.spec = { file: p(G.spec), title: answer.value?.title ?? null, engine: answer.value?.engine ?? 'party', mechanics: (answer.value?.mechanics ?? []).map(m => m.id) };
       else out.concepts = (answer.value?.cards ?? []).map(c => ({ id: c.id, title: c.title, hook: c.hook, howItPlays: c.howItPlays }));
+      // the economy the pitch names, in the loop's own words (with the price, how to drop it, the hole when it pays for clears)
+      if (!answer.errors && answer.file === 'pitch.json' && answer.value?.play?.economy) out.economy = { words: economyWords(answer.value.play.economy, { asked: economyAsked(answer.value) }), tellThePerson: 'Show the person these words as they are, with the concepts.' };
+      if (!answer.errors && answer.economy) out.economy = { ...answer.economy, ...(answer.economy.hole ? { tellThePerson: `Tell the person, as it is: "${answer.economy.hole}"` } : {}) };
       // what the second reader read, and in plain words what nobody read: the person is not told a pitch was fully checked
       if (answer.secondRead) out.secondReader = secondSaid(answer.secondRead, answer.value ?? await readJson(G.pitch));
       return out;
@@ -840,15 +858,16 @@ const TOOLS = [
       // (the library's `notYet`: own promises nothing checked). Kept beside the delivery for the studio's Build tab,
       // because the state file holds the outcome's name only.
       const words = OUTCOME_WORDS[o.outcome] ?? null, firstWords = o.notYet || null;
-      if (/^delivered/.test(String(o.outcome))) { await mkdir(G.out, { recursive: true }); await writeFile(path.join(G.out, OUTCOME_FILE), JSON.stringify({ outcome: o.outcome, words, firstWords, at: new Date().toISOString() }, null, 2) + '\n'); }
+      if (/^delivered/.test(String(o.outcome))) { await mkdir(G.out, { recursive: true }); await writeFile(path.join(G.out, OUTCOME_FILE), JSON.stringify({ outcome: o.outcome, words, firstWords, ...(o.economy ? { economy: o.economy } : {}), at: new Date().toISOString() }, null, 2) + '\n'); }
       return report(L, host, G, {
         ...said, delivered: /^delivered/.test(String(o.outcome)), outcome: o.outcome, ...(words ? { outcomeMeans: words } : {}), ...(firstWords ? { firstWords } : {}),
         ...(o.failed ? { failed: o.failed } : {}), ...(L.state.fallback ? { fallback: L.state.fallback } : {}),
         ...(delivery ? { delivery } : {}),
+        ...(o.economy ? { economy: o.economy } : {}),
         ...(pt && !pt.skipped ? { playtest: { verdict: pt.verdict, failed: pt.failedIds ?? [], blockers: (pt.feel ?? []).filter(f => f.severity === 'blocker').map(f => f.issue), summary: pt.summary ?? '' } } : {}),
         // a play-test that could not run proved nothing: said by name, whatever the outcome is called
         ...(L.state.playtest?.verdict === 'error' ? { playtestDidNotRun: L.state.playtest.error ?? 'the play-test could not run' } : {}),
-        tellThePerson: `${firstWords ? `Start with these words, as they are: "${firstWords}" Then say` : o.outcome === 'delivered-with-issues' ? 'Start with what the play-tester could not see work or was blocked by (playtest.failed, playtest.blockers). Then say' : 'Say'} what they will see, what you left out and why, and anything that still fails.${L.state.playtest?.verdict === 'error' ? ' Say plainly that no play-tester played this version (playtestDidNotRun says why).' : ''} A green verify is the kit's bar, not their verdict. To play it: gamesfun_dev_start.`,
+        tellThePerson: `${firstWords ? `Start with these words, as they are: "${firstWords}" Then say` : o.outcome === 'delivered-with-issues' ? 'Start with what the play-tester could not see work or was blocked by (playtest.failed, playtest.blockers). Then say' : 'Say'} what they will see, what you left out and why, and anything that still fails.${L.state.playtest?.verdict === 'error' ? ' Say plainly that no play-tester played this version (playtestDidNotRun says why).' : ''} A green verify is the kit's bar, not their verdict. To play it: gamesfun_dev_start.${o.economy ? ` Then give them the economy's words as they are: "${o.economy.words}"${o.economy.link ? ' (the link is the approval page: you never sign, and the build does not wait for it)' : ''}` : ''}`,
       });
     }); },
   },

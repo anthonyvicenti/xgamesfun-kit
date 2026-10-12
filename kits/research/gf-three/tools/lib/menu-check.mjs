@@ -19,7 +19,9 @@
 //                          page to connect, the menu shows the address and the items, Wear asks the page, the page's
 //                          loadout reaches the game and the player is drawn in the item's colour, Disconnect clears it,
 //                          and Play with friends asks the page. The economy's buttons (CONTRACT §6g W2), on a second
-//                          page in stepped time: with no offer nothing of the economy is on screen (home, wallet view,
+//                          page in stepped time (an engine with no stepped time, forge, passes `clock`: the round's
+//                          clock is cut to that many seconds through Studio's overrides and the page plays in real
+//                          time to the same results card): with no offer nothing of the economy is on screen (home, wallet view,
 //                          HUD, pause, results); then the page offers one button per place (menu, pause, results, hud)
 //                          and each shows where its `where` says and nowhere else, a real click sends gf:econ-action
 //                          with its id, and the HUD line follows the page's gf:economy state
@@ -250,7 +252,7 @@ const H = window.__host = { log: [], game: null, status: 'none', worn: [], addre
 // each click is its own make-believe (no wallet, no network, no money)
 const ECON = { actions: [
   { id: 'shop-sword', kind: 'buy', label: 'Buy a test sword', price: { amount: '0.1', currency: 'SOL' }, says: 'A test item', where: 'menu' },
-  { id: 'stake-gold', kind: 'stake', label: 'Stake 5 gold', says: 'Earn while you play', where: 'pause' },
+  { id: 'stake-gold', kind: 'stake', label: 'Stake 5 gold', price: { amount: '5', currency: 'GOLD' }, says: 'Earn while you play', where: 'pause' },
   { id: 'claim-prize', kind: 'claim', label: 'Claim', where: 'results' },
   { id: 'gold', kind: 'hold', label: 'Gold', where: 'hud' },
 ] };
@@ -277,8 +279,11 @@ addEventListener('message', e => {
 });
 </script>`;
 
-/** Check 22: the wallet in the home menu, through a stand-in for the /play page. → {ok, detail, record, warnings} */
-export async function checkWallet({ newPage, url, log = () => {}, shot = null }) {
+/** Check 22: the wallet in the home menu, through a stand-in for the /play page. → {ok, detail, record, warnings}
+ * clock: for an engine with no stepped time (forge: kit/core/boot-forge.js has no window.__game.step), the economy page
+ * plays in real time on a round cut to `clock` seconds (config/game.json /round/seconds through the overrides, as check 6
+ * does), and still reaches the results card. 0 (the party and scenic boots): stepped time. */
+export async function checkWallet({ newPage, url, log = () => {}, shot = null, clock = 0 }) {
   const gameUrl = `${url}${url.includes('?') ? '&' : '?'}seed=4&bots=1`;
   const html = HOST_HTML(gameUrl), htmlStep = HOST_HTML(`${gameUrl}&gf-step=1`);
   // /step: the economy's page, the game in stepped time (kit/core/step.js) so a whole round ends in seconds
@@ -344,14 +349,14 @@ export async function checkWallet({ newPage, url, log = () => {}, shot = null })
   // the economy's buttons (CONTRACT §6g W2), on a page of their own
   const E = { steps: [], fail: [] };
   if (!fail.length) {
-    try { await checkEconomy({ newPage, hostUrl: `${hostUrl}step`, shot, E }); }
+    try { await checkEconomy({ newPage, hostUrl: clock ? `${hostUrl}real` : `${hostUrl}step`, shot, E, clock }); }
     catch (e) { if (!E.fail.length) E.fail.push(`the economy: ${e.message}`); }
   }
   await new Promise(r => server.close(r));
   steps.push(...E.steps); fail.push(...E.fail);
   const ok = fail.length === 0 && steps.length > 0;
   log(`wallet: ${ok ? 'ok' : fail.join('; ')}`);
-  return { ok, detail: ok ? 'framed by a stand-in /play page: the menu listed its wallet, connected through the page, showed the address and 2 items, wore one through the page (the player drawn in its colour), disconnected, and Play with friends asked the page; with no economy offered nothing of it showed (home, wallet view, HUD, pause, results), then each of the page\'s economy buttons showed only where it said (results card, wallet view, pause menu) and a real click asked the page, and the HUD line showed and followed the page\'s state' : `the wallet in the menu: ${fail.slice(0, 5).join('; ')}`, record: { steps }, warnings };
+  return { ok, detail: ok ? 'framed by a stand-in /play page: the menu listed its wallet, connected through the page, showed the address and 2 items, wore one through the page (the player drawn in its colour), disconnected, and Play with friends asked the page; with no economy offered nothing of it showed (home, wallet view, HUD, pause, results), then each of the page\'s economy buttons showed only where it said (results card, wallet view, pause menu) and a real click asked the page, and the HUD line showed and followed the page\'s state' + (clock ? ` (the economy page in real time on a ${clock} s round: this engine has no stepped time)` : '') : `the wallet in the menu: ${fail.slice(0, 5).join('; ')}`, record: { steps }, warnings };
 }
 
 // ---- check 22, the economy (CONTRACT §6g W2): the page's buttons and lines, drawn by the kit, clicks told to the page ----
@@ -363,7 +368,7 @@ async function econOnScreen(frame) {
     const vis = typeof e.checkVisibility === 'function' ? e.checkVisibility({ opacityProperty: true, visibilityProperty: true }) : e.offsetParent !== null;
     const inView = r.width > 2 && r.height > 2 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight;
     const at = inView ? document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) : null;
-    return { id: e.dataset.econ ?? null, where: e.closest('[data-where]')?.dataset.where ?? null, text: e.textContent.trim().slice(0, 60), shown: !!(vis && inView), clear: !!at && (at === e || e.contains(at)) };
+    return { id: e.dataset.econ ?? null, where: e.closest('[data-where]')?.dataset.where ?? null, text: e.textContent.trim().slice(0, 60), seen: (e.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 80), shown: !!(vis && inView), clear: !!at && (at === e || e.contains(at)) };
   }).filter(x => x.shown)).catch(() => null);
 }
 const econNames = on => on.map(x => x.id ?? `a '${x.where}' box`).join(', ');
@@ -373,26 +378,38 @@ async function noEconomy(frame, step, place, m) {
   return step(`no economy offered: nothing of it in ${place}`, on && !on.length && !offers, on === null ? 'could not read the page' : on.length ? `on screen: ${econNames(on)}` : offers ? `${offers} offers the page never made` : '');
 }
 
-async function checkEconomy({ newPage, hostUrl, shot, E }) {
-  const T = await newPage('economy');
+async function checkEconomy({ newPage, hostUrl, shot, E, clock = 0 }) {
+  // real time (clock > 0): the round's clock cut to `clock` seconds, the same overrides check 6 uses on forge
+  const T = await newPage('economy', clock ? { overrides: { patches: [{ file: 'config/game.json', pointer: '/round/seconds', value: clock }] } } : {});
   const p = T.page;
   const step = (name, ok, detail = '') => { E.steps.push({ name, ok: !!ok, detail }); if (!ok) E.fail.push(`${name}${detail ? ` (${detail})` : ''}`); return !!ok; };
   const F = p.frameLocator('#game');
   const frame = () => p.frames().find(f => f !== p.mainFrame());
   const gm = () => frame()?.evaluate(() => window.__game?.menu?.() ?? null).catch(() => null);
   const gs = () => frame()?.evaluate(() => window.__game?.snapshot?.() ?? null).catch(() => null);
-  const advance = (ms, draw = true) => frame()?.evaluate(([ms, draw]) => window.__game?.step?.(ms, { draw }) ?? null, [ms, draw]).catch(() => null);
+  // stepped time: one step of ms; real time: ms of the wall clock, then the game's state (a frame is drawn on its own)
+  const advance = clock ? async ms => { if (ms) await sleep(ms); return gs(); }
+    : (ms, draw = true) => frame()?.evaluate(([ms, draw]) => window.__game?.step?.(ms, { draw }) ?? null, [ms, draw]).catch(() => null);
   const econAsked = () => p.evaluate(() => window.__host.log.filter(x => x.type === 'gf:econ-action').map(x => x.id));
   const click = async sel => { await F.locator(sel).first().click({ timeout: 5000 }); await sleep(300); };
   const has = async sel => (await F.locator(sel).count()) > 0;
   /** Play the round in stepped time until it reaches a phase (draw only the last frame). */
-  async function stepTo(phase, ms, chunk) { for (let t = 0; t <= ms; t += chunk) { const r = await advance(chunk, false); if (!r) return null; if (r.phase === phase) { await advance(50); return r; } } return null; }
+  async function stepTo(phase, ms, chunk) {
+    if (clock) return until(async () => { const s = await gs(); return s?.phase === phase ? s : null; }, phase === 'results' ? (clock + 10) * 1000 : Math.max(ms, 15000), `phase ${phase}`).catch(() => null);
+    for (let t = 0; t <= ms; t += chunk) { const r = await advance(chunk, false); if (!r) return null; if (r.phase === phase) { await advance(50); return r; } } return null; }
   /** One place: its button is on screen, in that place, with nothing over it, and no other economy button is. */
-  async function placeHolds(where, id, what) {
+  async function placeHolds(where, id, what, price = null) {
     const on = (await econOnScreen(frame)) ?? [];
+    // a paid button shows its price in the text a player can read (not in a line that hides in a short window)
+    if (price) { const b = on.find(x => x.id === id); step(`the '${where}' button shows its price (${price}) on screen at ${p.viewportSize()?.height ?? '?'} px high`, b && b.seen.includes(price), b ? `reads "${b.seen}"` : 'not on screen'); }
     const btn = on.find(x => x.id === id), others = on.filter(x => x.id && x.id !== id);
     return step(`the economy's '${where}' button is ${what}, and only it`, btn && btn.where === where && btn.clear && !others.length,
       !btn ? `not on screen (on screen: ${econNames(on) || 'nothing of the economy'})` : btn.where !== where ? `drawn in '${btn.where}'` : !btn.clear ? 'something is drawn over it' : others.length ? `also on screen: ${others.map(x => x.id).join(', ')}` : `"${btn.text}"`);
+  }
+  /** Run a look at the studio preview's short window (787 x 613), then put the window back. */
+  async function shortWindow(fn) {
+    const was = p.viewportSize(); await p.setViewportSize({ width: 787, height: 613 }); await sleep(500); await advance(50);
+    try { return await fn(); } finally { if (was) { await p.setViewportSize(was); await sleep(400); await advance(50); } }
   }
   /** A real click on a place's button sends gf:econ-action with its id to the page. */
   async function clickAsks(where, id) {
@@ -405,7 +422,8 @@ async function checkEconomy({ newPage, hostUrl, shot, E }) {
   try {
     await p.goto(hostUrl, { waitUntil: 'load' });
     await until(async () => { const m = await gm(); return m?.view === 'home' && m.wallet?.present ? m : null; }, 90000, 'the economy page\'s game to hear the page');
-    if (!step('the economy page runs in stepped time', await advance(0), 'no window.__game.step (?gf-step=1)')) throw new Error('no stepped time');
+    if (clock) { const s0 = await gs(); if (!step(`the economy page runs in real time, its round cut to ${clock} s (no stepped time on this engine)`, s0, s0 ? `phase ${s0.phase}` : 'no window.__game.snapshot')) throw new Error('no game state'); }
+    else if (!step('the economy page runs in stepped time', await advance(0), 'no window.__game.step (?gf-step=1)')) throw new Error('no stepped time');
     // with no offer: nothing in the HUD, the pause menu or the results card
     await click('#gf-play');
     if (!step('Play starts the round', await stepTo('playing', 8000, 500), `phase ${(await gs())?.phase}`)) throw new Error('no round');
@@ -414,7 +432,9 @@ async function checkEconomy({ newPage, hostUrl, shot, E }) {
     await F.locator('body').press('Escape'); await sleep(300); await advance(50);      // a frame, so the HUD hides under the menu
     if ((await gm())?.view === 'pause') { await noEconomy(frame, step, 'the pause menu', await gm()); await click('#gf-resume'); }
     else step('Esc opens the pause menu', false, `view ${(await gm())?.view}`);
-    if (!step('the round ends (stepped time)', await stepTo('results', 900000, 10000), `phase ${(await gs())?.phase}`)) throw new Error('no results');
+    const tEnd = Date.now(), ended = await stepTo('results', 900000, 10000);
+    if (!step(clock ? `the round ends (real time, a ${clock} s clock)` : 'the round ends (stepped time)', ended, !clock ? `phase ${(await gs())?.phase}`
+      : ended ? `results ${((Date.now() - tEnd) / 1000).toFixed(1)} s after Resume` : `phase ${(await gs())?.phase} ${clock + 10} s after Resume (the round's clock was cut to ${clock} s through the overrides)`)) throw new Error('no results');
     await sleep(200);
     await noEconomy(frame, step, 'the results card', await gm());
     // the page offers one button per place, and its state
@@ -430,7 +450,8 @@ async function checkEconomy({ newPage, hostUrl, shot, E }) {
     const home = (await econOnScreen(frame)) ?? [];
     step('the home view shows no economy button (\'menu\' ones are in the wallet view)', !home.length, econNames(home));
     await click('#gf-wallet');
-    await placeHolds('menu', 'shop-sword', 'in the wallet view');
+    await placeHolds('menu', 'shop-sword', 'in the wallet view', '0.1 SOL');
+    await shortWindow(async () => { await placeHolds('menu', 'shop-sword', 'in the wallet view', '0.1 SOL'); if (shot) await shot(p, 'economy-menu-613'); });
     if (shot) await shot(p, 'economy-menu');
     await clickAsks('menu', 'shop-sword');
     await click('#gf-back');
@@ -450,7 +471,8 @@ async function checkEconomy({ newPage, hostUrl, shot, E }) {
     step('the HUD line follows a gf:economy change', l2, `"${(await line())?.text ?? ''}" after the page said 42`);
     // the pause menu has the 'pause' button
     await F.locator('body').press('Escape'); await sleep(300); await advance(50);      // a frame, so the HUD hides under the menu
-    await placeHolds('pause', 'stake-gold', 'in the pause menu');
+    await placeHolds('pause', 'stake-gold', 'in the pause menu', '5 GOLD');
+    await shortWindow(() => placeHolds('pause', 'stake-gold', 'in the pause menu', '5 GOLD'));
     if (shot) await shot(p, 'economy-pause');
     await clickAsks('pause', 'stake-gold');
     const m2 = await gm(), sent = m2?.economy?.sent ?? [];

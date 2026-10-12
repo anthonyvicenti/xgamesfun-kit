@@ -83,6 +83,8 @@ export function cleanEconState(d) {
 export const econText = x => (x ? x.text || `${x.amount}${x.symbol ? ` ${x.symbol}` : ''}` : '');
 /** A price as a button says it. */
 export const priceText = p => (p ? `${p.amount}${p.currency ? ` ${p.currency}` : ''}` : '');
+/** An economy button's label: the name and, when it costs something, the price, so the price is never only in a line that can hide (a short window hides the small line). */
+export const econLabel = (a, wait = false) => { const n = wait ? `${a.label}…` : a.label; return a.price ? `${n} · ${priceText(a.price)}` : n; };
 
 function emit() { for (const fn of subs.slice()) { try { fn(); } catch (e) { console.error(e); } } }
 
