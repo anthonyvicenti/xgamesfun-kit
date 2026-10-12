@@ -19,9 +19,11 @@ which tool comes next; `gamesfun_step_pitch`, `gamesfun_step_spec`, `gamesfun_st
 `gamesfun_rollback`, `gamesfun_keep_edits`, `gamesfun_play`, `gamesfun_playtest_report` and `gamesfun_requests` go with them. The skill
 `build-loop` (generated from the tool list) has the table.
 
-Plus any tools other parts of the kit add in `mcp/tools/*.mjs`. The `web3_*` tools and the `economy_*` tools (a game's
-economy: catalog, examples, check, simulate, cost, explain, save, and the links that put it live; skill
-`gamesfun-economy`) are off unless the server is started with `GAMESFUN_WEB3=1` in its environment. Paths in tool arguments are relative to
+Plus any tools other parts of the kit add in `mcp/tools/*.mjs`. The `web3_*` tools (the older shop and token drafts;
+skill `gamesfun-web3`) and the `economy_*` tools (a game's economy: catalog, examples, check, simulate, cost, explain,
+save, and the links that put it live; skill `gamesfun-economy`) are off unless the server is started with `GAMESFUN_WEB3=1` in its environment. No tool signs:
+going live, a token launch and the old shop publish each end at the studio's Economy tab (a link when the studio runs), where the
+creator approves in their own wallet. Paths in tool arguments are relative to
 the kit root, wherever the agent starts the server from. Requires `npm ci` first.
 
 ## Claude Code

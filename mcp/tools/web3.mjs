@@ -125,7 +125,7 @@ export const tools = [
   },
   {
     name: 'web3_prepare_launch',
-    description: 'Prepare launching the game’s token on games.fun’s Meteora curve (devnet, quoted in MAIN-dev). This does NOT launch it: it leaves a request and returns a step for the human, who opens the studio’s Token tab and approves each step in their own wallet (two upload signatures and one transaction).',
+    description: 'Prepare launching the game’s token on games.fun’s Meteora curve (devnet, quoted in MAIN-dev). This does NOT launch it: it leaves a request and returns a step for the human, who opens the studio’s Economy tab (the token is one part of the game’s economy) and approves each step in their own wallet (two upload signatures and one transaction). For a whole economy (shop, boxes, lotteries, stakes, crafting…) use the economy_* tools and the gamesfun-economy skill.',
     inputSchema: {
       type: 'object',
       required: ['name', 'symbol', 'picture'],
@@ -143,7 +143,7 @@ export const tools = [
   },
   {
     name: 'web3_prepare_publish',
-    description: 'Prepare putting the shop on sale: the collection and loot game the first time, then every new or changed item and box. This does NOT publish: it leaves a request and returns a step for the human, who opens the studio’s Shop tab and approves in their wallet (a signature per new upload, then one approval for all the transactions).',
+    description: 'Prepare putting the shop on sale: the collection and loot game the first time, then every new or changed item and box. This does NOT publish: it leaves a request and returns a step for the human, who opens the studio’s Economy tab (the shop is part of the game’s economy: it moves into the economy section and goes live with the rest of it) and approves in their wallet (a signature per new upload, then one approval for all the transactions). economy_publish is the same for an economy written with the economy_* tools.',
     inputSchema: { type: 'object', properties: { game }, additionalProperties: false },
     handler: async (input, ctx) => result(await call('shop', 'publish', { game: input.game }, ctx)),
   },

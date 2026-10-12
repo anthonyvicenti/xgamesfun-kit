@@ -3,7 +3,7 @@
 gamesfun-kit is a repository that advanced users clone and open in the AI coding agent they
 already use (Claude Code, Codex, Cursor, opencode, Cline…). The agent follows `AGENTS.md` to
 turn a prompt into a multiplayer three.js browser game on games.fun's `gf-three` kit, then adds
-Solana items, loot boxes, a shop and a token. Everything runs on Windows, macOS and Linux with
+a Solana economy (items, loot boxes, a shop, lotteries, stakes, crafting and a token, as one spec; devnet). Everything runs on Windows, macOS and Linux with
 Node 24 and Chrome. No desktop app, no build step, and no bash.
 
 ## Two audiences

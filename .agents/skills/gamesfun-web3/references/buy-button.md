@@ -1,53 +1,47 @@
-# Buy and open-box buttons
+# The economy's buttons in a game
 
-The kit gives you data and actions. gf-three's `ctx.ui` has meters, banners and toasts, but no buttons, so draw
-the shop as a small DOM overlay from `rules.js` `setup(ctx)` (style it like the game's HUD), and give feedback
-with `ctx.ui.toast`. A **Connect** button calls `gfWeb3.connect()`.
+**You don't write them.** The page that hosts the game offers the economy's actions, and the kit's menu and HUD
+draw them (gf-three CONTRACT §6g W2). A game with no economy, or a game opened with no page that offers one, shows
+nothing of it, so it looks exactly as before.
 
-```js
-import gfWeb3 from './gf/web3/index.js';
-await gfWeb3.ready();   // in setup(ctx): gfWeb3.ready().then(drawShop)
+## How they get there
 
-for (const item of await gfWeb3.shop.list()) {           // listed items, priced in the shop's currency
-  if (!item.forSale) continue;                           // "Loot boxes only" items
-  addButton(`${item.name} · ${item.priceText}`, async (button) => {
-    button.disabled = true;
-    try {
-      const { item: bought } = await gfWeb3.shop.buy(item.id, { onStatus: showMessage });   // two approvals: pay, then claim
-      celebrate(bought.name);
-      await gfWeb3.wearOwned();
-    } catch (error) {
-      showMessage(error.message);                        // not enough SOL, the player declined…
-    } finally {
-      button.disabled = false;
-    }
-  });
-}
+1. **The economy is the spec.** Every action a player can take comes from the `economy` section of `gamesfun.json`:
+   an item for sale is a Buy, a box is an Open, a lottery is Buy tickets, a stake is Stake and Unstake, a contest is
+   Enter, a recipe is Craft, a hold is Hold, and whatever is due is Claim. `playerActions(economy)`
+   (`web3/economy/actions.mjs`) is that list: `[{ id, part, kind, label, price, says, where, asks }]`. The label is
+   the part's name, `says` is what it does in a player's words (prices and odds included).
+2. **The page offers them.** `{ type: 'gf:host', v: 1, …, economy: { actions: [{ id, kind, label, price, says, where }] } }`,
+   and on every change `{ type: 'gf:economy', v: 1, balances, tickets, stakes, claimable, pending, error }`.
+3. **The kit draws them where `where` says:**
+   - `menu`: buttons in the wallet view (from the home menu or the pause menu), under the wallet;
+   - `pause`: buttons in the pause menu, under the wallet button;
+   - `results`: buttons on the results card, between the scores and Play again (alone; with friends the party
+     page's card is the result and has none);
+   - `hud`: lines in the HUD's player card (a balance, tickets, a stake, what is claimable), once the page's state
+     has one.
 
-for (const box of await gfWeb3.boxes()) {
-  addButton(`${box.name} · ${box.priceText}`, async () => {
-    const { item } = await gfWeb3.openBox(box.id, { onStatus: showMessage });
-    celebrate(item.name);
-  });
-  showOdds(box.odds.map((o) => `${o.item}: ${(o.chance * 100).toFixed(1)}%`));   // always show the odds
-}
-gfWeb3.on('status', showMessage);   // "Approve the purchase in your wallet…", "Rolling…"
-```
+   For now the spec has no field for `where`: a claim goes to `results` and everything else to `menu`.
+4. **A click only tells the page**: `{ type: 'gf:econ-action', id }`. The page asks the player's wallet, signs with
+   gf-web3 (`gfWeb3.economy.act(id)`), and sends a new `gf:economy`. While an action's id is in `pending` its button
+   waits ("…", disabled); `error` shows under the buttons in the player's words.
 
-- **A buy is two approvals.** The first pays (`buy_item` opens an order that holds the payment). The
-  second claims it (`settle` mints the Core NFT to the player and sends the whole price to the
-  creator's treasury). The collectible's address depends on the slot the purchase lands in, so the
-  two cannot share a transaction. games.fun's loot program charges the player a flat 0.002 SOL per
-  purchase; the order also holds 0.006 SOL until it is claimed, then gives back what is left. For a
-  SOL shop, exactly the price is wrapped and then unwrapped around the purchase.
-- **A box is two approvals.** The first pays and asks MagicBlock's VRF to roll. A few seconds later
-  the kit sees the roll and asks the wallet to claim the item (a permissionless `settle`). If
-  everything in the box sold out, the roll fails and the kit asks the wallet to approve a refund.
-- **An order the player did not finish** (they declined the claim, closed the page, or the roll was
-  slow) stays theirs: `gfWeb3.orders()` lists it and `gfWeb3.finish(order)` claims it, or refunds it
-  once the program allows (a failed roll at once, a roll that never came after about 10 minutes, an
-  unclaimed order after 7 days).
-- **Errors carry plain words for the player.** Show `error.message`. Don't retry a declined
-  request on your own.
-- **Disable a button while its promise runs.** A second click makes a second purchase.
-- **Show the published odds.** They are exactly what the program rolls: sold-out items drop out.
+## What you can change
+
+- **Which buttons exist, their names and prices:** change the economy spec (`economy_save`, or the Economy tab).
+- **What a bought item does to its owner:** its `look` (`cosmetics.md`).
+- **Nothing in the game's code.** No overlay, no `gf/web3/` import, no price in `rules.js`, no `ctx.economy` (there is
+  none). Rules never see the economy: a game is never scored by what someone paid.
+
+## Checking it
+
+`gamesfun verify` check 22 frames the game in a stand-in page: with no offer nothing of the economy is on screen;
+with one action per place, each button shows only where its `where` says, a real click sends `gf:econ-action` with its
+id, and the HUD line follows the page's state. `window.__game.menu().economy` and `window.__game.hud().economy` show
+what was offered, the state and the clicks.
+
+## Before the economy
+
+Games made with gf-web3 2.0.0 drew their own shop: a DOM overlay in `rules.js` calling `gfWeb3.shop.buy` and
+`gfWeb3.openBox`. Those games keep working (gf-web3 reads their old `shop` as the economy it stands for), but don't
+write a new one: the kit's menu draws the same buttons, signed by the page, for every game.
