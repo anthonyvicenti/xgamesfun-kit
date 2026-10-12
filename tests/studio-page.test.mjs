@@ -293,6 +293,9 @@ test('a request the session ends two turns without reporting is dropped, and the
 
 test('the studio page and its tabs are served, and every tab imports its modules', async () => {
   const tabs = (await call('/api/studio/tabs')).body.map(t => t.file);
-  for (const f of ['session.js', 'build.js', 'tune.js', 'friends.js', 'assets.js']) assert.ok(tabs.includes(f), f);
+  for (const f of ['tune.js', 'friends.js', 'assets.js']) assert.ok(tabs.includes(f), f);
+  // the session and the build are the conversation on the left (studio/chat.js), not tools
+  for (const f of ['session.js', 'build.js']) assert.ok(!tabs.includes(f), f);
+  for (const f of ['chat.js', 'start.js']) assert.equal((await fetch(`${base}/studio/${f}`)).status, 200, f);
   for (const f of ['session.js', 'session-client.js', 'loop-state.js', 'tune.js']) assert.equal((await fetch(`${base}/studio/lib/${f}`)).status, 200, f);
 });

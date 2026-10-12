@@ -15,16 +15,19 @@ line, what you should see, eight things to try and what to send us when one goes
 Open your coding agent (Claude Code or Codex) in a terminal and paste this:
 
 ```text
-Set up the games.fun game-building kit on this machine: git clone https://github.com/anthonyvicenti/gamesfun-kit.git (skip the clone if a gamesfun-kit folder is already here), then in that folder run these, one at a time, with Node 24: npm ci, then node bin/gamesfun.mjs doctor, then node bin/gamesfun.mjs connect, then node bin/gamesfun.mjs create games/first --from soak-squad, then start node bin/gamesfun.mjs dev games/first in the background and give me the studio address it prints (it opens my browser too). Tell me what each step printed in one line, and end with the line connect printed after "next:" (what I type in this session so the studio page reaches it). If a step fails, do what its "If it fails" section in gamesfun-kit/docs/ONE-LINE.md says, and if that doesn't fix it, stop and tell me exactly what failed. Never ask me for a password, token or key.
+I want you to set up the XGames.fun game kit in this folder so I can make games in its studio. Here is what that involves, and I agree to it: git clone https://github.com/anthonyvicenti/gamesfun-kit.git (skip the clone if a gamesfun-kit folder is already here), then in that folder, with Node 24, run these one at a time: npm ci, then node bin/gamesfun.mjs doctor, then node bin/gamesfun.mjs connect, then start node bin/gamesfun.mjs dev in the background and give me the studio address it prints (it opens the studio's start page in my browser, where I describe my first game). connect adds the kit's tools and a plugin to you at user scope; the plugin lets the studio page on 127.0.0.1 show this session, send it my requests and answer its permission prompts. I can undo it with node bin/gamesfun.mjs connect --remove. Tell me what each step printed in one line. If a step fails, do what its "If it fails" section in gamesfun-kit/docs/ONE-LINE.md says, and if that doesn't fix it, stop and tell me exactly what failed. Never ask me for a password, token or key. End your last message with the line connect printed after "next:" (what I type in this session so the studio page reaches it), word for word, and nothing after it.
 ```
 
 Your agent clones this repository, installs it, checks your machine (`doctor`), adds our tools to itself through its own
 commands (`claude mcp add`, `codex mcp add`, and for Claude Code `claude plugin install` for the hooks that link the
-studio page to your session: `connect`), makes a first game from an example and opens the studio page. In Claude Code
-you then type `/reload-plugins` once, in the same session: the tools and the page's link are live without a restart. It
-talks to the model the way it always does, under your own login; nothing here signs you in or sends anything to a
-model. What each step does and what the agent does when one fails: [docs/ONE-LINE.md](docs/ONE-LINE.md). The line
-names the address the repository has today; it changes when the repository is public.
+studio page to your session: `connect`), and opens the studio's start page. There you describe a game in your own words
+(or start from an example): your session pitches a few takes in the studio's conversation, you pick one, and it builds
+it while the game appears beside the conversation. One step is yours: in Claude Code, type `/reload-plugins` once in the
+same session (an agent cannot reload its own plugins); the tools and the page's link are live without a restart.
+`node bin/gamesfun.mjs connect --remove` takes the tools and the plugin out again. Your agent talks to the model the way
+it always does, under your own login; nothing here signs you in or sends anything to a model. What each step does and
+what the agent does when one fails: [docs/ONE-LINE.md](docs/ONE-LINE.md). The line names the address the repository has
+today; it changes when the repository is public.
 
 Stay current with `node bin/gamesfun.mjs update` (fast-forward only; a once-a-day background check prints one line when
 there is a newer kit, and `GAMESFUN_NO_UPDATE_CHECK=1` turns it off).

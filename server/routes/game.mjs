@@ -5,22 +5,23 @@ import path from 'node:path';
 import { gameInfo, latestVerdict, readJson, summarizeVerdict } from '../../lib/games.mjs';
 import { BIN } from '../../lib/paths.mjs';
 import { listSlots, setFile, setValue } from '../../lib/slots.mjs';
-import { HttpError, readBody, readJson as readBodyJson } from '../http.mjs';
+import { HttpError, openGame, readBody, readJson as readBodyJson } from '../http.mjs';
 
 export default function register(router, ctx) {
-  const { gameDir } = ctx;
+  // the open game, read at each request: the studio may open another while the server runs (server/index.mjs)
+  const G = () => openGame(ctx);
   const run = { child: null, lines: [], started: null, finished: null, code: null, args: [] };
 
-  router.get('/info', async () => ({ ...(await gameInfo(gameDir)), url: '/game/', friendsUrl: '/game/gf/mp/', network: ctx.network }));
+  router.get('/info', async () => ({ ...(await gameInfo(G())), url: '/game/', friendsUrl: '/game/gf/mp/', network: ctx.network }));
 
-  router.get('/slots', async req => listSlots(gameDir, { all: req.query.get('all') === '1' }));
+  router.get('/slots', async req => listSlots(G(), { all: req.query.get('all') === '1' }));
 
   // a value slot: { id, value }
   router.post('/slots/value', async req => {
     const { id, value } = await readBodyJson(req);
     if (typeof id !== 'string') throw new HttpError(400, 'id is required');
     // refused in the kit's own words (kit/assets/items.js slotValueProblems): `problems` lists each, for the page to show
-    try { return await setValue(gameDir, id, value); } catch (e) { throw new HttpError(400, e.message, e.problems ? { problems: e.problems } : null); }
+    try { return await setValue(G(), id, value); } catch (e) { throw new HttpError(400, e.message, e.problems ? { problems: e.problems } : null); }
   });
 
   // a file slot: the raw file as the body; ?id=<slot>&name=<file name>
@@ -28,12 +29,12 @@ export default function register(router, ctx) {
     const id = req.query.get('id'), name = req.query.get('name') ?? 'upload';
     if (!id) throw new HttpError(400, 'id is required');
     const bytes = await readBody(req, { limit: 64 * 1024 * 1024 });
-    try { return await setFile(gameDir, id, { bytes, name }); } catch (e) { throw new HttpError(400, e.message); }
+    try { return await setFile(G(), id, { bytes, name }); } catch (e) { throw new HttpError(400, e.message); }
   });
 
   // verify: the latest verdicts, and a run started from the studio (one at a time)
   router.get('/verify', async () => {
-    const root = path.join(gameDir, 'evidence');
+    const root = path.join(G(), 'evidence');
     let names = [];
     try { names = (await readdir(root)).filter(n => /^verify-\d+$/.test(n)).sort((a, b) => Number(b.slice(7)) - Number(a.slice(7))).slice(0, 10); } catch {}
     const runs = [];
@@ -43,7 +44,7 @@ export default function register(router, ctx) {
   router.post('/verify', async req => {
     if (run.child) throw new HttpError(409, 'verify is already running');
     const body = await readBodyJson(req);
-    const args = [BIN, 'verify', gameDir];
+    const args = [BIN, 'verify', G()];
     if (body.quick !== false) args.push('--quick');
     if (body.check != null) { if (!/^\d+(,\d+)*$/.test(String(body.check))) throw new HttpError(400, 'check must be a number'); args.push('--check', String(body.check)); }
     Object.assign(run, { lines: [], started: new Date().toISOString(), finished: null, code: null, args: args.slice(2) });
@@ -54,5 +55,5 @@ export default function register(router, ctx) {
     child.on('close', code => { run.child = null; run.code = code; run.finished = new Date().toISOString(); ctx.events?.send('verify', { code }); });
     return { started: true, args: run.args };
   });
-  router.get('/verify/latest', async () => (await latestVerdict(gameDir)) ?? null);
+  router.get('/verify/latest', async () => (await latestVerdict(G())) ?? null);
 }

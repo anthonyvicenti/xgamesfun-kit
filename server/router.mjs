@@ -75,7 +75,10 @@ export function createRouter({ log = () => {} } = {}) {
         const mod = await import(pathToFileURL(path.join(dir, f)).href);
         if (typeof mod.default !== 'function') throw new Error('must export default function register(router, ctx)');
         const facade = area(name, f);
-        await mod.default(facade, { ...ctx, log: (...a) => ctx.log(`[${name}]`, ...a) });
+        // each area gets its own log; the open game stays the server's (read live: the studio may open another)
+        const view = { ...ctx, log: (...a) => ctx.log(`[${name}]`, ...a) };
+        if ('gameDir' in ctx) Object.defineProperty(view, 'gameDir', { get: () => ctx.gameDir, enumerable: true });
+        await mod.default(facade, view);
       } catch (e) {
         areas.set(name, { area: name, file: f, ok: false, error: e.message, routes: areas.get(name)?.routes ?? [] });
         ctx.log(`routes: ${f} did not load: ${e.message}`);

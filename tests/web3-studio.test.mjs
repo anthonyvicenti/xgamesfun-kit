@@ -177,7 +177,7 @@ describe('studio Economy tab on core’s dev server, in Chrome (fake chain)', { 
 
   it('a link from the agent (#economy?flow=economy) opens the tab and offers "Put it live", without starting anything', async (t) => {
     if (!browser) return t.skip('no browser');
-    await page.getByRole('tab', { name: 'Session' }).click();
+    await page.getByRole('tab', { name: 'Tune' }).click();   // another tool first (Session is the conversation now, not a tab)
     asked.length = 0;
     await page.goto(`${server.url}studio/#economy?flow=economy`);
     await page.locator('.panel:not([hidden]) [data-testid="econ-asked"]').waitFor();

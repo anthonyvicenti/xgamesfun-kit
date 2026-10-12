@@ -56,11 +56,11 @@ try {
     const p = await ctx.newPage();
     const errors = []; p.on('pageerror', e => errors.push(e.message));
     await p.goto(`${base}/studio/`, { waitUntil: 'load' });
-    await tab(p, 'session');
+    // the conversation is on the left of every view: no tab to open
     const s = await sessionDriver(base, { id: `run-${label}`, cwd: game });
     await until(() => p.locator('.conn').first().innerText(), 5000, 'banner');
     check(/No session connected/.test(await text(p, '.conn')), `${label}: with no session the page says to start the agent`);
-    await shot(p, `${label}-1-no-session`, 'Session tab before any session: "No session connected yet", start your agent in this folder');
+    await shot(p, `${label}-1-no-session`, 'The conversation before any session: "No session connected yet", start your agent in this folder');
     check((await clipped(p)).length === 0, `${label}: no clipped label in the header or tab row (${JSON.stringify(await clipped(p))})`);
 
     // the title in the bar follows the game's files (found in the end-to-end run: the session renamed the game, a
@@ -84,8 +84,8 @@ try {
     // a request typed in the page
     const ask = `make the enemies faster (${label})`;
     const mine = p.locator('.req', { hasText: ask });
-    await p.fill('textarea.ask', ask);
-    await p.click('text=Send to your session');
+    await p.fill('#chat-input', ask);
+    await p.click('#chat-send');
     await until(async () => (await mine.count()) === 1, 6000, 'request row');
     check(await mine.and(p.locator('[data-state="waiting"]')).count() === 1, `${label}: the typed request shows as waiting`);
     check(/Waiting for your session/.test(await mine.innerText()), `${label}: the waiting words`);
@@ -180,10 +180,10 @@ try {
       await stopDev(); await sleep(800); await startDev();
       const s2 = await sessionDriver(base, { id: 'after-restart', cwd: game });
       await s2.start(); await s2.prompt('after the restart');
-      await until(async () => /after the restart/.test(await text(p, '.timeline')), 12000, 'timeline after restart');
+      await until(async () => /after the restart/.test(await text(p, '.chat-feed')), 12000, 'timeline after restart');
       check(true, `desktop: after a restart the open page reconnects (new token) and shows the new session's events`);
-      await p.fill('textarea.ask', 'a request after the restart'); await p.click('text=Send to your session');
-      await until(async () => /a request after the restart/.test(await text(p, '.queue')), 8000, 'request after restart');
+      await p.fill('#chat-input', 'a request after the restart'); await p.click('#chat-send');
+      await until(async () => /a request after the restart/.test(await text(p, '.chat-feed')), 8000, 'request after restart');
       check(true, `desktop: sending after the restart works (401 retried with the new token)`);
       const hold = s2.ask('Bash', { command: 'ls' });
       await until(() => p.locator('.perm').count(), 8000, 'card after restart');

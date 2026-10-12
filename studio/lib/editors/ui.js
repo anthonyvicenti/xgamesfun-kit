@@ -43,11 +43,16 @@ export function undoBar(history, apply, panel) {
 }
 
 /**
- * "Ask my session": a short box whose words go to the person's own agent session as a request (the Session tab's
- * queue, bridge/CONTRACT.md), with what is selected. The page calls no model: the session does the work and the
- * result lands in the game's files, which the editor shows when they change. compose(text) → the full request.
+ * "Ask my session": the studio has ONE box for the person's own agent session, the conversation's on the left
+ * (studio/chat.js). An editor hands it a context: what the request is about (label), a placeholder, and compose(words)
+ * → what the session is told. The page calls no model: the session does the work and the result lands in the game's
+ * files, which the editor shows when they change. With no conversation on the page (a test page), a box of its own.
  */
 export function askBox(ctx, { label, placeholder, compose, selection = () => null, button = 'Ask my session', onSent = () => {} }) {
+  if (ctx.chat?.ask) {
+    const go = el('button', { type: 'button', className: 'ghost', on: { click: () => ctx.chat.ask({ label, placeholder, compose, selection, button, onSent }) } }, button);
+    return el('div', { className: 'ask-box ask-handoff' }, el('div', { className: 'ask-label' }, label), el('div', { className: 'ask-row' }, go, el('span', { className: 'muted small' }, 'You type it in the conversation, on the left.')));
+  }
   const box = el('textarea', { className: 'ask', rows: 2, placeholder, 'aria-label': label });
   const send = el('button', { type: 'button' }, button);
   const state = el('div', { className: 'ask-state muted small', 'aria-live': 'polite' });
@@ -57,7 +62,7 @@ export function askBox(ctx, { label, placeholder, compose, selection = () => nul
     send.disabled = true;
     try {
       const r = await sessionApi('request', { text: compose(words), selection: selection() ?? undefined });
-      state.textContent = r.session ? 'Sent. Your session has it (the Session tab shows its progress); the change shows here when it lands.' : 'Waiting for your agent session: it gets this as soon as one is connected (the Session tab says how).';
+      state.textContent = r.session ? 'Sent. Your session has it; the change shows here when it lands.' : 'Waiting for your agent session: it gets this as soon as one is connected.';
       state.dataset.state = 'sent';
       box.value = '';
       onSent(r);

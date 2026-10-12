@@ -1,5 +1,10 @@
-// The local dev server behind `gamesfun dev`: one game, the studio page, live reload, local multiplayer signaling and
-// the API routes in server/routes/*.mjs. It binds 127.0.0.1 only and checks Host and Origin (security.mjs).
+// The local dev server behind `gamesfun dev`: the studio page, the game it has open (none at first when `dev` is started
+// without one: the studio's start page), live reload, local multiplayer signaling and the API routes in
+// server/routes/*.mjs. It binds 127.0.0.1 only and checks Host and Origin (security.mjs).
+//
+// The open game can change while the server runs (the studio opens one of games/, or a new idea's folder the build
+// loop is making): ctx.gameDir is read at each request, never kept by a route, and ctx.setGame(dir) moves it, tells the
+// routes that asked (ctx.onGame(fn)) and the studio page (the `project` event).
 //
 //   /                      → /studio/
 //   /studio/…              the studio page (studio/index.html, studio.js, tabs/*.js)
@@ -12,11 +17,12 @@
 //                          the page that hosts the game signs with the kit's code, never with code from the game's folder
 //   /__gamesfun/events     live reload (Server-Sent Events): `game` when the game's files change, `studio` for the studio's
 import { createServer } from 'node:http';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { readJson } from '../lib/games.mjs';
-import { KIT_ROOT, SIGNAL_SERVER, STUDIO } from '../lib/paths.mjs';
+import { isGame, readJson } from '../lib/games.mjs';
+import { GAMES, KIT_ROOT, SIGNAL_SERVER, STUDIO } from '../lib/paths.mjs';
 const GF_WEB3 = path.join(KIT_ROOT, 'web3', 'gf-web3');
 import { sendJson, sendText } from './http.mjs';
 import { injectOnline, ONLINE_CLIENT, ONLINE_CLIENT_PATH, onlineFor } from './online.mjs';
@@ -39,16 +45,35 @@ function listen(server, port) {
 }
 
 /**
- * Start serving one game. port: a number (exactly that one), or null (the first free of PREFERRED_PORTS, else any free
- * port). → { url, port, close(), router, events }
+ * Is the open folder a game to show (its page served, its tools offered), or one the build loop is still making?
+ * A game create made is one; so is any folder the person opened that the loop is not making (no .gf-loop in it: a game
+ * made by hand or by an older kit). A folder that does not exist yet, or holds only the loop's talk, is being made.
  */
-export async function startDevServer({ gameDir, port = null, log = console.log, watch = true, routesDir = path.join(KIT_ROOT, 'server', 'routes'), env = process.env } = {}) {
-  const gamesfun = await readJson(path.join(gameDir, 'gamesfun.json'), null);
+export function gameReady(dir) {
+  if (!dir) return false;
+  if (isGame(dir)) return true;
+  return existsSync(dir) && !existsSync(path.join(dir, '.gf-loop'));
+}
+
+/** A folder the studio may open: a direct child of the games folder, named as create names one (letters, digits, dots, dashes). */
+export function gameFolder(gamesRoot, name) {
+  if (typeof name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(name) || name.includes('..')) throw new Error('a game folder is named with letters, digits, dashes and dots, e.g. my-game');
+  return path.join(gamesRoot, name);
+}
+
+/**
+ * Start the dev server. gameDir: the game to open, or null (the studio's start page). gamesRoot: the folder of the
+ * person's games (games/ in the kit). port: a number (exactly that one), or null (the first free of PREFERRED_PORTS,
+ * else any free port). → { url, port, close(), router, events, ctx }
+ */
+export async function startDevServer({ gameDir = null, gamesRoot = GAMES, port = null, log = console.log, watch = true, routesDir = path.join(KIT_ROOT, 'server', 'routes'), env = process.env } = {}) {
+  const gamesfun = gameDir ? await readJson(path.join(gameDir, 'gamesfun.json'), null) : null;
   const network = process.env.GAMESFUN_NETWORK || gamesfun?.network || 'devnet';
   const events = createEvents();
   const router = createRouter({ log });
   let actualPort = 0;
   let sig = null, upgradeHandler = null;
+  let ctx = null;                                     // set below, before the routes load; a request before then gets a 503
 
   const server = createServer(async (req, res) => {
     let url;
@@ -56,6 +81,7 @@ export async function startDevServer({ gameDir, port = null, log = console.log, 
     const api = url.pathname.startsWith('/api/') || url.pathname.startsWith('/signal');
     const no = refuse(req.headers, actualPort, { api });
     if (no) return sendText(res, no.status, no.reason);
+    if (!ctx) return sendText(res, 503, 'starting');
     try {
       if (sig?.handleHttp(req, res)) return;                                      // POST /signal/v1, GET /signal/v1/ice
       if (url.pathname.startsWith('/api/')) {
@@ -71,6 +97,8 @@ export async function startDevServer({ gameDir, port = null, log = console.log, 
       if (url.pathname.startsWith('/__gamesfun/gf-web3/')) return await serveStatic(req, res, { base: GF_WEB3, rest: url.pathname.slice('/__gamesfun/gf-web3'.length), mount: '/__gamesfun/gf-web3', search: url.search });
       if (url.pathname.startsWith('/studio/')) return await serveStatic(req, res, { base: STUDIO, rest: url.pathname.slice('/studio'.length), mount: '/studio', search: url.search });
       if (url.pathname.startsWith('/game/')) {
+        const gameDir = ctx.gameDir;
+        if (!gameReady(gameDir)) return sendText(res, 404, 'no game is open yet');
         return await serveStatic(req, res, {
           base: gameDir, rest: url.pathname.slice('/game'.length), mount: '/game', search: url.search,
           // the game's kit and the person's switch are read as each page is served: an upgrade or a new setting needs no restart of the game
@@ -104,19 +132,43 @@ export async function startDevServer({ gameDir, port = null, log = console.log, 
   const gate = { on: (e, fn) => { if (e === 'upgrade') upgradeHandler = fn; }, off: (e, fn) => { if (e === 'upgrade' && upgradeHandler === fn) upgradeHandler = null; } };
   sig = attachSignaling(gate, { path: '/signal', log: () => {} });
 
-  const ctx = { gameDir, kitRoot: KIT_ROOT, network, log, url, events };
+  // the open game: read at each request (ctx.gameDir), moved by setGame; the watch follows it once it is a game
+  const listeners = new Set();
+  let gameWatch = null, watching = null;
+  const armWatch = () => {
+    if (!watch) return;
+    const dir = gameReady(ctx.gameDir) ? ctx.gameDir : null;
+    if (dir === watching) return;
+    gameWatch?.(); gameWatch = null; watching = dir;
+    if (dir) gameWatch = watchTree(dir, files => { events.send('game', { files }); }, { log });
+  };
+  ctx = {
+    gameDir: gameDir ? path.resolve(gameDir) : null, gamesRoot: path.resolve(gamesRoot), kitRoot: KIT_ROOT, network, log, url, events,
+    /** Open another game (a folder under gamesRoot, made or not yet), or none (null): the studio's start page. */
+    setGame(dir) {
+      const next = dir ? path.resolve(dir) : null;
+      if (next === ctx.gameDir) { armWatch(); return next; }
+      ctx.gameDir = next;
+      armWatch();
+      for (const fn of listeners) { try { fn(next); } catch (e) { log(`dev server: ${e.message}`); } }
+      events.send('project', { game: next ? path.basename(next) : null });
+      return next;
+    },
+    /** The folder being made became a game (create ran): start watching it. Called by whoever notices first. */
+    gameMade: () => armWatch(),
+    onGame(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+  };
   await router.load(routesDir, ctx);
 
   const unwatch = [];
-  if (watch) {
-    unwatch.push(watchTree(gameDir, files => { events.send('game', { files }); }, { log }));
-    unwatch.push(watchTree(STUDIO, files => { events.send('studio', { files }); }, { log }));
-  }
+  armWatch();
+  if (watch) unwatch.push(watchTree(STUDIO, files => { events.send('studio', { files }); }, { log }));
   return {
     url, port: actualPort, router, events, ctx, signaling: sig,
     /** Where this game's friends join from: { use: 'online' | 'this-machine', host, own, kit, why } */
-    online: () => onlineFor(gameDir, env),
+    online: () => (ctx.gameDir ? onlineFor(ctx.gameDir, env) : Promise.resolve({ use: 'this-machine', why: 'no game is open yet' })),
     close: () => new Promise(resolve => {
+      gameWatch?.();
       for (const u of unwatch) u();
       events.close(); sig.close();
       server.close(() => resolve());

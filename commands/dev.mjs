@@ -1,5 +1,6 @@
 import { guard, parse, UsageError } from '../lib/cli.mjs';
-import { resolveGame, shown } from '../lib/games.mjs';
+import path from 'node:path';
+import { isGame, resolveGame, shown } from '../lib/games.mjs';
 import { openUrl } from '../lib/open.mjs';
 import { forgetDevServer, recordDevServer } from '../lib/state.mjs';
 import { startDevServer } from '../server/index.mjs';
@@ -7,8 +8,10 @@ import { onlineWords } from '../server/online.mjs';
 
 const usage = `Usage: gamesfun dev [dir] [--port <n>] [--no-open]
 
-Serve one game on this machine (127.0.0.1 only) and open the studio: the game, its slots, verify, and any tabs in
-studio/tabs/. Files reload as you (or your agent) save them. Two tabs on /game/gf/mp/ play together through the local
+Open the studio on this machine (127.0.0.1 only). With no folder (and not run inside a game), it opens on the start
+page: describe a new game, open one of yours in games/, or start from an example. With a game folder, it opens on that
+game: the conversation with your agent session on the left, the game and its tools (slots, verify, any tabs in
+studio/tabs/) on the right. Files reload as you (or your agent) save them. Two tabs on /game/gf/mp/ play together through the local
 signaling server. A game on multiplayer kit 1.6.4 or newer opens its rooms online, so a friend on another machine can
 join (docs/ONLINE.md); GAMESFUN_ONLINE=off keeps rooms on this machine, GAMESFUN_ONLINE=<https://…/signal/v1> uses a
 signaling server of your own. Stop with Ctrl+C.
@@ -31,17 +34,20 @@ export default {
   run: args => guard(async () => {
     const { values, positionals } = parse(args, { port: { type: 'string' }, 'no-open': { type: 'boolean' } }, usage);
     if (values.port && !/^\d{1,5}$/.test(values.port)) throw new UsageError(`--port takes a number\n\n${usage}`);
-    const gameDir = await resolveGame(positionals[0]);
+    // a folder given, or the game this is run inside; else the start page (the person's games are listed there)
+    const gameDir = positionals[0] ? await resolveGame(positionals[0]) : isGame(process.cwd()) ? path.resolve(process.cwd()) : null;
     const { port, open } = devOptions(values);
     const srv = await startDevServer({ gameDir, port, log: (...a) => console.log(...a) });
-    const entry = { pid: process.pid, url: srv.url, port: srv.port, game: shown(gameDir), gameDir, started: new Date().toISOString() };
+    const entry = { pid: process.pid, url: srv.url, port: srv.port, game: gameDir ? shown(gameDir) : null, gameDir, started: new Date().toISOString() };
     await recordDevServer(entry);
     const failed = srv.router.areas().filter(a => !a.ok);
-    console.log(`gamesfun dev: ${shown(gameDir)}`);
+    console.log(`gamesfun dev: ${gameDir ? shown(gameDir) : 'the start page (no game open: describe one, or open one of yours)'}`);
     console.log(`  studio   ${srv.url}studio/`);
-    console.log(`  play     ${srv.url}game/                 (alone, with bots)`);
-    console.log(`  friends  ${srv.url}game/gf/mp/           (Host here, open the invite link in another tab)`);
-    console.log(`  online   ${onlineWords(await srv.online())}   (docs/ONLINE.md)`);
+    if (gameDir) {
+      console.log(`  play     ${srv.url}game/                 (alone, with bots)`);
+      console.log(`  friends  ${srv.url}game/gf/mp/           (Host here, open the invite link in another tab)`);
+      console.log(`  online   ${onlineWords(await srv.online())}   (docs/ONLINE.md)`);
+    }
     console.log(`  api      ${srv.router.areas().filter(a => a.ok).map(a => `/api/${a.area}`).join(', ')}`);
     for (const f of failed) console.log(`  routes   ${f.file} did not load: ${f.error}`);
     console.log('Live reload is on. Ctrl+C stops the server.');
