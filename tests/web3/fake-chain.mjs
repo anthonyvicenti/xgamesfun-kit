@@ -227,8 +227,6 @@ export function fakeChain({ irysFree = true } = {}) {
         return ok({ meta: { logMessages: [] } });
       case 'getBalance':
         return ok({ context: { slot }, value: balances.get(params[0]) ?? 5_000_000_000 });
-      case 'getSignaturesForAddress':
-        return ok([]);
       case 'getTokenAccountBalance': {
         const a = accounts.get(params[0]);
         if (!a) return err('Invalid param: could not find account', -32602);
