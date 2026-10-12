@@ -1,6 +1,6 @@
 // MCP tools for a game's economy (devnet): what an economy can be made of, examples to start from, the checker, the
 // quick simulation, the cost, the spec in plain words, saving it into the game, and the links the creator's wallet
-// signs from (going live, a decision). Behind the same switch as web3_* (GAMESFUN_WEB3=1, mcp/server.mjs).
+// signs from (going live, a decision). Behind the same switch as web3_* (on by default; GAMESFUN_WEB3=0 turns it off, lib/web3-switch.mjs).
 //
 // Read-only, apart from economy_save, which writes the `economy` section of the game's gamesfun.json after the
 // checker passes it. No tool signs, holds a key or talks to a wallet: going live and every decision happen in the

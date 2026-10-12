@@ -21,7 +21,7 @@ which tool comes next; `gamesfun_step_pitch`, `gamesfun_step_spec`, `gamesfun_st
 
 Plus any tools other parts of the kit add in `mcp/tools/*.mjs`. The `web3_*` tools (the older shop and token drafts;
 skill `gamesfun-web3`) and the `economy_*` tools (a game's economy: catalog, examples, check, simulate, cost, explain,
-save, and the links that put it live; skill `gamesfun-economy`) are off unless the server is started with `GAMESFUN_WEB3=1` in its environment. No tool signs:
+save, and the links that put it live; skill `gamesfun-economy`) are on by default (since 2026-10-12); start the server with `GAMESFUN_WEB3=0` in its environment to hide them. No tool signs:
 going live, a token launch and the old shop publish each end at the studio's Economy tab (a link when the studio runs), where the
 creator approves in their own wallet. Paths in tool arguments are relative to
 the kit root, wherever the agent starts the server from. Requires `npm ci` first.

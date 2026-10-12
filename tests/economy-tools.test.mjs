@@ -40,10 +40,10 @@ async function listed(env) {
 test('the economy tools sit behind the web3 switch', async () => {
   const { tools: all } = await loadTools();
   for (const n of NAMES) assert.ok(all.has(n), n);
-  assert.equal(offered('economy_check', {}), false);
-  assert.equal(offered('economy_check', { GAMESFUN_WEB3: '1' }), true);
-  const off = await listed({});
-  const on = await listed({ GAMESFUN_WEB3: '1' });
+  assert.equal(offered('economy_check', {}), true, 'web3 is on by default (2026-10-12)');
+  assert.equal(offered('economy_check', { GAMESFUN_WEB3: '0' }), false);
+  const off = await listed({ GAMESFUN_WEB3: '0' });
+  const on = await listed({});
   try {
     assert.deepEqual((await off.listTools()).tools.filter((x) => x.name.startsWith('economy_')), []);
     const tools = (await on.listTools()).tools.filter((x) => x.name.startsWith('economy_'));

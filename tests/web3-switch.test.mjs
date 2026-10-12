@@ -1,5 +1,5 @@
-// Web3 is off by default in the studio: the Economy tab (which replaced the Token and Shop tabs) is listed only with
-// GAMESFUN_WEB3=1 or a gamesfun.json.
+// Web3 is on by default in the studio since 2026-10-12 (lib/web3-switch.mjs): the Economy tab (which replaced the
+// Token and Shop tabs) is listed unless GAMESFUN_WEB3=0.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { rm, writeFile } from 'node:fs/promises';
@@ -20,28 +20,27 @@ after(async () => {
 });
 const tabs = async () => (await (await fetch(`${base}/api/studio/tabs`)).json()).map(t => t.file);
 
-test('web3 off: no Economy tab in the list, and the other tabs stay', async () => {
+test('web3 on by default: the Economy tab is listed, and no Token or Shop tab', async () => {
   delete process.env.GAMESFUN_WEB3;
-  const files = await tabs();
-  assert.ok(!files.includes('economy.js'), files.join());
-  assert.ok(!files.includes('token.js') && !files.includes('shop.js'), 'the Token and Shop tabs are gone for good');
-  for (const f of ['session.js', 'build.js', 'tune.js', 'friends.js', 'assets.js', 'verify.js']) assert.ok(files.includes(f), f);
-  process.env.GAMESFUN_WEB3 = '0';
-  assert.ok(!(await tabs()).includes('economy.js'), 'only "1" turns it on');
-});
-
-test('GAMESFUN_WEB3=1 lists the Economy tab, and no Token or Shop tab', async () => {
-  process.env.GAMESFUN_WEB3 = '1';
   const files = await tabs();
   assert.ok(files.includes('economy.js'), files.join());
-  assert.ok(!files.includes('token.js') && !files.includes('shop.js'));
+  assert.ok(!files.includes('token.js') && !files.includes('shop.js'), 'the Token and Shop tabs are gone for good');
+  process.env.GAMESFUN_WEB3 = '1';
+  assert.ok((await tabs()).includes('economy.js'));
 });
 
-test('a game with a gamesfun.json lists them without the variable', async () => {
-  delete process.env.GAMESFUN_WEB3;
+test('GAMESFUN_WEB3=0 takes the Economy tab out, and the other tabs stay', async () => {
+  for (const v of ['0', 'off', 'false', 'no']) {
+    process.env.GAMESFUN_WEB3 = v;
+    const files = await tabs();
+    assert.ok(!files.includes('economy.js'), v);
+    for (const f of ['session.js', 'build.js', 'tune.js', 'friends.js', 'assets.js', 'verify.js']) assert.ok(files.includes(f), f);
+  }
+});
+
+test('GAMESFUN_WEB3=0 wins even for a game that already has a gamesfun.json', async () => {
+  process.env.GAMESFUN_WEB3 = '0';
   await writeFile(path.join(game.dir, 'gamesfun.json'), JSON.stringify({ network: 'devnet' }));
-  const files = await tabs();
-  assert.ok(files.includes('economy.js'));
+  assert.ok(!(await tabs()).includes('economy.js'));
   await rm(path.join(game.dir, 'gamesfun.json'));
-  assert.ok(!(await tabs()).includes('economy.js'), 'gone again once the file is');
 });

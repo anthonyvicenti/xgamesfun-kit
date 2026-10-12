@@ -14,23 +14,22 @@ import { pathToFileURL } from 'node:url';
 import { isMain } from '../lib/main.mjs';
 import { BIN, KIT_ROOT } from '../lib/paths.mjs';
 import { markRunning } from '../lib/running.mjs';
+import { web3On } from '../lib/web3-switch.mjs';
 
 export const TOOLS_DIR = path.join(KIT_ROOT, 'mcp', 'tools');
 const NAME = /^[a-zA-Z0-9_-]{1,64}$/;
 
 /**
- * Tool families that are off unless an environment variable turns them on. The open builder is game creation only
- * for now (HANDOFF section 1), so the web3_* tools are not offered to a session by default: GAMESFUN_WEB3=1 lists
- * them again, and the economy_* tools with them. Nothing in web3/ changes; the commands (`npx gamesfun web3 …`,
- * `npx gamesfun economy …`) work either way.
+ * Tool families a switch can turn off. Web3 (the web3_* and economy_* tools) is on by default since 2026-10-12;
+ * GAMESFUN_WEB3=0 hides them (lib/web3-switch.mjs). The commands (`npx gamesfun web3 …`, `npx gamesfun economy …`)
+ * work either way.
  */
 export const OPTIONAL_TOOLS = [
-  { prefix: 'web3_', env: 'GAMESFUN_WEB3', why: 'tokens, shops and loot boxes (devnet)' },
-  { prefix: 'economy_', env: 'GAMESFUN_WEB3', why: 'game economies on loot program 0.3 (devnet)' },
+  { prefix: 'web3_', on: web3On, why: 'tokens, shops and loot boxes (devnet)' },
+  { prefix: 'economy_', on: web3On, why: 'game economies on loot program 0.3 (devnet)' },
 ];
-const on = v => /^(1|true|yes|on)$/i.test(String(v ?? '').trim());
 /** Is this tool offered with this environment? */
-export const offered = (name, env = process.env) => !OPTIONAL_TOOLS.some(o => name.startsWith(o.prefix) && !on(env[o.env]));
+export const offered = (name, env = process.env) => !OPTIONAL_TOOLS.some(o => name.startsWith(o.prefix) && !o.on(env));
 
 export const INSTRUCTIONS = [
   'gamesfun builds multiplayer three.js browser games on games.fun\'s gf-three kit. Read AGENTS.md in the kit root first.',

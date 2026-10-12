@@ -10,7 +10,7 @@ payments, recipes, schedules, lotteries, stakes, contests, holds, and the decisi
 on games.fun's loot program 0.3 on **Solana devnet**. You write the spec; the kit checks, simulates and costs it; the
 creator approves going live in their own wallet. The format is `web3/economy/README.md`.
 
-The tools are the `economy_*` MCP tools (on with `GAMESFUN_WEB3=1`). Without them, the same from a terminal:
+The tools are the `economy_*` MCP tools (on by default; `GAMESFUN_WEB3=0` hides them). Without them, the same from a terminal:
 `npx gamesfun economy check|simulate|cost|plan [game] [--spec <file>] [--json]`.
 
 ## Rules (always)
