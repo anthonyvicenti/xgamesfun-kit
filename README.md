@@ -79,6 +79,7 @@ playbook) and the skills in `skills/`.
 | `npx gamesfun doctor` | is this machine ready? One line per check, with the one command that fixes each problem on your system (`--json`) |
 | `npx gamesfun connect` | add our MCP server to Claude Code and Codex through their own commands, and for Claude Code install the kit's plugin (the studio page's link to your session); checks both (`--remove` undoes it) |
 | `npx gamesfun update` | fetch and fast-forward the kit; `npm ci` only if the lockfile changed |
+| `npx gamesfun login` / `publish [dir]` / `logout` | put a game on games.fun at a link anyone can play: games.fun hosts it, the game's checks gate it, the link is unlisted, publishing again updates it ([docs/PUBLISH.md](docs/PUBLISH.md)) |
 
 `npx gamesfun <command> --help` gives each one's options. If `npx` can't find the command (an older npm), run
 `node bin/gamesfun.mjs <command>` instead: it is the same program.
