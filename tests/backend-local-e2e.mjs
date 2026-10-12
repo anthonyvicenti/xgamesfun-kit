@@ -15,7 +15,8 @@
 //   5. serves the game with `gamesfun dev`'s server, plays one round in Chrome (the client on, as in a person's own
 //      browser), and the score row appears in the database under the player's anonymous id, with no gf-backend warning;
 //   6. plays again with the client in its default automated-browser mode: no request reaches the database.
-// The anon role cannot read what RLS hides: the script also tries an update with the publishable key and must fail.
+// Then, from outside the game: the key alone cannot write, another player cannot write in this player's name or change
+// a score, and a player can add their own.
 import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -76,16 +77,14 @@ try {
   psql('drop table if exists public.high_scores cascade');
   const r = spawnSync('psql', [a.db, '-v', 'ON_ERROR_STOP=1', '-q', '-f', path.join(mig, '20261012000000_high_scores.sql')], { encoding: 'utf8' });
   step('the migration applied (psql, as apply_migration would)', r.status === 0, r.stderr.trim());
+  psql("notify pgrst, 'reload schema'");   // PostgREST picks up the new table (Supabase does this on its own on a hosted project)
+  await sleep(1500);
   let live = await B.judgeRows(game.dir, psql(B.LIVE_SQL, { json: true }));
   step('the live check passes the project', live.ok, JSON.stringify(live.tables));
   psql('create table public.e2e_leaky (id int)');
   live = await B.judgeRows(game.dir, psql(B.LIVE_SQL, { json: true }));
   psql('drop table public.e2e_leaky');
   step('the live check refuses a table without row-level security', !live.ok && /e2e_leaky/.test(live.refused.join()), live.refused[0]);
-
-  // the publishable key alone (no player) cannot write, and a signed-in player cannot write someone else's row
-  const anonWrite = await fetch(`${new URL(a.api).origin}/rest/v1/high_scores`, { method: 'POST', headers: { apikey: a.key, 'content-type': 'application/json' }, body: JSON.stringify({ player_id: '00000000-0000-0000-0000-000000000000', name: 'x', score: 1 }) });
-  step('the key alone cannot add a score (RLS)', !anonWrite.ok, `HTTP ${anonWrite.status}`);
 
   // 5. play a round in Chrome with the client on
   server = await startDevServer({ gameDir: game.dir, port: Number(a.port), log: () => {}, watch: false });
@@ -116,10 +115,23 @@ try {
   const users = psql(`select count(*) from auth.users where id = '${p1.result.user}' and is_anonymous`);
   step('the player is an anonymous Supabase user', users === '1', `auth.users rows: ${users}`);
 
+  // row-level security from outside the game: the key alone cannot write, and a signed-in player cannot write as another
+  const origin = new URL(a.api).origin;
+  const anonWrite = await fetch(`${origin}/rest/v1/high_scores`, { method: 'POST', headers: { apikey: a.key, 'content-type': 'application/json' }, body: JSON.stringify({ player_id: p1.result.user, name: 'x', score: 1 }) });
+  step('the key alone cannot add a score (RLS)', [401, 403].includes(anonWrite.status), `HTTP ${anonWrite.status} ${(await anonWrite.text()).slice(0, 120)}`);
+  const other = await (await fetch(`${origin}/auth/v1/signup`, { method: 'POST', headers: { apikey: a.key, 'content-type': 'application/json' }, body: '{}' })).json();
+  const asOther = await fetch(`${origin}/rest/v1/high_scores`, { method: 'POST', headers: { apikey: a.key, authorization: `Bearer ${other.access_token}`, 'content-type': 'application/json' }, body: JSON.stringify({ player_id: p1.result.user, name: 'cheat', score: 999 }) });
+  step('another player cannot add a score in this player\'s name (RLS)', [401, 403].includes(asOther.status), `HTTP ${asOther.status} ${(await asOther.text()).slice(0, 120)}`);
+  const own = await fetch(`${origin}/rest/v1/high_scores`, { method: 'POST', headers: { apikey: a.key, authorization: `Bearer ${other.access_token}`, 'content-type': 'application/json', prefer: 'return=minimal' }, body: JSON.stringify({ player_id: other.user.id, name: 'Other', score: 3 }) });
+  step('a player can add their own score (RLS allows it)', own.status === 201, `HTTP ${own.status}`);
+  const upd = await fetch(`${origin}/rest/v1/high_scores?player_id=eq.${p1.result.user}`, { method: 'PATCH', headers: { apikey: a.key, authorization: `Bearer ${other.access_token}`, 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify({ score: 999999 }) });
+  const changed = await upd.json().catch(() => null);
+  step('no player can change a score (no update policy)', Array.isArray(changed) && changed.length === 0 && psql(`select max(score) from public.high_scores where player_id = '${p1.result.user}'`) !== '999999', `HTTP ${upd.status}, rows changed ${Array.isArray(changed) ? changed.length : '?'}`);
+
   // 6. an automated browser with the default: the client stays off
   const p2 = await play({ on: false, label: 'automated-default' });
   const after = Number(psql('select count(*) from public.high_scores'));
-  step('an automated browser (verify, play) touches nothing by default', !p2.toDb.length && after === before + 1, `requests to the database: ${p2.toDb.length}`);
+  step('an automated browser (verify, play) touches nothing by default', !p2.toDb.length && after === before + 2, `requests to the database: ${p2.toDb.length}`);
   rec.ok = true;
 } catch (e) {
   rec.error = e.message;
