@@ -109,16 +109,18 @@ should never ask you for a password, a token or a key. If it does, say no and te
 | 1 | `git clone` | A new folder named `gamesfun-kit`. On Windows a browser window may ask you to sign in to GitHub. |
 | 2 | `npm ci` | A line that starts with "added" and a number of packages. It takes under a minute. |
 | 3 | `doctor` | About ten lines that start with `ok`, `warn` or `FAIL`, then "Ready: nothing blocks a first game." A `warn` is fine. A `FAIL` is not. |
-| 4 | `connect` | It says the tools were added to your agent. Then a line that starts with `next:`. |
-| 5 | `dev` | An address like `http://127.0.0.1:5180/studio/`. Chrome opens on that page: the studio's start page, "What do you want to make?". No game plays yet. |
+| 4 | `connect` | It says the tools were added to your agent. If they were added before from another folder (an older copy of the kit), a line that starts with `moved:` names that folder and this one: this copy is the one in use now. Then a line that starts with `next:`. |
+| 5 | `dev` | An address like `http://127.0.0.1:5180/studio/`. Chrome opens on that page: the studio's start page, "What do you want to make?". No game and no example plays or shows yet. Games you already have in `games/` are listed there, and none is opened until you click one. |
 
 When the agent is done, its last line tells you to type something. **In Claude Code, type `/reload-plugins` and press
 Enter. Then say hi to it.** This is the one step the agent cannot do for you: it connects the page in Chrome to your
 agent, and the line under the start page's box stops saying "No agent session connected yet". Codex has no such step,
 and in Codex the page cannot reach your agent yet (things 3, 4 and 7 below need Claude Code).
 
-The page in Chrome is the studio. To try the things below on a finished game, click **Start from this** under
-**Soak Squad** at the bottom of the start page: it copies the example into `games/soak-squad` and opens it. The
+The page in Chrome is the studio. It shows no game until you describe one (or pick one): when you send your first
+idea, the right side says **Making your game** while your agent pitches and builds it, and your own game appears
+there when its first build is done. To try the things below on a finished game straight away, click **Start from
+this** under **Soak Squad** at the bottom of the start page: it copies the example into `games/soak-squad` and opens it. The
 conversation with your agent is on the left; the game is on the right, with its tools in a bar above it. (The pictures
 on this page show the studio before this layout: the game on the left and the tabs on the right.)
 
@@ -154,7 +156,8 @@ Make me a game where we defend a lighthouse from crabs.
   Chrome window), and has a second agent play it as a new player.
 - If the agent tries to stop before it is finished, it is told to go on. That is on purpose.
 - At the end it says "delivered", tells you what you will see, and what it left out.
-- Ask it: "open the new game in the studio". The game shows in the studio page. Play it.
+- Ask it: "open the new game in the studio". The game shows in the studio page. Play it. (A game you started from
+  the studio's start page opens there by itself when it is delivered; until then that side says "Making your game".)
 
 **If it goes wrong, send us:** the agent's last answer, and these two files (replace `<name>` with the game's folder
 name, which the agent told you):

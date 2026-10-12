@@ -32,13 +32,14 @@
         "restartHint": "In this Claude Code session, type /reload-plugins, then say hi: it loads the kit's tools and the studio's link to this session without a restart (a new session picks them up by itself)."
       },
       "plugin": {
-        "about": "The kit's plugin (plugin/: the studio bridge's hooks and the play-tester subagent), installed from this checkout through Claude Code's own plugin commands. The checkout is a marketplace of one plugin (.claude-plugin/marketplace.json). {kit} is this checkout's folder.",
+        "about": "The kit's plugin (plugin/: the studio bridge's hooks and the play-tester subagent), installed from this checkout through Claude Code's own plugin commands. The checkout is a marketplace of one plugin (.claude-plugin/marketplace.json). {kit} is this checkout's folder. listMarketplaces says which folder the marketplace was added from, so connect can tell one added from another checkout.",
         "marketplace": "gamesfun-kit",
         "name": "gamesfun",
         "scopes": ["user", "local", "project"],
         "addMarketplace": ["plugin", "marketplace", "add", "{kit}", "--scope", "{scope}"],
         "install": ["plugin", "install", "{plugin}@{marketplace}", "--scope", "{scope}"],
         "list": ["plugin", "list", "--json"],
+        "listMarketplaces": ["plugin", "marketplace", "list", "--json"],
         "uninstall": ["plugin", "uninstall", "{plugin}@{marketplace}", "--scope", "{scope}"],
         "removeMarketplace": ["plugin", "marketplace", "remove", "{marketplace}", "--scope", "{scope}"]
       },

@@ -19,6 +19,12 @@ export async function recordConnected(r, { remove = false, dir = STATE } = {}) {
   return v;
 }
 
+/** One line for a registration re-pointed at this checkout: the old folder, the new one, and how to switch back. */
+export function movedLine(m, { dryRun = false } = {}) {
+  const back = m.live ? `${m.from} still holds a kit: run connect in that folder to switch back` : 'that folder no longer holds a kit';
+  return `${dryRun ? 'would move' : 'moved'}: ${m.what} was from ${m.from}, ${dryRun ? 'would be' : 'is now'} from ${m.to} (${back})`;
+}
+
 const usage = `Usage: gamesfun connect [--agent <id>] [--scope <scope>] [--dir <folder>] [--replace] [--remove] [--dry-run] [--json]
 
 Register this kit's MCP server with your coding agent (every agent found; rows are in lib/agents.json) using the agent's
@@ -30,7 +36,8 @@ file, signs in, or reads a credential.
   --scope <s>     Claude Code: user (default; every folder), local (this folder, private), project (.mcp.json in --dir)
                   Codex has one scope, user
   --dir <folder>  the folder local and project scopes belong to (default: the current one)
-  --replace       point an existing "gamesfun" registration at this checkout
+  --replace       register again from this checkout even when it already is (one from another folder, an older or a
+                  deleted clone, is re-pointed here without it: one "moved" line each, the old folder and the new)
   --remove        take the registration and the plugin out again
 The environment variables GAMESFUN_CONNECT_SCOPE and GAMESFUN_CONNECT_DIR set --scope and --dir when they are not given.
   --dry-run       print the agent commands, run none that change anything`;
@@ -49,6 +56,7 @@ export default {
     if (r.server?.ok) console.log(`server: starts, ${r.server.tools.length} tools (${r.server.tools.join(', ')})`);
     for (const a of r.results) {
       console.log(`${a.name}: ${a.status}`);
+      for (const m of a.moved ?? []) console.log(`  ${movedLine(m, { dryRun: !!values['dry-run'] })}`);
       for (const s of a.steps) console.log(`  ${s.do}: ${s.command}${s.code === undefined ? '' : `  -> exit ${s.code}`}${s.note ? ` (${s.note})` : ''}`);
       if (a.note) console.log(`  ${a.note}`);
       if (a.plugin) console.log(`  plugin (the studio page's link to your session): ${a.plugin.status}${a.plugin.note ? `: ${a.plugin.note}` : ''}`);
