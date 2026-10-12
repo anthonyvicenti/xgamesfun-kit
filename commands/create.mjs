@@ -1,6 +1,7 @@
 import { guard, parse, printJson } from '../lib/cli.mjs';
 import { createGame } from '../lib/create.mjs';
 import { installGfWeb3 } from '../web3/node/install.mjs';
+import { refreshClient } from '../lib/backend/index.mjs';
 
 const usage = `Usage: gamesfun create <dir> (--from <example> | --spec <spec.json>) [--force] [--json]
 
@@ -19,6 +20,7 @@ export default {
     const { values, positionals } = parse(args, { from: { type: 'string' }, spec: { type: 'string' }, force: { type: 'boolean' } }, usage);
     const r = await createGame(positionals[0], { from: values.from, spec: values.spec, force: values.force });
     r.web3 = await installGfWeb3(r.dir);   // the in-game kit gf-web3 at gf/web3/, and a gamesfun.json stub
+    await refreshClient(r.dir);           // gf/backend/, only in a game that has a backend (backend.json)
     if (values.json) return printJson(r);
     for (const n of r.notes) console.log(`note     ${n}`);
     for (const w of r.warnings) console.log(`warning  ${w}`);

@@ -3,6 +3,7 @@ import { guard, parse } from '../lib/cli.mjs';
 import { resolveGame } from '../lib/games.mjs';
 import { runTool } from '../lib/run-tool.mjs';
 import { installGfWeb3 } from '../web3/node/install.mjs';
+import { refreshClient } from '../lib/backend/index.mjs';
 import { migrateFile } from '../web3/economy/migrate.mjs';
 
 const usage = `Usage: gamesfun upgrade [dir] [--out <dir>] [--world] [--dry-run] [--json]
@@ -33,6 +34,7 @@ export default {
     if (values.json) flags.push('--json');
     const r = await runTool('upgrade', [dir, ...flags]);
     if (r.code === 0) await installGfWeb3(values.out ? path.resolve(values.out) : dir);   // refresh gf/web3/
+    if (r.code === 0) await refreshClient(values.out ? path.resolve(values.out) : dir);   // and gf/backend/ when the game has a backend
     if (r.code === 0) {
       const moved = await migrateFile(values.out ? path.resolve(values.out) : dir, { write: true });   // shop → economy
       if (!values.json && moved.changed) console.log(moved.notes.join('\n'));
