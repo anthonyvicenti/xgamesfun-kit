@@ -62,8 +62,8 @@ try {
     await shot(p, `${label}-6-build-verdict`, 'Build tab: step, round, failing check with its rule and fix, play-tester notes, automatic fixes, roll back (none saved yet)');
     // tune
     await tab(p, 'tune'); await sleep(600);
-    await p.evaluate(() => { const r = document.querySelector('.row.tune input[type=range]'); if (r) { r.value = r.max; r.dispatchEvent(new Event('input', { bubbles: true })); } });
-    await shot(p, `${label}-7-tune`, 'Tune tab on the party game: sliders and switches, each marked "applies with a reload", one edit staged');
+    await p.evaluate(() => { const r = document.querySelector('.settings .set input[type=range]'); if (r) { r.value = r.max; r.dispatchEvent(new Event('input', { bubbles: true })); } });
+    await shot(p, `${label}-7-tune`, 'Settings on the party game: a card per group, sliders with their ends and default, one edit staged');
     await p.close();
     pastDesktop.push(label);
   }
