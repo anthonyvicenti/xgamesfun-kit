@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // gf-three catalog: what the kit offers, for the pitch agent and for builders.
 //
-//   node research/gf-three/tools/catalog.mjs [--json] [--engine party|scenic|forge|flat]
+//   node research/gf-three/tools/catalog.mjs [--json] [--engine party|scenic|forge|flat|vista]
 //
 // loops      how a game is played (spec.loop; open builder M4-B): a timed round, a level run, a world that stays, and the
 //            ones the session cannot run yet, each `ready` or planned, with how a pitch picks one (loopGuide)
@@ -24,7 +24,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { KIT, LIBRARY, KIT_VERSION, SPEC_SCHEMA, SCENIC, SCENIC_KIT, SCENIC_VERSION, FORGE_KIT, FORGE_VERSION } from './lib/paths.mjs';
+import { KIT, LIBRARY, KIT_VERSION, SPEC_SCHEMA, SCENIC, SCENIC_KIT, SCENIC_VERSION, FORGE_KIT, FORGE_VERSION, VISTA_KIT, VISTA_VERSION } from './lib/paths.mjs';
 import { importKitModule } from './lib/kit-import.mjs';
 import { withDefaults } from './lib/schema.mjs';
 import { kitModuleFiles } from './lib/vendor.mjs';
@@ -93,7 +93,7 @@ export function manifestProblems(id, m) {
   if (!m || typeof m !== 'object') return [`mechanic ${id}: index.js exports no manifest`];
   if (m.id !== id) bad.push(`manifest.id is "${m.id}", the folder is "${id}"`);
   if (typeof m.describe !== 'string' || !m.describe.trim()) bad.push('describe: one line');
-  if (!Array.isArray(m.engines) || !m.engines.length || m.engines.some(e => !['party', 'scenic', 'forge'].includes(e))) bad.push('engines: a list of party, scenic, forge');
+  if (!Array.isArray(m.engines) || !m.engines.length || m.engines.some(e => !['party', 'scenic', 'forge', 'vista'].includes(e))) bad.push('engines: a list of party, scenic, forge, vista');
   if (!(isFn(m.needs) || (m.needs && typeof m.needs === 'object'))) bad.push('needs: {parts, world} or params => that');
   if (!Array.isArray(m.uses)) bad.push('uses: a list of mechanic ids');
   if (!isFn(m.owns)) bad.push('owns: params => [{res, why, free}]');
@@ -235,7 +235,7 @@ export function flowProblems(id, m) {
   if (!m || typeof m !== 'object') return [`loop ${id}: index.js exports no manifest`];
   if (m.id !== id) bad.push(`manifest.id is "${m.id}", the folder is "${id}"`);
   if (typeof m.describe !== 'string' || !m.describe.trim()) bad.push('describe: one line');
-  if (!Array.isArray(m.engines) || !m.engines.length || m.engines.some(e => !['party', 'scenic', 'forge'].includes(e))) bad.push('engines: a list of party, scenic, forge');
+  if (!Array.isArray(m.engines) || !m.engines.length || m.engines.some(e => !['party', 'scenic', 'forge', 'vista'].includes(e))) bad.push('engines: a list of party, scenic, forge, vista');
   if (!['required', 'cap'].includes(m.seconds)) bad.push('seconds: "required" or "cap"');
   if (!['fill', 'min'].includes(m.seats?.alone) || !['join', 'wait'].includes(m.seats?.late) || typeof m.seats?.why !== 'string') bad.push('seats: {alone: fill | min, late: join | wait, why}');
   if (!m.needs || typeof m.needs !== 'object') bad.push('needs: {parts, world}');
@@ -278,7 +278,7 @@ const flowStatus = (flows, id) => { const f = flows.find(x => x.id === id); retu
 const LOOP_DEFS = [
   { id: 'round', label: 'a timed round', describe: 'everyone plays at once in one timed round: lobby, countdown, play, results, play again',
     pick: 'things move all the time and every player acts at the same moment; one clock for everyone, then a winner',
-    spec: 'round.seconds (30-900), round.winBy; the mechanics are what you do during it', engines: ['party', 'scenic', 'forge'],
+    spec: 'round.seconds (30-900), round.winBy; the mechanics are what you do during it', engines: ['party', 'scenic', 'forge', 'vista'],
     ready: ({ kit, flows }) => (!existsSync(join(kit, 'net/session.js')) ? 'not ready: the kit has no session (kit/net/session.js)' : flows.some(f => f.id === 'round') ? flowStatus(flows, 'round') : null),
     shape: spec => (spec.round?.mode === 'world' ? 'round.mode is "world", which is the loop "world"' : hasMech(spec, 'levels') ? 'the spec has the levels mechanic, which is the loop "run"' : null) },
   { id: 'run', label: 'a level run', describe: 'a run through levels in order: clear one and a portal takes everyone to the next; the last level, or a boss, ends it (one clock for the whole run)',
@@ -361,6 +361,10 @@ const ENGINE_GUIDE = [
   'flat (gf-three on a plane, kit/flat): a 2D game: the creator says 2D, pixel art, sprite, retro, side-scroller, platformer or top-down, or names a 2D game; also a grid or board seen from above with a cursor each. Pick its `plane` (engines.flat.planes: top or side) and a look in the art style asked for (pixel unless they say drawn, cartoon, hand-drawn or vector)',
   '* a flat spec says its `plane`; its camera is that plane\'s (top or side), its world is field (top) or stage (side), every body is {from: "sprite"}, and it lists only mechanics run on that plane (engines.flat.mechanics.<plane>): create refuses anything else, and what the idea needs beyond them goes in v1.notYet',
   'when unsure, scenic for anything that is not silly',
+  'vista (gf-vista): calm games where the place is the point: a coast, the sea, the sky, light and weather; fishing, sailing, exploring, cozy co-op for 1-4 who see each other on one island. The engine for a creator who asks for a photoreal, realistic, lifelike or beautiful world, real water, a real sky or sunset, or names a game known for its sea and light, when the game is calm (no combat): vista over scenic then. A vendored WebGPU core (WebGPU only, a desktop browser). Its play is the core\'s walking, swimming, boat and fishing, the data tables (spec.vista: species, gear, vendors, economy, start) and rules.js, not mechanic modules',
+  '* vista is never a card for a game meant to open inside a post on X (or another in-app browser), or for a phone: it draws only with WebGPU on a desktop graphics card',
+  '* a vista spec lists no mechanic and no world.props; its world.template is palm-isle (the core\'s island, the only vista world), its camera first, its look one of engines.vista.looks; its `characters` is one role, the player, with body {from: "bean"} (friends see the kit\'s bodies); a vista card promises only what engines.vista.has lists and puts what the idea needs beyond it (engines.vista.cannot) in v1.notYet',
+  '* a vista game is our own design in our own words: no vista card\'s spec names an existing game (not even the one the creator named) or its people and places; the buyer and the shop get generic names of our own (spec.vista.vendors)',
   '* forge is never a card for a game meant to open inside a post on X (or another in-app browser) yet: it draws with WebGPU, or with its WebGL2 build where there is none (since wave 3), and that build has not been run inside an in-app browser or on a phone (research/rust-engine/PLAN.md §10)',
   '* a forge spec lists no mechanic; a forge card promises only what its tables run today (catalog.json → engines.forge.tables: a table whose `runs` is null goes in v1.notYet)',
   '* a forge game is our own design in our own words: no forge card\'s spec or conceptPrompt names an existing game, not even the one the creator named (leave the spec\'s `prompt` out), and nothing in it is named after that game\'s places, weapons, enemies or cards; the name stays in `research` and `similar`',
@@ -455,6 +459,10 @@ export async function catalog({ kit = KIT } = {}) {
   // on each plane are the part's own manifest; nothing about it is listed here by hand.
   const flat = await flatCatalog({ kit });
   if (flat) { out.worlds.push(...flat.worlds); out.looks.push(...flat.looks); out.engines.flat = flat.engine; }
+  // the vista engine (research/super-scenic/PLAN.md, CONTRACT §8 vista): the core's island, its looks, its data tables
+  const vista = await vistaCatalog();
+  out.worlds.push(...vista.worlds); out.looks.push(...vista.looks);
+  out.engines.vista = vista.engine;
   out.engineGuide = ENGINE_GUIDE;
   // how a game is played, apart from the engine (M4-B): what the session runs today, and what is planned
   out.loops = await loopParts({ kit });
@@ -539,6 +547,60 @@ async function forgeCatalog() {
     engine.tables.cards && Object.assign(engine.tables.cards, { rarities: C.RARITIES ?? [] });
     engine.tablesHow = 'spec.forge = {player, weapons: [{id, preset | kind, …}], enemies: [{id, archetype, …}], waves: [{id, enemies: [{type, count}]}], cards: [{id, rarity, stat, add}]}; every value a slot; node research/gf-forge/tools/tables.mjs <spec> checks one (create refuses what the core cannot do)';
   } catch (e) { engine.status = `does not import: ${e.message.split('\n')[0]}`; }
+  engine.worlds = worlds.map(w => w.id); engine.looks = looks.map(l => l.id);
+  return { engine, worlds, looks };
+}
+
+/**
+ * The vista engine (research/gf-vista; research/super-scenic/THIN_E2E.md): the core's island, its six looks, first
+ * person, its data tables (spec.vista) and what it has and cannot do yet, so no pitch promises more.
+ */
+// Offered to creators' pitches only once the creator opens it (the same rule as forge: research/super-scenic/PLAN.md §10,
+// THIN_E2E "closed to creators behind GF_VISTA_OPEN=1"). Until then its status is not `ready`, which the pitch checker
+// refuses with this reason. GF_VISTA_OPEN=1 offers it (the tests, the evals and our own runs); read at each call, so a
+// test can open and close it. `create`, `verify` and `upgrade` never read it.
+export const vistaOpen = (env = process.env) => env.GF_VISTA_OPEN === '1';
+const VISTA_CLOSED = 'not open yet (gf-vista is still being built: never a card until the catalog says ready)';
+export async function vistaCatalog({ env = process.env } = {}) {
+  const engine = { id: 'vista', kit: `gf-vista ${VISTA_VERSION}`, for: 'calm games where the place is the point: a coast, the sea, the sky, light and weather; fishing, sailing, exploring, cozy co-op for 1-4 friends who see each other on one island',
+    look: 'a physical sky and light over a simulated ocean with volumetric clouds, seen in first person: six named looks from a clear morning to a storm swell (the hour, the sea state, the exposure and the clouds, each a slot)', camera: 'first', cameras: ['first'], worlds: [], looks: [], status: vistaOpen(env) ? 'ready' : VISTA_CLOSED,
+    note: 'WebGPU only, on a desktop browser with a graphics card (a browser without WebGPU shows the kit\'s "open in a browser with WebGPU" screen); the first visit compiles its shaders (about 10 s); never inside a post on X. No mechanic modules: its play is the core\'s, spec.vista (the data tables) and rules.js (events in: bite, hooked, catch, lost, sold, bought, board, leave; ctx.finish ends the session)',
+    multiplayer: 'live co-op for 1-4 on one island: each player walks, swims, sails and fishes on their own copy, and sees the others as people (a gf-humanoid-1 body, one a seat, in their colour) where they really are; the host\'s copy owns the time of day, the sea state, the clock and the results',
+    tables: {
+      species: 'what bites, where and what it is worth: {<id>: {name, habitat: [shallows | reef | pier | bay | deep], minKg, maxKg, value}}; the ids are the core\'s swimming fish (silverside, mullet, needlefish, sergeant, grunt, yellowtail, chromis, tang, wrasse, parrot, angel, jack, barracuda, grouper, redSnapper, tuna, mahi, tarpon), the names our own',
+      gear: 'what the shop sells: {<id>: {name, kind, price, <its stat>}}; kinds and their stat: line lineKg (breaking strain, kg), reel reelSpeed (how fast the line comes in), rod castM (longest cast, m), hold holdKg (cooler, kg), tank fuelL, engine speedMul, finder and lights (no stat). A spec\'s gear replaces the defaults whole, so list a price-0 starter of each kind the player needs (a line, a reel, a rod, a hold) and the upgrades above it',
+      vendors: '{buyer: {name, greeting}, shop: {name, greeting}}: generic names of our own',
+      economy: '{startMoney, fuelPrice}',
+      start: 'pier (the pier\'s foot on the beach, looking out along the pier: the best first view, the default) | pier-head (the end of the pier, facing open sea) | beach | boat: where players begin',
+    },
+    tablesHow: 'spec.vista = {species, gear, vendors, economy, start}; every value a slot; research/gf-vista/kit/tables check() refuses what the core cannot do (create refuses the spec)',
+    spec: {
+      players: '{min: 1, max: 1-4, bots: false, mode: "coop"}: no bots; friends play together',
+      round: 'seconds: the longest a session lasts (300-900); winBy in plain words (a calm goal: land N kinds of fish, earn an amount); the rules end it at the goal with ctx.finish, the clock otherwise',
+      controls: '{primary: "cast, strike and reel", interact: "board the boat, trade at a stall"}: the core\'s own keys (R takes out the rod; How to play lists them)',
+      characters: '[{role: "player", describe, body: {from: "bean"}}] and no other role',
+      world: '{template: "palm-isle"} and no props',
+    },
+    has: ['one island in the open sea (palm-isle): a sandy bay, a long pier, a fishing village, palms, rocks, a reef and open ocean', 'walking, swimming, diving and a boat to take out', 'wildlife that lives on its own: a humpback whale that cruises the deep water, blows and breaches, fish on the reef, gulls, crabs', 'fishing: casting, bites, the catch, a cooler, a fish buyer and a tackle shop (spec.vista)', 'six looks from a clear morning to a storm swell', 'friends on the same island who see each other'],
+    cannot: [
+      'any world but the core\'s island (no coast of our own, no second map, no levels or rooms)',
+      'any camera but first person',
+      'enemies, combat, weapons, health, building, crafting or farming: it is a calm game',
+      'a boat friends ride together (each player\'s boat is their own copy\'s)',
+      'progress saved between sessions on the play host',
+      'phones, and playing inside a post on X (WebGPU on a desktop only)',
+      'new bodies or props made for the game: friends are the kit\'s bodies; the island\'s things are the core\'s',
+    ],
+    bodies: ['friends see each other as gf-humanoid-1 bodies from research/gf-vista/kit/bodies.json (realistic bodies, track C), else four library bodies, one a seat, in each player\'s colour'] };
+  const worlds = [], looks = [];
+  try {
+    const C = await importKitModule(join(VISTA_KIT, 'config.js'));
+    if (C.error) throw C.error;
+    for (const id of C.templates ?? []) { const info = C.TEMPLATE_INFO?.[id] ?? {}; worlds.push({ id, engine: 'vista', label: info.label ?? id, describe: info.describe ?? '', kind: info.kind ?? 'outdoor', starts: Object.keys(C.PLACES ?? {}),
+      // one island at every size class (spec world.size changes nothing yet: the coast generator is PLAN wave 3)
+      sizes: Object.fromEntries(['small', 'medium', 'large'].map(k => [k, { size: [2048, 2048], note: 'the core\'s one island' }])) }); }
+    for (const [id, p] of Object.entries(C.presets ?? {})) looks.push({ id, engine: 'vista', label: p.label ?? id, describe: p.describe ?? '', times: [p.hour < 7 || p.hour > 20 ? 'night' : p.hour > 16.5 ? 'golden' : 'day'] });
+  } catch (e) { engine.status = `does not import: ${String(e?.message ?? e).split('\n')[0]}`; }
   engine.worlds = worlds.map(w => w.id); engine.looks = looks.map(l => l.id);
   return { engine, worlds, looks };
 }

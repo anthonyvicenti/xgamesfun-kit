@@ -40,14 +40,14 @@ import { execFileSync } from 'node:child_process';
 import { join, resolve, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { REPO, KIT, KIT_VERSION, SPEC_SCHEMA, GF_AUDIO, LIBRARY, FORGE, FORGE_KIT, FORGE_VERSION, importPart, json, walk, sha256 } from './lib/paths.mjs';
-import { put, vendorLibraries, vendorKit, vendorGfAssets, kitFiles, forgeFiles } from './lib/vendor.mjs';
+import { put, vendorLibraries, vendorKit, vendorGfAssets, kitFiles, forgeFiles, vistaFiles } from './lib/vendor.mjs';
 import { importKitModule } from './lib/kit-import.mjs';
 import { specToConfig, libraryPicture, specParams, enemyToughness, FORGE_GATE_QUERY } from './lib/spec-config.mjs';
 import { assembleManifest } from './lib/slots-lib.mjs';
 import { ensurePictures } from './lib/items-lib.mjs';
 import { withDefaults, check } from './lib/schema.mjs';
 import { loadWorldSubject, checkWorld } from './lib/world-check.mjs';
-import { decideModules, AUDIO_FILES, indexHtml, mainJs, attribution, forgeModules } from './create.mjs';
+import { decideModules, AUDIO_FILES, indexHtml, mainJs, attribution, forgeModules, create } from './create.mjs';
 import { loopOf, flowOf, flowParts } from './catalog.mjs';
 import { adopt } from '../../multiplayer/party/adopt.mjs';
 import { checkKitReleased } from '../../multiplayer/party/manifest.mjs';
@@ -103,6 +103,8 @@ export async function upgrade(gameDir, { out = null, world = false, log = () => 
   const record = await readJson('gf-three.json');
   // a forge game (CONTRACT §8 forge): its own way (upgradeForge: gf/forge and its pinned wasm, the forge configs)
   if (record.kit?.engine === 'forge') return upgradeForge(dir, { src, out, record, t0 });
+  // a vista game (CONTRACT §8 vista): the kit's files again through create (upgradeVista)
+  if (record.kit?.engine === 'vista') return upgradeVista(dir, { src, record, t0 });
   const before = { kit: await kitHashes(dir), slots: await slotIds(dir), files: new Set(await walk(dir)) };
   const changes = { kit: [], vendor: [], config: [], bodies: [], slots: { added: [], removed: [] }, world: null, notes: [] };
 
@@ -283,6 +285,48 @@ export async function upgrade(gameDir, { out = null, world = false, log = () => 
   return { ok: true, code: 0, dir, src, ms: Math.round(performance.now() - t0), modules, kit: kitDiff, vendor: changes.vendor.filter(f => !f.startsWith('gf/three/')), config: changes.config, bodies: changes.bodies, slots: changes.slots, world: changes.world, notes: changes.notes, warnings: A.warnings, slotCount: A.slotCount, main: A.mainCount };
 }
 
+// ---- vista games (CONTRACT §8 vista; research/super-scenic/THIN_E2E.md track S) ----
+
+/** What a vista game's gf/three/kit.js records against what create would vendor today. */
+async function vistaBehind(dir) {
+  const { modules } = await decideModules({ engine: 'vista' });
+  const want = await kitFiles(modules), wantVista = await vistaFiles();
+  let have = {}, haveVista = {};
+  try { const t = await readFile(join(dir, 'gf/three/kit.js'), 'utf8'); const r = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); have = r.files ?? {}; haveVista = r.vista?.files ?? {}; } catch {}
+  const diff = (w, h) => ({ added: Object.keys(w).filter(k => !(k in h)), changed: Object.keys(w).filter(k => k in h && h[k] !== w[k]), removed: Object.keys(h).filter(k => !(k in w)) });
+  return { modules, kit: diff(want, have), vista: diff(wantVista, haveVista) };
+}
+/** --plan for a vista game. */
+async function vistaPlan(dir) {
+  const b = await vistaBehind(dir), why = [];
+  const n = k => k.added.length + k.changed.length + k.removed.length;
+  if (n(b.kit)) why.push(`gf/three is ${n(b.kit)} file${n(b.kit) > 1 ? 's' : ''} behind the kit (${b.kit.changed.length} changed, ${b.kit.added.length} added, ${b.kit.removed.length} removed since create)`);
+  if (n(b.vista)) why.push(`gf/vista is ${n(b.vista)} file${n(b.vista) > 1 ? 's' : ''} behind research/gf-vista (${b.vista.changed.length} changed, ${b.vista.added.length} added, ${b.vista.removed.length} removed)`);
+  const mp = await checkKitReleased(dir);
+  if (!mp.ok || !mp.latest) why.push(mp.ok ? `gf/mp is gf-multiplayer ${mp.version}, not the current one` : 'gf/mp is not an unedited gf-multiplayer release');
+  return { ok: true, code: 0, dir, engine: 'vista', behind: why.length > 0, why, kit: b.kit, vista: b.vista, mp: { version: mp.version ?? null, latest: !!mp.latest }, world: { relay: false, why: 'a vista world is the core\'s island; --world is for gf-three\'s stock templates' } };
+}
+/**
+ * Upgrade a vista game: create again from its spec.json in place, which re-copies gf/three (the vista closure), gf/vista
+ * (kit, HUD, core), gf/mp, gf-assets and audio, regenerates index.html, main.js, assets.json (the sound list kept) and
+ * the build record, and keeps rules.js and every config file as the game has them. Not yet for vista: filling a value
+ * an older config lacks (forge's fillMissing); a game whose spec.json no longer validates is refused, with the reason.
+ */
+async function upgradeVista(dir, { src, record, t0 }) {
+  const before = await vistaBehind(dir), slotsBefore = await slotIds(dir);
+  if (!existsSync(join(dir, 'spec.json'))) return { ok: false, code: 2, problems: ['a vista game is upgraded from its spec.json, and this game has none'] };
+  const r = await create(join(dir, 'spec.json'), dir);
+  if (!r.ok) return { ok: false, code: r.code, problems: r.problems.map(p => `upgrade (create in place): ${p}`) };
+  const slotsAfter = await slotIds(dir);
+  const rec = JSON.parse(await readFile(join(dir, 'gf-three.json'), 'utf8'));
+  const n = k => k.added.length + k.changed.length + k.removed.length;
+  rec.upgrades = [...(record.upgrades ?? []), { at: new Date().toISOString(), kit: KIT_VERSION, engine: 'vista', kitFiles: { added: before.kit.added.length, changed: before.kit.changed.length, removed: before.kit.removed.length }, vistaFiles: n(before.vista) }];
+  await writeFile(join(dir, 'gf-three.json'), json(rec));
+  return { ok: true, code: 0, dir, src, engine: 'vista', ms: Math.round(performance.now() - t0), modules: r.modules, kit: before.kit, vista: before.vista,
+    vendor: r.wrote.filter(f => !f.startsWith('gf/three/') && !f.startsWith('gf/vista/')), config: [], files: [], slots: { added: [...slotsAfter].filter(x => !slotsBefore.has(x)), removed: [...slotsBefore].filter(x => !slotsAfter.has(x)) },
+    notes: [...(r.kept.length ? [`kept as the game has them: ${r.kept.join(', ')}`] : []), 'not yet for vista: a value an older config lacks is not filled in (re-run create with --force on a copy to see what the current kit would write)'], warnings: r.warnings, slotCount: r.slots, main: r.main };
+}
+
 // ---- forge games (CONTRACT §8 forge; research/rust-engine/PLAN.md §4 track S) ----
 
 /** What a forge game's gf/three/kit.js records against what create would vendor today. */
@@ -424,6 +468,7 @@ export async function upgradePlan(gameDir) {
   // forge (CONTRACT §8 forge): behind when gf/three, gf/forge or its pinned wasm is not what create would vendor today,
   // or gf/mp is an older gf-multiplayer; --world is not for forge (its room comes from the spec, not a stock template)
   if (record.kit?.engine === 'forge') return forgePlan(dir);
+  if (record.kit?.engine === 'vista') return vistaPlan(dir);
   const { modules } = await decideModules({ standins: !!record.options?.standins, standinMechanics: !!record.options?.standinMechanics });
   const want = await kitFiles(modules);
   let have = {};
@@ -507,7 +552,7 @@ if (isMain(import.meta)) {
     if (a.includes('--json')) process.stdout.write(JSON.stringify(p, null, 2) + '\n');
     else if (!p.ok) { for (const x of p.problems) console.error(`problem: ${x}`); console.error('upgrade --plan: FAILED'); }
     else {
-      console.log(`kit     ${p.behind ? `behind: ${p.why.join('; ')}` : `current (gf/three${p.engine === 'forge' ? ', gf/forge and its wasm' : ''} and gf/mp are what create would write today)`}`);
+      console.log(`kit     ${p.behind ? `behind: ${p.why.join('; ')}` : `current (gf/three${p.engine === 'forge' ? ', gf/forge and its wasm' : p.engine === 'vista' ? ', gf/vista' : ''} and gf/mp are what create would write today)`}`);
       const w = p.world;
       console.log(`world   ${w.complete ? 'complete (check 17 passes)' : w.complete === false ? `NOT COMPLETE (${w.errors.join(', ')}); ${w.stock ? 'stock' : w.stock === false ? 'not stock' : 'unknown'}: ${w.why}` : w.why}`);
       console.log(`upgrade --plan: ${p.behind || w.relay ? `run node research/gf-three/tools/upgrade.mjs ${relative(process.cwd(), p.dir) || '.'}${w.relay ? ' --world' : ''}` : 'nothing to do'}`);
@@ -521,6 +566,7 @@ if (isMain(import.meta)) {
   else {
     const list = (xs, n = 8) => `${xs.slice(0, n).join(', ')}${xs.length > n ? ` and ${xs.length - n} more` : ''}`;
     console.log(`kit     gf/three: ${r.kit.changed.length} changed, ${r.kit.added.length} added, ${r.kit.removed.length} removed${r.kit.changed.length + r.kit.added.length ? ` (${list([...r.kit.added.map(f => `+${f}`), ...r.kit.changed])})` : ''}`);
+    if (r.engine === 'vista') console.log(`vista   gf/vista: ${r.vista.changed.length} changed, ${r.vista.added.length} added, ${r.vista.removed.length} removed`);
     if (r.engine === 'forge') console.log(`forge   gf/forge: ${r.forge.changed.length} changed, ${r.forge.added.length} added, ${r.forge.removed.length} removed; the core's wasm ${r.wasm.behind ? `${String(r.wasm.have ?? 'none').slice(0, 12)} → ${String(r.wasm.want).slice(0, 12)}` : 'already the kit\'s release'}${r.files?.length ? `; copied ${list(r.files)}` : ''}`);
     if (r.vendor.length) console.log(`vendor  ${list(r.vendor)}`);
     console.log(`config  ${r.config.length ? `added ${list(r.config, 12)}` : 'nothing added (every value the game set is kept)'}`);

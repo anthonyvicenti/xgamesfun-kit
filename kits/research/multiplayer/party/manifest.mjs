@@ -13,10 +13,10 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 export const repo = resolve(here, '../../..');
 export const KIT_NAME = 'gf-multiplayer';
-export const KIT_VERSION = '1.7.0';   // 1.5.0 worlds (research/worlds/PLAN.md); 1.5.1 names filtered; 1.6.0 watch then play (research/watch/PLAN.md); 1.6.1 live rounds watched; 1.6.2 play-test 1's fixes (2026-10-09); 1.6.3 a viewer's own room or solo (2026-10-10); 1.6.4 no late-candidate 400s, online signaling (2026-10-11); 1.6.5 the streamer link: the same stream link next time (2026-10-11); 1.6.6 a locked room, a round alone (2026-10-11); 1.7.0 the streamer's voice (2026-10-12)
+export const KIT_VERSION = '1.7.1';   // 1.5.0 worlds (research/worlds/PLAN.md); 1.5.1 names filtered; 1.6.0 watch then play (research/watch/PLAN.md); 1.6.1 live rounds watched; 1.6.2 play-test 1's fixes (2026-10-09); 1.6.3 a viewer's own room or solo (2026-10-10); 1.6.4 no late-candidate 400s, online signaling (2026-10-11); 1.6.5 the streamer link: the same stream link next time (2026-10-11); 1.6.6 a locked room, a round alone (2026-10-11); 1.7.0 the streamer's voice (2026-10-12); 1.7.1 the mic in the stream panel, as soon as you go live (2026-10-12)
 // The version the development sources are, frozen as kits/gf-multiplayer/<DEV_VERSION>/. It runs ahead of KIT_VERSION
 // while a release waits to become the default.
-export const DEV_VERSION = '1.7.0';   // 1.7.0: the streamer's voice, from Studio's play page through the friends page to viewers who tap for sound (2026-10-12); the default
+export const DEV_VERSION = '1.7.1';   // 1.7.1: the stream panel offers Turn on mic as soon as you're live, through Studio's play page or its mic window (2026-10-12); 1.7.0: the streamer's voice, from Studio's play page through the friends page to viewers who tap for sound (2026-10-12); the default
 export const KIT_DIR = 'gf/mp';                      // where a game vendors the kit, relative to its served folder
 export const MANIFEST = 'multiplayer.json';          // at the root of the served folder, beside assets.json
 export const FROZEN = join(repo, 'research/foundations/kits', KIT_NAME);

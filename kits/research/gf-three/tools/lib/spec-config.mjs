@@ -4,7 +4,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { LIBRARY, STANDIN_ASSETS, KIT, SCENIC, FORGE, FORGE_KIT, importPart } from './paths.mjs';
+import { LIBRARY, STANDIN_ASSETS, KIT, SCENIC, FORGE, FORGE_KIT, VISTA_KIT, importPart } from './paths.mjs';
 import { createRng, hashString } from '../../kit/core/rng.js';
 import { FAIR_DEFAULTS } from '../../kit/core/fair-logic.js';
 import { generateLayout } from '../../kit/world/generate.js';
@@ -164,7 +164,8 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
   // with the real world module the layout pieces come from its catalog (realWorld below); here: the gameplay props,
   // and with the stand-in world every prop
   // (a forge world places every spec prop itself, from its own library: CONTRACT §8 forge)
-  for (const p of spec.engine === 'forge' ? [] : spec.world?.props ?? []) {
+  // (a vista world is the core's island: create refuses props on it, so there are none here)
+  for (const p of spec.engine === 'forge' || spec.engine === 'vista' ? [] : spec.world?.props ?? []) {
     if (modules.world && layoutProps.includes(p)) continue;
     // a flat (2D) game's prop is a picture (kit/flat): an image slot, a stand-in in the game's art style until one is made
     if (flat) { named[p.name] = `prop.${p.name}`; propFiles[p.name] = flat.part.propFor(p, { style: flat.style, assets, repoFile: flat.repoFile }); continue; }
@@ -221,9 +222,15 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
     }
     notes.push(`characters: friends see each other as the co-op hunters, one body a seat (slots ${W.BODY}, ${W.bodySlot(1)}, …), skinned by the forge renderer, their cloth in the player's colour${held.length ? `, holding ${held.join(', ')}` : ''}${forgeWear.fp ? '; the first-person arms and weapons, a kill\'s pieces, a coin and the effect pictures are slots too' : ''}`);
   }
+  // the vista engine (research/super-scenic/THIN_E2E.md; CONTRACT §8 vista): no three.js character. Friends see each other
+  // as gf-humanoid-1 bodies skinned by the core (gf/vista/kit/humanoid.js), one a seat: kit/bodies.json's default list
+  // (track C's realistic bodies), else the wave 1 sandbox's Quaternius bodies; each a slot, with the shared clips
+  const vista = spec.engine === 'vista';
+  let vistaWear = null;
+  if (vista) { const vb = await vistaBodies({ assets, notes }); vistaWear = vb.config; vb.files.forEach((f, i) => { bodies[`seat${i + 1}`] = f; }); }
   // a flat (2D) game's body is a picture sheet (kit/flat/character.js, the gf-flat-1 standard)
   if (flat) for (const c of spec.characters ?? [{ role: 'player', body: { from: 'sprite' } }]) { const b = flat.part.bodyFor(c, { plane: flat.plane, style: flat.style, assets, repoFile: flat.repoFile }); roles[c.role] = b.role; bodies[c.role] = b.record; notes.push(b.note); }
-  for (const c of forge || flat ? [] : spec.characters ?? [{ role: 'player', body: { from: 'bean' } }]) {
+  for (const c of forge || flat || vista ? [] : spec.characters ?? [{ role: 'player', body: { from: 'bean' } }]) {
     const to = `assets/models/body-${c.role}.glb`;
     const lib = modules.character ? await libraryBody(c.body) : null;
     if (lib) {
@@ -251,10 +258,10 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
     }
     roles[c.role] = { body: to, height: 1.7, ...(hat ? { hat, hatDescribe: c.hat } : {}), ...(c.describe ? { describe: c.describe } : {}), ...(bodies[c.role].license ? { license: bodies[c.role].license } : {}) };
   }
-  if (modules.character && !forge && existsSync(join(LIBRARY, 'clips/gf-humanoid-1.glb'))) assets.push({ to: 'assets/clips/gf-humanoid-1.glb', from: join(LIBRARY, 'clips/gf-humanoid-1.glb'), license: (await libraryLicense('clips/gf-humanoid-1.glb', 'gf-humanoid-1')) ?? { spdx: 'CC0-1.0', author: 'Quaternius (Universal Animation Library), retargeted by games.fun', url: 'https://quaternius.itch.io/universal-animation-library' } });
+  if (modules.character && !forge && !vista && existsSync(join(LIBRARY, 'clips/gf-humanoid-1.glb'))) assets.push({ to: 'assets/clips/gf-humanoid-1.glb', from: join(LIBRARY, 'clips/gf-humanoid-1.glb'), license: (await libraryLicense('clips/gf-humanoid-1.glb', 'gf-humanoid-1')) ?? { spdx: 'CC0-1.0', author: 'Quaternius (Universal Animation Library), retargeted by games.fun', url: 'https://quaternius.itch.io/universal-animation-library' } });
 
   // ---- the ground (stand-in world only: the real world draws its own from colour slots and a noise texture) ----
-  if (!modules.world && !forge && !flat) assets.push({ to: 'assets/textures/ground.ktx2', from: join(STANDIN_ASSETS, 'grass.ktx2'), license: { spdx: 'CC0-1.0', author: 'Poly Haven', url: 'https://polyhaven.com/a/leafy_grass' } });
+  if (!modules.world && !forge && !flat && !vista) assets.push({ to: 'assets/textures/ground.ktx2', from: join(STANDIN_ASSETS, 'grass.ktx2'), license: { spdx: 'CC0-1.0', author: 'Poly Haven', url: 'https://polyhaven.com/a/leafy_grass' } });
 
   // ---- config files ----
   const mechanics = (spec.mechanics ?? []).map(m => ({ id: m.id, ...(m.as ? { as: m.as } : {}), params: { ...(mechanicDefaults[m.id] ?? {}), ...specParams(spec, m), ...(m.params ?? {}) } }));
@@ -284,11 +291,11 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
     camera: spec.camera ?? 'third',
     // forge (CONTRACT §8 forge): the walk, the jump and the field of view are the data tables' (game.forge.player), so
     // the controller keeps only the mouse's sensitivity
-    controller: forge ? { camera: { first: { sensitivity: cameraDefaults('first').sensitivity } } } : { speed: 5.2, sprint: 7.4, jump: 7.2, camera: { [spec.camera ?? 'third']: cameraDefaults(spec.camera ?? 'third') } },
+    controller: forge || vista ? { camera: { first: { sensitivity: cameraDefaults('first').sensitivity } } } : { speed: 5.2, sprint: 7.4, jump: 7.2, camera: { [spec.camera ?? 'third']: cameraDefaults(spec.camera ?? 'third') } },
     controls: { ...(spec.controls ?? {}) },
     // forge (CONTRACT §8 forge): every spec prop is the game's own, placed by the world module; no size or count values,
     // which the forge world does not read
-    props: forge ? (spec.world?.props ?? []).map(p => ({ name: p.name, ...(p.describe ? { describe: p.describe } : {}), ...(p.role ? { role: p.role } : {}) }))
+    props: vista ? [] : forge ? (spec.world?.props ?? []).map(p => ({ name: p.name, ...(p.describe ? { describe: p.describe } : {}), ...(p.role ? { role: p.role } : {}) }))
       : gameProps.map(p => ({ name: p.name, describe: p.describe, count: p.count ?? 1, ...(p.role ? { role: p.role } : {}), size: /ball/i.test(p.name) ? 0.44 : 0.6 })),
     mechanics,
     rules: { summary: spec.rules?.summary ?? '', ...(spec.rules?.scoring ? { scoring: spec.rules.scoring } : {}), params: { ...(spec.rules?.params ?? {}) } },
@@ -298,13 +305,23 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
   };
   // fair play is about knocks and bots, which the forge engine has neither of yet (tracks F and A): no fair.* values
   // (slots that would change nothing) until it does
-  if (forge) delete game.fair;
+  if (forge || vista) delete game.fair;
+  // vista: co-op and calm, no bots (each player fishes, sails and walks on their own; friends see each other)
+  if (vista) Object.assign(game.players, { bots: false, mode: P.mode ?? 'coop' });
+  // vista's keys are the core's own (core/src/core/Input.js read by its player and its fishing): the shared kit's other
+  // names for an action (F for the primary, Q for the secondary) do nothing there, so the spec's controls are written as
+  // the game's own rows (controls.more), which How to play and the HUD's line show as they are
+  if (vista) game.controls = vistaControls(spec.controls ?? {});
   // a flat (2D) game: its plane, its jump and its controls are the flat part's to set (kit/flat/slots.js gameFor)
   if (flat) Object.assign(game, flat.part.gameFor(spec, game));
   // the forge data tables (spec.forge: player, physics, weapons, enemies, waves, cards), every value filled and a slot
   // (research/gf-forge/kit/tables; create has already refused what the core can't do)
   const forgeTables = forge ? await importPart(join(FORGE_KIT, 'tables/index.js'), 'the forge engine (research/gf-forge)') : null;
   if (forge) game.forge = forgeTables.fill(spec.forge ?? {});
+  // the vista data tables (spec.vista: species, gear, vendors, economy, start; research/gf-vista/kit/tables, interface I1),
+  // every value filled and a slot (create has already refused what the core can't do)
+  const vistaTables = vista ? await importPart(join(VISTA_KIT, 'tables/index.js'), 'the vista engine (research/gf-vista)') : null;
+  if (vista) game.vista = vistaTables.fill(spec.vista ?? {});
   // the real look writes its own config/look.json (the whole preset, every value a slot); the stand-in keeps `values`
   const realLook = lookConfig?.(spec.look?.preset ?? 'jelly-pastel', spec.look?.time ?? 'day');
   const look = realLook ?? { preset: spec.look?.preset ?? 'jelly-pastel', time: spec.look?.time ?? 'day', ...(spec.look?.palette ? { palette: spec.look.palette } : {}), values: lookPreset?.(spec.look?.preset, spec.look?.time) ?? standinPresetValues(spec.look?.preset, spec.look?.time ?? 'day') };
@@ -322,7 +339,7 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
     ...(spec.world?.notes ? { notes: spec.world.notes } : {}),
   };
   // seat colours (character.tint.<role>): the look's player palette when it has one, else the party page's colours
-  const characters = { roles, palette: (Array.isArray(lookPlayers) ? lookPlayers : SEAT_COLORS).slice(0, Math.max(4, P.max ?? 4)), nameplate: { show: true }, ...(forgeWear ? { forge: forgeWear } : {}) };
+  const characters = { roles, palette: (Array.isArray(lookPlayers) ? lookPlayers : SEAT_COLORS).slice(0, Math.max(4, P.max ?? 4)), nameplate: { show: true }, ...(forgeWear ? { forge: forgeWear } : {}), ...(vistaWear ? { vista: vistaWear } : {}) };
 
   // ---- sounds: the spec's, then the kit's round sounds ----
   const sounds = { version: 1, sounds: {} };
@@ -336,6 +353,20 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
   if (forge) {
     for (const s of forgeTables.soundsOf(game.forge)) kitSounds[s.id] ??= [s.label, s.preset, 'sfx'];
     kitSounds['round-end'] ??= ['The round ends', 'lose', 'sfx'];
+  }
+  // the vista core's own sounds (its field recordings: steps, surf, reel, splash), listed by name when the vista kit says
+  // which it plays through gf-audio (track G: the tables' `soundsOf`/`SOUNDS`, else kit/audio.js); until then the core's
+  // own soundscape plays them, which the record notes
+  if (vista) {
+    kitSounds['round-end'] ??= ['The session ends', 'confirm', 'sfx'];
+    const own = await vistaSounds(game.vista, vistaTables);
+    // a full entry (the core's own sounds keep engine 'vista-core', read-only and their reason: the soundscape plays
+    // them, gf-audio's kit plays the rest); a bare [label, preset, bus] row otherwise
+    for (const s of own.list) {
+      if (s.engine || s.src?.file) { if (!sounds.sounds[s.id]) { const { id, ...rest } = s; sounds.sounds[id] = rest; } }
+      else kitSounds[s.id] ??= [s.label ?? s.id, s.src ?? s.preset ?? 'click', s.bus ?? 'sfx'];
+    }
+    notes.push(own.note);
   }
   // the flow's own sounds (kit/loops/<id> → sounds: a turn passing), in games that flow plays
   for (const [id, v] of Object.entries(flow?.sounds ?? {})) kitSounds[id] ??= v;
@@ -359,16 +390,21 @@ export async function specToConfig(spec, { modules, lookPreset = null, lookConfi
     live: {
       entry: 'index.html', seedParam: null, team: P.mode === 'coop' || forge, metric: 'score', direction: 'higher', unit: 'pts', maxSeconds: flow ? flowMaxSeconds(spec, flow) : Math.min(3600, (spec.round?.seconds ?? 120) + 30),
       // forge (CONTRACT §8 forge "Live co-op"): co-op for 2–4, the host's core owns the world (research/rust-engine/PLAN.md §9)
-      sees: forge ? 'Each player sees the others as a hooded body in their own colour, holding the weapon they hold, with their name above, where the host\'s core has them.'
+      sees: vista ? 'Each player sees the others as a person (a gf-humanoid-1 body, one a seat, in their colour) standing, walking, running, swimming or at the helm where they really are, with their name above in their colour.'
+        : forge ? 'Each player sees the others as a hooded body in their own colour, holding the weapon they hold, with their name above, where the host\'s core has them.'
         : 'Each player sees the others as their character, in their seat colour, with a ring at their feet and their name above.',
-      shares: forge ? 'Everything the host\'s core simulates (every player\'s body from their inputs, enemies, shots, hits), sent in its snapshots, and the round, its clock and the scores'
+      shares: vista ? 'The session and its clock, the scores, the time of day and the sea state, owned by the host\'s copy (each player\'s own catch, cooler and money are their own)'
+        : forge ? 'Everything the host\'s core simulates (every player\'s body from their inputs, enemies, shots, hits), sent in its snapshots, and the round, its clock and the scores'
         : 'The round and its clock, the scores and everything the rules share (ctx.shared), owned by the host\'s copy',
       // gf-multiplayer 1.4.0: the game's world behind the waiting room, and the game's own HUD and room menu in a round
       backdrop: 'gf-backdrop=1', hud: 'game',
     },
     check: { near: 2.5, seconds: 60 },
   };
-  if (forge) multiplayer.players.max = Math.min(4, multiplayer.players.max);
+  if (forge || vista) multiplayer.players.max = Math.min(4, multiplayer.players.max);
+  // vista: co-op; no backdrop behind the friends page's waiting room (it would boot the core and compile its shaders a
+  // second time for the lobby alone); the gate's random input never presses the core's own keys
+  if (vista) { multiplayer.live.team = true; delete multiplayer.live.backdrop; multiplayer.check.avoidKeys = ['KeyF', 'KeyT', 'KeyM', 'KeyL', 'KeyP']; }
   // forge: the live gate plays the game with FORGE_GATE_QUERY (multiplayer.json check.query: a query for scripted
   // players, never used in real play), so the steps after its 40 s of random input find the round still running
   if (forge) multiplayer.check.query = FORGE_GATE_QUERY;
@@ -580,4 +616,72 @@ function worldGame(spec, game, world, notes) {
   } else notes.push('world: round.mode world without the build mechanic: nothing can change the world');
   if (world) delete world.__hotbar;
   delete game.props;
+}
+
+// ---- the vista engine's keys, bodies and sounds (research/super-scenic/THIN_E2E.md: I4 kit/bodies.json, track C) ----
+/**
+ * A vista game's controls (config/game.json → controls): the core's own keys as rows of [keys, what], the spec's words
+ * on the keys the core really uses: the left button for the primary, the right for the secondary, E for interact,
+ * Space for jump, and R for the rod (the core's, always there).
+ */
+export function vistaControls(c = {}) {
+  const more = [['R', 'take out or put away the rod']];
+  if (c.primary) more.push(['Click', String(c.primary)]);
+  if (c.secondary) more.push(['Right click', String(c.secondary)]);
+  if (c.interact) more.push(['E', String(c.interact)]);
+  for (const r of Array.isArray(c.more) ? c.more : []) if (Array.isArray(r) && r[0] && r[1]) more.push([String(r[0]), String(r[1])]);
+  return { ...(c.jump ? { jump: String(c.jump) } : {}), more };
+}
+/** A body record's file in the library (research/gf-three/library/): "bodies/x.glb", "x.glb" or a library-relative path. */
+function libraryBodyFile(file) {
+  for (const rel of [file, `bodies/${file}`]) if (typeof rel === 'string' && existsSync(join(LIBRARY, rel))) return rel;
+  return null;
+}
+/**
+ * config/characters.json → vista, and the body files copied in: kit/bodies.json's `default` ids (track C's realistic
+ * bodies) when that list exists and its files are in the library, else the wave 1 sandbox's four Quaternius bodies; the
+ * shared clips. Each body's licence comes from its record, else library/bodies.json, else library/LICENSES.json.
+ */
+export async function vistaBodies({ assets, notes }) {
+  const C = await importPart(join(VISTA_KIT, 'config.js'), 'the vista engine (research/gf-vista)');
+  const kitList = await readJsonMaybe(join(VISTA_KIT, 'bodies.json'));
+  const lib = list(await readJsonMaybe(join(LIBRARY, 'bodies.json')));
+  // kit/bodies.json names files from the repo root (research/gf-three/library/bodies/x.glb); the library, relative to itself
+  const libRel = f => (typeof f === 'string' ? f.replace(/^.*?gf-three\/library\//, '') : f);
+  const rec = id => { const k = kitList?.bodies?.[id]; const l = lib.find(b => b.id === id); return k ? { ...l, ...k, file: libRel(k.file ?? l?.file), license: (typeof k.license === 'object' ? k.license : null) ?? l?.license ?? null } : l ?? null; };
+  let ids = Array.isArray(kitList?.default) ? kitList.default.filter(id => { const r = rec(id); return r && libraryBodyFile(r.file ?? `bodies/${id}.glb`); }) : [];
+  const from = ids.length ? 'kit/bodies.json (track C)' : 'the wave 1 sandbox\'s Quaternius bodies (kit/bodies.json is not in yet)';
+  if (!ids.length) ids = C.FALLBACK_BODIES.filter(id => libraryBodyFile(rec(id)?.file ?? `bodies/${id}.glb`));
+  if (!ids.length) throw new Error('vista: no body for friends: neither kit/bodies.json\'s defaults nor the Quaternius bodies are in research/gf-three/library');
+  while (ids.length < C.SEATS) ids = [...ids, ...ids].slice(0, C.SEATS);
+  const records = Object.fromEntries(ids.map(id => [id, rec(id) ?? {}]));
+  const files = [];
+  for (const id of new Set(ids)) {
+    const r = records[id], file = libraryBodyFile(r.file ?? `bodies/${id}.glb`);
+    const l = r.license ?? null;
+    const license = l ? { spdx: l.spdx ?? l.license ?? 'CC0-1.0', author: l.author ?? '', url: l.url ?? l.page ?? l.source ?? '' } : await libraryLicense(file, id);
+    assets.push({ to: C.bodyFile(id), from: join(LIBRARY, file), license });
+    files.push({ file: C.bodyFile(id), from: `library:${id}`, ...(license ? { license } : {}) });
+  }
+  assets.push({ to: C.CLIPS_FILE, from: join(LIBRARY, 'clips/gf-humanoid-1.glb'), license: (await libraryLicense('clips/gf-humanoid-1.glb', 'gf-humanoid-1')) ?? { spdx: 'CC0-1.0', author: 'Quaternius (Universal Animation Library), retargeted by games.fun', url: 'https://quaternius.itch.io/universal-animation-library' } });
+  notes.push(`characters: friends see each other as gf-humanoid-1 bodies skinned by the vista core, one a seat (${ids.join(', ')}; from ${from}), tinted in their colour; slots ${C.bodySlot(0)}, ${C.bodySlot(1)}, …`);
+  return { config: C.bodiesConfig(ids, records), files };
+}
+/** The core's sounds as gf-audio lists them: the tables module's `soundsOf(tables)` or `SOUNDS`, else kit/audio.js's. */
+async function vistaSounds(tables, T) {
+  let found = null;
+  try { found = typeof T?.soundsOf === 'function' ? T.soundsOf(tables) : Array.isArray(T?.SOUNDS) ? T.SOUNDS : null; } catch { found = null; }
+  // track G's list (kit/sounds.json): the core's 42 field recordings and the HUD's own few, with the game's paths
+  // (the sandboxes link the core at gf/core/; a game vendors it at gf/vista/core/)
+  if (!found && existsSync(join(VISTA_KIT, 'sounds.json'))) {
+    try {
+      const L = JSON.parse(await readFile(join(VISTA_KIT, 'sounds.json'), 'utf8'));
+      found = Object.entries(L.sounds ?? {}).map(([id, v]) => ({ id, ...structuredClone(v), ...(v?.src?.file ? { src: { ...v.src, file: String(v.src.file).replace(/^gf\/core\//, 'gf/vista/core/') } } : {}) }));
+    } catch { found = null; }
+  }
+  if (!found && existsSync(join(VISTA_KIT, 'audio.js'))) {
+    try { const A = await importPart(join(VISTA_KIT, 'audio.js'), 'the vista engine (research/gf-vista)'); found = typeof A.soundsOf === 'function' ? A.soundsOf(tables) : Array.isArray(A.SOUNDS) ? A.SOUNDS : null; } catch { found = null; }
+  }
+  if (Array.isArray(found) && found.length) return { list: found.filter(s => s && typeof s.id === 'string'), note: `sounds: the vista core's ${found.length} sounds are listed by name (assets.json → sounds), played through gf-audio` };
+  return { list: [], note: 'sounds: the vista core\'s field recordings (surf, wind, steps, reel, splash) still play through its own soundscape, not gf-audio; they become named sounds here once the vista kit lists them (track G: kit/audio.js or the tables\' SOUNDS)' };
 }

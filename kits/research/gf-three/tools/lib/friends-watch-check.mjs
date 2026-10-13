@@ -28,7 +28,6 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startParty } from '../../../multiplayer/party/lib.mjs';
@@ -50,13 +49,17 @@ export async function streamerLinkFrom(page) {
 }
 
 // ---- the streamer's voice (gf-multiplayer 1.7.0; the creator, 2026-10-12: "How hard would it be to add in an audio
-// stream from a mic for the stream watchers") ----
-// Studio's play page opens the microphone (creator-studio/lib/voice-capture.mjs) and posts compressed voice into the
-// friends page in its frame. Here that same file runs on a page of its own in the streamer's browser (another origin,
-// as Studio is: the play origin refuses the microphone, permissions-policy microphone=()), with Chrome's fake microphone
-// (a 440 Hz tone, voiceArgs()); each message it would post goes into the streamer's friends page as from the page above
-// (this machine has no Studio origin, so the friends page takes its own). The viewer taps for sound and must hear it.
-// A checkout without Studio (the open builder's kit repo) skips the steps and says so.
+// stream from a mic for the stream watchers"; 1.7.1: "The mic options should come up after you click go live before you
+// start the game") ----
+// Going live opens the stream panel, which offers Turn on mic. On a friends page with no Studio above it (the game's own
+// link, a post on X, and this machine) the button opens Studio's mic window (<studio>/play/<slug>/voice), which runs
+// creator-studio/lib/voice-capture.mjs on a click and posts compressed voice to the page that opened it (the play origin
+// refuses the microphone: permissions-policy microphone=()). Here a stand-in for that window is served where the kit
+// opens it (this machine has no Studio origin, so the friends page's own), running that same file with Chrome's fake
+// microphone (a 440 Hz tone, voiceArgs()). The viewer taps for sound and must hear it; closing the window turns the
+// mic off. Studio's own page (the button there, and the window) is checked on production after a deploy
+// (research/watch/evidence/*/prod-voice-check.mjs). A checkout without Studio (the open builder's kit repo) skips the
+// steps and says so.
 const VOICE_CAPTURE = join(dirname(fileURLToPath(import.meta.url)), '../../../../creator-studio/lib/voice-capture.mjs');
 let toneFile = null;
 /** Chrome's flags for a fake microphone that plays a steady tone (written once to the temp folder). */
@@ -71,26 +74,59 @@ export function voiceArgs() {
   }
   return ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-audio-capture=${toneFile}`];
 }
-/** Two steps: the viewer hears the streamer; a game below the streamer's friends page cannot hand it voice. */
+/** The mic window's stand-in (app/play/[slug]/voice's part that matters here): Turn on mic → voice to window.opener. */
+function micWindowHtml(code) {
+  return `<!doctype html><meta charset="utf-8"><title>Your mic</title><button id="voice-mic" type="button">Turn on mic</button>
+<script>${code.replace(/<\/script/gi, '<\\/script')}
+const playOrigin = location.origin, opener = window.opener; let v = null;
+try { opener.postMessage({ type: 'gf:live-ask', v: 1 }, playOrigin); } catch (e) {}
+document.getElementById('voice-mic').onclick = async () => {
+  try { v = await startVoice({ send: m => opener.postMessage(m, playOrigin) }); opener.postMessage({ type: 'gf:voice-state', v: 1, on: true }, playOrigin); document.title = 'on'; }
+  catch (e) { document.title = 'error ' + (e && (e.name || e.message)); }
+};
+addEventListener('message', e => {
+  if (e.source !== opener || !e.data) return;
+  if ((e.data.type === 'gf:mic' && e.data.on === false) || (e.data.type === 'gf:live-state' && e.data.state !== 'on')) { if (v) v.stop(); v = null; document.title = 'off'; }
+});
+addEventListener('pagehide', () => { if (v) { v.stop(); try { opener.postMessage({ type: 'gf:voice-state', v: 1, on: false }, playOrigin); } catch (e) {} } });
+</script>`;
+}
+/** Steps: the panel offers the mic and opens the mic window; the viewer hears the streamer; a game below the streamer's
+ *  friends page cannot hand it voice; closing the mic window turns the mic off. */
 export async function voiceSteps({ streamer, streamerGame, viewer, step }) {
   const party = p => p.evaluate(() => window.__party.snapshot()).catch(() => null);
   if (!existsSync(VOICE_CAPTURE)) return { skipped: 'no creator-studio/lib/voice-capture.mjs in this checkout: the voice steps did not run' };
   const code = readFileSync(VOICE_CAPTURE, 'utf8').replace(/^export /gm, '');
-  // the stand-in Studio page: an empty page on a server of its own (a secure context: 127.0.0.1)
-  const studio = createServer((q, r) => { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); r.end('<!doctype html><title>Studio</title>'); });
-  await new Promise(r => studio.listen(0, '127.0.0.1', r));
-  const micPage = await streamer.context().newPage();
-  let mic = null;
+  const ctx = streamer.context(), where = /\/play\/[^/]+\/voice(\?|$)/;
+  const serve = r => r.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: micWindowHtml(code) });
+  await ctx.route(where, serve);
+  let win = null, ok = true;
   try {
-    await micPage.goto(`http://127.0.0.1:${studio.address().port}/`);
-    await micPage.exposeFunction('gfToFriends', m => streamer.evaluate(x => window.postMessage(x, location.origin), m).catch(() => {}));
-    mic = await micPage.evaluate(`(async () => { ${code}; if (!voiceSupported()) return 'this browser cannot send voice'; window.__gfVoice = await startVoice({ send: m => window.gfToFriends(m) }); window.gfToFriends({ type: 'gf:voice-state', v: 1, on: true }); return 'on'; })()`).catch(e => String(e?.message ?? e));
-    return await voiceHeard({ streamer, streamerGame, viewer, step, mic, party });
+    // the panel: open again if it was closed (the LIVE badge toggles it)
+    if (!(await streamer.evaluate(() => !!document.querySelector('#mp-live-share:not([hidden])')).catch(() => false))) await streamer.click('#mp-live').catch(() => {});
+    const offered = await until(() => streamer.evaluate(() => { const b = document.querySelector('#mp-live-share:not([hidden]) #mp-live-mic'); return b && b.offsetParent !== null ? b.textContent : null; }), 8000, 'Turn on mic in the stream panel').catch(() => null);
+    const opened = offered ? await Promise.all([ctx.waitForEvent('page', { timeout: 8000 }).catch(() => null), streamer.click('#mp-live-mic').catch(() => {})]).then(([p]) => p) : null;
+    win = opened;
+    const url = win ? win.url() : '';
+    ok = step('the stream panel offers Turn on mic, which opens Studio\'s mic window', !!offered && !!win && where.test(url),
+      offered ? (win ? `"${offered.trim()}" opened ${url.replace(/^https?:\/\/[^/]+/, '')}` : `"${offered.trim()}" opened no window`) : 'no #mp-live-mic in the stream panel') && ok;
+    let mic = 'no mic window';
+    if (win) {
+      await win.waitForLoadState('load').catch(() => {});
+      await win.click('#voice-mic').catch(() => {});
+      mic = await until(async () => { const t = await win.title().catch(() => ''); return t === 'on' || t.startsWith('error') ? t : null; }, 10000, 'the mic window\'s mic').catch(() => 'no answer from the mic window');
+    }
+    ok = (await voiceHeard({ streamer, streamerGame, viewer, step, mic, party })).ok && ok;
+    const pressed = await streamer.evaluate(() => document.querySelector('#mp-live-mic')?.getAttribute('aria-pressed') ?? null).catch(() => null);
+    if (win) { await win.close().catch(() => {}); win = null; }
+    const off = await until(async () => { const m = (await party(streamer))?.live?.mic; return m && !m.on && !m.window ? m : null; }, 5000, 'the mic off').catch(() => null);
+    ok = step('the panel shows the mic on; closing the mic window turns it off', pressed === 'true' && !!off, `the panel's button ${pressed === 'true' ? 'pressed' : `aria-pressed ${pressed}`} while on; after the window closed ${off ? 'off' : JSON.stringify((await party(streamer))?.live?.mic)}`) && ok;
+    return { ok };
   } finally {
-    await micPage.evaluate(() => window.__gfVoice?.stop()).catch(() => {});
-    await streamer.evaluate(() => window.postMessage({ type: 'gf:voice-state', v: 1, on: false }, location.origin)).catch(() => {});
-    await micPage.close().catch(() => {});
-    await new Promise(r => studio.close(r));
+    if (win) await win.close().catch(() => {});
+    await ctx.unroute(where, serve).catch(() => {});
+    // leave it as the flow had it: the panel closed and the game focused (the panel's × does both)
+    if (await streamer.evaluate(() => !!document.querySelector('#mp-live-share:not([hidden])')).catch(() => false)) await streamer.click('#mp-live-close').catch(() => {});
   }
 }
 async function voiceHeard({ streamer, streamerGame, viewer, step, mic, party }) {
@@ -306,7 +342,7 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
     const solo = await until(() => Wv.page.evaluate(() => window.__game?.ready === true && document.querySelector('#gf-play') ? { url: location.href, net: window.__game.snapshot().net ?? null } : null), 60000, 'the game alone on W').catch(() => null);
     ok = step('Play solo: the game on its own page, with nobody else', !!solo && solo.net === null && !/\/gf\/mp\//.test(new URL(solo.url).pathname) && !new URL(solo.url).searchParams.has('watch'), solo ? `${solo.url}; its home menu, no room` : `still at ${Wv.page.url()}`) && ok;
     // ---- another day: J's streamer link in a new browser, the same public link (kit 1.6.5) ----
-    let again = null, kUrl = '', kNote = false, kLeak = -1, yLive = null, kLocked = false, kSolo = null, yShut = null, zRefused = null, kAlone = -1, yRound = null;
+    let kMic = null, again = null, kUrl = '', kNote = false, kLeak = -1, yLive = null, kLocked = false, kSolo = null, yShut = null, zRefused = null, kAlone = -1, yRound = null;
     if (keep) {
       const K = await open('streamer, another day');
       await K.page.goto(keep, { waitUntil: 'load' });
@@ -318,6 +354,8 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
       await until(async () => { const s = await snap(K.page); return s?.phase === 'room' && s.code ? s : null; }, 30000, "K's room").catch(() => {});
       await K.page.click('#mp-golive').catch(() => {});
       again = await until(async () => { const s = (await party(K))?.live; return s?.state === 'on' ? s : null; }, 15000, 'K live').catch(() => null);
+      // the stream panel offers the mic straight away, in the waiting room, before the round (kit 1.7.1)
+      kMic = again ? await until(() => K.page.evaluate(() => { const b = document.querySelector('#mp-live-share:not([hidden]) #mp-live-mic'); return b && b.offsetParent !== null && !b.disabled ? b.textContent : null; }), 5000, "K's Turn on mic").catch(() => null) : null;
       kLeak = await K.page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('gf-watch:')).length).catch(() => -1);
       if (again) {
         const Y = await open('viewer 4');
@@ -348,6 +386,7 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
     }
     ok = step('another day, the streamer link goes live on the same link, and the old link shows it', !!again && again.id === live.id && again.link === live.link && !!yLive && !/gf-stream/.test(kUrl) && kNote && kLeak === 0,
       again ? `live on ${again.id} (was ${live.id}); the old link ${yLive ? 'shows it live' : 'does not show it live'}; the address bar ${/gf-stream/.test(kUrl) ? 'still holds the secret' : 'is clean'}; the note ${kNote ? 'shown' : 'not shown'}; localStorage ${kLeak} gf-watch entries` : `K is ${keep ? 'not live' : 'never opened: no streamer link'}`) && ok;
+    ok = step('going live in the waiting room offers Turn on mic before the round starts', !!kMic, kMic ? `"${kMic.trim()}" in the stream panel` : again ? 'no #mp-live-mic in the stream panel' : 'K never went live') && ok;
     ok = step('a streamer locks their room and plays alone, live: viewers can\'t join, an invite is refused', !!kLocked && !!kSolo && !!yRound && !!yShut && !!zRefused && kAlone === 1,
       `lock ${kLocked ? 'on, Start enabled' : 'not taken'}; round alone ${kSolo ? 'started' : 'not started'}, ${yRound ? 'watched' : 'not watched'}; the viewer's Join ${yShut ? `"${yShut}", disabled, beside Start a room and Play solo` : 'still open'}; the invite ${zRefused ? `refused: "${zRefused.trim().slice(0, 80)}"` : 'not refused'}; ${kAlone} in the room`) && ok;
     ok = step('no console errors', errors.length === 0, errors.slice(0, 4).join(' | ') || 'none') && ok;
@@ -358,5 +397,5 @@ export async function checkFriendsWatch({ dir, outDir = null, shots = [], log = 
     await srv.close().catch(() => {});
   }
   const failed = record.steps.filter(s => !s.ok);
-  return { ok: ok && !failed.length, detail: failed.length ? failed.map(s => `${s.name}: ${s.detail}`).slice(0, 3).join(' · ') : `${record.steps.length} steps: Go live in a round, watch the streamer (clock, scores, names), the streamer's voice heard, read-only, a reload, a room of one's own, Join, Stop, the game alone, the same link another day, a locked room played alone`, record, warnings };
+  return { ok: ok && !failed.length, detail: failed.length ? failed.map(s => `${s.name}: ${s.detail}`).slice(0, 3).join(' · ') : `${record.steps.length} steps: Go live in a round, watch the streamer (clock, scores, names), the mic from the stream panel and the streamer's voice heard, read-only, a reload, a room of one's own, Join, Stop, the game alone, the same link another day, a locked room played alone`, record, warnings };
 }

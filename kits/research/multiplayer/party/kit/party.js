@@ -1120,12 +1120,19 @@
   // ---- the streamer's voice (kit 1.7.0) ----
   // Only the page directly above this one, and only from Studio's origin (this machine, with no Studio: this page's
   // own origin), may hand voice in: a game below this page, or another page on the play origin, never can.
-  var VOICE = { on: false, frames: 0, bytes: 0, refused: 0, at: 0 };
-  function voiceFrom(e) { return e.source === window.parent && e.origin === (LV.studio || location.origin); }
+  // Kit 1.7.1 (the creator: "The mic options should come up after you click go live before you start the game"): the
+  // stream panel offers Turn on mic as soon as you're live. Under Studio's play page (it answers gf:mic-here) the
+  // button asks that page to open the mic; anywhere else it opens Studio's small mic window (/play/<slug>/voice), the
+  // only other page that may hand voice in: the window this page opened, from Studio's origin. The play origin itself
+  // never opens a microphone (every game shares it), and the mic window opens the mic only when it is clicked there.
+  var VOICE = { on: false, frames: 0, bytes: 0, refused: 0, at: 0, above: false, popup: null, watch: null, blocked: false };
+  function studioOrigin() { return LV.studio || location.origin; }
+  function voiceFrom(e) { return e.origin === studioOrigin() && (e.source === window.parent || (!!VOICE.popup && e.source === VOICE.popup)); }
   window.addEventListener('message', function (e) {
     var d = e.data;
-    if (!d || typeof d !== 'object' || (d.type !== 'gf:voice' && d.type !== 'gf:voice-state' && d.type !== 'gf:live-ask')) return;
+    if (!d || typeof d !== 'object' || (d.type !== 'gf:voice' && d.type !== 'gf:voice-state' && d.type !== 'gf:live-ask' && d.type !== 'gf:mic-here')) return;
     if (!voiceFrom(e)) { VOICE.refused++; return; }
+    if (d.type === 'gf:mic-here') { if (e.source === window.parent && window.parent !== window && !VOICE.above) { VOICE.above = true; liveChanged(); } return; }
     if (d.type === 'gf:live-ask') return liveTellPage(true);
     if (d.type === 'gf:voice-state') { var on = d.on === true && LV.state === 'on'; if (on !== VOICE.on) { VOICE.on = on; LV.metaAt = 0; liveChanged(); } return; }
     if (LV.state !== 'on' || !LV.ws || LV.ws.readyState !== 1) return;
@@ -1139,11 +1146,40 @@
   // The page above (Studio's play page) shows the microphone button while this stream is on.
   var liveTold = '';
   function liveTellPage(force) {
-    if (window.parent === window) return;
     var msg = { type: 'gf:live-state', v: 1, state: LV.state, viewers: LV.viewers, mic: VOICE.on, id: LV.id }, k = JSON.stringify(msg);
     if (k === liveTold && !force) return;
     liveTold = k;
-    try { window.parent.postMessage(msg, LV.studio || location.origin); } catch (e) {}
+    if (window.parent !== window) try { window.parent.postMessage(msg, studioOrigin()); } catch (e) {}
+    if (VOICE.popup) try { VOICE.popup.postMessage(msg, studioOrigin()); } catch (e) {}
+  }
+  // The stream panel's mic button (kit 1.7.1).
+  function micPress() {
+    if (LV.state !== 'on') return;
+    if (VOICE.above) { try { window.parent.postMessage({ type: 'gf:mic', v: 1, on: !VOICE.on }, studioOrigin()); } catch (e) {} return; }
+    if (VOICE.popup && !VOICE.popup.closed) {
+      if (VOICE.on) try { VOICE.popup.postMessage({ type: 'gf:mic', v: 1, on: false }, studioOrigin()); } catch (e) {}
+      else try { VOICE.popup.focus(); } catch (e) {}
+      return;
+    }
+    var slug = gameId(), w = null;
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) slug = 'game';
+    // not noopener: the mic window talks to this page through window.opener, and this page knows it by the handle
+    try { w = window.open(studioOrigin() + '/play/' + slug + '/voice?s=' + encodeURIComponent(LV.id || ''), 'gf-voice', 'popup,width=420,height=380'); } catch (e) {}
+    VOICE.blocked = !w; VOICE.popup = w || null;
+    if (w) { clearInterval(VOICE.watch); VOICE.watch = setInterval(function () { if (VOICE.popup && !VOICE.popup.closed) return; clearInterval(VOICE.watch); VOICE.popup = null; if (VOICE.on) { VOICE.on = false; LV.metaAt = 0; } liveChanged(); }, 1000); }
+    liveChanged();
+  }
+  function micRow() {
+    if (LV.state !== 'on' || (!VOICE.above && !LV.studio && window.parent !== window)) return null;
+    var open = !!VOICE.popup && !VOICE.popup.closed;
+    var text = VOICE.on ? 'Mic on · Turn off' : open ? 'Mic window open' : 'Turn on mic';
+    var hint = VOICE.on ? 'Your viewers hear you.' : VOICE.blocked ? 'Your browser blocked the mic window. Allow pop-ups for this site, then press again.'
+      : VOICE.above ? 'Let your viewers hear you. You can start before the game does.'
+      : open ? 'Press Turn on mic in the games.fun window. Keep it open while you talk.'
+      : 'Opens a small games.fun window that holds your mic. Keep it open while you talk.';
+    return el('div', { class: 'mic' }, [
+      el('button', { id: 'mp-live-mic', class: VOICE.on ? 'primary on' : 'primary', type: 'button', 'aria-pressed': VOICE.on ? 'true' : 'false', text: (VOICE.on ? '🎙 ' : '🎤 ') + text, onclick: micPress }),
+      el('p', { class: VOICE.blocked && !VOICE.on ? 'err' : 'muted', text: hint })]);
   }
   function setLive(st, err) { LV.state = st; LV.error = err || null; liveChanged(); }
   function rand36(n) { var a = new Uint8Array(n), s = ''; crypto.getRandomValues(a); for (var i = 0; i < n; i++) s += (a[i] % 36).toString(36); return s; }
@@ -1250,8 +1286,8 @@
     var ws = LV.ws; LV.ws = null;
     if (ws) { try { if (ws.readyState === 1) ws.send('{"k":"bye"}'); ws.close(1000); } catch (e) {} }
     try { sessionStorage.removeItem('gf-watch:on:' + gameRoot.pathname); } catch (e) {}
-    LV.viewers = 0; LV.popup = false; LV.parts = []; LV.size = 0; VOICE.on = false;
-    setLive('off');
+    LV.viewers = 0; LV.popup = false; LV.parts = []; LV.size = 0; VOICE.on = false; VOICE.blocked = false;
+    setLive('off');                                  // the mic window hears 'off' (liveTellPage) and turns the mic off
     liveBadgeSend();
     void why;
   }
@@ -1359,7 +1395,7 @@
   function livePopup() {
     var p = $('mp-live-share'), show = LV.popup && (LV.state === 'on' || LV.state === 'starting' || LV.state === 'error');
     if (!show) { if (p) p.hidden = true; return; }
-    var key = JSON.stringify([LV.state, LV.link, LV.error, LV.id]);
+    var key = JSON.stringify([LV.state, LV.link, LV.error, LV.id, VOICE.on, VOICE.above, !!VOICE.popup, VOICE.blocked, LV.studio]);
     if (!p) { p = el('section', { id: 'mp-live-share', class: 'live-share', role: 'dialog', 'aria-label': 'Your stream' }); $('stage').append(p); }
     p.hidden = false;
     if (p.dataset.key === key) return;
@@ -1382,6 +1418,7 @@
         el('button', { id: 'mp-live-close', class: 'quiet x', type: 'button', 'aria-label': 'Close', text: '×', onclick: function () { LV.popup = false; livePopup(); focusGame(); } })]),
       LV.error ? el('p', { class: 'err', text: LV.error }) : el('p', { class: 'muted', text: 'Anyone with this link watches you play, then can jump in. Everyone here sees that you’re live.' }),
       el('div', { class: 'link' }, [link, copy]),
+      micRow(),
       LV.state === 'error' ? null : el('div', { class: 'keep' }, [
         el('p', { class: 'muted', text: 'Want this same link next time? Keep your streamer link and open it before you go live. It\u2019s private: anyone with it can stream as you.' }),
         keep]),
@@ -1701,7 +1738,7 @@
           lastHandoffMs: WS.lastHandoffMs, lastWhy: WS.lastWhy, cid: WS.cid, name: WS.name, players: worldPlayers(), started: WS.started, frame: WS.frameUrl, session: !!S.session } : null,
         // kit 1.6.0: streaming (this copy's own stream) and watching (a viewer)
         locked: S.locked, live: { available: liveAvailable(), state: LV.state, id: LV.id, saved: LV.saved, link: LV.link, viewers: LV.viewers, error: LV.error, sent: LV.sent, relay: LV.relay, badges: Object.keys(BADGES),
-          mic: { on: VOICE.on, frames: VOICE.frames, bytes: VOICE.bytes, refused: VOICE.refused } },
+          mic: { on: VOICE.on, frames: VOICE.frames, bytes: VOICE.bytes, refused: VOICE.refused, above: VOICE.above, window: !!VOICE.popup, blocked: VOICE.blocked } },
         watch: WS.watch ? { id: WS.watch.id, state: WS.watch.state, live: WS.watch.live, ended: WS.watch.ended, keyed: WS.watch.keyed, mismatch: WS.watch.mismatch, full: WS.watch.full,
           viewers: WS.watch.viewers, follow: watchInfo(WS.watch).follow, roster: WS.watch.roster.length, queued: WS.watch.queue.length, got: WS.watch.got, joinOpen: WS.watch.joinOpen,
           voice: (function (V) { return { on: V.on, supported: V.supported, mic: !!(WS.watch.meta && WS.watch.meta.mic), frames: V.frames, decoded: V.decoded, played: V.played, late: V.late, errors: V.errors,

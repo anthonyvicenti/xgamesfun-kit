@@ -305,10 +305,10 @@
     "32": {
       "name": "no WebGPU: the open-in-your-browser screen",
       "home": "part",
-      "part": "engine:forge",
+      "part": "engine:forge, engine:vista",
       "run": "build",
       "rule": "On a browser with no WebGPU the game shows the kit's \"open in your browser\" screen, never a blank canvas.",
-      "fix": "Do not replace or hide the forge boot's fallback screen."
+      "fix": "Do not replace or hide the forge or vista boot's fallback screen (a vista game: never load gf/vista/core yourself; the boot loads it once WebGPU is there)."
     },
     "33": {
       "name": "a lost GPU device is recovered",
@@ -331,6 +331,22 @@
       "run": "build",
       "rule": "Every test in the game's tests/ folder passes: each is one of this game's own promises (its loop, its scoring, a mechanic as this game has it, its hook, an accept item) as a play script with expect steps.",
       "fix": "The detail names the test, the promise's words and the expect that did not hold. Fix the game so the promise holds (rules.js, config/game.json), or, when the promise itself changed, the test with it; then re-run --check 35 (a few seconds)."
+    },
+    "36": {
+      "name": "the sea is drawn and moving",
+      "home": "part",
+      "part": "engine:vista",
+      "run": "build",
+      "rule": "Looking out to sea from the start place, the water under the horizon is drawn (not flat) and moves from frame to frame while the player stands still.",
+      "fix": "Do not cover the view with your own HUD, change the camera or stop the core's frame in rules.js; keep config/look.json's sea state one of calm, breezy, choppy or storm."
+    },
+    "37": {
+      "name": "the look is the config's",
+      "home": "part",
+      "part": "engine:vista",
+      "run": "build",
+      "rule": "The core draws the look config/look.json names (preset, hour, sea state, exposure, clouds), and a value Studio changes there reaches the core.",
+      "fix": "Set the look in config/look.json, never with ctx.vista.look.set in rules.js at boot; a rule that changes the light during play (a day passing) starts from the config's values."
     }
   },
   "brief": {

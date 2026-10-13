@@ -27,7 +27,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve, relative, posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { REPO, KIT, SCENIC_KIT, FORGE, FORGE_KIT, importPart, LIBRARY, KIT_VERSION, SCENIC_VERSION, FORGE_VERSION, SPEC_SCHEMA, GF_AUDIO, json, sha256, engineOf, walk } from './lib/paths.mjs';
+import { REPO, KIT, SCENIC_KIT, FORGE, FORGE_KIT, VISTA_KIT, importPart, LIBRARY, KIT_VERSION, SCENIC_VERSION, FORGE_VERSION, VISTA_VERSION, SPEC_SCHEMA, GF_AUDIO, json, sha256, engineOf, walk } from './lib/paths.mjs';
 import { check, withDefaults } from './lib/schema.mjs';
 import { put, vendorLibraries, vendorKit, vendorGfAssets, kitModuleFiles, optionalModuleDirs } from './lib/vendor.mjs';
 import { importKitModule } from './lib/kit-import.mjs';
@@ -60,6 +60,21 @@ export async function decideModules({ standins = false, standinMechanics = false
   }
   const scenic = engine === 'scenic';
   if (scenic) out.engine = 'scenic';
+  // the vista engine (CONTRACT §8 vista; research/super-scenic/THIN_E2E.md): its look and world are research/gf-vista/kit's
+  // (kit/config.js: the core's island, kit/look.js's presets); no three.js character and no mechanic module (the core
+  // plays the fishing and the boat from spec.vista); never stand-ins
+  if (engine === 'vista') {
+    out.engine = 'vista';
+    const m = await importPart(join(VISTA_KIT, 'config.js'), 'the vista engine (research/gf-vista)');
+    const missing = ['templates', 'presets', 'lookConfig', 'worldConfig', 'slotsFor'].filter(n => !(n in m));
+    if (missing.length) throw new Error(`research/gf-vista/kit/config.js lacks ${missing.join(', ')}: the vista engine has no stand-in`);
+    out.look = true; out.world = true;
+    why.push(`look: the vista engine's (gf-vista ${VISTA_VERSION}: the core's sky, sea, clouds and light; look.preset sets the hour, the sea state, the exposure and the clouds)`,
+      `world: the vista engine's (the core's island, palm-isle)`,
+      'character: the vista engine\'s (first person: your own body is never drawn; friends are gf-humanoid-1 bodies skinned by the core, gf/vista/kit/humanoid.js)',
+      'mechanics: no gf-three mechanic module runs on vista (the core plays the fishing and the boat from the vista tables, spec.vista; the rules are rules.js)');
+    return { modules: out, why, mods: { look: m, world: m, mechanics: {} } };
+  }
   // the forge engine (CONTRACT §8 forge): its look and world are research/gf-forge/kit's; no three.js character, and no
   // mechanic module runs on it yet (their params stay in config for the rules); never stand-ins
   if (engine === 'forge') {
@@ -138,8 +153,9 @@ export async function create(specPath, outDir, { force = false, newRules = false
     else for (const p of check(flow.manifest.params, spec.round.params)) problems.push(`round.params (loop "${flow.id}"): ${p}`);
   }
   if (spec.round?.mode === 'world' && spec.world?.template !== 'voxel') problems.push('round.mode world: needs world.template voxel');
-  // every game has a mechanic, except a forge game in wave 0, where none runs yet (CONTRACT §8 forge)
-  if (engineOf(spec) !== 'forge' && !(spec.mechanics?.length >= 1)) problems.push('mechanics: at least 1 items');
+  // every game has a mechanic, except a forge game in wave 0, where none runs yet (CONTRACT §8 forge), and a vista game,
+  // whose play is the core's fishing and boat (CONTRACT §8 vista)
+  if (!['forge', 'vista'].includes(engineOf(spec)) && !(spec.mechanics?.length >= 1)) problems.push('mechanics: at least 1 items');
   // a spec that names its loop (how the game is played, M4-B) names one this kit can run, with that loop's shape
   if (spec.loop != null && !problems.length) problems.push(...loopProblems(spec, await loopParts({ kit: kitDir })));
   if (problems.length) return { ok: false, code: 2, problems: problems.map(p => `spec ${p}`) };
@@ -159,7 +175,7 @@ export async function create(specPath, outDir, { force = false, newRules = false
   try { decided = await decideModules({ ...options, engine, kit: kitDir, flat }); } catch (e) { return { ok: false, code: 1, problems: [e.message] }; }
   const { modules, why, mods } = decided;
   // the spec's world and look must be ones its engine has (CONTRACT §8)
-  if (engine === 'scenic' || engine === 'forge') {
+  if (engine === 'scenic' || engine === 'forge' || engine === 'vista') {
     const T = spec.world?.template, L = spec.look?.preset;
     const bad = [];
     if (T && !mods.world.templates.includes(T)) bad.push(`world.template "${T}" is not a ${engine} world (${mods.world.templates.join(', ')})`);
@@ -167,12 +183,27 @@ export async function create(specPath, outDir, { force = false, newRules = false
     // forge, wave 0 (CONTRACT §8 forge): first person only, rounds only (a voxel world is three.js's)
     if (engine === 'forge' && (spec.camera ?? 'first') !== 'first') bad.push(`camera "${spec.camera}" is not one the forge engine has yet (first)`);
     if (engine === 'forge' && spec.round?.mode === 'world') bad.push('round.mode world is not on the forge engine (the voxel world is three.js\'s)');
+    // vista (CONTRACT §8 vista): first person only; a session with a clock (no persistent world yet); no gf-three
+    // mechanic and no props (the island's pier, stalls and boat are the core's own)
+    if (engine === 'vista' && (spec.camera ?? 'first') !== 'first') bad.push(`camera "${spec.camera}" is not one the vista engine has (first)`);
+    if (engine === 'vista' && spec.round?.mode === 'world') bad.push('round.mode world is not on the vista engine yet (a vista game is a session with a clock)');
+    if (engine === 'vista' && (spec.mechanics ?? []).length) bad.push(`mechanics: no gf-three mechanic runs on the vista engine (${spec.mechanics.map(m => m.id).join(', ')}): its play is the core's fishing and boat, the vista tables (spec.vista) and rules.js; list none`);
+    if (engine === 'vista' && (spec.world?.props ?? []).length) bad.push('world.props: a vista world places no props yet (the island, its pier, stalls and boat are the core\'s own); list none');
     if (bad.length) return { ok: false, code: 2, problems: bad.map(b => `spec ${b} (engine ${engine})`) };
   }
   // spec.forge, the forge data tables (CONTRACT §8 forge; research/gf-forge/kit/tables): a value the core can't do, a
   // field that does not exist or a wave naming a missing enemy is refused; what no system runs yet is a note
   const forgeNotes = [];
   if (spec.forge !== undefined && engine !== 'forge') return { ok: false, code: 2, problems: [`spec forge: the data tables are the forge engine's (engine is ${engine})`] };
+  // spec.vista, the vista data tables (research/gf-vista/kit/tables, interface I1: check(spec.vista) → problems): refused
+  // with each problem the checker names
+  if (spec.vista !== undefined && engine !== 'vista') return { ok: false, code: 2, problems: [`spec vista: the data tables are the vista engine's (engine is ${engine})`] };
+  if (engine === 'vista') {
+    const r = (await importPart(join(VISTA_KIT, 'tables/index.js'), 'the vista engine (research/gf-vista)')).check(spec.vista ?? {});
+    const probs = Array.isArray(r) ? r : r?.problems ?? [];
+    if (probs.length) return { ok: false, code: 2, problems: probs.map(p => `spec vista: ${String(p).replace(/^vista[.:]\s*/, '')} (engine vista)`) };
+    forgeNotes.push(...(Array.isArray(r?.notes) ? r.notes : []));
+  }
   if (engine === 'forge') {
     const r = (await importPart(join(FORGE_KIT, 'tables/index.js'), 'the forge engine (research/gf-forge)')).check(spec.forge);
     if (r.problems.length) return { ok: false, code: 2, problems: r.problems.map(p => `spec ${p} (engine forge)`) };
@@ -199,11 +230,11 @@ export async function create(specPath, outDir, { force = false, newRules = false
   const standinLook = await importKitModule(join(KIT, 'core/standins/look.js'));
   const lookPreset = lookMod ? (id, time) => { const v = lookMod.presetValues?.(id, time) ?? lookMod.presets?.[id]; return v ? JSON.parse(JSON.stringify(v)) : null; } : null;
   // the real look's config/look.json is its whole preset (lookConfig), id dropped: every value a look.* slot
-  const lookConfig = flat ? id => flatPart.lookConfig(id, { plane: flat }) : lookMod?.lookConfig ? (id, time) => { const c = JSON.parse(JSON.stringify(lookMod.lookConfig(id, { time }))); delete c.id; return c; } : null;
+  const lookConfig = flat ? id => flatPart.lookConfig(id, { plane: flat }) : engine === 'vista' ? () => mods.look.lookConfig(spec) : lookMod?.lookConfig ? (id, time) => { const c = JSON.parse(JSON.stringify(lookMod.lookConfig(id, { time }))); delete c.id; return c; } : null;
   // the forge world reads no file itself: its library (the curated KayKit pieces and their licences) is passed in
   const forgeLib = engine === 'forge' ? await (await importPart(join(FORGE, 'tools/library.mjs'), 'the forge engine (research/gf-forge)')).forgeLibrary() : null;
   const flatFile = f => join(REPO, 'research/gf-three', f);      // the flat stand-in pictures (tools/lib/standin-assets/flat)
-  const worldConfig = flat ? (s, o) => flatPart.worldConfig(s, { ...o, repoFile: flatFile }) : engine === 'scenic' ? (s, o) => mods.world.worldConfig(s, o) : engine === 'forge' ? (s, o) => mods.world.worldConfig(s, { ...o, library: forgeLib }) : null;
+  const worldConfig = flat ? (s, o) => flatPart.worldConfig(s, { ...o, repoFile: flatFile }) : engine === 'vista' ? s => mods.world.worldConfig(s) : engine === 'scenic' ? (s, o) => mods.world.worldConfig(s, o) : engine === 'forge' ? (s, o) => mods.world.worldConfig(s, { ...o, library: forgeLib }) : null;
   const flowUse = flow && flow.id !== 'round' && spec.round?.mode !== 'world' ? { id: flow.id, params: withDefaults(flow.manifest.params ?? {}, spec.round?.params ?? {}), sounds: flow.module?.sounds ?? {} } : null;
   // a mechanic's own sounds (its module's `sounds`: id → [label, preset, bus]) are listed with the game's, like its slots
   const mechanicSounds = Object.fromEntries(Object.entries(mods.mechanics ?? {}).filter(([, m]) => m.sounds && typeof m.sounds === 'object').map(([id, m]) => [id, m.sounds]));
@@ -215,7 +246,7 @@ export async function create(specPath, outDir, { force = false, newRules = false
   // rules.js already there) needs gets its config block, its stand-in files and its folder in gf/three. A module added
   // to the kit later needs no line here. A game that needs none is unchanged.
   const extraFiles = [], extras = new Set(prev.extras ?? []);
-  if (engine !== 'forge') {
+  if (engine !== 'forge' && engine !== 'vista') {
     const rules = await readFile(join(dir, 'rules.js'), 'utf8').catch(() => '');
     for (const id of await optionalModuleDirs()) {
       const m = await importKitModule(join(KIT, id, 'module.js'));
@@ -245,7 +276,7 @@ export async function create(specPath, outDir, { force = false, newRules = false
   for (const f of extraFiles) await own(f.to, await readFile(f.from));
   await own('multiplayer.json', json(C.multiplayer));
   await own('rules.js', rulesStub(spec, parts, flowUse ? flow : null, flat ? { plane: flat, note: flatPart.manifest.note(flat), controls: flatPart.manifest.planes[flat].controls } : null));
-  if (engine !== 'forge') await gen('index.html', indexHtml(spec.title, engine));
+  if (engine !== 'forge' && engine !== 'vista') await gen('index.html', indexHtml(spec.title, engine));
   await gen('main.js', mainJs(engine));
 
   // the kit and everything vendored
@@ -264,6 +295,8 @@ export async function create(specPath, outDir, { force = false, newRules = false
   const libs = await vendorLibraries(dir, [...kit.sourceTexts, rulesText], { engine }); wrote.push(...libs.wrote);
   // forge: the page, once everything it names is in place (it asks for every module of the game at once)
   if (engine === 'forge') await gen('index.html', indexHtml(spec.title, engine, { preload: await forgeModules(dir) }));
+  // vista: the page names no core module (the boot loads the core only once WebGPU is there)
+  if (engine === 'vista') await gen('index.html', indexHtml(spec.title, engine));
 
   // every table entry's picture its own file (open builder wave 10): a default's "library:<id>" copied in, with its grip
   // and licence (tools/lib/items-lib.mjs)
@@ -272,7 +305,7 @@ export async function create(specPath, outDir, { force = false, newRules = false
   warnings.push(...pics.problems);
   // the build record, then assets.json from the declarations (keeping the sound list a game already has)
   const record = {
-    kit: { name: 'gf-three', version: KIT_VERSION, engine, ...(engine === 'scenic' ? { scenic: SCENIC_VERSION } : {}), ...(engine === 'forge' ? { forge: FORGE_VERSION } : {}) }, game: slugOf(spec.title), spec: { file: 'spec.json', sha256: sha256(specBytes) },
+    kit: { name: 'gf-three', version: KIT_VERSION, engine, ...(engine === 'scenic' ? { scenic: SCENIC_VERSION } : {}), ...(engine === 'forge' ? { forge: FORGE_VERSION } : {}), ...(engine === 'vista' ? { vista: VISTA_VERSION } : {}) }, game: slugOf(spec.title), spec: { file: 'spec.json', sha256: sha256(specBytes) },
     options, modules, named: C.named, props: C.propFiles, bodies: C.bodies, notes: C.notes, ...(C.worldArt ? { worldArt: C.worldArt } : {}),
   };
   await gen('gf-three.json', json(record));
@@ -308,9 +341,9 @@ function mergeMissing(into, from) {
 const slugOf = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'game';
 const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-/** main.js: the shared boot, or (forge, CONTRACT §8) the shared boot without three.js. */
+/** main.js: the shared boot, or (forge, vista: CONTRACT §8) the shared boot without three.js. */
 export function mainJs(engine = 'party') {
-  const boot = engine === 'forge' ? 'boot-forge.js' : 'boot.js';
+  const boot = engine === 'forge' ? 'boot-forge.js' : engine === 'vista' ? 'boot-vista.js' : 'boot.js';
   return `import { boot } from './gf/three/core/${boot}';\nimport rules from './rules.js';\nboot({ rules });\n`;
 }
 
@@ -348,6 +381,23 @@ export async function forgeModules(dir, entries = ['gf/three/ui/loading.js', 'ma
 const FORGE_EARLY = `(function(){if(!WebAssembly.compileStreaming||!window.ReadableStream)return;var q=/[?&]gf-forge-backend=(webgpu|webgl2?)(?:&|$)/.exec(location.search),b=q?(q[1]==='webgpu'?'webgpu':'webgl2'):(navigator.gpu?'webgpu':'webgl2'),E=window.__gfEarly={bytes:0,wasm:null},d=b==='webgpu'?'gf/forge/wasm/':'gf/forge/wasm-webgl2/',u=d+'forge_web_bg.wasm';try{var l=document.createElement('link');l.rel='modulepreload';l.href=d+'forge_web.js';document.head.appendChild(l)}catch(e){}try{var m=fetch(u).then(function(r){if(!r.ok||!r.body)throw new Error('HTTP '+r.status);var d=r.body.getReader();return WebAssembly.compileStreaming(new Response(new ReadableStream({pull:function(c){return d.read().then(function(x){if(x.done){c.close();return}E.bytes+=x.value.byteLength;c.enqueue(x.value)})},cancel:function(w){return d.cancel(w)}}),{headers:{'Content-Type':'application/wasm'}}))});m.catch(function(){});E.wasm={url:u,module:m,backend:b}}catch(e){}})();`;
 
 export function indexHtml(title, engine = 'party', { preload = null } = {}) {
+  // vista (CONTRACT §8 vista): no import map (every import is relative); the core draws into #app (its Engine's
+  // container); the loading view starts with the page. The core's modules are loaded by the boot once the browser is
+  // known to have WebGPU, so a browser without it gets the kit's screen, never a blank page
+  if (engine === 'vista') return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>${escHtml(title)}</title>
+<link rel="icon" href="data:,">
+<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#05080c}#app{position:fixed;inset:0}#app canvas{display:block}</style>
+<script type="module">import { startLoading } from './gf/three/ui/loading.js'; startLoading();</script>
+<script type="module" src="main.js"></script>
+</head>
+<body><div id="app"></div></body>
+</html>
+`;
   // forge (CONTRACT §8 forge): every import is relative (no three.js, no Rapier), so there is no import map.
   // Wave 3 (track M): the wasm starts with the page, and every module is asked for at once (forgeModules); a page
   // written without the list (preload null) still loads, one import after another
@@ -474,6 +524,66 @@ export default {
 `;
 }
 
+/**
+ * The rules.js create writes for a vista game (CONTRACT §8 vista; prompts/build-vista.md). The core plays the island by
+ * itself (walking, swimming, the boat, the fishing: bites, the catch, the cooler), and the kit's game bridge
+ * (gf/vista/kit/game.js) turns what happens into events: bite, hooked, catch, lost, sold, bought, board, leave. The stub
+ * plays as it is: a catch scores, and a game with a goal (rules.params.goalSpecies, a count of different kinds of fish)
+ * ends the session for everyone when one player reaches it; the clock ends it otherwise. The build agent starts from a
+ * game that can be played, scored and finished.
+ */
+function vistaRulesStub(spec) {
+  const controls = Object.entries(spec.controls ?? {}).map(([k, v]) => `//   ${k}: ${v}`).join('\n') || '//   (none named)';
+  return `// rules.js: THE GAME AGENT'S FILE. ${spec.title}: what makes this game this game, on the vista engine (research/gf-three/CONTRACT.md §8 vista).
+// Written by create.mjs from the spec. The kit already plays the island (walk, swim, the boat), the fishing (cast, bite,
+// the catch, the cooler, the buyer, the shop) from the data tables (config/game.json → vista), the look
+// (config/look.json), the HUD, the menu and friends. Tune numbers there.
+//
+// Hook: ${spec.hook ?? ''}
+// Rules:
+${comment(spec.rules.summary)}
+// Scoring: ${spec.rules.scoring ?? '(see the rules)'}
+// Win: ${spec.round.winBy ?? 'the goal, before the clock runs out'}${spec.round.loseBy ? `\n// Lose: ${spec.round.loseBy}` : ''}
+// Session: at most ${spec.round.seconds} s · players ${spec.players.min}–${spec.players.max}, together on one island
+// Tuning numbers (config/game.json → rules.params, each a rules.* slot): ${JSON.stringify(spec.rules.params ?? {})}
+// Controls (the core's own: WASD walk, mouse look, R the rod, hold and release the left button to cast, E to board,
+// take the helm and trade; How to play lists them):
+${controls}
+// Not in v1: ${(spec.notInV1 ?? []).join('; ') || '—'}
+// The creator will judge: ${(spec.accept ?? []).join('; ') || '—'}
+//
+// What the rules can use (ctx): ctx.vista.state() → {money, cooler, rod, fight, near, catches, log}; ctx.vista.sell(),
+// ctx.vista.buy(id); ctx.vista.look.set({hour, sea, exposure}); ctx.vista.tables (the filled data tables); ctx.me (this
+// copy's player: its score is what the results show); ctx.finish(reason) ends the session for everyone with the results.
+// Events reach event(ctx, name, d) on the copy where they happened (each player fishes on their own copy):
+//   bite, hooked, catch {species, name, kg, cm, value}, lost, sold {sold, money}, bought {id, money}, board, leave.
+// Never touch the core (gf/vista/core) or the kit; never draw your own HUD over the kit's.
+export default {
+  // Once on every copy, after the island, the players and the HUD exist.
+  setup(ctx) {},
+  // Every copy, when the session starts.
+  roundStart(ctx) { for (const p of ctx.players.list()) p.score = 0; },
+  // A game event on this copy (see above), or a message another copy sent with ctx.net.send.
+  event(ctx, name, d) {
+    if (ctx.round.phase !== 'playing') return;
+    // score: one point a fish landed (the results show each player's own)
+    if (name === 'catch') {
+      ctx.me.score += 1;
+      // the goal: this many different kinds of fish (rules.params.goalSpecies), then the session ends for everyone
+      const goal = Number(ctx.config.rules?.params?.goalSpecies) || 0;
+      if (goal > 0 && Object.keys(ctx.vista.state().log ?? {}).length >= goal) ctx.finish('goal');
+    }
+  },
+  // Every frame on every copy.
+  update(ctx, dt) {},
+  // Host only: is the session over for another reason? null, or { winners: [playerId], reason }.
+  check(ctx) { return null; },
+  // Every copy, at the end: the rows of the results card.
+  results(ctx) { return ctx.players.list().map(p => ({ id: p.id, name: p.name, value: p.score })); },
+};
+`;
+}
+
 /** A mechanic's block of setup(): what it is, its note, a worked line, its traps, then each callback it offers as an
  *  empty named handler (the manifest's `stub` and `events`). */
 function stubBlock(part, as, spec) {
@@ -493,6 +603,7 @@ function stubBlock(part, as, spec) {
  *  spec uses (from its manifest). Nothing in it does anything yet: every handler is empty. */
 export function rulesStub(spec, parts = [], flow = null, flat = null) {
   if (spec.engine === 'forge') return forgeRulesStub(spec);
+  if (spec.engine === 'vista') return vistaRulesStub(spec);
   // a flow that has its own hooks (kit/loops/<id> → manifest.stub and events): its note, a worked line and its traps
   // above the hooks, and each hook it calls as an empty one. The timed round's six hooks are the ones below.
   const F = flow?.manifest?.stub ? flow.manifest : null;
@@ -544,9 +655,10 @@ ${flowHooks}};
 
 /** gf/LICENSE: which of the game's folders are the kit's (MIT), then the kit's licence text as it is. */
 export function kitLicence(text) {
-  return `The games.fun kit code in this game is under the MIT licence below: gf/three/, gf/scenic/ and gf/forge/ (a scenic
-or forge game), gf/mp/, gf/gf-assets.js and audio/. Third-party files inside them and in vendor/ keep their own licence,
-which sits beside each copy; ATTRIBUTION.md lists them and the art. The game's own files (rules.js, config/, its art and
+  return `The games.fun kit code in this game is under the MIT licence below: gf/three/, gf/scenic/, gf/forge/ and gf/vista/kit
+and gf/vista/hud (a scenic, forge or vista game), gf/mp/, gf/gf-assets.js and audio/. Third-party files inside them and in
+vendor/ keep their own licence, which sits beside each copy (a vista game's core, gf/vista/core/, is Tidewater's, under its
+own MIT licence: gf/vista/core/LICENSE and ATTRIBUTION.md); ATTRIBUTION.md lists them and the art. The game's own files (rules.js, config/, its art and
 sounds) are the maker's.
 
 ${text.trim()}
@@ -569,9 +681,10 @@ export function attribution(spec, record) {
   const lic = (file, l) => { const c = credits.find(x => x.file === file); return c ? creditLine(c) : `${l?.spdx ?? 'see library/LICENSES.json'}${l?.author ? `, ${l.author}` : ''}`; };
   for (const [name, p] of Object.entries(record.props ?? {})) art.push(`| ${p.file} | prop "${name}" (${p.from}) | ${lic(p.file, p.license)} |`);
   for (const [role, b] of Object.entries(record.bodies ?? {})) art.push(`| ${b.file} | body of "${role}" (${b.from}) | ${lic(b.file, b.license)} |`);
-  const scenic = record.kit?.engine === 'scenic', forge = record.kit?.engine === 'forge';
+  const scenic = record.kit?.engine === 'scenic', forge = record.kit?.engine === 'forge', vista = record.kit?.engine === 'vista';
   const creditText = credits.length ? `\n## Credits\n\nThese files are used under a licence that asks for credit. Keep these lines with the game while it uses them (the game's How to play shows them to players); a file you replace with your own needs no line.\n\n${credits.map(c => `- ${c.file}: ${creditLine(c)}`).join('\n')}\n` : '';
   if (forge) return forgeAttribution(spec, record, art) + creditText;
+  if (vista) return vistaAttribution(spec, record, art) + creditText;
   if (!scenic) art.push('| assets/textures/ground.ktx2 | ground (stand-in: Poly Haven leafy_grass, converted to KTX2) | CC0-1.0, Poly Haven |');
   for (const a of record.worldArt ?? []) art.push(`| ${a.file} | ${a.what} | ${a.license} |`);
   const libs = scenic
@@ -600,6 +713,36 @@ ${art.join('\n')}
 
 Sounds are gf-audio presets (synthesised, no files).
 ${creditText}`;
+}
+
+/** A vista game's credits (CONTRACT §8 vista): the vendored core (Tidewater, MIT; its own attribution travels with it at
+ *  gf/vista/core/ATTRIBUTION.md, its field recordings' authors in gf/vista/core/public/audio/CREDITS.md), the shared
+ *  kits, and the bodies. */
+function vistaAttribution(spec, record, art) {
+  art.push('| assets/clips/gf-humanoid-1.glb | the shared clips friends\' bodies play | CC0-1.0, Quaternius (Universal Animation Library), retargeted by games.fun |');
+  return `# ${spec.title}: credits
+
+Made with gf-three ${KIT_VERSION} and the vista engine gf-vista ${record.kit.vista} (research/gf-vista, research/super-scenic/PLAN.md) by create.mjs from spec.json. Licences travel with the code: each library's licence sits beside its copy.
+
+## Code
+
+| What | Where | Licence |
+|---|---|---|
+| the vista core: Tidewater by DRG Software Solutions LLC (Dan Greenheck), https://github.com/dgreenheck/tidewater at 4811ba48 (engine, ocean, sky, clouds, post, world, player, fishing and boat), with gf-vista's marked patches | gf/vista/core/ (LICENSE, ATTRIBUTION.md, CREDITS.md and PATCHES.md beside it) | MIT |
+| the core's field recordings, scanned debris and props, cloud volumes, SMAA tables and two Rocketbox characters | gf/vista/core/public/ (each folder's CREDITS.md or LICENSE beside it; gf/vista/core/ATTRIBUTION.md lists them) | CC0-1.0 and MIT, as listed there |
+| meshoptimizer's decoder | gf/vista/kit/vendor/meshopt_decoder.module.js (LICENSE-meshoptimizer beside it) | MIT |
+| gf-three (the shared system, without three.js), gf-vista ${record.kit.vista} (kit and HUD), gf-multiplayer ${MP_KIT_VERSION}, gf-assets 1.3.0, gf-audio 1.5.0 (ZzFX, MIT) | gf/three/, gf/vista/kit/, gf/vista/hud/, gf/mp/, gf/gf-assets.js, audio/ | MIT, Copyright (c) 2026 games.fun (gf/LICENSE) |
+
+No player-facing name, person or place of the upstream game is used: the game's words are its own (config/game.json).
+
+## Art
+
+| File | What | Licence |
+|---|---|---|
+${art.join('\n')}
+
+Menu and HUD sounds are gf-audio presets (synthesised, no files); the island's own sounds are the core's field recordings above.
+`;
 }
 
 /** A forge game's credits (CONTRACT §8 forge): the Rust core's crates (their licences in gf/forge/wasm/LICENSES.md),
@@ -647,8 +790,10 @@ async function report(r) {
   // a voxel world (CONTRACT §9) has no prop layout: its own lint is verify's world lint (tools/lib/worlds-check.mjs)
   const worldJson = JSON.parse(await readFile(join(r.dir, 'config/world.json'), 'utf8').catch(() => '{}'));
   const voxel = worldJson.template === 'voxel';
+  // a vista world (CONTRACT §8 vista) is the core's island: no set-dressing lint applies to it
+  if (worldJson.kind === 'vista-coast') console.log(`world   the vista core's island (${worldJson.template}); start places ${Object.keys(worldJson.places ?? {}).join(', ')}`);
   // a forge world (CONTRACT §8 forge): the forge world lint (gf/forge/arena.js lintWorld, track A), checks 11 and 17's
-  if (/^forge-/.test(worldJson.kind ?? '')) try {
+  else if (/^forge-/.test(worldJson.kind ?? '')) try {
     const { lintWorld } = await import(pathToFileURL(join(r.dir, 'gf/forge/arena.js')).href);
     const game = JSON.parse(await readFile(join(r.dir, 'config/game.json'), 'utf8'));
     const en = game.forge?.enemies ?? [];

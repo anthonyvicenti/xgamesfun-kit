@@ -130,7 +130,7 @@ import { checkLoadouts } from './lib/loadout-check.mjs';
 import { loadSubject, lintDressing, lines as dressingLines } from './lib/dressing.mjs';
 import { RECORDER, recordingOf, firstLook, undefended, judgeAlive, goalOf } from './lib/alive-check.mjs';
 import { gameFingerprint } from './lib/own-verify.mjs';
-import { passes, passesForge, profilePasses, requiredFor, runsHere, checkProfile } from './lib/verdict.mjs';
+import { passes, passesForge, passesVista, profilePasses, requiredFor, runsHere, checkProfile } from './lib/verdict.mjs';
 import { checkHome } from './lib/homes.mjs';
 import { checkLooks } from './lib/looks-check.mjs';
 import { worldCheck } from './lib/world-check.mjs';
@@ -189,22 +189,23 @@ export async function verify(gameDir, { quick = false, out = null, log = console
   const one = list?.length === 1 ? list[0] : null;
   // a world (CONTRACT §9: config/game.json round.mode "world") has its own flow, tools/verify-world.mjs; so has a forge
   // game (CONTRACT §8 forge: tools/verify-forge.mjs, the checks that apply through the forge observation interface; the
-  // rest listed "not yet for forge", never passed)
+  // rest listed "not yet for forge", never passed), and a vista game (CONTRACT §8 vista: tools/verify-vista.mjs)
   const roundMode = JSON.parse(await readFile(join(dir, 'config/game.json'), 'utf8').catch(() => '{}')).round?.mode;
-  const kind = roundMode === 'world' ? 'world' : await engineOfGame(dir) === 'forge' ? 'forge' : 'round';
+  const eng = await engineOfGame(dir);
+  const kind = roundMode === 'world' ? 'world' : eng === 'forge' ? 'forge' : eng === 'vista' ? 'vista' : 'round';
   const required = requiredFor(kind, { release });
   if (kind !== 'round') {
     // a profile here: its checks are left out of the run and recorded as skipped after it (the gate's lobby-only legs
     // are a round game's; here check 5 is skipped whole)
     const skip = profile ? profile.skip.filter(s => (list ?? [...required, 9]).includes(s.check)) : [];
     const run = profile ? (list ?? required).filter(n => !skip.some(s => s.check === n)) : only;
-    const flow = kind === 'world' ? (await import('./verify-world.mjs')).verifyWorld : (await import('./verify-forge.mjs')).verifyForge;
+    const flow = kind === 'world' ? (await import('./verify-world.mjs')).verifyWorld : kind === 'vista' ? (await import('./verify-vista.mjs')).verifyVista : (await import('./verify-forge.mjs')).verifyForge;
     const r = await flow(dir, { rec, outDir, add, log: say, t0, lap, quick, only: run, release,
       statics: { looks: () => looks(dir, rec, add), check18: () => check18(dir, { rec, add }), check19: () => check19(dir, { rec, add }), likeness: shots => likeness(dir, { rec, add, shots, refs }) } });
     if (profile) {
       for (const s of skip) add(s.check, checkHome(s.check)?.name ?? `check ${s.check}`, null, `skipped by profile ${profile.name}: ${s.reason}`, { skippedBy: 'profile', reason: s.reason });
       checks.sort((a, b) => (typeof a.n === 'number' ? a.n : 99) - (typeof b.n === 'number' ? b.n : 99));
-      if (!list) r.pass = kind === 'forge' ? passesForge(checks, required) : passes(checks, required);
+      if (!list) r.pass = kind === 'forge' ? passesForge(checks, required) : kind === 'vista' ? passesVista(checks, required) : passes(checks, required);
       stampProfile(r, profile, required);
       await writeFile(join(outDir, 'verdict.json'), JSON.stringify(r, null, 2) + '\n');
     }
@@ -1142,11 +1143,14 @@ if (isMain(import.meta)) {
   const worldGame = JSON.parse(await readFile(join(resolve(dir), 'config/game.json'), 'utf8').catch(() => '{}')).round?.mode === 'world';
   // a forge game (CONTRACT §8 forge) runs any of its checks alone or together, its own 32 and 33 among them (and
   // since gf-forge wave 4, 34: watch then play)
-  const forgeGame = await engineOfGame(resolve(dir)) === 'forge';
+  const gameEngine = await engineOfGame(resolve(dir));
+  const forgeGame = gameEngine === 'forge', vistaGame = gameEngine === 'vista';
+  // a vista game (CONTRACT §8 vista): any of its checks, its own 32, 36 and 37 among them
+  if (vistaGame && nums && !nums.every(n => n >= 1 && n <= 37)) { console.error('--check takes check numbers 1 to 37 (one, or several: 3,32,36)'); process.exit(2); }
   if (forgeGame && nums && !nums.every(n => n >= 1 && n <= 34)) { console.error('--check takes check numbers 1 to 34 (one, or several: 3,32,34)'); process.exit(2); }
   if (worldGame && nums && !nums.every(n => n >= 1 && n <= 34)) { console.error('--check takes check numbers 1 to 31 and 34 (one, or several: 13,26,30)'); process.exit(2); }
   const roundChecks = [...requiredFor('round', { release: true }), 9];
-  if (!worldGame && !forgeGame && nums && !nums.every(n => roundChecks.includes(n))) { console.error(`--check takes the checks of a round game (1 to 25, 31, 34 and 35), one or several: 13 or 1,2 or 13,16. Not one: ${nums.filter(n => !roundChecks.includes(n)).join(', ')}`); process.exit(2); }
+  if (!worldGame && !forgeGame && !vistaGame && nums && !nums.every(n => roundChecks.includes(n))) { console.error(`--check takes the checks of a round game (1 to 25, 31, 34 and 35), one or several: 13 or 1,2 or 13,16. Not one: ${nums.filter(n => !roundChecks.includes(n)).join(', ')}`); process.exit(2); }
   let profile = null;
   if (a.includes('--profile')) {
     const pf = opt('--profile', null);
@@ -1160,7 +1164,7 @@ if (isMain(import.meta)) {
   const byProfile = (rec.profile?.skipped ?? []).map(c => c.n);
   const skipped = rec.checks.filter(c => c.ok === null && !c.notYet && !byProfile.includes(c.n)).map(c => c.n);
   const notYet = (rec.notYet ?? []).map(c => c.n);
-  if (notYet.length) console.log(`not yet for forge: ${notYet.join(', ')} (each with its reason in verdict.json → notYet)`);
+  if (notYet.length) console.log(`not yet for ${rec.engine === 'vista' ? 'vista' : 'forge'}: ${notYet.join(', ')} (each with its reason in verdict.json → notYet)`);
   if (rec.profile) console.log(`skipped by profile ${rec.profile.name}: ${byProfile.join(', ') || 'nothing'} (each with its reason in verdict.json → profile.skipped)`);
   const profileOk = !!rec.profile && !rec.pass && rec.profilePass;
   const word = rec.pass ? 'PASS' : profileOk ? `PROFILE ${rec.profile.name} OK (not a full pass)` : 'FAIL';

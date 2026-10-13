@@ -201,6 +201,10 @@ button.dice { flex: none; padding: 0 13px; font-size: 20px; line-height: 1; bord
 .live-share .link { display: flex; gap: 6px; }
 .live-share .link input { flex: 1 1 auto; min-width: 0; font: 12px var(--mp-font); color: var(--mp-muted); background: var(--mp-bg); border: 1px solid var(--mp-line); border-radius: 9px; padding: 8px 10px; }
 .live-share .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.live-share .mic { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--mp-line); }
+.live-share .mic button { width: 100%; }
+.live-share .mic button.on { background: #1f9d55; border-color: #1f9d55; color: #fff; }
+.live-share .mic p { margin: 6px 0 0; }
 .live-share a.button { display: inline-flex; align-items: center; text-decoration: none; padding: 8px 14px; border-radius: var(--mp-radius); font-weight: 700; background: var(--mp-accent); color: var(--mp-accent-fg); border: 1px solid var(--mp-accent); }
 /* one row where it fits; on a narrow screen the buttons (kit 1.6.3: Join, Start a room, Play solo) take a row of their own under the line */
 .watch-bar { position: absolute; left: 50%; bottom: max(12px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 7; display: flex; flex-wrap: wrap; align-items: center; gap: 7px 10px;

@@ -74,6 +74,7 @@ import { createFeel } from '../../forge/feel.js';
 import { createRender } from '../../forge/render.js';
 import { loadFight } from '../../forge/fight.js';
 import { createCards } from '../../forge/cards.js';
+import { createShop } from '../../forge/shop.js';
 import { createGovernor, lookFor, QUALITY, loadChoice, saveChoice, settingsRow } from '../../forge/governor.js';
 
 export const VERSION = KIT.version;
@@ -295,6 +296,8 @@ export async function boot({ rules = {} } = {}) {
     ctx.fight?.sleeve?.();
     // the run (wave 2, track G; gf/forge/cards.js): the reward between waves with its inspector, over the core's cards
     ctx.cards = createCards(ctx);
+    // the pedlar's cart and the paid revive (gf-forge wave 7, track P; gf/forge/shop.js), over the core's purse and cart
+    ctx.shop = createShop(ctx);
     // the host replays each joiner's inputs (forge-core net.rs); a joiner's batches come as 'fi' (base64), to the host only
     if (net.active && ctx.host) net.on('fi', (b, from) => { const n = players.api.nid(from); if (n && typeof b === 'string') forge.net.pushInputs(n, b); });
     let lastLatest = null, lastInputs = -1e9;
@@ -436,6 +439,8 @@ export async function boot({ rules = {} } = {}) {
         // many entities of each kind the core holds (resting debris among them)
         run: () => JSON.parse(JSON.stringify(ctx.cards?.facts() ?? null)),
         cards: () => JSON.parse(JSON.stringify(ctx.cards?.observe() ?? null)),
+        // wave 7 (track P): the pedlar's cart as shown, each player's purse, the paid revive's prompt
+        shop: () => JSON.parse(JSON.stringify(ctx.shop?.observe() ?? null)),
         down: () => JSON.parse(JSON.stringify(players.api.down?.() ?? null)),
         value: (path, player) => ctx.cards?.value(path, player) ?? null,
         counts: () => forge.entityCounts(),
@@ -542,6 +547,7 @@ export async function boot({ rules = {} } = {}) {
       forge.route(ctx, rules, { local: watching ? players.api.nid(players.api.watched()?.id) ?? 0 : n });
       try { ctx.feel?.update(dt); } catch (e) { console.error(e); }
       try { ctx.cards?.update(dt); } catch (e) { console.error(e); }
+      try { ctx.shop?.update(dt); } catch (e) { console.error(e); }
       try { ctx.fair.update(dt); } catch (e) { console.error(e); }
       try { rules.update?.(ctx, dt); } catch (e) { console.error(e); }
       for (const fn of ctx.onFrame) fn(dt);

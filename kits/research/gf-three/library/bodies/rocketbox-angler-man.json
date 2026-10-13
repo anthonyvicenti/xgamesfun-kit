@@ -1,0 +1,27 @@
+{
+  "id": "rocketbox-angler-man",
+  "label": "Outdoor vest man",
+  "file": "bodies/rocketbox-angler-man.glb",
+  "from": "library",
+  "kind": "rocketbox",
+  "sex": "m",
+  "tags": [
+    "human",
+    "man",
+    "outdoors",
+    "realistic",
+    "fishing",
+    "angler",
+    "older",
+    "coastal",
+    "player"
+  ],
+  "describe": "an older man with grey hair and a grey beard in a khaki multi-pocket vest over a green shirt, brown trousers and boots (realistic)",
+  "license": {
+    "spdx": "MIT",
+    "author": "Microsoft",
+    "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+    "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Male_Adult_05/Export/Male_Adult_05.fbx (git blob 41ae8205…, sha256 cd0e1750…52d0) and Assets/Avatars/Adults/Male_Adult_05/Textures/m009_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+    "note": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Male_Adult_05/Export/Male_Adult_05.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 10°, LeftMiddle 0°, LeftRing 13°, LeftPinky 25°, RightIndex 10°, RightMiddle 0°, RightRing 13°, RightPinky 25°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+  }
+}

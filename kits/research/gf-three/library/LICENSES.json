@@ -2758,6 +2758,114 @@
    "sha256": "7a74c7489cd55289cdd17e1962dcacfea7cc99ded78b6417cff7aa9a9f0ed757",
    "note": "baked offline by the script at 512 px (original work; 128 px until 2026-10-09)",
    "generator": "research/worlds/tools/bake_blocks.py"
+  },
+  "bodies/rocketbox-polo-man.glb": {
+   "spdx": "MIT",
+   "title": "Polo shirt man",
+   "author": "Microsoft",
+   "page": "https://github.com/microsoft/Microsoft-Rocketbox",
+   "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Male_Adult_01/Export/Male_Adult_01.fbx (git blob fdaf4aa7…, sha256 8d1edb51…8a29) and Assets/Avatars/Adults/Male_Adult_01/Textures/m002_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+   "from": "bodies.json (track C)",
+   "sha256": "1d80ba931c2e60f7905cfce5946a1cd2d761b60806c5318c85a453f97ed2658d",
+   "modified": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Male_Adult_01/Export/Male_Adult_01.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 10°, LeftMiddle 0°, LeftRing 13°, LeftPinky 25°, RightIndex 10°, RightMiddle 0°, RightRing 13°, RightPinky 25°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+  },
+  "bodies/rocketbox-tee-woman.glb": {
+   "spdx": "MIT",
+   "title": "T-shirt woman",
+   "author": "Microsoft",
+   "page": "https://github.com/microsoft/Microsoft-Rocketbox",
+   "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Female_Adult_17/Export/Female_Adult_17.fbx (git blob a3c97794…, sha256 77712530…831f) and Assets/Avatars/Adults/Female_Adult_17/Textures/f006_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+   "from": "bodies.json (track C)",
+   "sha256": "239be30d5c1f6b84317ca87331b6de309ff1d9b50edb5bc1ee4fc463ac104ba3",
+   "modified": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Female_Adult_17/Export/Female_Adult_17.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 11°, LeftMiddle 0°, LeftRing 12°, LeftPinky 27°, RightIndex 11°, RightMiddle 0°, RightRing 12°, RightPinky 27°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+  },
+  "bodies/rocketbox-denim-man.glb": {
+   "spdx": "MIT",
+   "title": "Denim jacket man",
+   "author": "Microsoft",
+   "page": "https://github.com/microsoft/Microsoft-Rocketbox",
+   "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Male_Adult_12/Export/Male_Adult_12.fbx (git blob 15d4f850…, sha256 b44fa601…4014) and Assets/Avatars/Adults/Male_Adult_12/Textures/m007_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+   "from": "bodies.json (track C)",
+   "sha256": "9ea5d62105693ef36f0d6d616813b7c374eb6e095a08f40bebf2e20e18f67c18",
+   "modified": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Male_Adult_12/Export/Male_Adult_12.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 10°, LeftMiddle 0°, LeftRing 13°, LeftPinky 25°, RightIndex 10°, RightMiddle 0°, RightRing 13°, RightPinky 25°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+  },
+  "bodies/rocketbox-knit-woman.glb": {
+   "spdx": "MIT",
+   "title": "Knit dress woman",
+   "author": "Microsoft",
+   "page": "https://github.com/microsoft/Microsoft-Rocketbox",
+   "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Female_Adult_11/Export/Female_Adult_11.fbx (git blob 429ca315…, sha256 713d79f1…ca88) and Assets/Avatars/Adults/Female_Adult_11/Textures/f011_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+   "from": "bodies.json (track C)",
+   "sha256": "7409c0a043d69e0bb81897666e30644c67d4014078e862ba3a89b0249f91823c",
+   "modified": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Female_Adult_11/Export/Female_Adult_11.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 11°, LeftMiddle 0°, LeftRing 12°, LeftPinky 27°, RightIndex 11°, RightMiddle 0°, RightRing 12°, RightPinky 27°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+  },
+  "bodies/rocketbox-angler-man.glb": {
+   "spdx": "MIT",
+   "title": "Outdoor vest man",
+   "author": "Microsoft",
+   "page": "https://github.com/microsoft/Microsoft-Rocketbox",
+   "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Male_Adult_05/Export/Male_Adult_05.fbx (git blob 41ae8205…, sha256 cd0e1750…52d0) and Assets/Avatars/Adults/Male_Adult_05/Textures/m009_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+   "from": "bodies.json (track C)",
+   "sha256": "03b73216550c21737725ebd57181a8e94c4e917ac7eab661709705fa7302706e",
+   "modified": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Male_Adult_05/Export/Male_Adult_05.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 10°, LeftMiddle 0°, LeftRing 13°, LeftPinky 25°, RightIndex 10°, RightMiddle 0°, RightRing 13°, RightPinky 25°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+  },
+  "bodies/rocketbox-cardigan-woman.glb": {
+   "spdx": "MIT",
+   "title": "Cardigan woman",
+   "author": "Microsoft",
+   "page": "https://github.com/microsoft/Microsoft-Rocketbox",
+   "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Female_Adult_14/Export/Female_Adult_14.fbx (git blob 869e5ce1…, sha256 63d32ecd…67f4) and Assets/Avatars/Adults/Female_Adult_14/Textures/f017_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+   "from": "bodies.json (track C)",
+   "sha256": "6d4865521744ae1364790b01d56ba6984d1d4d28c002b93fe9c9b4929fa361e7",
+   "modified": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Female_Adult_14/Export/Female_Adult_14.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 11°, LeftMiddle 0°, LeftRing 12°, LeftPinky 27°, RightIndex 11°, RightMiddle 0°, RightRing 12°, RightPinky 27°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+  },
+  "bodies/rocketbox-polo-man.preview.jpg": {
+   "generated": true,
+   "generator": "research/gf-three/character-bench/previews.mjs (track C)",
+   "author": "games.fun",
+   "spdx": null,
+   "of": "bodies/rocketbox-polo-man.glb",
+   "sha256": "1bd96efc827620ae1c71a77d1e74353750dc0b2c5f0ffe4997483951c8e42525"
+  },
+  "bodies/rocketbox-tee-woman.preview.jpg": {
+   "generated": true,
+   "generator": "research/gf-three/character-bench/previews.mjs (track C)",
+   "author": "games.fun",
+   "spdx": null,
+   "of": "bodies/rocketbox-tee-woman.glb",
+   "sha256": "f93ae1661301fcfd787f5391a2e35570c43404747cfed65654ddddc7453ee537"
+  },
+  "bodies/rocketbox-denim-man.preview.jpg": {
+   "generated": true,
+   "generator": "research/gf-three/character-bench/previews.mjs (track C)",
+   "author": "games.fun",
+   "spdx": null,
+   "of": "bodies/rocketbox-denim-man.glb",
+   "sha256": "d9e19203211ed0afeff312fc210b76db8731050c1b2aebd81c2ffee0344a6500"
+  },
+  "bodies/rocketbox-knit-woman.preview.jpg": {
+   "generated": true,
+   "generator": "research/gf-three/character-bench/previews.mjs (track C)",
+   "author": "games.fun",
+   "spdx": null,
+   "of": "bodies/rocketbox-knit-woman.glb",
+   "sha256": "c39d06f80ee0d3d087077f315d83978609422c00815bde4c410255f69d42a838"
+  },
+  "bodies/rocketbox-angler-man.preview.jpg": {
+   "generated": true,
+   "generator": "research/gf-three/character-bench/previews.mjs (track C)",
+   "author": "games.fun",
+   "spdx": null,
+   "of": "bodies/rocketbox-angler-man.glb",
+   "sha256": "eb8b24422d93c55cd8d2c9ddcb28f69db87ebeb5c310e044ea0f76c4e61d6887"
+  },
+  "bodies/rocketbox-cardigan-woman.preview.jpg": {
+   "generated": true,
+   "generator": "research/gf-three/character-bench/previews.mjs (track C)",
+   "author": "games.fun",
+   "spdx": null,
+   "of": "bodies/rocketbox-cardigan-woman.glb",
+   "sha256": "f12196973debe8ee5de38f7e1163127b71107501c82a25c6a5258d9bf12beec8"
   }
  },
  "about": "One record per shipped library file: licence (SPDX), author, source page and download, sha256 of the source and of the shipped file, and what was changed. CC-BY files carry a credit line that must ship with any game that uses them."

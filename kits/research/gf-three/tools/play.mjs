@@ -135,7 +135,7 @@ export async function play(target, script, { out, log = console.log, size = '128
     const software = process.env.GF_PLAY_SOFTWARE === '1';
     // the game's own renderer (CONTRACT §8): WebGPU for a scenic game, WebGL for a party game. A URL says which through
     // the gf-three.json it serves; --gpu webgl|webgpu overrides
-    const engine = isUrl ? await fetch(new URL('gf-three.json', url.endsWith('/') ? url : `${url}/`)).then(r => r.ok ? r.json() : null).then(j => ['scenic', 'forge'].includes(j?.kit?.engine) ? j.kit.engine : 'party').catch(() => 'party') : null;
+    const engine = isUrl ? await fetch(new URL('gf-three.json', url.endsWith('/') ? url : `${url}/`)).then(r => r.ok ? r.json() : null).then(j => ['scenic', 'forge', 'vista'].includes(j?.kit?.engine) ? j.kit.engine : 'party').catch(() => 'party') : null;
     const launched = gpuFlag ? { browser: await launchChrome({ headless: !headed, gpu: gpuFlag }), gpu: gpuFlag, note: null }
       : await launchForGame(launchChrome, isUrl ? null : target, { software, headless: !headed, ...(engine ? { engine } : {}) });
     browser = launched.browser;
@@ -143,10 +143,12 @@ export async function play(target, script, { out, log = console.log, size = '128
     rec.chrome = browser.version(); rec.renderer = software ? 'software' : `gpu (${launched.gpu})`;
     // a phone ({"do":"start","touch":true}): a touch screen at --size, fingers through CDP touch events
     const touch = parsed.steps[0]?.touch === true;
-    const forge = (engine ?? (isUrl ? null : await engineOfGame(resolve(target)))) === 'forge';
-    // a forge game is first person, and headless Chrome grants no pointer lock: emulate it, so the mouse's real
-    // relative motion turns the view (as every forge check does: tools/lib/forge-feel-check.mjs POINTER_LOCK)
-    const emulatedLock = forge && !touch && !headed;
+    const eng = engine ?? (isUrl ? null : await engineOfGame(resolve(target)));
+    const forge = eng === 'forge';
+    // a forge or vista game is first person, and headless Chrome grants no pointer lock: emulate it, so the mouse's real
+    // relative motion turns the view (as every forge check does: tools/lib/forge-feel-check.mjs POINTER_LOCK; a vista
+    // game the same: tools/lib/lock.mjs)
+    const emulatedLock = (forge || eng === 'vista') && !touch && !headed;
     const center = { x: Math.round(w / 2), y: Math.round(h / 2) };
     /** A window with a player in it. `framed`: the game is in the friends page's frame (the page around it is the room's). */
     const open = async (who, framed, round) => {

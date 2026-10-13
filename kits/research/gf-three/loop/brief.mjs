@@ -43,11 +43,11 @@ export const USES={
   // the party engine's laid-out worlds (rooms, doors, gates); a voxel world, a scenic isle and a forge room are their own
   world:spec=>(spec?.engine??'party')==='party'&&spec?.world?.template!=='voxel',
   // players drawn as characters with their own loadout
-  'character:loadout':spec=>spec?.engine!=='forge',
+  'character:loadout':spec=>spec?.engine!=='forge'&&spec?.engine!=='vista',
   // a model the worker makes, or more than one role (two roles must not share a body)
   'assets:generated':spec=>(spec?.characters??[]).some(c=>MADE.has(c?.body?.from))||(spec?.world?.props??[]).some(p=>MADE.has(p?.from))||(spec?.characters?.length??0)>1,
   // a game played in rounds (a persistent world has no round to play with bots)
-  'loop:round':spec=>spec?.round?.mode!=='world'&&spec?.engine!=='forge',
+  'loop:round':spec=>spec?.round?.mode!=='world'&&spec?.engine!=='forge'&&spec?.engine!=='vista',
   // the person's own database or server (loop/backend.mjs): only a spec that names one
   backend:spec=>!!spec?.backend&&typeof spec.backend==='object',
 };
@@ -84,6 +84,7 @@ export const partsOf=spec=>[...Object.keys(USES).filter(p=>USES[p](spec)),...[..
 /** {{PARTS}} for one game: each mechanic in the spec with its own note. The notes are the kit's words, never the creator's. */
 export function partsWords(spec,parts){
   if(spec?.engine==='forge')return 'This game\'s play is in its data tables, not in mechanics (see "On the forge engine" above).';
+  if(spec?.engine==='vista')return 'This game\'s play is the vista core\'s and its data tables, not mechanics (see "On the vista engine" above).';
   const used=(spec?.mechanics??[]).map(m=>m?.id).filter(Boolean).filter((id,i,a)=>a.indexOf(id)===i);
   if(!used.length)return 'This plan uses no mechanics: the game is `rules.js` and its config alone.';
   if(!parts)return `The plan's mechanics: ${used.map(id=>`\`${id}\``).join(', ')}. Their own notes are in \`node {{KIT_TOOLS}}/catalog.mjs --json\` and in the \`rules.js\` stub.`;

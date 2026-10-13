@@ -1,0 +1,27 @@
+{
+  "id": "rocketbox-cardigan-woman",
+  "label": "Cardigan woman",
+  "file": "bodies/rocketbox-cardigan-woman.glb",
+  "from": "library",
+  "kind": "rocketbox",
+  "sex": "f",
+  "tags": [
+    "human",
+    "woman",
+    "casual",
+    "realistic",
+    "everyday",
+    "older",
+    "coastal",
+    "modern",
+    "player"
+  ],
+  "describe": "a middle-aged woman with short brown hair in a long grey knit cardigan, dark jeans and flat shoes (realistic)",
+  "license": {
+    "spdx": "MIT",
+    "author": "Microsoft",
+    "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+    "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Female_Adult_14/Export/Female_Adult_14.fbx (git blob 869e5ce1…, sha256 63d32ecd…67f4) and Assets/Avatars/Adults/Female_Adult_14/Textures/f017_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+    "note": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Female_Adult_14/Export/Female_Adult_14.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 11°, LeftMiddle 0°, LeftRing 12°, LeftPinky 27°, RightIndex 11°, RightMiddle 0°, RightRing 12°, RightPinky 27°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+  }
+}

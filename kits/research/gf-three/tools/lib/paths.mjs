@@ -25,9 +25,15 @@ export const SCENIC_VERSION = '0.1.0-dev';
 // no three.js, no Rapier (the core's own physics is rapier3d in Rust)
 export const FORGE = join(REPO, 'research/gf-forge');
 export const FORGE_KIT = join(FORGE, 'kit');
-export const FORGE_VERSION = '0.8.0-wave6';
-export const ENGINES = ['party', 'scenic', 'forge'];
-export const engineOf = spec => (spec?.engine === 'scenic' ? 'scenic' : spec?.engine === 'forge' ? 'forge' : 'party');
+export const FORGE_VERSION = '0.9.0-wave7';
+// The vista engine (research/super-scenic/PLAN.md, THIN_E2E.md; CONTRACT §8 vista): a vendored WebGPU core (Tidewater at
+// 4811ba48, MIT) for calm games where the place is the point, vendored into a vista game as gf/vista/ (kit/, hud/ and
+// core/ with its public files, laid out as in research/gf-vista so every relative import holds); no three.js, no Rapier
+export const VISTA = join(REPO, 'research/gf-vista');
+export const VISTA_KIT = join(VISTA, 'kit');
+export const VISTA_VERSION = '0.2.0-thin';
+export const ENGINES = ['party', 'scenic', 'forge', 'vista'];
+export const engineOf = spec => (['scenic', 'forge', 'vista'].includes(spec?.engine) ? spec.engine : 'party');
 
 // Pinned third-party sources (research/gf-three/README.md "Pinned"), copied byte for byte into a game's vendor/.
 const T = 'research/foundations/trials';
@@ -69,7 +75,7 @@ export const json = v => JSON.stringify(v, null, 2) + '\n';
 /** A game's engine (CONTRACT §8): gf-three.json → kit.engine, else what its gf/three/kit.js records, else 'party'. */
 export async function engineOfGame(dir) {
   try { const e = JSON.parse(await readFile(join(dir, 'gf-three.json'), 'utf8'))?.kit?.engine; if (e) return ENGINES.includes(e) ? e : 'party'; } catch {}
-  try { const m = /"engine":\s*"(scenic|forge)"/.exec(await readFile(join(dir, 'gf/three/kit.js'), 'utf8')); return m ? m[1] : 'party'; } catch {}
+  try { const m = /"engine":\s*"(scenic|forge|vista)"/.exec(await readFile(join(dir, 'gf/three/kit.js'), 'utf8')); return m ? m[1] : 'party'; } catch {}
   return 'party';
 }
 
@@ -105,12 +111,14 @@ export async function launchForGame(launchChrome, dir, { software = !!process.en
  *   party   WebGL on the graphics card. WebGPU is never asked for.
  *   scenic  WebGPU; without an adapter it runs on WebGL2 inside WebGPURenderer and the verdict's notes say so.
  *   forge   WebGPU only; without an adapter the launch fails with NoWebGPUError (nothing is drawn in software).
+ *   vista   WebGPU only, the same as forge (its core has no WebGL path; a browser without one gets the kit's screen).
  *   GF_VERIFY_SOFTWARE=1: any engine on Chrome's software renderer (never for judging looks).
  * → {gpu: 'webgl' | 'webgpu' | 'software', withoutWebgpu: null | 'webgl' | 'error', result}
  */
 export function rendererFor(engine, { software = false } = {}) {
   if (software) return { gpu: 'software', withoutWebgpu: null, result: 'Runs on Chrome\'s software renderer (GF_VERIFY_SOFTWARE).' };
   if (engine === 'forge') return { gpu: 'webgpu', withoutWebgpu: 'error', result: 'A forge game draws only with WebGPU and has no WebGL path, so it cannot be verified on this machine.' };
+  if (engine === 'vista') return { gpu: 'webgpu', withoutWebgpu: 'error', result: 'A vista game draws only with WebGPU and has no WebGL path, so it cannot be verified on this machine.' };
   if (engine === 'scenic') return { gpu: 'webgpu', withoutWebgpu: 'webgl', result: 'A scenic game without a WebGPU adapter runs on WebGL2 inside WebGPURenderer, and the verdict says so.' };
   return { gpu: 'webgl', withoutWebgpu: null, result: 'A party game runs on WebGL and never asks for WebGPU.' };
 }

@@ -1305,6 +1305,487 @@
           "model judge, right hand: knockdown at 0.48 s: the right thumb's joint 1 bends -65° where the clip's bends 3° (off by 68°, limit 40°)"
         ]
       }
+    },
+    {
+      "id": "rocketbox-polo-man",
+      "label": "Polo shirt man",
+      "file": "bodies/rocketbox-polo-man.glb",
+      "from": "library",
+      "kind": "rocketbox",
+      "sex": "m",
+      "tags": [
+        "human",
+        "man",
+        "casual",
+        "realistic",
+        "summer",
+        "beach",
+        "coastal",
+        "modern",
+        "player"
+      ],
+      "describe": "a young man with short brown hair in a striped polo shirt, khaki shorts and trainers (realistic)",
+      "license": {
+        "spdx": "MIT",
+        "author": "Microsoft",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+        "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Male_Adult_01/Export/Male_Adult_01.fbx (git blob fdaf4aa7…, sha256 8d1edb51…8a29) and Assets/Avatars/Adults/Male_Adult_01/Textures/m002_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+        "note": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Male_Adult_01/Export/Male_Adult_01.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 10°, LeftMiddle 0°, LeftRing 13°, LeftPinky 25°, RightIndex 10°, RightMiddle 0°, RightRing 13°, RightPinky 25°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.824,
+      "bytes": 718796,
+      "mb": 0.719,
+      "sha256": "1d80ba931c2e60f7905cfce5946a1cd2d761b60806c5318c85a453f97ed2658d",
+      "triangles": 7440,
+      "joints": 80,
+      "materials": 3,
+      "textures": [
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024"
+      ],
+      "tint": [],
+      "preview": "bodies/rocketbox-polo-man.preview.jpg",
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left arm: knockdown at 0.48 s: its edges stretch or crush ×5.1 (99th percentile; limit ×4.1)",
+          "model judge, right arm: heavy at 0.98 s: its edges stretch or crush ×5.2 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 0.978,
+        "swingDeg": {
+          "LeftArm": 44,
+          "LeftForeArm": 50.3,
+          "LeftUpLeg": 4.1,
+          "LeftLeg": 1.1,
+          "RightArm": 44,
+          "RightForeArm": 50.3,
+          "RightUpLeg": 4.1,
+          "RightLeg": 1.1
+        }
+      },
+      "judge": {
+        "ok": true,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "rocketbox-tee-woman",
+      "label": "T-shirt woman",
+      "file": "bodies/rocketbox-tee-woman.glb",
+      "from": "library",
+      "kind": "rocketbox",
+      "sex": "f",
+      "tags": [
+        "human",
+        "woman",
+        "casual",
+        "realistic",
+        "summer",
+        "beach",
+        "coastal",
+        "modern",
+        "player"
+      ],
+      "describe": "a young woman with fair hair tied up, in a green T-shirt, light jeans and flat shoes (realistic)",
+      "license": {
+        "spdx": "MIT",
+        "author": "Microsoft",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+        "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Female_Adult_17/Export/Female_Adult_17.fbx (git blob a3c97794…, sha256 77712530…831f) and Assets/Avatars/Adults/Female_Adult_17/Textures/f006_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+        "note": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Female_Adult_17/Export/Female_Adult_17.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 11°, LeftMiddle 0°, LeftRing 12°, LeftPinky 27°, RightIndex 11°, RightMiddle 0°, RightRing 12°, RightPinky 27°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.751,
+      "bytes": 800796,
+      "mb": 0.801,
+      "sha256": "239be30d5c1f6b84317ca87331b6de309ff1d9b50edb5bc1ee4fc463ac104ba3",
+      "triangles": 8516,
+      "joints": 80,
+      "materials": 3,
+      "textures": [
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024"
+      ],
+      "tint": [],
+      "preview": "bodies/rocketbox-tee-woman.preview.jpg",
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left hand: sprint at 0.13 s: its edges stretch or crush ×4.2 (99th percentile; limit ×4.1) (+1 more)",
+          "model judge, right hand: sprint at 0.27 s: its edges stretch or crush ×4.2 (99th percentile; limit ×4.1)",
+          "model judge, left leg: roll at 0 s: its edges stretch or crush ×4.1 (99th percentile; limit ×4.1)",
+          "model judge, right leg: run at 0.19 s: its edges stretch or crush ×4.6 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 1.009,
+        "swingDeg": {
+          "LeftArm": 42.3,
+          "LeftForeArm": 45.9,
+          "LeftUpLeg": 4.4,
+          "LeftLeg": 2.1,
+          "RightArm": 42.3,
+          "RightForeArm": 45.9,
+          "RightUpLeg": 4.4,
+          "RightLeg": 2.1
+        }
+      },
+      "judge": {
+        "ok": true,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "rocketbox-denim-man",
+      "label": "Denim jacket man",
+      "file": "bodies/rocketbox-denim-man.glb",
+      "from": "library",
+      "kind": "rocketbox",
+      "sex": "m",
+      "tags": [
+        "human",
+        "man",
+        "casual",
+        "realistic",
+        "everyday",
+        "town",
+        "coastal",
+        "modern",
+        "player"
+      ],
+      "describe": "a Black man with close-cropped hair in a denim jacket over a white T-shirt, jeans and white trainers (realistic)",
+      "license": {
+        "spdx": "MIT",
+        "author": "Microsoft",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+        "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Male_Adult_12/Export/Male_Adult_12.fbx (git blob 15d4f850…, sha256 b44fa601…4014) and Assets/Avatars/Adults/Male_Adult_12/Textures/m007_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+        "note": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Male_Adult_12/Export/Male_Adult_12.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 10°, LeftMiddle 0°, LeftRing 13°, LeftPinky 25°, RightIndex 10°, RightMiddle 0°, RightRing 13°, RightPinky 25°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.807,
+      "bytes": 608316,
+      "mb": 0.608,
+      "sha256": "9ea5d62105693ef36f0d6d616813b7c374eb6e095a08f40bebf2e20e18f67c18",
+      "triangles": 6722,
+      "joints": 80,
+      "materials": 2,
+      "textures": [
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024"
+      ],
+      "tint": [],
+      "preview": "bodies/rocketbox-denim-man.preview.jpg",
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, right leg: push at 2.13 s: its edges stretch or crush ×4.4 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 0.978,
+        "swingDeg": {
+          "LeftArm": 44,
+          "LeftForeArm": 50.3,
+          "LeftUpLeg": 4.1,
+          "LeftLeg": 1.1,
+          "RightArm": 44,
+          "RightForeArm": 50.3,
+          "RightUpLeg": 4.1,
+          "RightLeg": 1.1
+        }
+      },
+      "judge": {
+        "ok": true,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "rocketbox-knit-woman",
+      "label": "Knit dress woman",
+      "file": "bodies/rocketbox-knit-woman.glb",
+      "from": "library",
+      "kind": "rocketbox",
+      "sex": "f",
+      "tags": [
+        "human",
+        "woman",
+        "casual",
+        "realistic",
+        "everyday",
+        "town",
+        "coastal",
+        "modern",
+        "player"
+      ],
+      "describe": "a woman with brown skin and dark hair in a bun, in a brown knit dress with a belt and tall boots (realistic)",
+      "license": {
+        "spdx": "MIT",
+        "author": "Microsoft",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+        "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Female_Adult_11/Export/Female_Adult_11.fbx (git blob 429ca315…, sha256 713d79f1…ca88) and Assets/Avatars/Adults/Female_Adult_11/Textures/f011_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+        "note": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Female_Adult_11/Export/Female_Adult_11.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 11°, LeftMiddle 0°, LeftRing 12°, LeftPinky 27°, RightIndex 11°, RightMiddle 0°, RightRing 12°, RightPinky 27°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.736,
+      "bytes": 730800,
+      "mb": 0.731,
+      "sha256": "7409c0a043d69e0bb81897666e30644c67d4014078e862ba3a89b0249f91823c",
+      "triangles": 8896,
+      "joints": 80,
+      "materials": 3,
+      "textures": [
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024"
+      ],
+      "tint": [],
+      "preview": "bodies/rocketbox-knit-woman.preview.jpg",
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left hand: throw at 0.1 s: the left middle bends -36° at its knuckle (a finger bends -35° to 105°)",
+          "model judge, left leg: run at 0.75 s: its edges stretch or crush ×4.9 (99th percentile; limit ×4.1)",
+          "model judge, right leg: run at 0.75 s: its edges stretch or crush ×7.2 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 1.009,
+        "swingDeg": {
+          "LeftArm": 42.3,
+          "LeftForeArm": 45.9,
+          "LeftUpLeg": 4.4,
+          "LeftLeg": 2.1,
+          "RightArm": 42.3,
+          "RightForeArm": 45.9,
+          "RightUpLeg": 4.4,
+          "RightLeg": 2.1
+        }
+      },
+      "judge": {
+        "ok": true,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "rocketbox-angler-man",
+      "label": "Outdoor vest man",
+      "file": "bodies/rocketbox-angler-man.glb",
+      "from": "library",
+      "kind": "rocketbox",
+      "sex": "m",
+      "tags": [
+        "human",
+        "man",
+        "outdoors",
+        "realistic",
+        "fishing",
+        "angler",
+        "older",
+        "coastal",
+        "player"
+      ],
+      "describe": "an older man with grey hair and a grey beard in a khaki multi-pocket vest over a green shirt, brown trousers and boots (realistic)",
+      "license": {
+        "spdx": "MIT",
+        "author": "Microsoft",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+        "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Male_Adult_05/Export/Male_Adult_05.fbx (git blob 41ae8205…, sha256 cd0e1750…52d0) and Assets/Avatars/Adults/Male_Adult_05/Textures/m009_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+        "note": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Male_Adult_05/Export/Male_Adult_05.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 10°, LeftMiddle 0°, LeftRing 13°, LeftPinky 25°, RightIndex 10°, RightMiddle 0°, RightRing 13°, RightPinky 25°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.812,
+      "bytes": 858704,
+      "mb": 0.859,
+      "sha256": "03b73216550c21737725ebd57181a8e94c4e917ac7eab661709705fa7302706e",
+      "triangles": 7836,
+      "joints": 80,
+      "materials": 3,
+      "textures": [
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024"
+      ],
+      "tint": [],
+      "preview": "bodies/rocketbox-angler-man.preview.jpg",
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left leg: getup_front at 1.2 s: its edges stretch or crush ×5.4 (99th percentile; limit ×4.1)",
+          "model judge, right leg: push at 2.13 s: its edges stretch or crush ×4.4 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 0.978,
+        "swingDeg": {
+          "LeftArm": 44,
+          "LeftForeArm": 50.3,
+          "LeftUpLeg": 4.1,
+          "LeftLeg": 1.1,
+          "RightArm": 44,
+          "RightForeArm": 50.3,
+          "RightUpLeg": 4.1,
+          "RightLeg": 1.1
+        }
+      },
+      "judge": {
+        "ok": true,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
+    },
+    {
+      "id": "rocketbox-cardigan-woman",
+      "label": "Cardigan woman",
+      "file": "bodies/rocketbox-cardigan-woman.glb",
+      "from": "library",
+      "kind": "rocketbox",
+      "sex": "f",
+      "tags": [
+        "human",
+        "woman",
+        "casual",
+        "realistic",
+        "everyday",
+        "older",
+        "coastal",
+        "modern",
+        "player"
+      ],
+      "describe": "a middle-aged woman with short brown hair in a long grey knit cardigan, dark jeans and flat shoes (realistic)",
+      "license": {
+        "spdx": "MIT",
+        "author": "Microsoft",
+        "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+        "source": "https://github.com/microsoft/Microsoft-Rocketbox @0943055db6ec570bcef9f2c8b41c9e5467c808f9 Assets/Avatars/Adults/Female_Adult_14/Export/Female_Adult_14.fbx (git blob 869e5ce1…, sha256 63d32ecd…67f4) and Assets/Avatars/Adults/Female_Adult_14/Textures/f017_*.tga, retrieved 2026-10-12; licence LICENSE.md (MIT, Copyright (c) 2020 Microsoft)",
+        "note": "made by research/gf-vista/tools/rocketbox/build.mjs: fetched Assets/Avatars/Adults/Female_Adult_14/Export/Female_Adult_14.fbx and Textures/ at 0943055 (git blob sha1 checked); textures 2048² TGA → 1024² by research/gf-vista/tools/rocketbox/textures.py (colour and normal JPEG, ORM with roughness 0.92 − 0.6 × specular, opacity PNG); converted by Blender 4.5.14 (research/gf-vista/tools/rocketbox/convert.py: materials body, head, opacity; no clips); 52 Biped bones renamed onto gf-humanoid-1 (build.mjs BIPED; 28 face bones kept as extras); posed at its bind pose (0 joints reset); opacity cards alpha-tested (MASK 0.5) and double-sided, body and head single-sided; normalised onto gf-humanoid-1 (tools/lib/char-gltf.mjs normalizeBody); fingers turned at rest part way toward the standard's T-pose hand (build.mjs straightenFingers, share per finger {\"Index\":0.6,\"Middle\":0,\"Ring\":0.5,\"Pinky\":0.7}; largest turn: LeftIndex 11°, LeftMiddle 0°, LeftRing 12°, LeftPinky 27°, RightIndex 11°, RightMiddle 0°, RightRing 12°, RightPinky 27°); textures capped at 1024 px, dedup, weld, quantised + meshopt (tools/lib/char-optimize.mjs, as tools/optimize.mjs)"
+      },
+      "rig": "gf-humanoid-1",
+      "height": 1.744,
+      "bytes": 1058292,
+      "mb": 1.058,
+      "sha256": "6d4865521744ae1364790b01d56ba6984d1d4d28c002b93fe9c9b4929fa361e7",
+      "triangles": 8724,
+      "joints": 80,
+      "materials": 3,
+      "textures": [
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024",
+        "1024x1024"
+      ],
+      "tint": [],
+      "preview": "bodies/rocketbox-cardigan-woman.preview.jpg",
+      "rigCheck": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "model judge, left hand: throw at 0.1 s: the left middle bends -36° at its knuckle (a finger bends -35° to 105°)",
+          "model judge, right leg: run at 0.19 s: its edges stretch or crush ×4.5 (99th percentile; limit ×4.1)"
+        ],
+        "legScale": 1.014,
+        "swingDeg": {
+          "LeftArm": 42.3,
+          "LeftForeArm": 45.9,
+          "LeftUpLeg": 4.4,
+          "LeftLeg": 2.1,
+          "RightArm": 42.3,
+          "RightForeArm": 45.9,
+          "RightUpLeg": 4.4,
+          "RightLeg": 2.1
+        }
+      },
+      "judge": {
+        "ok": true,
+        "parts": {
+          "face": "pass",
+          "body": "pass",
+          "arm_l": "pass",
+          "arm_r": "pass",
+          "hand_l": "pass",
+          "hand_r": "pass",
+          "leg_l": "pass",
+          "leg_r": "pass",
+          "foot_l": "pass",
+          "foot_r": "pass"
+        }
+      }
     }
   ]
 }

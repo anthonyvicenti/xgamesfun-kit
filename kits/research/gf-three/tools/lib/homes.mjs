@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain } from './main.mjs';
-import { REQUIRED, REQUIRED_WORLD, REQUIRED_FORGE, RELEASE_ONLY } from './verdict.mjs';
+import { REQUIRED, REQUIRED_WORLD, REQUIRED_FORGE, REQUIRED_VISTA, RELEASE_ONLY } from './verdict.mjs';
 
 export const HOMES_FILE = fileURLToPath(new URL('./homes.json', import.meta.url));
 export const HOMES = ['invariant', 'part', 'game', 'nowhere'];
@@ -35,8 +35,8 @@ let cached = null;
 /** A check's entry in homes.json ({name, home, part?, run, rule, fix}), or null. */
 export function checkHome(n) { cached ??= loadHomes(); return cached.checks?.[String(n)] ?? null; }
 
-/** Every check verify can require, in any flow: a round's, a world's and a forge game's, and 9 (the contact sheet). */
-export const allChecks = () => [...new Set([...REQUIRED, ...REQUIRED_WORLD, ...REQUIRED_FORGE, 9])].sort((a, b) => a - b);
+/** Every check verify can require, in any flow: a round's, a world's, a forge game's and a vista game's, and 9 (the contact sheet). */
+export const allChecks = () => [...new Set([...REQUIRED, ...REQUIRED_WORLD, ...REQUIRED_FORGE, ...REQUIRED_VISTA, 9])].sort((a, b) => a - b);
 
 export const lineHash = text => createHash('sha256').update(text.trim()).digest('hex').slice(0, 12);
 

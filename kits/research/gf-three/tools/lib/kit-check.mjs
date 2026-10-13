@@ -5,7 +5,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { KIT, SCENIC_KIT, FORGE_KIT, GF_AUDIO, VENDOR, walk, sha256 } from './paths.mjs';
+import { KIT, SCENIC_KIT, FORGE_KIT, VISTA, GF_AUDIO, VENDOR, walk, sha256 } from './paths.mjs';
 import { KIT_VERSION as MP_VERSION, checkKitReleased } from '../../../multiplayer/party/manifest.mjs';
 import { addonClosure } from './vendor.mjs';
 
@@ -17,7 +17,7 @@ async function sums(file) {
 
 export async function checkKitCopies(gameDir) {
   const problems = [], notes = [];
-  let forgeEngine = false;
+  let forgeEngine = false, vistaEngine = false;
   // gf/three: every file in kit.js, unchanged, and nothing else
   const kitJs = join(gameDir, 'gf/three/kit.js');
   if (!existsSync(kitJs)) problems.push('gf/three/kit.js is missing (re-run create)');
@@ -60,6 +60,20 @@ export async function checkKitCopies(gameDir) {
       let staleFo = 0;
       for (const [rel, h] of Object.entries(fo ?? {})) { const src = await readFile(join(FORGE_KIT, rel)).catch(() => null); if (!src || sha256(src) !== h) staleFo++; }
       if (staleFo) notes.push(`gf/forge is gf-forge ${rec.forge?.version} as it was when create ran; ${staleFo} file(s) have changed in research/gf-forge/kit since (re-run create to update)`);
+      // gf/vista (the vista engine, CONTRACT §8 vista): every file kit.js lists (the core and its public files among
+      // them), unchanged, and nothing else; the core's licence and attribution must be there
+      vistaEngine = rec.engine === 'vista';
+      const vi = vistaEngine ? rec.vista?.files ?? null : null;
+      if (vistaEngine && !vi) problems.push('gf/three/kit.js says the engine is vista but lists no gf/vista files (re-run create)');
+      for (const [rel, h] of Object.entries(vi ?? {})) {
+        const cur = await readFile(join(gameDir, 'gf/vista', rel)).catch(() => null);
+        if (!cur) problems.push(`gf/vista/${rel}: missing`); else if (sha256(cur) !== h) problems.push(`gf/vista/${rel}: edited (differs from the copy create made)`);
+      }
+      for (const rel of await walk(join(gameDir, 'gf/vista'))) if (!(rel in (vi ?? {}))) problems.push(`gf/vista/${rel}: not a vista engine file`);
+      if (vi) for (const need of ['core/LICENSE', 'core/ATTRIBUTION.md']) if (!(need in vi)) problems.push(`gf/vista/${need}: the core's ${need.endsWith('LICENSE') ? 'licence' : 'attribution'} must travel with it (re-run create)`);
+      let staleVi = 0;
+      for (const [rel, h] of Object.entries(vi ?? {})) { const src = await readFile(join(VISTA, rel)).catch(() => null); if (!src || sha256(src) !== h) staleVi++; }
+      if (staleVi) notes.push(`gf/vista is gf-vista ${rec.vista?.version} as it was when create ran; ${staleVi} file(s) have changed in research/gf-vista since (re-run create to update)`);
     }
   }
   // gf/mp
@@ -87,8 +101,8 @@ export async function checkKitCopies(gameDir) {
     if (!src || !existsSync(src)) { problems.push(`${rel}: not a pinned library file`); continue; }
     if (sha256(await readFile(join(gameDir, rel))) !== sha256(await readFile(src))) problems.push(`${rel}: differs from the pinned copy`);
   }
-  // a forge game vendors no library: vendor/ must be empty, and nothing of three.js is imported
-  if (forgeEngine) return { ok: problems.length === 0, problems, notes };
+  // a forge or vista game vendors no library: vendor/ must be empty, and nothing of three.js is imported
+  if (forgeEngine || vistaEngine) return { ok: problems.length === 0, problems, notes };
   // every three.js addon the kit, the libraries and rules.js import is there
   const texts = [];
   for (const sub of ['gf/three', 'gf/scenic']) for (const rel of await walk(join(gameDir, sub))) if (/\.m?js$/.test(rel)) texts.push(await readFile(join(gameDir, sub, rel), 'utf8'));

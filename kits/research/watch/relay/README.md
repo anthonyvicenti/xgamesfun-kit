@@ -27,10 +27,11 @@ All under `/watch/v1/`; `<id>` is `^[a-z0-9]{12}$` (else 400).
 
 ## A few thousand viewers: repeaters (2026-10-12)
 
-The creator: "How hard is it to scale this up to at least a few thousand?". One Durable Object sending every frame to every viewer tops out in the hundreds, so on Cloudflare a channel's viewers are spread over **repeaters**: `WATCH_SHARDS` objects named `<id>~<n>`, each holding up to `WATCH_SHARD_VIEWERS` viewers (20 × 250 = 5,000 in `wrangler.toml`).
+The creator: "How hard is it to scale this up to at least a few thousand?". One Durable Object sending every frame to every viewer tops out in the hundreds, so on Cloudflare a channel's viewers are spread over **repeaters**: `WATCH_SHARDS` objects named `<id>~<n>`, each holding up to `WATCH_SHARD_VIEWERS` viewers (80 × 250 = 20,000 in `wrangler.toml`; it was 20 × 250 = 5,000 until the creator, the same day: "I can update to a paid plan, lets cap at 20k"). Viewer 20,001 is told the stream is full and retries every 20 s. Checked on a test copy with 80 repeaters of 5: 460 viewers, exactly 400 in, 60 told full (some after trying all 80 repeaters), the count exact, every frame delivered. A crowd of thousands needs Workers Paid (Durable Object requests and time).
 
 - The streamer still talks to the channel's own object (`<id>`), which keeps the key, the meta and the cache, and now also counts **relays**: a repeater's one WebSocket to it (`?role=relay`), made object to object, never through the Worker (the Worker answers 403 to `role=relay`, `shard` or `last` from outside). The channel sends a relay exactly what it sends a viewer.
 - A repeater forwards everything down to its viewers as it came, keeps the state, the key frame and the deltas after it for newcomers, answers `ping`, and says how many it serves (`{k:'count', n}`, at most once a second, capped at `WATCH_SHARD_VIEWERS` by the channel). The channel counts them in: the streamer, every viewer and `GET /watch/v1/<id>` see the whole audience (up to about two seconds late).
+- A full stream stays cheap (`cloudflare/viewers.mjs`): the Worker first asks the channel how many are watching (one request); at the cap a viewer goes straight to its own repeater with `last=1` (let in if a seat came free, else told full), and the stream is remembered as full in that Worker for 10 s. Before this, every retry of every turned-away viewer tried all 80 repeaters.
 - The Worker starts a viewer at the repeater its address picks (`shardFor`: one network's viewers share a repeater, so the per-address cap holds); a full repeater answers 503 before the upgrade and the next one is tried; the last takes the socket and turns it away the usual way (`state` full, 4029). `WATCH_SHARD_BY=random` spreads one address over all of them (a load test from one machine).
 - A repeater with no viewers lets its line go after 30 s (`WATCH_LINGER_MS`) and may hibernate; a broken line (a deploy) comes back with backoff while viewers keep their sockets. `WATCH_SHARDS=0` keeps the old shape: every viewer on the channel's object, capped at `WATCH_MAX_VIEWERS`.
 - One network: phones on one carrier share an address, so the per-address cap is 32 (it was 8) and joins are paced: at most 40 new viewers at once from one address, then one a second (`WATCH_MAX_PER_IP`, `WATCH_IP_JOIN_BURST`). Node uses the same rules on the channel's own viewers.
@@ -64,7 +65,7 @@ const relay = attachWatchRelay(server, { path: '/watch/v1/', origins: [...], max
 ## Tests
 
 ```bash
-node --test research/watch/relay/tests/*.test.mjs                  # units + Node e2e (44 tests)
+node --test research/watch/relay/tests/*.test.mjs                  # units + Node e2e (63 tests, 1 skipped: Worker only)
 
 # the same e2e suite against the Worker, locally:
 cd research/watch/relay/cloudflare

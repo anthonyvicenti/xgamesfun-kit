@@ -81,6 +81,18 @@ export const WORLD_PROMISES = [
 export const WORLD_FIRST_PROMISE = { id: 'kit.world.first', text: 'I see the world through my own eyes: after a first click the mouse looks around and I build where the crosshair is (the wheel picks a block); inside a post I drag to look and click the block I want; on a phone I drag to look and tap.', proofs: ['verify:13', 'verify:24', 'verify:30', 'play'], check: 'first person' };
 /** The round promises a world never makes. */
 const ROUND_ONLY = new Set(['kit.round', 'kit.fair', 'kit.happens', 'kit.lobby', 'kit.world']);
+/** The kit's standing promises a vista game does not make yet, each with why (CONTRACT §8 vista; verdict.mjs NOT_YET_VISTA). */
+export const VISTA_NOT_YET = {
+  'kit.slots': 'the island the vista core draws is not slots yet (verify check 4 is not yet for vista)',
+  'kit.fair': 'nothing knocks a player down in a calm vista game',
+  'kit.clean': 'the world is the core\'s own island, not a layout made for the game',
+  'kit.happens': 'no bots on vista (verify check 12 is not yet for vista)',
+  'kit.bodies': 'the friends\' bodies are library bodies; the vista core\'s skinning is not judged by verify yet (check 19)',
+  'kit.wallet': 'an item worn from the wallet is not drawn on vista bodies yet',
+  'kit.post': 'a vista game is never offered inside a post on X',
+  'kit.screens': 'a vista game is for a desktop browser with WebGPU, not phones',
+  'kit.world': 'the world is the core\'s own island',
+};
 
 /** The action mechanics (gf-scenic wave 1, track M): what each promises a player, and which checks prove it. */
 export const MECHANIC_PROMISES = {
@@ -202,9 +214,12 @@ export function derivePromises({ spec = {}, config = {} } = {}) {
   // 6. the kit's standing promises (the winBy words ride on the round promise)
   const world = (config.round?.mode ?? spec.round?.mode) === 'world' || (config.round?.mode === undefined && spec.world?.template === 'voxel');
   const first = world && (config.camera ?? spec.camera ?? 'first') === 'first';
+  const vistaGame = spec.engine === 'vista' || !!config.vista;
   for (const k of world ? [...KIT_PROMISES.filter(k => !ROUND_ONLY.has(k.id)), ...WORLD_PROMISES, ...(first ? [WORLD_FIRST_PROMISE] : [])] : KIT_PROMISES) {
+    if (vistaGame && VISTA_NOT_YET[k.id]) { excluded.push({ id: k.id, text: k.text, because: `not yet for vista: ${VISTA_NOT_YET[k.id]}` }); continue; }
     const winBy = clean(config.round?.winBy ?? spec.round?.winBy);
-    const text = k.id === 'kit.round' && winBy ? `A round ends on a results screen that says who won (${winBy}), and I can play again.` : k.text;
+    const text = k.id === 'kit.round' && vistaGame ? `A session ends on a results card with each player's score that says who won${winBy ? ` (${winBy}, or the best score when time runs out)` : ' (the best score)'}, and I can play again.`
+      : k.id === 'kit.round' && winBy ? `A round ends on a results screen that says who won (${winBy}), and I can play again.` : k.text;
     add({ id: k.id, kind: 'kit', text, source: `kit: ${k.check}`, proofs: [...k.proofs], core: false });
   }
   // the creator's reference images (verify check 23, track S; after the roguelike miss: "The game also doesn't have the
@@ -217,10 +232,35 @@ export function derivePromises({ spec = {}, config = {} } = {}) {
   // 8. the forge engine (CONTRACT §8 forge): what its core gives every game, from the data tables
   const forge = config.forge ?? (spec.engine === 'forge' ? spec.forge ?? {} : null);
   if (forge) for (const p of forgePromises(forge)) add({ kind: 'kit', core: false, ...p });
+  // 9. the vista engine (CONTRACT §8 vista): what its core gives every game, from the data tables
+  const vista = config.vista ?? (spec.engine === 'vista' ? spec.vista ?? {} : null);
+  // on vista, check 15 lands a fish with real input and reads the score before and after (verify-vista.mjs): it holds
+  // the score promise where check 12's bots cannot (no bots on vista)
+  if (vistaGame) for (const p of out) if (p.id === 'score' && !p.proofs.includes('verify:15')) p.proofs = ['verify:15', ...p.proofs];
+  if (vista && (spec.engine === 'vista' || config.vista)) for (const p of vistaPromises(vista)) add({ kind: 'kit', core: false, ...p });
 
   const title = clean(config.text?.title ?? config.title ?? spec.title);
-  return { schema: SCHEMA, title, hook, ...(forge ? { engine: 'forge' } : {}), controls: { hud: hudLine(controls, config.camera ?? spec.camera), list: out.filter(p => p.kind === 'control').map(p => ({ action: p.action, keys: p.keys, key: p.key, does: controls[p.action] })) },
+  return { schema: SCHEMA, title, hook, ...(forge ? { engine: 'forge' } : vista ? { engine: 'vista' } : {}), controls: { hud: hudLine(controls, config.camera ?? spec.camera), list: out.filter(p => p.kind === 'control').map(p => ({ action: p.action, keys: p.keys, key: p.key, does: controls[p.action] })) },
     promises: out, notPromised: notInV1, excluded };
+}
+
+/**
+ * What the vista engine promises a player (CONTRACT §8 vista), from the game's data tables (config/game.json → vista):
+ * the island, the sea, the boat and the fishing the core plays, and what verify alone proves (no blank page without
+ * WebGPU, the sea drawn and moving, the look the config's). The play-tester of a vista game
+ * (research/studio-v2/prompts/playtest-vista.md) is held to the 'play' ones. → promises without `kind` and `core`
+ */
+export function vistaPromises(tables = {}) {
+  const out = [], species = Object.values(tables.species ?? {}).map(s => s?.name).filter(Boolean);
+  const buyer = tables.vendors?.buyer?.name, shop = tables.vendors?.shop?.name;
+  out.push({ id: 'vista.browser', text: 'In a browser without WebGPU the game says so and gives me a link to open it where it plays, never a blank page.', source: 'vista: no WebGPU', proofs: ['verify:32'] });
+  out.push({ id: 'vista.sea', text: 'When I look out to sea the water is alive: waves move, the light glints on them, and the sky, the clouds and the light are the game\'s own look.', source: 'vista: the sea and the look', proofs: ['verify:36', 'verify:37', 'play'] });
+  out.push({ id: 'vista.sharp', text: 'On my computer the game is as sharp as my screen, at any window size and browser zoom: never a small picture stretched to fit.', source: 'vista: the canvas follows the pixel ratio', proofs: ['verify:31', 'play'] });
+  out.push({ id: 'vista.walk', text: 'I walk the island in first person (WASD, the mouse to look), along the pier and the beach, and I can wade and swim into the sea.', source: 'vista: the core\'s walker', proofs: ['verify:3', 'play'] });
+  out.push({ id: 'vista.fish', text: `R takes out my rod; I hold and let go of the left button to cast, and when a fish bites I strike and reel it in${species.length ? ` (${species.slice(0, 3).join(', ')}${species.length > 3 ? ', …' : ''})` : ''}.`, source: 'vista: the fishing (spec.vista.species)', proofs: ['verify:15', 'verify:13', 'play'] });
+  if (buyer || shop) out.push({ id: 'vista.trade', text: `I can sell my catch${buyer ? ` at ${buyer}` : ''}${shop ? ` and buy better gear at ${shop}` : ''} (E at the stall).`, source: 'vista: vendors and gear (spec.vista)', proofs: ['play'] });
+  out.push({ id: 'vista.boat', text: 'E boards the moored boat by the pier and takes its helm; I can steer it out to sea and back.', source: 'vista: the core\'s boat', proofs: ['play'] });
+  return out;
 }
 
 /** The promises a play-tester is asked to prove (those with a 'play' proof). */

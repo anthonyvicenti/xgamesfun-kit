@@ -125,6 +125,11 @@ const validId = id => { if (typeof id !== 'string' || !/^[-a-z0-9]{12,64}$/.test
 /** Owner-side publishing (GET/POST/DELETE /api/projects/:id/publish). Every call is scoped to the owner's own game. */
 export function createPublishing(db, bucket) {
   const first = (sql, ...args) => db.prepare(sql).bind(...args).first();
+  // A database from before migration 0018 has no publish_blocks table, and so no blocked account: an operator's
+  // import-game.mjs --publish against it must still publish (the multiplayer session hit this on production, 2026-10-12).
+  // Only that one missing table is forgiven; any other error still stops the publish.
+  const blocked = owner => first('SELECT owner FROM publish_blocks WHERE owner=?', owner)
+    .catch(e => { if (/publish_blocks/.test(String(e?.message)) && /does not exist|no such table/.test(String(e?.message))) return null; throw e; });
   const all = async (sql, ...args) => (await db.prepare(sql).bind(...args).all()).results;
   async function owned(owner, id) {
     const p = await first('SELECT id,title FROM projects WHERE id=? AND owner=?', validId(id), owner);
@@ -171,7 +176,7 @@ export function createPublishing(db, bucket) {
     if (!playOrigin(env)) throw new PublishError('The play host is not configured.', 503);
     // An operator's takedown sticks (migration 0018): the game's link stays down, and so does the account's publishing.
     if ((await rowFor(id))?.taken_down_at != null) throw new PublishError(TAKEN_DOWN, 403);
-    if (await first('SELECT owner FROM publish_blocks WHERE owner=?', owner)) throw new PublishError(BLOCKED, 403);
+    if (await blocked(owner)) throw new PublishError(BLOCKED, 403);
     const v = await chooseVersion(id, input?.versionId ?? null), time = Date.now();
     if (await rowFor(id)) { await relink(owner, id, v.id, time); return view(await rowFor(id), env); }
     // A new link: the title's slug, or the first free numbered form. The insert is the arbiter (slug is the primary

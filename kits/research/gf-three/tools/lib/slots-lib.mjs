@@ -13,7 +13,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { KIT, SCENIC_KIT, FORGE_KIT, LIBRARY, walk } from './paths.mjs';
+import { KIT, SCENIC_KIT, FORGE_KIT, VISTA_KIT, LIBRARY, walk } from './paths.mjs';
 import { importKitModule } from './kit-import.mjs';
 
 export const MAIN_MAX = 40;
@@ -70,8 +70,11 @@ const scenicFile = (gameDir, rel) => { const g = join(gameDir, 'gf/scenic', rel)
 // the forge engine's look and world (CONTRACT §8 forge): the game's gf/forge copy, else research/gf-forge/kit
 const forgeFile = (gameDir, rel) => { const g = join(gameDir, 'gf/forge', rel); return existsSync(g) ? g : join(FORGE_KIT, rel); };
 
-async function provider(gameDir, rel, { scenic = false, forge = false } = {}) {
-  const mod = await importKitModule(forge ? forgeFile(gameDir, rel) : scenic ? scenicFile(gameDir, rel) : kitFile(gameDir, rel));
+// the vista engine's declarations (CONTRACT §8 vista): the game's gf/vista/kit copy, else research/gf-vista/kit
+const vistaFile = (gameDir, rel) => { const g = join(gameDir, 'gf/vista/kit', rel); return existsSync(g) ? g : join(VISTA_KIT, rel); };
+
+async function provider(gameDir, rel, { scenic = false, forge = false, vista = false } = {}) {
+  const mod = await importKitModule(vista ? vistaFile(gameDir, rel) : forge ? forgeFile(gameDir, rel) : scenic ? scenicFile(gameDir, rel) : kitFile(gameDir, rel));
   if (mod.error) throw new Error(`${rel}: could not be imported in Node (${mod.error.message}); a module must not touch the DOM at import`);
   return mod;
 }
@@ -142,8 +145,12 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null,
   }
 
   push((await provider(gameDir, 'ui/slots.js')).slotsFor(cfg), 'ui');
-  const scenic = mods.engine === 'scenic', forge = mods.engine === 'forge';
-  if (forge) {
+  const scenic = mods.engine === 'scenic', forge = mods.engine === 'forge', vista = mods.engine === 'vista';
+  if (vista) {
+    // the vista engine (CONTRACT §8 vista; gf/vista/kit/config.js): the bodies friends see, the seat colours and the clips;
+    // the start places; the look values; every value of the data tables (config/game.json → vista)
+    push((await provider(gameDir, 'config.js', { vista })).slotsFor(cfg), 'vista');
+  } else if (forge) {
     // the forge engine (CONTRACT §8 forge): its world and look modules, and the player bodies friends see (gf/forge/wear.js:
     // the seat colours, a player look (§6e); the co-op body, its clips, each held weapon)
     push(fromModule(await provider(gameDir, 'wear.js', { forge }), cfg), 'character');
@@ -181,7 +188,7 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null,
   // the optional kit modules this game carries (modules.extras; a folder with a module.js: kit/vfx/module.js documents
   // the contract): their slots, and their preview entries below. A new module needs no line here.
   const extraMods = [];
-  if (!forge) for (const id of mods.extras ?? []) { const m = await provider(gameDir, `${id}/module.js`); extraMods.push(m); push(m.slotsFor?.(cfg), id); }
+  if (!forge && !vista) for (const id of mods.extras ?? []) { const m = await provider(gameDir, `${id}/module.js`); extraMods.push(m); push(m.slotsFor?.(cfg), id); }
 
   // files under assets/ that no declaration covers still become slots (coverage rule 1)
   const covered = new Set(slots.map(s => s.source?.file));
@@ -247,7 +254,11 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null,
   const ownProps = [...named.keys()].filter(n => seen.has(`prop.${n}`));
   const propNames = ownProps.length ? ownProps : finalSlots.filter(s => s.type === 'model' && s.id.startsWith('prop.') && !s.id.slice(5).includes('.')).slice(0, 4).map(s => s.id.slice(5));
   const has = id => seen.has(id);
-  const showcase = [
+  const showcase = vista ? [
+    // a vista game's preview subjects: the island behind no menu, and the same view for its look (gf/three/core/boot-vista.js)
+    { id: 'world', label: 'The island', query: '?gf-show=world', groups: ['world'] },
+    { id: 'look', label: 'Look and light', query: '?gf-show=look', groups: ['look'] },
+  ] : [
     ...roles.map(r => ({ id: `character.${r}`, label: r === 'player' ? 'Player character' : `${r} character`, query: `?gf-show=character.${r}`, slots: [`character.body.${r}`, `character.tint.${r}`, `character.height.${r}`].filter(has) })),
     ...propNames.map(n => ({ id: `prop.${n}`, label: n.replace(/^./, c => c.toUpperCase()), query: `?gf-show=prop.${n}`, slots: [`prop.${n}`, `prop.${n}.size`].filter(has) })),
     ...extraMods.flatMap(m => m.showcase?.(cfg, has) ?? []),
@@ -285,7 +296,8 @@ export async function assembleManifest(gameDir, { sounds = null, modules = null,
     sounds: sounds ?? { version: 1, sounds: {} },
     ...(cfg.catalog ? { embed: [{ path: 'config/props.json', reason: 'the prop catalog entries the world module reads (sizes, colliders, materials)' }] } : {}),
     // a forge game draws only with WebGPU (CONTRACT §8 forge): capture, the gates and the worker's play-tests need an adapter
-    ...(forge ? { runtime: { gpu: 'webgpu' } } : {}),
+    // so does a vista game (CONTRACT §8 vista: WebGPU only)
+    ...(forge || vista ? { runtime: { gpu: 'webgpu' } } : {}),
     check: {
       steps: [{ waitFor: "window.__game && window.__game.phase === 'lobby'", timeout: 90000 }, { wait: 500 }],
       play: { steps: [{ clickSelector: '#gf-play' }, { wait: 4500 }, { hold: 'KeyW', ms: 1200 }, { key: 'KeyE' }, { click: 'centre' }, { wait: 800 }], avoidKeys: [] },

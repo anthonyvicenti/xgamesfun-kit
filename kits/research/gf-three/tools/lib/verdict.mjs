@@ -43,6 +43,34 @@ export function passesForge(checks, required = REQUIRED_FORGE) {
 }
 
 /**
+ * The vista engine (CONTRACT §8 vista, tools/verify-vista.mjs; research/super-scenic/THIN_E2E.md, the thin wave): the
+ * checks that apply today, through the vista boot's window.__game, the shared DOM checks and the shared gates, and
+ * vista's own: 32 (no WebGPU: the kit's screen with the game's link, and none of the core downloaded), 36 (the sea is
+ * drawn and moving) and 37 (the look is the config's, and a value Studio changes reaches the core). Everything else is
+ * NOT_YET_VISTA with its reason, never counted as passed.
+ */
+export const REQUIRED_VISTA = [1, 2, 3, 5, 6, 13, 14, 15, 18, 20, 21, 23, 25, 31, 32, 36, 37];
+/** What cannot apply to a vista game yet, and why: n → [name, why]. Recorded "not yet for vista" (ok: null). */
+export const NOT_YET_VISTA = {
+  4: ['slot coverage 100%', 'the slot-ID pass over what the vista core draws is not built (the core\'s own models, textures and sounds are not slots yet: they are vendored and hash-pinned in gf/vista/core)'],
+  7: ['audio gate v4', 'the core\'s soundscape now plays through gf-audio\'s sfx bus (gf/vista/kit/audio.js, core patch #2) and passed the gate in its sandbox (tools/fish-loop.mjs), but verify\'s gate run is not wired for vista yet'],
+  8: ['swap proof', 'no model or texture of the island is a slot yet; the look values are, and check 37 swaps one'],
+  9: ['contact sheet and perf', 'the capture tool (lookdev/capture.mjs) drives three.js scenes; a vista capture with frame times per tier is PLAN wave 5'],
+  10: ['fair play', 'nothing in a vista game can knock or hurt a player'],
+  11: ['set dressing', 'the world is the core\'s own island (palm-isle): nothing is laid out from the spec yet (the coast generator is PLAN wave 3)'],
+  12: ['something happens', 'no bots on vista: a calm game has no opponents to act'],
+  16: ['hits read', 'nothing is hit in a vista game'],
+  17: ['the world is complete', 'the world is the core\'s own island; the world check reads generated layouts'],
+  19: ['bodies hold their shape', 'the friends\' bodies are library bodies the model judge already passed; the core\'s own skinning was held to rig.js by tools/humanoid-fixture.mjs in wave 1, not by verify yet'],
+  22: ['the wallet in the menu', 'a player\'s loadout (an item\'s colour on their body) is not drawn on vista bodies yet'],
+  24: ['plays inside a post', 'a vista game is never offered for a post on X (WebGPU only, desktop)'],
+  33: ['a lost device is recovered', 'the vista core does not recover from a lost GPU device yet'],
+  34: ['watch then play', 'a viewer\'s copy (the streamer\'s eyes) is not built for vista: the menu offers no Go live'],
+};
+/** The vista pass rule: every REQUIRED_VISTA check ran and passed, no other check failed; not-yet checks never count. */
+export const passesVista = (checks, required = REQUIRED_VISTA) => passesForge(checks, required);
+
+/**
  * The checks that test the kit, not the game: no rules.js or config a build agent writes can fail them
  * (research/game-templates/ai-studios-2026-10-10/findings/verify-our-numbers.md, claim 2: 8 the swap proof, 31 sharp
  * on every screen, 34 watch then play). They run per release (verify --release, which regress.mjs --corpus passes),
@@ -54,14 +82,17 @@ export function passesForge(checks, required = REQUIRED_FORGE) {
  * walk leg repeats check 3. Each cost every build about 10 to 15 s and could tell it nothing about its own game.
  */
 export const RELEASE_ONLY = [8, 22, 24, 31, 34];
-const LISTS = { round: REQUIRED, world: REQUIRED_WORLD, forge: REQUIRED_FORGE };
-/** The checks a verify of this kind of game must run and pass: a build's (the list less RELEASE_ONLY) or a release's. */
+const LISTS = { round: REQUIRED, world: REQUIRED_WORLD, forge: REQUIRED_FORGE, vista: REQUIRED_VISTA };
+/** RELEASE_ONLY for a kind of game. A vista build runs check 31 too: one page at pixel ratio 2, and the creator's
+ *  complaint (2026-10-12: a vista game drawn at a quarter of the screen's pixels looked "much much worse"). */
+export const releaseOnlyFor = kind => (kind === 'vista' ? RELEASE_ONLY.filter(n => n !== 31) : RELEASE_ONLY);
+/** The checks a verify of this kind of game must run and pass: a build's (the list less its release-only) or a release's. */
 export function requiredFor(kind = 'round', { release = false } = {}) {
   const all = LISTS[kind] ?? REQUIRED;
-  return release ? all : all.filter(n => !RELEASE_ONLY.includes(n));
+  return release ? all : all.filter(n => !releaseOnlyFor(kind).includes(n));
 }
-/** Is check n run in this verify? Every check in a release run; in a build's run all but RELEASE_ONLY. */
-export const runsHere = (n, { release = false } = {}) => release || !RELEASE_ONLY.includes(n);
+/** Is check n run in this verify? Every check in a release run; in a build's run all but the kind's release-only. */
+export const runsHere = (n, { release = false, kind = 'round' } = {}) => release || !releaseOnlyFor(kind).includes(n);
 
 /**
  * A profiled run (verify --profile <file>, e.g. a CI runner with no graphics card) skips checks by name and reason.
