@@ -75,7 +75,7 @@ export const DATA = [
   { path: 'research/gf-vista/README.md', why: 'the vista engine: overview' },
   { path: 'research/gf-vista/kit', why: 'the vista engine\'s kit (boot, look, tables, bodies, HUD wiring), vendored into a vista game as gf/vista/kit/', browser: true },
   { path: 'research/gf-vista/hud', why: 'the vista engine\'s HUD, vendored into a vista game as gf/vista/hud/', browser: true },
-  { path: 'research/gf-vista/core', why: 'the vista engine\'s WebGPU core (Tidewater, MIT; its public files CC0 or MIT, credited in core/ATTRIBUTION.md), vendored whole into a vista game as gf/vista/core/ (about 54 MB)', browser: true },
+  { path: 'research/gf-vista/core', why: 'the vista engine\'s WebGPU core (Tidewater, MIT; its public files CC0 or MIT, credited in core/ATTRIBUTION.md), vendored into a vista game as gf/vista/core/ (about 53 MB; its sky-pro clouds are left out below)', browser: true },
   { path: 'research/gf-vista/UPSTREAM.json', why: 'the vista core\'s upstream record (repository, commit, licence), vendored into a vista game' },
   { path: 'research/gf-vista/specs', why: 'the vista engine\'s development spec (an example spec)' },
   { path: 'research/foundations/kits/gf-audio/{audio}', why: 'gf-audio, vendored into each game as audio/', browser: true },
@@ -106,6 +106,11 @@ export const LEFT_OUT = [
   { path: `${GF3}/lookdev`, why: 'the contact-sheet tool (verify check 9; --quick skips it and a full verify says it is absent)' },
   { path: 'research/pipeline', why: 'games.fun\'s own Playwright install (this package pins playwright-core)' },
   { path: 'research/pipeline-v2', why: 'games.fun\'s Meshy key file (here the key comes from the environment)' },
+  // the creator, 2026-10-12: the open-source kit ships vista with the core's own MIT clouds (core/src/sky/Clouds.js).
+  // The core imports SkyProClouds only on demand (core patch 5), and boot-vista picks the MIT clouds when a game's
+  // gf/three/kit.js lists no core/src/sky/SkyProClouds.js, which a game made from these kits never does.
+  { path: 'research/gf-vista/core/src/sky/SkyProClouds.js', why: 'the vista core\'s volumetric clouds from sky-pro-webgpu, whose notice names a separate licence (the creator, 2026-10-12: the kit uses the core\'s own MIT clouds)' },
+  { path: 'research/gf-vista/core/public/clouds', why: 'the sky-pro-webgpu clouds\' noise volumes and their licensing note (only SkyProClouds.js reads them)' },
 ];
 /**
  * Tool faults worked around here until games.fun fixes them: a static import into a LEFT_OUT part. The named file and
@@ -499,8 +504,9 @@ export async function buildSnapshot(repo, commit = 'HEAD') {
     const mine = under(d.path);
     if (!mine.length) { problems.push(`${d.path}: not in games.fun at ${full.slice(0, 12)}`); continue; }
     for (const rel of mine) {
-      const why = excludedByName(rel);
+      const why = excludedByName(rel), out = leftOut(rel);
       if (why) { excluded.push({ path: rel, why }); continue; }
+      if (out) { excluded.push({ path: rel, why: `left out: ${out.why}` }); continue; }   // a left-out file inside a data folder
       chosen.set(rel, 'data');
     }
   }

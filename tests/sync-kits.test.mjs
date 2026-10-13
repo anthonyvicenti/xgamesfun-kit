@@ -277,6 +277,7 @@ test('every tool this package runs is an entry of the walk, and every entry is i
 test('no kit version is written in the data list, and the forge engine is left out', () => {
   for (const d of DATA) assert.ok(!/kits\/gf-[a-z]+\/\d/.test(d.path), `${d.path}: use {mp}, {audio} or {assets}`);
   assert.ok(LEFT_OUT.some(p => p.path === 'research/gf-forge'));
+  for (const p of ['research/gf-vista/core/src/sky/SkyProClouds.js', 'research/gf-vista/core/public/clouds']) assert.ok(LEFT_OUT.some(x => x.path === p), `${p} is left out (the creator, 2026-10-12: the core's own MIT clouds)`);
   assert.ok(!DATA.some(d => d.path.startsWith('research/gf-forge')));
 });
 

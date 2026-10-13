@@ -75,7 +75,7 @@ test('every library asset in kits/ has a CC0 or permissive licence record (or is
   }
 });
 
-test('the vista engine travels with its licences: the core\'s MIT text, attribution and credits, its upstream record, and the Rocketbox bodies\' MIT text', () => {
+test('the vista engine travels with its licences (the core\'s MIT text, attribution and credits, its upstream record, the Rocketbox bodies\' MIT text) and without the sky-pro clouds', () => {
   const files = Object.keys(record.files);
   const v = record.kits['gf-vista'];
   assert.ok(v?.version && v.path === 'research/gf-vista', 'gf-vista is a kit in KITS.json');
@@ -84,6 +84,11 @@ test('the vista engine travels with its licences: the core\'s MIT text, attribut
   assert.equal(JSON.parse(readFileSync(path.join(KITS, 'research/gf-vista/UPSTREAM.json'), 'utf8')).license, 'MIT');
   // the vista sandbox, tools and tests stay in games.fun (create vendors kit/, hud/, core/ and UPSTREAM.json only)
   assert.ok(!files.some(f => /^research\/gf-vista\/(sandbox|tools|tests|briefs)\//.test(f)), 'no vista sandbox, tools, tests or briefs');
+  // the creator, 2026-10-12: the kit ships the core's own MIT clouds, never sky-pro-webgpu's (their notice names a
+  // separate licence); boot-vista picks the MIT clouds for a game whose copy of the core has no SkyProClouds.js
+  assert.ok(files.includes('research/gf-vista/core/src/sky/Clouds.js'), 'the core\'s own MIT clouds');
+  assert.ok(!files.some(f => f === 'research/gf-vista/core/src/sky/SkyProClouds.js' || f.startsWith('research/gf-vista/core/public/clouds/')), 'no sky-pro-webgpu clouds or noise volumes');
+  assert.ok(!files.some(f => /^research\/gf-vista\/core\/src\//.test(f) && /from\s+['"][^'"]*SkyProClouds/.test(readFileSync(path.join(KITS, f), 'utf8'))), 'no static import of SkyProClouds left in the core');
   const bodies = files.filter(f => /^research\/gf-three\/library\/bodies\/rocketbox-[^/]+\.glb$/.test(f));
   if (bodies.length) assert.ok(files.includes('research/gf-three/library/bodies/rocketbox-LICENSE.md'), 'the Rocketbox bodies ship with their MIT text beside them');
 });
