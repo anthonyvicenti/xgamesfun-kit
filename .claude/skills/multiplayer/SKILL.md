@@ -8,7 +8,7 @@ description: Keep a gf-three game live multiplayer - friends in one game, in syn
 The bar: friends are in one game, in sync, and each player sees the others as a character where they really are. Every
 gf-three game is `live` (`multiplayer.json` → `"mode": "live"`). One player hosts in their own browser; the others
 join with a code or an invite link; game traffic goes peer to peer over WebRTC. There is no game server. The kit
-(`gf/mp/`, gf-multiplayer 1.7.0) and gf-three's `kit/net/` do the networking: poses, drawing friends, the round,
+(`gf/mp/`, gf-multiplayer 1.7.1) and gf-three's `kit/net/` do the networking: poses, drawing friends, the round,
 loadouts. Background: `kits/research/multiplayer/STANDARD.md` and `kits/research/multiplayer/party/LIVE_HANDBOOK.md`.
 
 ## The rules that keep copies in sync

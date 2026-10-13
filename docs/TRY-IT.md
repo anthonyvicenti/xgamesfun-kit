@@ -245,7 +245,7 @@ which of the two showed the question, and what happened when you clicked.
 **You should see:** both tabs list both names in the waiting room. After you start, both tabs are in the same round, and
 each one shows the other player as a character that moves when the other tab moves.
 
-The host's waiting room also has **Lock room** (multiplayer part 1.6.6 and newer; new games carry 1.7.0). While it is locked nobody new
+The host's waiting room also has **Lock room** (multiplayer part 1.6.6 and newer; new games carry 1.7.1). While it is locked nobody new
 can join (a friend opening the code sees "This room is locked"), and the host can start a round alone; **Unlock room**
 undoes it. This page's screenshots do not show the button, and I have not clicked it by hand; the kit's verify check 34 plays it.
 
@@ -269,7 +269,7 @@ never joins, this question is the first thing to check (System Settings, Privacy
 computer can join.
 
 1. **The game must carry multiplayer part 1.6.4 or newer.** Since the sync of games.fun ed6c86ffa a game the kit makes
-   carries 1.7.0 (since the sync of games.fun d78283f51; 1.6.6 before it), which knows online play. (Games made before that sync carry 1.6.3 and stay on this machine until
+   carries 1.7.1 (since the sync of games.fun 562e14481; 1.7.0 from d78283f51, 1.6.6 before it), which knows online play. (Games made before that sync carry 1.6.3 and stay on this machine until
    `npx gamesfun upgrade <game>`.)
 2. **Our server must accept games that people run themselves.** It introduces the two browsers to each other (a room
    code, then they connect directly). Whether it does is the play host's switch, not the kit's. This page has not

@@ -36,7 +36,10 @@ today. If it is ever shipped, the credit line is:
 - [Quaternius](https://quaternius.com): character bodies and the Universal Animation Library clips and mannequin (CC0).
 - [Kay Lousberg, KayKit](https://kaylousberg.com): the dungeon props, weapons and character bodies of the scenic
   library (CC0).
-- [Poly Haven](https://polyhaven.com): the stand-in ground texture, `leafy_grass` (CC0).
+- [Poly Haven](https://polyhaven.com): the stand-in ground texture, `leafy_grass` (CC0), and the vista core's scanned
+  beach debris, stall props and wood and iron textures (CC0).
+- [Freesound](https://freesound.org) recordists: the vista core's 42 field recordings (CC0), each credited with its
+  author and link in `kits/research/gf-vista/core/public/audio/CREDITS.md`.
 - games.fun: the bean bodies and the procedural textures (CC0).
 
 ## Code and art under MIT and other permissive licences
@@ -49,6 +52,11 @@ today. If it is ever shipped, the credit line is:
 - N8AO (ambient occlusion; its licence text in the repository is CC0).
 - [folio-2025](https://github.com/brunosimon/folio-2025) by Bruno Simon (MIT): the scenic engine's rendering, materials,
   lighting, terrain and vegetation are ported from it, and some of its models and textures are scenic props.
+- [Tidewater](https://github.com/dgreenheck/tidewater) by Dan Greenheck, DRG Software Solutions LLC (MIT): the vista
+  engine's core (its WebGPU renderer, ocean, sky, volumetric clouds, island, wildlife and fishing), vendored with
+  games.fun's edits; its humpback whale model is the author's own.
+- [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) (MIT): the six people friends see each other as
+  in a vista game, and the vista core's two stall keepers.
 - [BUDDY: ROLLBACK](https://github.com/octobooth-4/buddy-rollback) by its contributors (MIT): the combat model of the
   melee mechanic.
 - The three.js voxel example by Google Inc. and threejsfundamentals (BSD-3-Clause), adapted into the voxel world.
@@ -69,7 +77,8 @@ If your game keeps a credited file, it must keep the credit. Today:
 
 - `create` writes an `ATTRIBUTION.md` into every game, listing each library file the game uses with its licence and
   author, and each code library with where its licence text sits. The licence texts of three.js, Rapier,
-  postprocessing, N8AO, ecctrl, the melee model, folio-2025 (scenic) and ZzFX are copied into the game beside the code.
+  postprocessing, N8AO, ecctrl, the melee model, folio-2025 (scenic), Tidewater (vista, `gf/vista/core/LICENSE` and
+  `ATTRIBUTION.md`) and ZzFX are copied into the game beside the code.
 - **That `ATTRIBUTION.md` is not yet enough for CC BY.** For a CC-BY file it prints only the licence name and the
   author ("CC-BY-3.0, J-Toastie"). The licence also asks for the title and a link to the work, and a link to the
   licence. The exact lines are in the library's `LICENSES.json` (`credit`), but `create` does not copy them.

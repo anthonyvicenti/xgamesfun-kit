@@ -51,8 +51,9 @@ There is no list of files. The script works out what the tools need from the too
    reads those calls: a part this package carries is walked like an import (the world server, the character bench);
    a part in `LEFT_OUT` is recorded and skipped (the forge engine).
 3. **Data** (`DATA`, about thirty lines): folders that are copied into a game, served to a page or read as documents,
-   so no import leads to them: the kit, the two libraries, the scenic engine's kit, the kit folders, the pinned
-   three.js builds, Rapier, the specs and schemas. Kit versions are never written there: `{mp}`, `{audio}` and
+   so no import leads to them: the kit, the two libraries, the scenic engine's kit, the vista engine's kit, HUD and
+   core (copied whole into a vista game, about 54 MB), the kit folders, the pinned three.js builds, Rapier, the specs
+   and schemas. The vista engine's sandbox, tools, tests and briefs stay in games.fun. Kit versions are never written there: `{mp}`, `{audio}` and
    `{assets}` are read from the tools at that commit, so a sync cannot copy a version the tools do not ask for.
 4. **A cross-check.** Every path `tools/lib/paths.mjs` names must be in the snapshot or in `LEFT_OUT`. A new engine or
    a moved vendor folder fails the sync with the line to add, instead of failing in `create` later.
@@ -73,8 +74,11 @@ The sync refuses, and leaves `kits/` alone, when:
 
 Left out by name: `EXCLUDED_DIRS` (evidence, regressions, sandbox, lookdev, caches, `node_modules`) and the file-name
 rules. Left out by licence: a library file ships when its `LICENSES.json` record is CC0 or permissive, or games.fun
-generated it, or its folder carries its upstream's permissive `LICENSE` text (the scenic library's folio folder);
-never Meshy output. `kits/KITS.json` records the commit, the kit versions, the entries, the parts (taken or not, and
+generated it, or its folder carries its upstream's permissive `LICENSE` text (the scenic library's folio folder); a
+licence text named for the files beside it (`bodies/rocketbox-LICENSE.md`, the six Microsoft Rocketbox bodies' MIT
+text) ships when its own text is a permissive licence; never Meshy output. The vista core is not a library: it travels
+whole with its `LICENSE` (MIT), `ATTRIBUTION.md`, `CREDITS.md` and the credits of each asset folder, and
+`tests/kits.test.mjs` checks those are there. `kits/KITS.json` records the commit, the kit versions, the entries, the parts (taken or not, and
 why), the modules the walk found, each data folder's size, the library files left out and why, and a sha256 per file.
 
 ### The drift test
@@ -136,7 +140,15 @@ An example is `templates/examples/<id>/` with `spec.json` (a locked spec), `rule
 provenance) and `example.json` (`title`, `summary`, `verified: { result, kits, date }`). Optional `files/` is laid over
 the created game (then `assets.json` is regenerated). An example ships only after `npx gamesfun verify --quick` passes
 on a fresh `create --from` with the current kits; record the result in `example.json`. An example that a kit fault fails may list the failing checks in `example.json` → `knownFailing` and say why in its README; the smoke test then requires exactly those to fail. No example has one now (`giant-four` had check 7 until the kits carried audio gate v5). There is one per engine:
-`soak-squad` (party, WebGL) and the scenic one (WebGPU, with WebGL2 inside WebGPURenderer where Chrome has no adapter), `coin-hop` for engine flat (2D, seen from the side), and `giant-four` for a game that is not a party round (the `turns` loop and the `board` mechanic, party engine).
+`soak-squad` (party, WebGL) and the scenic one (WebGPU, with WebGL2 inside WebGPURenderer where Chrome has no adapter), `coin-hop` for engine flat (2D, seen from the side), `giant-four` for a game that is not a party round (the `turns` loop and the `board` mechanic, party engine), and `lantern-cove` for engine vista.
+
+**A closed engine's example.** vista is not open to people's pitches yet (games.fun's catalog gives it a status other
+than `ready` unless `GF_VISTA_OPEN=1`), so `lantern-cove/example.json` has `closed: { env: "GF_VISTA_OPEN", why }`:
+`gamesfun examples`, the MCP tool and the studio's home page list it only when that variable is 1, and
+`create --from lantern-cove` finds it either way. It runs only where Chrome has a hardware WebGPU adapter with at least
+31 sampled and 5 storage textures per shader stage (no WebGL path; `kits/research/gf-vista/kit/gpu.js`), so CI never
+creates it (`docs/CI.md`), and the smoke test (`GAMESFUN_SMOKE=1 npm run test:smoke`) plays it only on a machine like that.
+`tests/vista.test.mjs` checks its listing and the catalog's engine lines without a browser.
 
 `tests/try-it-shots.mjs <out dir> [port]` takes the screenshots `docs/TRY-IT.md` shows (`docs/try-it/01` to `10`) from real runs of the examples; run it again when the studio page or an example changes.
 
@@ -210,7 +222,8 @@ git is started with `GIT_TERMINAL_PROMPT=0` so a private remote fails instead of
 ## CI
 
 `.github/workflows/check.yml` runs `npm ci`, the tests, and create plus `verify --quick --profile
-.github/ci-profile.json` for the party and the scenic example on Ubuntu and Windows (pull requests) and macOS as well
+.github/ci-profile.json` for the party and the scenic example (not the vista one: a runner has no WebGPU adapter, and
+vista has no WebGL path) on Ubuntu and Windows (pull requests) and macOS as well
 (pushes to `main`). `docs/CI.md` has the profile, what a runner can check, the measured software-rendering runs and the
 cost. It runs on GitHub since 2026-10-11, green on Linux, Windows and macOS; `docs/CI.md` section 7 lists what the
 first runs found and section 8 what still has to be tried by hand on a real Windows machine or a Mac. One system or one

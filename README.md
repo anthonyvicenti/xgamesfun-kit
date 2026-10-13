@@ -60,6 +60,23 @@ copies one into `games/`). With a game open you get the conversation with your a
 tools, verify runs and a **Play with friends** lobby. Open the lobby in two tabs, Host in one and Join with the invite
 link in the other, and you are two players in one game.
 
+## Engines
+
+A spec names one engine (`npx gamesfun catalog engines` lists them, with what each is for):
+
+| Engine | For | Draws with |
+|---|---|---|
+| `party` (gf-three) | silly party games with friends | WebGL (three.js) |
+| `flat` (gf-three) | 2D games seen from above or from the side | WebGL (three.js) |
+| `scenic` (gf-scenic) | serious, scenic and action games: adventure, roguelite, brawler | WebGPU, or WebGL2 inside the same renderer |
+| `vista` (gf-vista) | calm games where the place is the point: a coast, the sea, the sky; fishing with friends | **WebGPU only**, on a desktop graphics card |
+
+**vista is not open yet.** games.fun is still building it, so the catalog does not offer it to a pitch unless
+`GF_VISTA_OPEN=1` is set. It has no WebGL path: a browser without WebGPU, or a card with fewer than 31 sampled or 5
+storage textures per shader stage, gets the kit's "open in a browser with WebGPU" screen; never a phone, never inside a
+post on X. Each vista game carries the engine's core whole (about 54 MB; about 62 MB a game). The example is
+`lantern-cove`. games.fun's forge engine is not in this kit.
+
 **Then open this folder in your agent and say what you want**: "make a game where we defend a lighthouse from crabs",
 "make the water red and the rounds shorter", "swap the bucket for this model". The agent reads `AGENTS.md` (the
 playbook) and the skills in `skills/`.
@@ -68,8 +85,8 @@ playbook) and the skills in `skills/`.
 
 | Command | |
 |---|---|
-| `npx gamesfun examples` | complete example games to start from: `soak-squad` (a party round), `giant-four` (a turn-based board game), `isle-run` (a scenic action run), `coin-hop` (a 2D platformer) |
-| `npx gamesfun catalog [--all]` | what the kit can build: loops (how a game is played), mechanics, worlds, looks, bodies, props |
+| `npx gamesfun examples` | complete example games to start from: `soak-squad` (a party round), `giant-four` (a turn-based board game), `isle-run` (a scenic action run), `coin-hop` (a 2D platformer); `lantern-cove` (a calm fishing evening on the vista engine) with `GF_VISTA_OPEN=1` |
+| `npx gamesfun catalog [--all]` | what the kit can build: engines (`catalog engines`), loops (how a game is played), mechanics, worlds, looks, bodies, props |
 | `npx gamesfun create <dir> --from <example>` or `--spec <spec.json>` | make a game |
 | `npx gamesfun dev [dir]` | the studio, live reload and local multiplayer (127.0.0.1 only); a game on multiplayer kit 1.6.4 or newer opens its rooms online ([docs/ONLINE.md](docs/ONLINE.md); `GAMESFUN_ONLINE=off` keeps them on this machine) |
 | `npx gamesfun verify [dir] --quick` | the checks a game must pass, in real Chrome with real input (about 2 minutes) |

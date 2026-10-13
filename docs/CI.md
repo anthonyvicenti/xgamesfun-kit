@@ -68,6 +68,17 @@ Read from the kit's tools (`research/gf-three/tools/lib/paths.mjs`, `launchForGa
 The workflow's `scenic` job creates `isle-run` and runs the same profile as the party job. Measured below (section 3):
 the scenic game's lobby legs pass under software rendering just as the party game's do.
 
+### Vista games are not in CI
+
+A vista game (engine `vista`, the example `lantern-cove`) draws only with WebGPU: its core has no WebGL path, and it
+needs an adapter with at least 31 sampled and 5 storage textures per shader stage (`kits/research/gf-vista/kit/gpu.js`).
+games.fun's verify refuses to run it without a hardware adapter ("cannot be verified on this machine"), and a runner has
+none, so neither job creates one. What CI does hold for vista runs without a browser, in `npm test`: the sync of its
+files and licences (`tests/kits.test.mjs`, `tests/sync-kits.test.mjs`), the closed example's listing (`tests/vista.test.mjs`)
+and the catalog lines. Its verify (17 checks, 14 more "not yet for vista") runs by hand on a machine with a graphics
+card: `npx gamesfun create games/cove --from lantern-cove`, then `npx gamesfun verify games/cove
+--release`.
+
 ## 3. The CI profile: `ci-software`
 
 `.github/ci-profile.json` is the file `gamesfun verify --quick --profile .github/ci-profile.json` reads (the kit's
@@ -201,7 +212,8 @@ round to 3), against about 53 for all three. Windows and macOS are for a change 
   a second. Stepped time moves the game's clock, not the drawing (section 3).
 - **Looks.** A frame from SwiftShader or from a virtual card says nothing about how a game looks.
 - **WebGPU.** No runner has a hardware WebGPU adapter; the scenic game runs on WebGL2 inside `WebGPURenderer`. The
-  WebGPU path of the scenic engine has run only on one Linux machine with an NVIDIA card.
+  WebGPU path of the scenic engine has run only on one Linux machine with an NVIDIA card. A vista game cannot run on a
+  runner at all (section 2).
 - **macOS could run more than the profile lets it** (it has a virtual card and three processors). Which of the skipped
   checks hold there was not tried; each try costs ten times a Linux minute.
 - **The network between two machines.** The gate's two players are two pages of one Chrome on one machine.
@@ -303,6 +315,14 @@ board examples only; the flat one has not run on a runner.
 sync carries `creator-studio/lib/voice-capture.mjs` (Studio's own capture file, our code, no imports), which the check
 loads into a stand-in streamer page with Chrome's fake microphone; without it the check skips them and says so. The
 smoke test ran all four examples 22 of 22 on Linux with a graphics card; the workflow did not run (billing).
+
+### Kits synced to games.fun 562e14481 (2026-10-12)
+
+`create` vendors gf-multiplayer 1.7.1 (Turn on mic in the stream panel), and the kits carry the vista engine. The
+workflow is unchanged: its jobs create the party, board and scenic examples only, and the vista example cannot run on a
+runner (section 2). On Linux with an RTX 5090, by hand: `lantern-cove` passed `verify --release` 17 of 17 (14 checks
+"not yet for vista"), and the smoke test's two pages saw each other in it through the kit's WebGPU launch. The workflow
+was not run for this sync.
 
 ## 8. What a person on a real Windows machine or a Mac still has to try by hand
 

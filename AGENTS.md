@@ -13,7 +13,8 @@ detailed steps (mirrored for your agent in `.claude/skills/` and `.agents/skills
 | A game | `games/<name>/`, made by `npx gamesfun create` | write `rules.js`, tune `config/*.json`, swap files under `assets/` through their slots |
 | The kit copies inside a game | `gf/`, `audio/`, `vendor/` | **never edit** (verify check 2 fails the game) |
 | The kits themselves | `kits/` (a snapshot of games.fun at the commit in `kits/KITS.json`) | **never edit**; a kit bug is reported upstream |
-| An example game | `templates/examples/soak-squad/` (`spec.json`, `rules.js`) | read it: it passes verify, and shows the patterns. `giant-four` is the turn-based one (the `turns` loop and the `board` mechanic), `isle-run` the scenic one |
+| An example game | `templates/examples/soak-squad/` (`spec.json`, `rules.js`) | read it: it passes verify, and shows the patterns. `giant-four` is the turn-based one (the `turns` loop and the `board` mechanic), `isle-run` the scenic one, `lantern-cove` the vista one (listed only with `GF_VISTA_OPEN=1`) |
+| The engines | `npx gamesfun catalog engines` | party, flat, scenic, vista (the spec's `engine`). **vista** is WebGPU only on a desktop graphics card (no WebGL path; a card needs 31 sampled and 5 storage textures per shader stage), about 62 MB a game, and not open to pitches unless `GF_VISTA_OPEN=1`: never pitch it to a person otherwise, never for a phone or a post on X |
 | The game spec schema | `kits/research/studio-v2/game-spec.schema.json` | every spec validates against it |
 | The tools | `npx gamesfun <command>` in a terminal, or the MCP tools `gamesfun_*` | same operations either way |
 

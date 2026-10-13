@@ -29,6 +29,8 @@ The kit includes work by others, each under its own licence. The full list, file
 | three.js, Rapier (physics), the Draco and Basis decoders | MIT, Apache-2.0 | Keep the licence files beside the code. `create` puts them in your game's `vendor/` folder; do not delete them. |
 | pmndrs postprocessing (Zlib), N8AO (CC0 text) | Zlib, CC0 | Zlib: keep the notice and do not claim you wrote it. |
 | ecctrl, folio-2025, the melee model, ZzFX | MIT | Keep the licence files that `create` puts beside them. |
+| The vista engine's core (Tidewater, by DRG Software Solutions LLC), the six Rocketbox people (Microsoft) | MIT | Keep `gf/vista/core/LICENSE` and `ATTRIBUTION.md` in a vista game. Microsoft's MIT text for the Rocketbox people travels in `gf/vista/core/public/models/characters/LICENSE-Rocketbox.md`, and the game's `ATTRIBUTION.md` lists each body. The core's clouds come from the same author's sky-pro-webgpu; their licence wording is not settled yet (THIRD_PARTY.md, "Needs a person" 8). |
+| The vista core's sounds (Freesound recordists) and debris and stall props (Poly Haven) | CC0 | Nothing. Each is credited in the core's `CREDITS.md` files anyway. |
 | The three.js voxel example (voxel worlds) | BSD-3-Clause | Keep its notice. (The kit has a gap here; see below.) |
 | Art by Kenney, Quaternius, Kay Lousberg (KayKit), Poly Haven, games.fun | CC0 | Nothing. Credit is kind but not required. |
 | Ten props by Poly Pizza creators | **CC BY 3.0** | **Credit the author, the title and a link, and say you changed it.** The exact lines are in [CREDITS.md](../CREDITS.md). If you keep one of these files in your game, keep its credit. If you swap the file for your own, you may drop the credit. |
