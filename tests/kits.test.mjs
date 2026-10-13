@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { KITS, KITS_JSON } from '../lib/paths.mjs';
 import { tempDir } from './helpers.mjs';
-import { buildSnapshot, closureProblems, diffKits, findSource, kitsRecord, LEFT_OUT, LIBRARIES, libraryDecision, licenceOfText, portabilityProblems, scanSecrets, TOOL_FAULTS } from '../scripts/sync-kits.mjs';
+import { buildSnapshot, closureProblems, diffKits, findSource, isNamedLicence, kitsRecord, LEFT_OUT, LIBRARIES, libraryDecision, licenceOfText, namedLicenceDecision, portabilityProblems, scanSecrets, TOOL_FAULTS } from '../scripts/sync-kits.mjs';
 
 const record = JSON.parse(await readFile(KITS_JSON, 'utf8'));
 
@@ -27,7 +27,7 @@ test('kits/ matches KITS.json byte for byte, with nothing extra', async () => {
 test('KITS.json records the source commit and the kits', () => {
   assert.equal(record.schema, 'gamesfun-kits/2');
   assert.match(record.source.commit, /^[0-9a-f]{40}$/);
-  for (const k of ['gf-three', 'gf-scenic', 'gf-multiplayer', 'gf-audio', 'gf-assets']) assert.ok(record.kits[k]?.version, `${k} version`);
+  for (const k of ['gf-three', 'gf-scenic', 'gf-vista', 'gf-multiplayer', 'gf-audio', 'gf-assets']) assert.ok(record.kits[k]?.version, `${k} version`);
   // the versions are the ones the tools in kits/ ask for (read from their code), and each kit folder is there
   const mp = /export const KIT_VERSION = '([^']+)'/.exec(readFileSync(path.join(KITS, 'research/multiplayer/party/manifest.mjs'), 'utf8'))[1];
   assert.equal(record.kits['gf-multiplayer'].version, mp);
@@ -68,10 +68,24 @@ test('every library asset in kits/ has a CC0 or permissive licence record (or is
     for (const rel of mine) {
       const inLib = rel.slice(lib.length);
       if (/\/LICENSE$/.test(inLib)) continue;   // a licence text itself
+      if (isNamedLicence(inLib)) { const d = namedLicenceDecision(readFileSync(path.join(KITS, ...rel.split('/')), 'utf8')); assert.ok(d.keep, `${rel}: ${d.why}`); continue; }
       const d = libraryDecision(inLib, licences, () => null, licenceFile);
       assert.ok(d.keep, `${rel}: ${d.why}`);
     }
   }
+});
+
+test('the vista engine travels with its licences: the core\'s MIT text, attribution and credits, its upstream record, and the Rocketbox bodies\' MIT text', () => {
+  const files = Object.keys(record.files);
+  const v = record.kits['gf-vista'];
+  assert.ok(v?.version && v.path === 'research/gf-vista', 'gf-vista is a kit in KITS.json');
+  for (const f of ['core/LICENSE', 'core/ATTRIBUTION.md', 'core/CREDITS.md', 'UPSTREAM.json', 'kit/vendor/LICENSE-meshoptimizer']) assert.ok(files.includes(`research/gf-vista/${f}`), `research/gf-vista/${f}`);
+  assert.equal(licenceOfText(readFileSync(path.join(KITS, 'research/gf-vista/core/LICENSE'), 'utf8')), 'MIT');
+  assert.equal(JSON.parse(readFileSync(path.join(KITS, 'research/gf-vista/UPSTREAM.json'), 'utf8')).license, 'MIT');
+  // the vista sandbox, tools and tests stay in games.fun (create vendors kit/, hud/, core/ and UPSTREAM.json only)
+  assert.ok(!files.some(f => /^research\/gf-vista\/(sandbox|tools|tests|briefs)\//.test(f)), 'no vista sandbox, tools, tests or briefs');
+  const bodies = files.filter(f => /^research\/gf-three\/library\/bodies\/rocketbox-[^/]+\.glb$/.test(f));
+  if (bodies.length) assert.ok(files.includes('research/gf-three/library/bodies/rocketbox-LICENSE.md'), 'the Rocketbox bodies ship with their MIT text beside them');
 });
 
 test('no key-shaped strings anywhere in kits/', async () => {

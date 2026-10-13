@@ -8,7 +8,7 @@ import path from 'node:path';
 import { GF3_TOOLS, KIT_ROOT, KITS } from '../lib/paths.mjs';
 import { runToolJson } from '../lib/run-tool.mjs';
 import { tempDir } from './helpers.mjs';
-import { closure, DATA, ENTRIES, excludedByName, kitVersions, LEFT_OUT, libraryDecision, licenceOfText, namedPaths, pathConstants, portabilityProblems, scanSecrets, maskTemplates, stripComments, TOOL_ENTRIES } from '../scripts/sync-kits.mjs';
+import { closure, DATA, ENTRIES, excludedByName, isNamedLicence, kitVersions, LEFT_OUT, libraryDecision, licenceOfText, namedLicenceDecision, namedPaths, pathConstants, portabilityProblems, scanSecrets, maskTemplates, stripComments, TOOL_ENTRIES } from '../scripts/sync-kits.mjs';
 
 const LIC = {
   'props/tree.glb': { spdx: 'CC0-1.0', author: 'Kenney (www.kenney.nl)', from: 'kenney:nature/tree' },
@@ -102,6 +102,18 @@ test('library: a folder that carries its upstream\'s permissive LICENSE ships wi
   assert.equal(libraryDecision('folio/rock.glb', {}, () => null, () => 'GPL-3.0').keep, false);
 });
 
+test('library: a licence text named for what it covers ships when its text is permissive (the Rocketbox bodies\' MIT text)', () => {
+  assert.equal(isNamedLicence('bodies/rocketbox-LICENSE.md'), true);
+  assert.equal(isNamedLicence('LICENSE-folio-2025'), true);
+  assert.equal(isNamedLicence('bodies/rocketbox-LICENSE.txt'), true);
+  assert.equal(isNamedLicence('folio/LICENSE'), false, 'a plain LICENSE keeps its own rule');
+  assert.equal(isNamedLicence('LICENSES.json'), false, 'the records file is not a licence text');
+  assert.equal(isNamedLicence('bodies/licensed-hero.glb'), false);
+  const mit = 'Rocketbox avatars:\n\nMIT License\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY';
+  assert.deepEqual(namedLicenceDecision(mit), { keep: true, why: 'licence text (MIT)' });
+  assert.equal(namedLicenceDecision('All rights reserved. Do not redistribute.').keep, false);
+});
+
 // ---- the walk: what the tools reach ----
 test('comments are removed without mistaking a string, a line comment or a regular expression for one', () => {
   const src = [
@@ -135,6 +147,7 @@ export const FORGE = join(REPO, 'research/gf-forge');
 export const FORGE_KIT = join(FORGE, 'kit');
 export const KIT_VERSION = '0.9.0';
 export const SCENIC_VERSION = '0.2.0';
+export const VISTA_VERSION = '0.2.0-thin';
 const T = 'research/foundations/trials';
 export const VENDOR = { three: join(REPO, \`\${T}/fps/vendor/three\`) };
 export const GF_ASSETS = join(REPO, 'research/foundations/kits/gf-assets/1.3.0/source/gf-assets.js');
@@ -155,7 +168,7 @@ test('paths.mjs is read for its folders, the paths it names and the kit versions
   for (const p of ['research/gf-three/kit', 'research/foundations/trials/fps/vendor/three', 'research/foundations/kits/gf-audio/1.5.0']) assert.ok(named.includes(p), p);
   assert.ok(!named.includes('research/foundations/trials'), 'the prefix alone is not a path the tools read');
   const v = kitVersions(f => ({ [P]: PATHS_SRC, 'research/multiplayer/party/manifest.mjs': 'export const KIT_VERSION = \'1.6.3\';   // note' })[f]);
-  assert.deepEqual(v, { mp: '1.6.3', mpDev: '1.6.3', audio: '1.5.0', assets: '1.3.0', gf3: '0.9.0', scenic: '0.2.0' });
+  assert.deepEqual(v, { mp: '1.6.3', mpDev: '1.6.3', audio: '1.5.0', assets: '1.3.0', gf3: '0.9.0', scenic: '0.2.0', vista: '0.2.0-thin' });
   // the newest frozen multiplayer kit runs ahead of the one create vendors until games.fun promotes it
   const ahead = kitVersions(f => ({ [P]: PATHS_SRC, 'research/multiplayer/party/manifest.mjs': 'export const KIT_VERSION = \'1.6.3\';\nexport const DEV_VERSION = \'1.6.4\';   // not yet KIT_VERSION' })[f]);
   assert.equal(ahead.mp, '1.6.3');

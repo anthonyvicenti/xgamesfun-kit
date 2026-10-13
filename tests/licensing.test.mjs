@@ -44,7 +44,7 @@ test('every library file has a licence record, or sits in a folder with its own 
     const missing = [];
     for (const abs of walk(dir)) {
       const rel = path.relative(dir, abs).split(path.sep).join('/');
-      if (INDEX.has(rel) || /(^|\/)LICENSE[^/]*$/.test(rel)) continue;
+      if (INDEX.has(rel) || /(^|\/)([^/]+-)?LICENSE[^/]*$/.test(rel)) continue;   // a licence text (bodies/rocketbox-LICENSE.md)
       if (/^bodies\/[^/]+\.json$/.test(rel)) continue;                       // a body's sidecar describes a record
       if (records[rel]) continue;
       if (fs.existsSync(path.join(path.dirname(abs), 'LICENSE'))) continue;  // e.g. library/folio/ (MIT, Bruno Simon)

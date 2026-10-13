@@ -72,6 +72,12 @@ export const DATA = [
   { path: 'research/gf-scenic/library', why: 'the scenic engine\'s bodies and props (CC0 or permissive only)', browser: true },
   { path: 'research/gf-scenic/tools/lib/vendor', why: 'three.js WebGPU addons (pinned), vendored into a scenic game', browser: true },
   { path: 'research/gf-scenic/specs', why: 'the scenic engine\'s development specs (example specs)' },
+  { path: 'research/gf-vista/README.md', why: 'the vista engine: overview' },
+  { path: 'research/gf-vista/kit', why: 'the vista engine\'s kit (boot, look, tables, bodies, HUD wiring), vendored into a vista game as gf/vista/kit/', browser: true },
+  { path: 'research/gf-vista/hud', why: 'the vista engine\'s HUD, vendored into a vista game as gf/vista/hud/', browser: true },
+  { path: 'research/gf-vista/core', why: 'the vista engine\'s WebGPU core (Tidewater, MIT; its public files CC0 or MIT, credited in core/ATTRIBUTION.md), vendored whole into a vista game as gf/vista/core/ (about 54 MB)', browser: true },
+  { path: 'research/gf-vista/UPSTREAM.json', why: 'the vista core\'s upstream record (repository, commit, licence), vendored into a vista game' },
+  { path: 'research/gf-vista/specs', why: 'the vista engine\'s development spec (an example spec)' },
   { path: 'research/foundations/kits/gf-audio/{audio}', why: 'gf-audio, vendored into each game as audio/', browser: true },
   { path: 'research/foundations/kits/gf-multiplayer/{mp}', why: 'gf-multiplayer, vendored into each game as gf/mp/', browser: true },
   { path: 'research/foundations/kits/gf-multiplayer/{mpDev}', why: 'the newest frozen gf-multiplayer, when it runs ahead of the one create vendors (a game on it passes verify check 2; online signaling needs 1.6.4)', browser: true },
@@ -169,6 +175,17 @@ export function licenceOfText(text) {
   if (/Apache License,? Version 2\.0/.test(t)) return 'Apache-2.0';
   if (/CC0 1\.0 Universal/.test(t)) return 'CC0-1.0';
   return null;
+}
+
+/**
+ * A licence text named for what it covers, beside those files (bodies/rocketbox-LICENSE.md beside the Rocketbox bodies):
+ * `<name>-LICENSE`, `LICENSE-<name>`, with .md or .txt. It has no LICENSES.json record of its own (it is not an asset).
+ */
+export const isNamedLicence = rel => /^(?:[A-Za-z0-9_.]+-)?LICEN[CS]E(?:-[A-Za-z0-9_.-]+)?(?:\.(?:md|txt))?$/.test(rel.split('/').pop()) && !/(^|\/)LICENSE$/.test(rel);
+/** A named licence text ships when its own text is a licence that may ship (licenceOfText). → { keep, why } */
+export function namedLicenceDecision(text) {
+  const spdx = licenceOfText(text);
+  return spdx && ALLOWED_LICENCES.includes(spdx) ? { keep: true, why: `licence text (${spdx})` } : { keep: false, why: 'a licence text that is not a permissive licence' };
 }
 
 /** Key-shaped strings. A hit fails the sync (the snapshot is public to anyone who can read this repository). */
@@ -362,6 +379,7 @@ export function kitVersions(read) {
     assets: /kits\/gf-assets\/(\d+\.\d+\.\d+)/.exec(paths)?.[1] ?? null,
     gf3: /export const KIT_VERSION = '([^']+)'/.exec(paths)?.[1] ?? null,
     scenic: /export const SCENIC_VERSION = '([^']+)'/.exec(paths)?.[1] ?? null,
+    vista: /export const VISTA_VERSION = '([^']+)'/.exec(paths)?.[1] ?? null,
   };
 }
 
@@ -530,7 +548,9 @@ export async function buildSnapshot(repo, commit = 'HEAD') {
       const sidecar = r => { try { return JSON.parse(text(`${lib}/${r}`)); } catch { return null; } };
       const licenceFile = r => licenceOfText(text(`${lib}/${path.posix.dirname(r)}/LICENSE`));
       const inLib = rel.slice(lib.length + 1);
-      const d = /(^|\/)LICENSE$/.test(inLib) && inLib.includes('/') ? { keep: true, why: 'licence text' } : libraryDecision(inLib, licences[lib], sidecar, licenceFile);
+      const d = /(^|\/)LICENSE$/.test(inLib) && inLib.includes('/') ? { keep: true, why: 'licence text' }
+        : isNamedLicence(inLib) ? namedLicenceDecision(text(rel))
+        : libraryDecision(inLib, licences[lib], sidecar, licenceFile);
       if (!d.keep) { excluded.push({ path: rel, why: d.why }); continue; }
     }
     files.set(rel, blobs.get(rel));
@@ -566,6 +586,7 @@ export function kitsRecord(snap) {
     kits: {
       'gf-three': { version: v.gf3, path: 'research/gf-three' },
       'gf-scenic': { version: v.scenic, path: 'research/gf-scenic' },
+      'gf-vista': { version: v.vista, path: 'research/gf-vista' },
       'gf-multiplayer': { version: v.mp, path: `research/foundations/kits/gf-multiplayer/${v.mp}`, ...(v.mpDev && v.mpDev !== v.mp ? { newest: v.mpDev, newestPath: `research/foundations/kits/gf-multiplayer/${v.mpDev}` } : {}) },
       'gf-audio': { version: v.audio, path: `research/foundations/kits/gf-audio/${v.audio}` },
       'gf-assets': { version: v.assets, path: `research/foundations/kits/gf-assets/${v.assets}` },
@@ -575,7 +596,7 @@ export function kitsRecord(snap) {
       excludedDirs: EXCLUDED_DIRS,
       leftOut: LEFT_OUT,
       libraryLicences: ALLOWED_LICENCES,
-      libraryRule: 'a library file ships when its LICENSES.json record is CC0 or a permissive licence, or it is generated by games.fun, or its folder carries a permissive LICENSE text; never Meshy output or a file without a licence',
+      libraryRule: 'a library file ships when its LICENSES.json record is CC0 or a permissive licence, or it is generated by games.fun, or its folder carries a permissive LICENSE text; a licence text named for what it covers (bodies/rocketbox-LICENSE.md) ships when its text is a permissive licence; never Meshy output or a file without a licence',
       secrets: 'no .env files; text files are scanned for key-shaped strings and the sync fails on any hit',
     },
     totals: { files: snap.files.size, bytes, excluded: snap.excluded.length, excludedBy: Object.fromEntries(Object.entries(why).sort()) },
