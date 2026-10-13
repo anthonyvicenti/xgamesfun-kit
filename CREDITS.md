@@ -53,8 +53,9 @@ today. If it is ever shipped, the credit line is:
 - [folio-2025](https://github.com/brunosimon/folio-2025) by Bruno Simon (MIT): the scenic engine's rendering, materials,
   lighting, terrain and vegetation are ported from it, and some of its models and textures are scenic props.
 - [Tidewater](https://github.com/dgreenheck/tidewater) by Dan Greenheck, DRG Software Solutions LLC (MIT): the vista
-  engine's core (its WebGPU renderer, ocean, sky, volumetric clouds, island, wildlife and fishing), vendored with
-  games.fun's edits; its humpback whale model is the author's own.
+  engine's core (its WebGPU renderer, ocean, sky, clouds, island, wildlife and fishing), vendored with games.fun's
+  edits; its humpback whale model is the author's own. The kit carries the core's own MIT clouds, not the volumetric
+  ones from the author's sky-pro-webgpu.
 - [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) (MIT): the six people friends see each other as
   in a vista game, and the vista core's two stall keepers.
 - [BUDDY: ROLLBACK](https://github.com/octobooth-4/buddy-rollback) by its contributors (MIT): the combat model of the

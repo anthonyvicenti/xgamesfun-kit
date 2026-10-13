@@ -324,6 +324,14 @@ runner (section 2). On Linux with an RTX 5090, by hand: `lantern-cove` passed `v
 "not yet for vista"), and the smoke test's two pages saw each other in it through the kit's WebGPU launch. The workflow
 was not run for this sync.
 
+### Kits synced to games.fun e6b5765ee (2026-10-12)
+
+The vista core's sky-pro-webgpu clouds are left out (`LEFT_OUT`; the creator: the kit uses the core's own MIT clouds),
+and `boot-vista.js` draws the core's `Clouds.js` for a game without them. On the same machine, by hand: a fresh
+`lantern-cove` has no `SkyProClouds.js` and no `clouds/` files, its `gf/three/kit.js` lists neither, it boots with no
+console error and requests no sky-pro file, and `verify --release` passed 17 of 17 (226 s); the smoke test passed for it (its quick verify 17 of 17, two pages
+that see each other). The workflow was not run.
+
 ## 8. What a person on a real Windows machine or a Mac still has to try by hand
 
 A runner is a virtual machine without a real graphics card, and it ran the profile only. None of this has been done on

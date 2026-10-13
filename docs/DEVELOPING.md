@@ -52,7 +52,7 @@ There is no list of files. The script works out what the tools need from the too
    a part in `LEFT_OUT` is recorded and skipped (the forge engine).
 3. **Data** (`DATA`, about thirty lines): folders that are copied into a game, served to a page or read as documents,
    so no import leads to them: the kit, the two libraries, the scenic engine's kit, the vista engine's kit, HUD and
-   core (copied whole into a vista game, about 54 MB), the kit folders, the pinned three.js builds, Rapier, the specs
+   core (copied into a vista game, about 53 MB, all but the sky-pro clouds below), the kit folders, the pinned three.js builds, Rapier, the specs
    and schemas. The vista engine's sandbox, tools, tests and briefs stay in games.fun. Kit versions are never written there: `{mp}`, `{audio}` and
    `{assets}` are read from the tools at that commit, so a sync cannot copy a version the tools do not ask for.
 4. **A cross-check.** Every path `tools/lib/paths.mjs` names must be in the snapshot or in `LEFT_OUT`. A new engine or
@@ -77,8 +77,13 @@ rules. Left out by licence: a library file ships when its `LICENSES.json` record
 generated it, or its folder carries its upstream's permissive `LICENSE` text (the scenic library's folio folder); a
 licence text named for the files beside it (`bodies/rocketbox-LICENSE.md`, the six Microsoft Rocketbox bodies' MIT
 text) ships when its own text is a permissive licence; never Meshy output. The vista core is not a library: it travels
-whole with its `LICENSE` (MIT), `ATTRIBUTION.md`, `CREDITS.md` and the credits of each asset folder, and
-`tests/kits.test.mjs` checks those are there. `kits/KITS.json` records the commit, the kit versions, the entries, the parts (taken or not, and
+with its `LICENSE` (MIT), `ATTRIBUTION.md`, `CREDITS.md` and the credits of each asset folder, and
+`tests/kits.test.mjs` checks those are there. Two files of the core are in `LEFT_OUT`, at the creator's word
+(2026-10-12: "Use the MIT clouds"): the volumetric clouds `core/src/sky/SkyProClouds.js` and their noise volumes
+`core/public/clouds/`, from sky-pro-webgpu, whose notice names a separate licence. The core imports them only on demand
+(games.fun core patch 5), and `boot-vista.js` draws the core's own `Clouds.js` (MIT) when a game's `gf/three/kit.js`
+lists no `core/src/sky/SkyProClouds.js`, which a game made from these kits never does. games.fun's own Studio keeps the
+volumetric ones. A file in `LEFT_OUT` inside a data folder is recorded as left out with its reason. `kits/KITS.json` records the commit, the kit versions, the entries, the parts (taken or not, and
 why), the modules the walk found, each data folder's size, the library files left out and why, and a sha256 per file.
 
 ### The drift test

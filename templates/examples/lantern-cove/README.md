@@ -16,15 +16,17 @@ only with `GF_VISTA_OPEN=1` set. `create --from lantern-cove` makes it either wa
   kit's "open in a browser with WebGPU" screen. It also needs an adapter with at least 31 sampled and 5 storage
   textures per shader stage (`gf/vista/kit/gpu.js`, `MIN_LIMITS`); a card below that gets the same screen. Never for a
   phone or for a post on X.
-- **About 62 MB per game.** `create` copies the engine's core whole into `gf/vista/core/` (about 54 MB: its code, sounds,
-  models, textures and cloud noise).
+- **About 62 MB per game.** `create` copies the engine's core into `gf/vista/core/` (about 53 MB: its code, sounds,
+  models and textures).
 - **A first visit of about 10 s** while the core compiles its shaders.
 
 What it shows:
-- **`"engine": "vista"` in the spec.** A physical sky and light over a simulated ocean with volumetric clouds, seen in
+- **`"engine": "vista"` in the spec.** A physical sky and light over a simulated ocean with clouds, seen in
   first person, on the core's own island (`palm-isle`: a bay, a long pier, a fishing village, a reef, open sea, a boat
   and wildlife). `look.preset` picks one of six looks (`gamesfun catalog looks`); the hour, the sea state, the exposure
-  and the clouds are each a slot.
+  and the clouds are each a slot. The clouds are the core's own (`core/src/sky/Clouds.js`, MIT): this kit leaves out
+  the volumetric sky-pro-webgpu clouds games.fun's Studio draws (their notice names a separate licence), so a Lantern
+  Cove made here and one made in games.fun's Studio differ in the sky.
 - **A game with no mechanic modules.** The core plays the walking, swimming, the boat and the fishing from the data
   tables in `spec.json` → `vista` (the species, the gear, the two vendors, the money, where you start); create refuses
   what the core cannot do. `rules.js` keeps only the score and the goal (`rules.goalSpecies`, a slot).

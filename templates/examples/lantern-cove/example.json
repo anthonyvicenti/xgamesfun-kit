@@ -7,9 +7,9 @@
     "why": "the vista engine is not open to pitches yet (WebGPU only, on a desktop graphics card; about 62 MB a game)"
   },
   "verified": {
-    "result": "PASS 17/17 with --release (14 more checks are 'not yet for vista', each with its reason in verdict.json, never counted as passed); PASS 17/17 with --quick in the smoke test",
-    "kits": "562e14481f0b3f23d0b464278c1649b1e20fea2e",
+    "result": "PASS 17/17 with --release (14 more checks are 'not yet for vista', each with its reason in verdict.json, never counted as passed); PASS 17/17 with --quick in the smoke test, whose two pages each drew the other",
+    "kits": "e6b5765ee38e7d486d7513aff20e8b19d24bba8c",
     "date": "2026-10-12",
-    "how": "npx gamesfun create <dir> --from lantern-cove, npx gamesfun verify <dir> --release (220 s), by hand on Linux with an RTX 5090 (WebGPU through Vulkan in chrome-headless-shell; CHROME_ARGS=\"--use-gl=angle --use-angle=gl-egl\"); the same spec from games.fun's own specs folder passed 17/17 too"
+    "how": "npx gamesfun create <dir> --from lantern-cove, npx gamesfun verify <dir> --release (226 s), by hand on Linux with an RTX 5090 (WebGPU through Vulkan in chrome-headless-shell; CHROME_ARGS=\"--use-gl=angle --use-angle=gl-egl\"); the core's own MIT clouds (no sky-pro files in the game). Before: PASS 17/17 with --release and the smoke test on kits 562e14481 (sky-pro clouds)"
   }
 }

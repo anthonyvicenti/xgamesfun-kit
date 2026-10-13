@@ -74,8 +74,9 @@ A spec names one engine (`npx gamesfun catalog engines` lists them, with what ea
 **vista is not open yet.** games.fun is still building it, so the catalog does not offer it to a pitch unless
 `GF_VISTA_OPEN=1` is set. It has no WebGL path: a browser without WebGPU, or a card with fewer than 31 sampled or 5
 storage textures per shader stage, gets the kit's "open in a browser with WebGPU" screen; never a phone, never inside a
-post on X. Each vista game carries the engine's core whole (about 54 MB; about 62 MB a game). The example is
-`lantern-cove`. games.fun's forge engine is not in this kit.
+post on X. Each vista game carries the engine's core (about 53 MB; about 62 MB a game). Its clouds are the core's
+own (MIT): this kit leaves out the volumetric sky-pro-webgpu clouds games.fun's Studio draws, whose notice names a
+separate licence. The example is `lantern-cove`. games.fun's forge engine is not in this kit.
 
 **Then open this folder in your agent and say what you want**: "make a game where we defend a lighthouse from crabs",
 "make the water red and the rounds shorter", "swap the bucket for this model". The agent reads `AGENTS.md` (the

@@ -22,7 +22,7 @@ this kit have the same owner, so these are MIT under this repository's `LICENSE`
 |---|---|---|---|---|
 | gf-three (the three.js game kit and its tools) | 0.1.0-dev | `research/gf-three/` | MIT (this repository) | kit part: yes (`gf/three/`); tools: no |
 | gf-scenic (the scenic engine: WebGPU, generated islands and dungeons) | 0.1.0-dev | `research/gf-scenic/` | MIT (this repository); the folio-2025 code inside is a separate row below | scenic games: yes (`gf/scenic/`) |
-| gf-vista (the vista engine: WebGPU only, a sky, sea and island; not open to pitches yet) | 0.2.0-thin | `research/gf-vista/` (`kit/`, `hud/`, `core/`, `UPSTREAM.json`, the example spec) | MIT (this repository) for `kit/` and `hud/`; the core is Tidewater's, a separate row below | vista games: yes (`gf/vista/`, the core whole, about 54 MB) |
+| gf-vista (the vista engine: WebGPU only, a sky, sea and island; not open to pitches yet) | 0.2.0-thin | `research/gf-vista/` (`kit/`, `hud/`, `core/`, `UPSTREAM.json`, the example spec) | MIT (this repository) for `kit/` and `hud/`; the core is Tidewater's, a separate row below | vista games: yes (`gf/vista/`, the core whole bar the sky-pro clouds, about 53 MB) |
 | gf-multiplayer | 1.7.1 | `research/foundations/kits/gf-multiplayer/1.7.1/` | MIT (its `kit.json` and file headers) | yes (`gf/mp/`) |
 | gf-audio | 1.5.0 | `research/foundations/kits/gf-audio/1.5.0/` | MIT (this repository); ZzFX inside is a separate row below | yes (`audio/`) |
 | gf-assets | 1.3.0 | `research/foundations/kits/gf-assets/1.3.0/` | MIT (this repository) | yes (`gf/gf-assets.js`) |
@@ -51,7 +51,7 @@ this kit have the same owner, so these are MIT under this repository's `LICENSE`
 | 17 | ws (the signal server's WebSocket) | 8.21.3 | MIT | `kits/research/multiplayer/p2p/vendor/ws/LICENSE`, `../ATTRIBUTION.md` | keep the notice | no (Node side only) |
 | 18 | Mannequin animation clips and `hero.glb` (stand-in body) | Quaternius, via pmndrs/ecctrl `e2cab804` | CC0-1.0 | `kits/research/gf-three/tools/lib/standin-assets/LICENSE-mannequin.txt` | none (credit is courteous) | yes, as the stand-in body |
 | 19 | Tidewater by DRG Software Solutions LLC (Dan Greenheck): the vista core's engine, ocean, sky, post, fx, materials, world, player, game, UI and audio code, vendored with games.fun's edits (marked `gf-vista:`, listed in `core/PATCHES.md`) | `4811ba48` | MIT, (c) 2026 DRG Software Solutions LLC | `kits/research/gf-vista/core/LICENSE`, `ATTRIBUTION.md`, `CREDITS.md`; `kits/research/gf-vista/UPSTREAM.json` | keep the notice | vista games, `gf/vista/core/` with its `LICENSE` and `ATTRIBUTION.md` (verify check 2 fails a game without them) |
-| 20 | The volumetric cumulus (`core/src/sky/SkyProClouds.js`) and its noise volumes (`core/public/clouds/*.bin`), from the same author's `sky-pro-webgpu` | as in Tidewater `4811ba48` | shipped inside Tidewater's MIT repository; `core/public/clouds/LICENSING.md` (copied from sky-pro) speaks of a separate "Three.js Sky Pro license" | `kits/research/gf-vista/core/public/clouds/LICENSING.md`, `core/ATTRIBUTION.md` | keep the notice | vista games; see "Needs a person" 8 |
+| 20 | The volumetric cumulus (`core/src/sky/SkyProClouds.js`) and its noise volumes (`core/public/clouds/`), from the same author's `sky-pro-webgpu` | as in Tidewater `4811ba48` | **not shipped in the kit** (the creator, 2026-10-12: the kit uses the core's own MIT clouds); their notice names a separate "Three.js Sky Pro license" | none here: `scripts/sync-kits.mjs` leaves them out (`LEFT_OUT`) | — | no: a vista game made with this kit draws the core's own clouds (`core/src/sky/Clouds.js`, MIT, row 19); games.fun's own Studio draws the volumetric sky-pro ones |
 | 21 | SMAA area and search tables (from three.js; SMAA by Jorge Jimenez et al.) | as in Tidewater `4811ba48` | MIT | named in `kits/research/gf-vista/core/ATTRIBUTION.md`; no text beside `core/public/textures/smaa/` | keep the notice | vista games |
 | 22 | meshoptimizer decoder (the vista kit's own copy) | as vendored | MIT, (c) Arseny Kapoulkine | `kits/research/gf-vista/kit/vendor/LICENSE-meshoptimizer` | keep the notice | vista games, `gf/vista/kit/vendor/` |
 
@@ -109,9 +109,11 @@ Not a library (no `LICENSES.json`): the core is copied whole into a vista game, 
 | Scanned beach debris and stall props, planks, iron and timber textures from Poly Haven | CC0-1.0 | `public/models/debris/CREDITS.md`, `public/models/props/CREDITS.md` | vista games |
 | Two Rocketbox characters (the stall keepers) | MIT, (c) 2020 Microsoft | `public/models/characters/LICENSE-Rocketbox.md` | vista games |
 | The humpback whale (mesh, albedo, height) | MIT (Tidewater's own) | `core/ATTRIBUTION.md` | vista games |
-| Cloud noise volumes | see code row 20 | `public/clouds/LICENSING.md` | vista games |
 
-Upstream's key art (`public/ui/keyart*.jpg`) and its Google Fonts link are not vendored (`core/ATTRIBUTION.md`).
+Upstream's key art (`public/ui/keyart*.jpg`) and its Google Fonts link are not vendored (`core/ATTRIBUTION.md`), and
+the sky-pro cloud volumes (`public/clouds/`) are not in this kit (code row 20). The core's `ATTRIBUTION.md` and a
+created game's `ATTRIBUTION.md` still list the sky-pro clouds and "cloud volumes": that wording is games.fun's and is
+corrected there.
 
 Sounds are gf-audio presets, synthesised at run time: no audio files (a vista game also plays the core's recordings
 above). The grim theme names two OFL-1.1 fonts (Grenze
@@ -163,12 +165,10 @@ Not settled from the repository itself:
 6. **The grim theme's fonts** (OFL-1.1): not in the snapshot; if they are added they bring OFL-1.1's own conditions
    (the licence text with the font; the font may not be sold by itself).
 7. **Chromium** downloaded by Playwright and sharp's libvips (LGPL-3.0): not shipped by this repository; mentioned only.
-8. **The vista core's clouds** (code row 20): `SkyProClouds.js` and `public/clouds/*.bin` come from the author's
-   `sky-pro-webgpu` and ship inside Tidewater's MIT repository at `4811ba48`, but the `LICENSING.md` beside the noise
-   volumes (copied from sky-pro) refers to a separate "Three.js Sky Pro license" whose text the repository does not
-   have. games.fun's creator ruled the clouds safe to use on 2026-10-12 (games.fun
-   `research/super-scenic/evidence/creator-decisions-2026-10-12.json`). Whether that covers redistributing them in an
-   open-source kit is for a person to confirm with the author.
+8. **The vista core's sky-pro clouds** (code row 20): settled by leaving them out. They are **not shipped in the kit**
+   (the creator, 2026-10-12: the kit uses the core's own MIT clouds), because the `LICENSING.md` beside their noise
+   volumes refers to a separate "Three.js Sky Pro license" whose text the repository does not have. The core's own
+   `Clouds.js` (Tidewater, MIT) says in its comments that its technique follows sky-pro-webgpu; its code is Tidewater's.
 
 
 ## The loot program's source (`program/`)
