@@ -316,21 +316,18 @@ sync carries `creator-studio/lib/voice-capture.mjs` (Studio's own capture file, 
 loads into a stand-in streamer page with Chrome's fake microphone; without it the check skips them and says so. The
 smoke test ran all four examples 22 of 22 on Linux with a graphics card; the workflow did not run (billing).
 
-### Kits synced to games.fun 562e14481 (2026-10-12)
-
-`create` vendors gf-multiplayer 1.7.1 (Turn on mic in the stream panel), and the kits carry the vista engine. The
-workflow is unchanged: its jobs create the party, board and scenic examples only, and the vista example cannot run on a
-runner (section 2). On Linux with an RTX 5090, by hand: `lantern-cove` passed `verify --release` 17 of 17 (14 checks
-"not yet for vista"), and the smoke test's two pages saw each other in it through the kit's WebGPU launch. The workflow
-was not run for this sync.
-
 ### Kits synced to games.fun e6b5765ee (2026-10-12)
 
-The vista core's sky-pro-webgpu clouds are left out (`LEFT_OUT`; the creator: the kit uses the core's own MIT clouds),
-and `boot-vista.js` draws the core's `Clouds.js` for a game without them. On the same machine, by hand: a fresh
+`create` vendors gf-multiplayer 1.7.1 (Turn on mic in the stream panel), and the kits carry the vista engine without
+its sky-pro-webgpu clouds (`LEFT_OUT`; the creator: the kit uses the core's own MIT clouds); `boot-vista.js` draws the
+core's `Clouds.js` for a game without them. The workflow is unchanged: its jobs create the party, board and scenic
+examples only, and the vista example cannot run on a runner (section 2). On Linux with an RTX 5090, by hand: a fresh
 `lantern-cove` has no `SkyProClouds.js` and no `clouds/` files, its `gf/three/kit.js` lists neither, it boots with no
-console error and requests no sky-pro file, and `verify --release` passed 17 of 17 (226 s); the smoke test passed for it (its quick verify 17 of 17, two pages
-that see each other). The workflow was not run.
+console error and requests no sky-pro file, and `verify --release` passed 17 of 17 (229 s). The smoke test passed
+`giant-four`, `isle-run`, `lantern-cove` (its two pages through the kit's WebGPU launch) and `soak-squad`; `coin-hop`
+failed checks 5 and 6 in two runs in a row (the gate's `host-ends-the-round` step: "the gate did not show results")
+and passed in the next two, and its `verify --quick` passed three times out of three from the command line, so it is
+recorded here as a flaky gate step, cause not found. The workflow was not run.
 
 ## 8. What a person on a real Windows machine or a Mac still has to try by hand
 

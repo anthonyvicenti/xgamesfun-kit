@@ -269,7 +269,7 @@ never joins, this question is the first thing to check (System Settings, Privacy
 computer can join.
 
 1. **The game must carry multiplayer part 1.6.4 or newer.** Since the sync of games.fun ed6c86ffa a game the kit makes
-   carries 1.7.1 (since the sync of games.fun 562e14481, now e6b5765ee; 1.7.0 from d78283f51, 1.6.6 before it), which knows online play. (Games made before that sync carry 1.6.3 and stay on this machine until
+   carries 1.7.1 (since the sync of games.fun e6b5765ee; 1.7.0 from d78283f51, 1.6.6 before it), which knows online play. (Games made before that sync carry 1.6.3 and stay on this machine until
    `npx gamesfun upgrade <game>`.)
 2. **Our server must accept games that people run themselves.** It introduces the two browsers to each other (a room
    code, then they connect directly). Whether it does is the play host's switch, not the kit's. This page has not
