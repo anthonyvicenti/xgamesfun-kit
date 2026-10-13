@@ -14,7 +14,8 @@ import { twoPlayers } from './two-players.mjs';
 const on = process.env.GAMESFUN_SMOKE === '1';
 const examples = (await readdir(EXAMPLES, { withFileTypes: true })).filter(e => e.isDirectory()).map(e => e.name).sort();
 
-// one test per example (one per engine: the party example on WebGL, the scenic one on WebGPU or WebGL2)
+// one test per example (one per engine: the party example on WebGL, the scenic one on WebGPU or WebGL2, the vista one
+// on WebGPU only, so it fails on a machine without a hardware WebGPU adapter)
 for (const id of examples) {
   test(`${id}: create from the example, quick verify passes, and two pages see each other`, { skip: on ? false : 'set GAMESFUN_SMOKE=1 to run (about 4 minutes an example)', timeout: 20 * 60 * 1000 }, async () => {
     const g = await tempGame(id);
@@ -36,7 +37,9 @@ for (const id of examples) {
 
       const srv = await startDevServer({ gameDir: g.dir, port: 0, log: () => {}, watch: false });
       try {
-        const r = await twoPlayers(srv.url, { seconds: 8 });
+        // a vista game draws only with WebGPU (no WebGL path): its two pages open in the kit's WebGPU launch
+        const engine = JSON.parse(await readFile(path.join(EXAMPLES, id, 'spec.json'), 'utf8')).engine;
+        const r = await twoPlayers(srv.url, { seconds: 8, gpu: engine === 'vista' ? 'webgpu' : null });
         assert.equal(r.ok, true, JSON.stringify(r));
       } finally { await srv.close(); }
     } finally { await g.cleanup(); }

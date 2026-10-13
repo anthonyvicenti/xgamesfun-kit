@@ -3,8 +3,10 @@
 // checking a game by hand (node tests/two-players.mjs <dev server url> [--shots <dir>]). With `joinerBase` the friend's
 // page is the same game served from another origin (tests/online-e2e.mjs).
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { isMain } from '../lib/main.mjs';
 import { ensureBrowser } from '../lib/chrome.mjs';
+import { KITS } from '../lib/paths.mjs';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms, what) {
@@ -16,11 +18,17 @@ const gameFrame = page => page.frames().find(f => f.parentFrame() === page.mainF
 const net = page => gameFrame(page)?.evaluate(() => window.__game?.snapshot()?.net ?? null).catch(() => null) ?? null;
 const dist = (a, b) => Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.z ?? 0) - (b.z ?? 0));
 
-/** → { ok, host, joiner, samples, details } */
-export async function twoPlayers(baseUrl, { shots = null, seconds = 10, log = () => {}, joinerBase = null, onPages = null } = {}) {
-  const b = await ensureBrowser({ log });
+/**
+ * `gpu: 'webgpu'`: a game that draws only with WebGPU (engine vista) is opened in the kit's own WebGPU launch (Vulkan in
+ * chrome-headless-shell on Linux; kits/research/foundations/qa/browser.mjs), which refuses a machine without a hardware
+ * adapter instead of waiting on the game's "no WebGPU" screen. → { ok, host, joiner, samples, details }
+ */
+export async function twoPlayers(baseUrl, { shots = null, seconds = 10, log = () => {}, joinerBase = null, onPages = null, gpu = null } = {}) {
   const { chromium } = await import('playwright-core');
-  const browser = await chromium.launch({ executablePath: b.path, headless: process.env.HEADED !== '1', args: ['--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', ...(process.env.CHROME_ARGS ?? '').split(/\s+/).filter(Boolean)] });
+  const b = gpu === 'webgpu' ? null : await ensureBrowser({ log });
+  const browser = gpu === 'webgpu'
+    ? await (await import(pathToFileURL(path.join(KITS, 'research', 'foundations', 'qa', 'browser.mjs')).href)).launchChrome({ gpu: 'webgpu', chromium, args: ['--autoplay-policy=no-user-gesture-required'] })
+    : await chromium.launch({ executablePath: b.path, headless: process.env.HEADED !== '1', args: ['--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', ...(process.env.CHROME_ARGS ?? '').split(/\s+/).filter(Boolean)] });
   const errors = [];
   try {
     const open = async label => {
@@ -75,7 +83,7 @@ export async function twoPlayers(baseUrl, { shots = null, seconds = 10, log = ()
     const onScreen = { host: samples.filter(s => s.hostDrawsJoiner?.onScreen).length, joiner: samples.filter(s => s.joinerDrawsHost?.onScreen).length };
     const ok = samples.length > 0 && good.length >= Math.ceil(samples.length * 0.8) && errors.length === 0;
     return {
-      ok, invite, friendUrl, browser: b, samples: samples.length, inPlace: good.length, onScreen, screenshots: shot, errors,
+      ok, invite, friendUrl, browser: b ?? browser.webgpu ?? null, samples: samples.length, inPlace: good.length, onScreen, screenshots: shot, errors,
       host: { you: h?.you, host: h?.host, peers: h?.peers?.map(p => p.name) }, joiner: { you: j?.you, host: j?.host, peers: j?.peers?.map(p => p.name) },
       last: samples.at(-1) ?? null,
     };
